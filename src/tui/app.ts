@@ -1700,6 +1700,27 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       push('system', `[context] ${color}${bar}${T.reset} ${used.toLocaleString()} / ${(budget || used).toLocaleString()} tokens (${pct}%)\n${tip}`);
       return;
     }
+    if (line.startsWith('/image ') || line === '/image') {
+      // MCH-109: attach image file(s) to the NEXT prompt (vision input).
+      const rest = line.startsWith('/image ') ? line.slice(7).trim() : '';
+      if (!rest) {
+        if (pendingImages.length === 0) { push('system', `Usage: /image <path...> — attaches image(s) to your next message. Or: /image clear`); return; }
+        pendingImages.length = 0;
+        push('system', '○ pending image attachments cleared');
+        return;
+      }
+      for (const p of rest.split(/\s+/)) {
+        const { resolve: rp, extname: ext } = await import('node:path');
+        const { existsSync: ex } = await import('node:fs');
+        const fp = p.startsWith('~/') ? rp(process.env.HOME ?? '~', p.slice(2)) : rp(runtime.cwd, p);
+        if (!ex(fp)) { push('error', `Not found: ${p}`); continue; }
+        const e = ext(fp).toLowerCase();
+        if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].includes(e)) { push('error', `Not an image: ${p}`); continue; }
+        pendingImages.push(fp);
+        push('system', `🖼 attached ${p} (${pendingImages.length} pending — type your message to send, or /image clear)`);
+      }
+      return;
+    }
     if (line === '/review' || line.startsWith('/review ') || line === '/security-review' || line.startsWith('/security-review ')) {
       // Distilled from Claude Code's `/review` + `/security-review`: review the
       // current working-tree diff before commit. `/security-review` skews the
@@ -1863,12 +1884,14 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         return r.finalSummary;
       }, false);
     } else {
-      await run(() => runtime.runPrompt(line), false);
+      await run(() => runtime.runPrompt(line, { images: pendingImages.splice(0, pendingImages.length) }), false);
     }
   }
 
     /** Message queue: messages typed while a task runs; drained on completion. */
   const messageQueue: string[] = [];
+  /** MCH-109: image paths attached via /image, sent with the next prompt. */
+  const pendingImages: string[] = [];
 
   async function run(fn: () => Promise<string>, echo = true): Promise<string> {
     state.busy = true;

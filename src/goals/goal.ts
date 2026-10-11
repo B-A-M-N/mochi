@@ -641,6 +641,32 @@ Return ONLY the JSON array, no markdown.`;
       ? `Task: ${task.title}\n${task.description}\nAcceptance criteria: ${task.acceptanceCriteria.join('; ')}`
       : (task.description || task.title));
     context.addMessage({ role: 'user', content: userPromptContent });
+    // MCH-109: attach image parts (paths read to data URIs, or verbatim
+    // data/http URLs) to the opening user message for vision models.
+    const imgParts: import('../types.js').ContentPart[] = [];
+    for (const img of task.images ?? []) {
+      if (img.startsWith('data:') || img.startsWith('http')) {
+        imgParts.push({ type: 'image_url', image_url: { url: img } });
+      } else {
+        try {
+          const { readFileSync } = await import('node:fs');
+          const { extname } = await import('node:path');
+          const mime = extname(img).toLowerCase() === '.jpg' || extname(img).toLowerCase() === '.jpeg'
+            ? 'image/jpeg'
+            : `image/${extname(img).toLowerCase().replace(/^\./, '')}`;
+          imgParts.push({ type: 'image_url', image_url: { url: `data:${mime};base64,${readFileSync(img).toString('base64')}` } });
+        } catch { /* unreadable image: skip */ }
+      }
+    }
+    if (imgParts.length > 0) {
+      context.addMessage({
+        role: 'user',
+        content: [
+          { type: 'text', text: `[attached ${imgParts.length} image(s) for this task]` },
+          ...imgParts,
+        ],
+      });
+    }
     // Optional synthetic-parameter context (e.g. Lazy Chameleon enhancement) is
     // injected as a leading system message so the agent reasons within it.
     for (const extra of extraContext) {

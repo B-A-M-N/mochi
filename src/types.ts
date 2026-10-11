@@ -99,6 +99,8 @@ export interface Task {
   verificationCommand?: string;
   attempts: Attempt[];
   output?: string;
+  /** MCH-109: image attachments (paths or data URIs) bundled with the prompt. */
+  images?: string[];
   assignedTo?: string;
   createdAt: number;
   startedAt?: number;
@@ -175,12 +177,25 @@ export interface ToolResult {
   durationMs: number;
 }
 
+/** Content part for multimodal messages (MCH-109). Text parts carry prose;
+ *  image parts carry a URL or data: URI the provider can render. */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string;
+  content?: string | ContentPart[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   name?: string;
+}
+
+/** Text content of a message, flattening multimodal parts (images drop). */
+export function contentText(m: { content?: string | ContentPart[] }): string {
+  if (!m.content) return '';
+  return typeof m.content === 'string' ? m.content
+    : m.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('\n');
 }
 
 export interface StreamToolCall {

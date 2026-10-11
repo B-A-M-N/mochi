@@ -117,6 +117,12 @@ export function createOpenAIProvider(config: ProviderConfig) {
         continue;
       }
       const mapped: any = { role: m.role, content: m.content ?? '' };
+      // MCH-109: multimodal user messages pass content parts through verbatim
+      // (OpenAI wire format: [{type:'text'},{type:'image_url'}]).
+      if (Array.isArray(m.content)) {
+        out.push({ role: m.role, content: m.content });
+        continue;
+      }
       if (m.role === 'system') mapped.cache_control = { type: 'ephemeral' };
       // MCH-38 (speed): mark the LAST message so every turn's prefix is a
       // cache breakpoint — with an append-only transcript, turns N+1 reuse

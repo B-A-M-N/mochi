@@ -556,7 +556,7 @@ export class Runtime {
     return new ChameleonEngine(this.config).enhance({ task, mode, budget });
   }
 
-  async runPrompt(prompt: string, opts?: { sessionId?: string }): Promise<string> {
+  async runPrompt(prompt: string, opts?: { sessionId?: string; images?: string[] }): Promise<string> {
     const r = await this.runPromptDetailed(prompt, opts);
     return r.summary;
   }
@@ -564,7 +564,7 @@ export class Runtime {
   /** Structured one-shot run: like runPrompt but returns the goal status,
    *  stop reason, and stats so headless consumers (`--json`, CI exit codes)
    *  can branch on real outcomes instead of parsing prose. */
-  async runPromptDetailed(prompt: string, opts?: { sessionId?: string }): Promise<{ summary: string; status: string; stopReason?: string; success: boolean; tokensUsed: number; costUsd: number; durationMs: number; goalId: string; filesModified: string[] }> {
+  async runPromptDetailed(prompt: string, opts?: { sessionId?: string; images?: string[] }): Promise<{ summary: string; status: string; stopReason?: string; success: boolean; tokensUsed: number; costUsd: number; durationMs: number; goalId: string; filesModified: string[] }> {
     if (this.abortController.signal.aborted) this.resetAbort();
     if (opts?.sessionId) {
       this.activeSessionId = opts.sessionId;
@@ -579,6 +579,7 @@ export class Runtime {
     const kind = classifyTaskKind({ title: prompt.split('\n')[0].slice(0, 80), description: prompt, role: 'coder' as any });
     const isChat = kind === 'chat';
     const task = createTask(prompt.split('\n')[0].slice(0, 80), prompt, { role: isChat ? 'assistant' as any : 'coder', acceptanceCriteria: [] });
+    if (opts?.images?.length) task.images = opts.images;
     goal.tasks.push(task.id);
     this.workspace.saveGoal(goal);
     this.workspace.saveTasks(goal.id, [task]);

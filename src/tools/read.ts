@@ -23,6 +23,23 @@ export const readTool: Tool = {
     const fullPath = rawPath === '~' ? homedir() : rawPath.startsWith('~/') ? resolve(homedir(), rawPath.slice(2)) : resolve(ctx.cwd, rawPath);
     if (!existsSync(fullPath)) throw new Error(`File not found: ${rawPath}`);
 
+    // MCH-109: image files are unreadable as text — return a data URI the
+    // model can attach to its next user message (multimodal vision input).
+    const IMG_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']);
+    if (IMG_EXTS.has(extname(fullPath).toLowerCase())) {
+      const buf = readFileSync(fullPath);
+      const mime = extname(fullPath).toLowerCase() === '.jpg' || extname(fullPath).toLowerCase() === '.jpeg'
+        ? 'image/jpeg'
+        : `image/${extname(fullPath).toLowerCase().replace(/^\./, '')}`;
+      const uri = `data:${mime};base64,${buf.toString('base64')}`;
+      return [
+        `Image file: ${rawPath} (${buf.length} bytes, ${mime}).`,
+        `To view it, send a user message with this content part: {"type":"image_url","image_url":{"url":"${uri.slice(0, 80)}..."}}`,
+        'Full data URI (base64, use verbatim as image_url.url):',
+        uri,
+      ].join('\n');
+    }
+
     // Per-run cache: only read non-firstTime from disk once per unchanged
     // (mtime, size) signature. Files that changed mid-run are re-read, so this
     // is a pure win for repeated reads of the same file within a task.
