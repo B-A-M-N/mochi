@@ -2161,6 +2161,16 @@ Continue from 'Next:', do not redo completed progress.`,
       }
       this.addAttempt(task, 'verify', [`${repo.testCommand || repo.buildCommand || 'verify'}`], 'failure', verification.summary);
       this.context.addKnownError(verification.summary);
+      // Quality slice 3: auto plan-mode escape. After 2+ verify failures AND
+      // 2+ tool errors, the agent is in a loop and is going to keep producing
+      // the same broken diff over and over. Force a structured recovery plan:
+      // ask the model to STOP making changes, write a 5-line plan, and only
+      // resume editing on the next iteration. This is the "you've been
+      // guessing; now stop and think" intervention that gets a model out of
+      // a confirmed loop without burning more verify cycles.
+      if (this.verifyCount >= 2 && this.totalToolErrors() >= 2) {
+        this.injectAutoPlanEscape(verification.summary);
+      }
       // Observation-driven retry: classify the failure, retrieve any matching
       // lessons from procedural memory, and append a structured attempt to
       // the autopsy record before nudging the model with the next hypothesis.
@@ -3818,6 +3828,51 @@ Continue from 'Next:', do not redo completed progress.`,
         message: `[struggle] injected state summary (${parts.length} signal(s))`,
       });
     } catch { /* never block the loop on injection */ }
+  }
+
+  /**
+   * Quality slice 3 helper: total consecutive tool errors across all tools.
+   * Cheap O(n) over the small Map; no I/O.
+   */
+  private totalToolErrors(): number {
+    let n = 0;
+    for (const e of this.consecutiveToolErrors.values()) n += e.count;
+    return n;
+  }
+
+  /** Quality slice 3: auto plan-mode escape. After 2+ verify failures AND
+   * 2+ tool errors we know the model is guessing in a loop. Instead of
+   * letting it produce another guess, force a structured plan directive.
+   * The threshold check (verifyCount >= 2 AND totalToolErrors >= 2) lives
+   * at the call site in the verify-failure path so this method itself can
+   * be called from tests and from future escape hatches without re-checking.
+   * Rate-limited to once per task. Never blocks. */
+  private autoPlanEscaped = false;
+  private injectAutoPlanEscape(failureText: string): void {
+    if (this.autoPlanEscaped || this.planMode) return;
+    this.autoPlanEscaped = true;
+    const truncated = failureText.slice(0, 240);
+    try {
+      this.context.addMessage({
+        role: 'system',
+        content:
+          'AUTO PLAN-MODE ESCAPE — you have failed verification ' + this.verifyCount +
+          ' times and accumulated ' + this.totalToolErrors() +
+          ' tool errors. The harness is forcing a planning step.\n' +
+          'DO NOT make any more edits in your next turn. Instead, output a 5-line plan that names:\n' +
+          '  1. The smallest assumption from your last change that, if false, would explain ALL the failures.\n' +
+          '  2. The one file you would re-read to confirm or refute that assumption.\n' +
+          '  3. The smallest possible next edit (often revert or a one-line guard).\n' +
+          '  4. The verify command whose output will prove the fix.\n' +
+          '  5. The single thing you will STOP doing.\n' +
+          `Failure evidence to plan around: ${truncated}`,
+      });
+      this.events.emit({
+        type: 'agent:log' as any,
+        agentId: this.id,
+        message: `[auto-plan-escape] injected (verifyCount=${this.verifyCount}, toolErrors=${this.totalToolErrors()})`,
+      });
+    } catch { /* never block the failure path */ }
   }
   private maybeSelfCritique(task: Task, failureText: string): void {
     if (this.selfCritiqued || this.planMode) return;

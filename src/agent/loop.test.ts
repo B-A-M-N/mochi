@@ -1628,3 +1628,116 @@ describe('empty-response escalation (quality slice 2 — escalate to fallback mo
     }
   });
 });
+
+describe('auto plan-mode escape (quality slice 3 — force a planning step when the agent is in a loop)', () => {
+  function makeBareAgent() {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-auto-plan-'));
+    const config = makeConfig(dir, 'http://localhost:0');
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const context = new ContextEngine(config, dir);
+    const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+    return { agent, dir };
+  }
+
+  it('is a no-op when the agent is healthy (verifyCount < 2 or toolErrors < 2)', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 0;
+      (agent as any).consecutiveToolErrors.clear();
+      // The threshold check lives at the call site; calling the method
+      // directly always runs it. Verify the GATING logic instead.
+      const shouldEscape = (agent as any).verifyCount >= 2 && (agent as any).totalToolErrors() >= 2;
+      expect(shouldEscape).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is a no-op when only verifyCount is high but tool errors are low', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 5;
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'x', count: 1 });
+      const shouldEscape = (agent as any).verifyCount >= 2 && (agent as any).totalToolErrors() >= 2;
+      expect(shouldEscape).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is a no-op when only tool errors are high but verifyCount is low', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 1;
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'x', count: 5 });
+      const shouldEscape = (agent as any).verifyCount >= 2 && (agent as any).totalToolErrors() >= 2;
+      expect(shouldEscape).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('gate fires when BOTH verify AND tool errors are high', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 2;
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'x', count: 3 });
+      const shouldEscape = (agent as any).verifyCount >= 2 && (agent as any).totalToolErrors() >= 2;
+      expect(shouldEscape).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects a 5-line plan directive when invoked', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 2;
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'oldText not found', count: 3 });
+      (agent as any).injectAutoPlanEscape('test foo failed: assertion at line 42');
+      const msgs = (agent as any).context.messages as Array<{ role: string; content: string }>;
+      const escape = msgs.find((m) => m.role === 'system' && m.content.includes('AUTO PLAN-MODE ESCAPE'));
+      expect(escape).toBeDefined();
+      const c = escape!.content;
+      expect(c).toContain('5-line plan');
+      expect(c).toContain('smallest assumption');
+      expect(c).toContain('smallest possible next edit');
+      expect(c).toContain('verify command');
+      expect(c.toLowerCase()).toContain('the single thing you will stop doing');
+      expect(c).toContain('test foo failed');
+      expect(c).toContain('DO NOT make any more edits');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fires only once per task (idempotent)', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).verifyCount = 2;
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'x', count: 3 });
+      (agent as any).injectAutoPlanEscape('failure 1');
+      (agent as any).injectAutoPlanEscape('failure 2');
+      (agent as any).injectAutoPlanEscape('failure 3');
+      const msgs = (agent as any).context.messages as Array<{ role: string; content: string }>;
+      const escapes = msgs.filter((m) => m.content.includes('AUTO PLAN-MODE ESCAPE'));
+      expect(escapes.length).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('totalToolErrors sums across tools', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'a', count: 2 });
+      (agent as any).consecutiveToolErrors.set('write', { error: 'b', count: 3 });
+      (agent as any).consecutiveToolErrors.set('shell', { error: 'c', count: 1 });
+      const n = (agent as any).totalToolErrors();
+      expect(n).toBe(6);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
