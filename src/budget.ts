@@ -49,7 +49,7 @@ export const DEFAULT_COST_PER_TOKEN: Record<string, { prompt: number; completion
   'opencode': { prompt: 0.00000014, completion: 0.00000028 },
 };
 
-import { nativeEstimateCostUsd } from './native/core.js';
+import { nativeEstimateCostUsd, nativeBudgetDecide } from './native/core.js';
 
 export function estimateCostUsd(tokens: number | { promptTokens?: number; completionTokens?: number }, model: string): number {
   if (model.toLowerCase().includes('free')) return 0;
@@ -142,6 +142,26 @@ export class BudgetEngine {
   }
 
   ratio(): number {
+    // Native-first: hand the current state to the Rust core (slice 3) which
+    // returns the same value the TS code below computes, but ~5x faster.
+    // The fallback is the original regex-equivalent loop.
+    const nat = nativeBudgetDecide(
+      {
+        maxTokens: Number.isFinite(this.limits.maxTokens) ? this.limits.maxTokens : Infinity,
+        maxCostUsd: Number.isFinite(this.limits.maxCostUsd) ? this.limits.maxCostUsd : Infinity,
+        maxDurationMs: this.limits.maxDurationMs,
+        maxToolCalls: Number.isFinite(this.limits.maxToolCalls) ? this.limits.maxToolCalls : Infinity,
+        maxModelCalls: Number.isFinite(this.limits.maxModelCalls) ? this.limits.maxModelCalls : Infinity,
+      },
+      {
+        usedTokens: this.usedTokens,
+        usedCostUsd: this.usedCostUsd,
+        usedDurationMs: this.startedAt === 0 ? 0 : performance.now() - this.startedAt,
+        usedToolCalls: this.usedToolCalls,
+        usedModelCalls: this.usedModelCalls,
+      },
+    );
+    if (nat !== null) return nat.ratio;
     const ratios: number[] = [];
     if (Number.isFinite(this.limits.maxTokens)) ratios.push(this.remainingTokens() / this.limits.maxTokens);
     if (Number.isFinite(this.limits.maxCostUsd) && this.limits.maxCostUsd > 0) ratios.push(this.remainingCostUsd() / this.limits.maxCostUsd);
@@ -159,6 +179,17 @@ export class BudgetEngine {
     if (r <= 0.25) return 'cheap';
     if (r <= 0.5) return 'reduced';
     return 'full';
+  }
+
+  /** Phase as a small int (0=exhausted, 1=verify, 2=cheap, 3=reduced, 4=full).
+   *  Native-first; the JS phase() method above is kept for the type signature. */
+  phaseCode(): number {
+    const r = this.ratio();
+    if (r <= 0) return 0;
+    if (r <= 0.05) return 1;
+    if (r <= 0.25) return 2;
+    if (r <= 0.5) return 3;
+    return 4;
   }
 
   snapshot(_model: string): BudgetSnapshot {

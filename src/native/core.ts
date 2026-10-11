@@ -117,6 +117,18 @@ function initNativeCore() {
           args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
           returns: FFIType.i32,
         },
+        mochi_budget_decide: {
+          args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
+          returns: FFIType.i32,
+        },
+        mochi_classify_command: {
+          args: [FFIType.cstring],
+          returns: FFIType.i32,
+        },
+        mochi_fold_output: {
+          args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
+          returns: FFIType.i32,
+        },
       });
       if (bunLib) {
         ffiAvailable = true;
@@ -524,4 +536,189 @@ export function nativeRedactSecrets(input: string): string | null {
   }
 
   return null;
+}
+
+/** Phase code returned by `nativeBudgetDecide`. */
+export const BUDGET_PHASES = ['exhausted', 'verify', 'cheap', 'reduced', 'full'] as const;
+export type BudgetPhase = (typeof BUDGET_PHASES)[number];
+
+export interface BudgetDecision {
+  /** Ratio in [0, 1] — most-constrained dimension wins. 1.0 = no cap. */
+  ratio: number;
+  /** 0=exhausted, 1=verify, 2=cheap, 3=reduced, 4=full. */
+  phase: number;
+  /** Human-readable phase name (matches `BUDGET_PHASES[phase]`). */
+  phaseName: BudgetPhase;
+}
+
+/**
+ * Fast in-process Rust budget decision: given current limits and used
+ * counters, returns the most-constrained ratio + phase code. Mirrors
+ * `BudgetEngine.ratio()` + `BudgetEngine.phase()` in `src/budget.ts` and
+ * runs on every turn. Pass `Infinity` for any cap you don't want to apply
+ * (matches the TS `Number.isFinite` check).
+ */
+export function nativeBudgetDecide(
+  limits: {
+    maxTokens: number;
+    maxCostUsd: number;
+    maxDurationMs: number;
+    maxToolCalls: number;
+    maxModelCalls: number;
+  },
+  used: {
+    usedTokens: number;
+    usedCostUsd: number;
+    usedDurationMs: number;
+    usedToolCalls: number;
+    usedModelCalls: number;
+  },
+): BudgetDecision | null {
+  initNativeCore();
+  if (!ffiAvailable) return null;
+
+  const input = JSON.stringify({ limits, used });
+  let jsonOut: string | null = null;
+
+  if (napiModule && typeof napiModule.budgetDecide === 'function') {
+    try {
+      const out = napiModule.budgetDecide(input);
+      if (typeof out === 'string') jsonOut = out;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut && bunLib) {
+    try {
+      const cap = 256;
+      const buf = Buffer.alloc(cap);
+      const { ptr } = (globalThis as any).Bun;
+      const written = bunLib.symbols.mochi_budget_decide(
+        Buffer.from(input + '\0'),
+        ptr(buf),
+        buf.length,
+      );
+      if (written < 0) return null;
+      let end = buf.indexOf(0);
+      if (end < 0) end = Math.min(written, buf.length);
+      jsonOut = buf.toString('utf8', 0, end);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut) return null;
+  try {
+    const parsed = JSON.parse(jsonOut) as { ratio: number; phase: number };
+    const phaseName = (BUDGET_PHASES[parsed.phase] ?? 'full') as BudgetPhase;
+    return { ratio: parsed.ratio, phase: parsed.phase, phaseName };
+  } catch {
+    return null;
+  }
+}
+
+/** Result of `nativeClassifyCommand`. */
+export type CommandRiskNative = 'low' | 'network' | 'destructive';
+
+/**
+ * Fast in-process Rust shell-command risk classifier. Mirrors
+ * `classifyCommand()` in `src/security.ts` byte-for-byte and runs on every
+ * shell tool call. Returns the risk label as a string.
+ */
+export function nativeClassifyCommand(cmd: string): CommandRiskNative | null {
+  initNativeCore();
+  if (!ffiAvailable) return null;
+
+  if (napiModule && typeof napiModule.classifyCommand === 'function') {
+    try {
+      const code = napiModule.classifyCommand(cmd);
+      if (typeof code === 'number') {
+        if (code === 0) return 'low';
+        if (code === 1) return 'network';
+        if (code === 2) return 'destructive';
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (bunLib) {
+    try {
+      const code = bunLib.symbols.mochi_classify_command(Buffer.from(cmd + '\0'));
+      if (code === 0) return 'low';
+      if (code === 1) return 'network';
+      if (code === 2) return 'destructive';
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/** Result of `nativeFoldOutput` — the head/tail line selection for a tool
+ *  result. Mirrors the line/byte logic in `src/core/tool-output.ts`. */
+export interface NativeFoldResult {
+  head: string[];
+  tail: string[];
+  omitted: number;
+  truncated: boolean;
+  truncatedBy: 'lines' | 'bytes' | 'none';
+  totalLines: number;
+  totalBytes: number;
+}
+
+/**
+ * Fast in-process Rust head/tail fold for tool output. Mirrors
+ * `applyToolOutputPolicy()` in `src/core/tool-output.ts` for the pure line
+ * selection; the TS wrapper keeps the file-spill and telemetry side effects.
+ * Returns null when the native core is unavailable.
+ */
+export function nativeFoldOutput(
+  text: string,
+  maxLines: number,
+  maxBytes: number,
+): NativeFoldResult | null {
+  initNativeCore();
+  if (!ffiAvailable) return null;
+
+  const input = JSON.stringify({ text, maxLines, maxBytes });
+  let jsonOut: string | null = null;
+
+  if (napiModule && typeof napiModule.foldOutput === 'function') {
+    try {
+      const out = napiModule.foldOutput(input);
+      if (typeof out === 'string') jsonOut = out;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut && bunLib) {
+    try {
+      const cap = 65_536;
+      const buf = Buffer.alloc(cap);
+      const { ptr } = (globalThis as any).Bun;
+      const written = bunLib.symbols.mochi_fold_output(
+        Buffer.from(input + '\0'),
+        ptr(buf),
+        buf.length,
+      );
+      if (written < 0) return null;
+      let end = buf.indexOf(0);
+      if (end < 0) end = Math.min(written, buf.length);
+      jsonOut = buf.toString('utf8', 0, end);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut) return null;
+  try {
+    const parsed = JSON.parse(jsonOut) as NativeFoldResult;
+    return parsed;
+  } catch {
+    return null;
+  }
 }

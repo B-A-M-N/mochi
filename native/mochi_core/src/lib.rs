@@ -9,6 +9,7 @@ pub mod codegraph;
 pub mod context;
 pub mod daemon;
 pub mod diff;
+pub mod fold;
 pub mod fuzzy;
 pub mod git;
 pub mod http_client;
@@ -20,6 +21,7 @@ pub mod planner;
 pub mod pty_manager;
 pub mod redact;
 pub mod repo;
+pub mod risk;
 pub mod search;
 pub mod skills;
 pub mod speculative_decoder;
@@ -45,6 +47,7 @@ pub use codegraph::*;
 pub use context::*;
 pub use daemon::*;
 pub use diff::*;
+pub use fold::*;
 pub use fuzzy::*;
 pub use git::*;
 pub use http_client::*;
@@ -56,6 +59,7 @@ pub use planner::*;
 pub use pty_manager::*;
 pub use redact::*;
 pub use repo::*;
+pub use risk::*;
 pub use search::*;
 pub use skills::*;
 pub use speculative_decoder::*;
@@ -229,6 +233,136 @@ pub unsafe extern "C" fn mochi_redact_secrets(
     }
     // Return the required length (excluding the NUL) so the caller can detect
     // truncation and retry with a bigger buffer.
+    (c_res.as_bytes().len()) as c_int
+}
+
+/// Per-turn budget ratio: most-constrained dimension wins. Returns ratio in
+/// [0, 1]. JSON in: {"limits":{t,c,d,tc,mc},"used":{t,c,d,tc,mc}} where
+/// non-finite values are encoded as `null` (matches the JS Number.POSITIVE_INFINITY
+/// convention). NaN/Inf in the JSON are also accepted as "no cap".
+/// JSON out: {"ratio":0.5,"phase":3} (phase: 0=exhausted,1=verify,2=cheap,3=reduced,4=full).
+#[no_mangle]
+pub unsafe extern "C" fn mochi_budget_decide(
+    input_ptr: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> c_int {
+    if input_ptr.is_null() || out_buf.is_null() || out_cap == 0 {
+        return -1;
+    }
+    let Ok(input) = (unsafe { CStr::from_ptr(input_ptr) }).to_str() else {
+        return -1;
+    };
+
+    // Minimal JSON extractor — only the fields we need, no full parser dep.
+    let limits = budget::BudgetLimitsInput {
+        max_tokens: json_f64(input, &["limits", "maxTokens"]).unwrap_or(f64::NAN),
+        max_cost_usd: json_f64(input, &["limits", "maxCostUsd"]).unwrap_or(f64::NAN),
+        max_duration_ms: json_f64(input, &["limits", "maxDurationMs"]).unwrap_or(0.0),
+        max_tool_calls: json_f64(input, &["limits", "maxToolCalls"]).unwrap_or(f64::NAN),
+        max_model_calls: json_f64(input, &["limits", "maxModelCalls"]).unwrap_or(f64::NAN),
+    };
+    let used = budget::BudgetUsedInput {
+        used_tokens: json_f64(input, &["used", "usedTokens"]).unwrap_or(0.0),
+        used_cost_usd: json_f64(input, &["used", "usedCostUsd"]).unwrap_or(0.0),
+        used_duration_ms: json_f64(input, &["used", "usedDurationMs"]).unwrap_or(0.0),
+        used_tool_calls: json_f64(input, &["used", "usedToolCalls"]).unwrap_or(0.0),
+        used_model_calls: json_f64(input, &["used", "usedModelCalls"]).unwrap_or(0.0),
+    };
+    let ratio = budget::budget_ratio(&limits, &used);
+    let phase = budget::budget_phase_code(ratio);
+
+    let payload = format!(r#"{{"ratio":{},"phase":{}}}"#, ratio, phase);
+    let c_res = match CString::new(payload) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let bytes = c_res.as_bytes_with_nul();
+    let copy_len = bytes.len().min(out_cap);
+    let dst = unsafe { slice::from_raw_parts_mut(out_buf as *mut u8, copy_len) };
+    dst.copy_from_slice(&bytes[..copy_len]);
+    if copy_len > 0 {
+        dst[copy_len - 1] = 0;
+    }
+    (c_res.as_bytes().len()) as c_int
+}
+
+/// Walk a flat JSON object by key path and return the f64 value, or None
+/// if the key is missing / null / not a number. Skips object/array braces
+/// (string-aware) so embedded quotes don't confuse the parse.
+fn json_f64(src: &str, path: &[&str]) -> Option<f64> {
+    let mut s = src;
+    for key in path {
+        // Find "key":
+        let needle = format!("\"{}\":", key);
+        let pos = s.find(&needle)?;
+        s = s[pos + needle.len()..].trim_start();
+    }
+    // Read the value: number, "null", or skip quoted string.
+    if s.starts_with("null") {
+        return None;
+    }
+    // Read up to first non-numeric terminator
+    let bytes = s.as_bytes();
+    let mut end = 0usize;
+    let mut seen_digit = false;
+    while end < bytes.len() {
+        let b = bytes[end];
+        if (b'0'..=b'9').contains(&b) || matches!(b, b'.' | b'-' | b'+' | b'e' | b'E') {
+            seen_digit = true;
+            end += 1;
+            continue;
+        }
+        break;
+    }
+    if !seen_digit {
+        return None;
+    }
+    s[..end].parse::<f64>().ok()
+}
+
+/// Classify a shell command's risk. Returns 0=low, 1=network, 2=destructive.
+#[no_mangle]
+pub unsafe extern "C" fn mochi_classify_command(cmd_ptr: *const c_char) -> c_int {
+    if cmd_ptr.is_null() {
+        return 0;
+    }
+    let Ok(cmd) = (unsafe { CStr::from_ptr(cmd_ptr) }).to_str() else {
+        return 0;
+    };
+    risk::classify_command(cmd) as c_int
+}
+
+/// Head+tail fold for tool output. JSON in: `{"text":"...","maxLines":N,"maxBytes":N}`.
+/// JSON out: `{"head":[...],"tail":[...],"omitted":N,"truncated":true|false,
+/// "truncatedBy":"lines"|"bytes"|"none","totalLines":N,"totalBytes":N}`.
+#[no_mangle]
+pub unsafe extern "C" fn mochi_fold_output(
+    input_ptr: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> c_int {
+    if input_ptr.is_null() || out_buf.is_null() || out_cap == 0 {
+        return -1;
+    }
+    let Ok(input) = (unsafe { CStr::from_ptr(input_ptr) }).to_str() else {
+        return -1;
+    };
+    let text = fold::json_string_field(input, "text").unwrap_or_default();
+    let max_lines = fold::json_usize_field(input, "maxLines").unwrap_or(400);
+    let max_bytes = fold::json_usize_field(input, "maxBytes").unwrap_or(20 * 1024);
+    let json = fold::fold_output_json(&text, max_lines, max_bytes);
+    let c_res = match CString::new(json) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let bytes = c_res.as_bytes_with_nul();
+    let copy_len = bytes.len().min(out_cap);
+    let dst = unsafe { slice::from_raw_parts_mut(out_buf as *mut u8, copy_len) };
+    dst.copy_from_slice(&bytes[..copy_len]);
+    if copy_len > 0 {
+        dst[copy_len - 1] = 0;
+    }
     (c_res.as_bytes().len()) as c_int
 }
 
