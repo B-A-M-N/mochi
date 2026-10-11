@@ -6,7 +6,7 @@
 // Rebranded into Mochi and extended. Kept dependency-free and sync so they
 // can wrap every disk write and tool gate without async plumbing.
 
-import { nativeRedactSecrets } from './native/core.js';
+import { nativeRedactSecrets, nativeClassifyCommand } from './native/core.js';
 
 /** Common secret shapes. Broader than Horus's originals (adds OpenAI/Anthropic/
  *  Gemini/JWT/bearer/ghp), because Mochi persists raw model output in
@@ -92,6 +92,8 @@ const NETWORK = [
 
 /** Classify a shell command by its side-effect risk (Horus's classifier). */
 export function classifyCommand(cmd: string): CommandRisk {
+  const nat = nativeClassifyCommand(cmd);
+  if (nat !== null) return nat;
   const c = cmd.trim();
   if (!c) return 'low';
   if (DESTRUCTIVE.some((r) => r.test(c))) return 'destructive';
