@@ -302,14 +302,10 @@ export const toolFactoryTool: Tool = {
   def: {
     name: 'tool_factory',
     description:
-      'Create, test, list, inspect, or remove your own reusable TOOLS — executable shell-backed helpers stored as ' +
-      '.mochi/tools/<name>/tool.json and hot-loaded into your toolset (callable by name immediately, this session and ' +
-      'every future session in this project). Use whenever you solve a problem with a non-trivial command pipeline or ' +
-      'repeat a multi-command workflow: capture it once as a tool instead of re-deriving it. ' +
-      'Commands receive arguments as JSON in $MOCHI_TOOL_ARGS (plus MOCHI_TOOL_NAME/MOCHI_TOOL_DIR env) and their stdout ' +
-      'becomes the tool output. Example command: `python3 scripts/lint_scope.py "$MOCHI_TOOL_ARGS"`. ' +
-      'Actions: create (name+description+command, parameters JSON array optional, permission, timeoutMs); ' +
-      'test (name + args — run it right now to verify before relying on it); list; show (name); remove (name — archived).',
+      'Author your own reusable TOOLS: shell-backed helpers in .mochi/tools/<name>/tool.json, hot-loaded and callable by name this session and every future one. ' +
+      'Use when a non-trivial command pipeline or multi-command workflow recurs: capture it once instead of re-deriving it. ' +
+      'Commands get JSON args via $MOCHI_TOOL_ARGS (plus MOCHI_TOOL_NAME/MOCHI_TOOL_DIR); stdout becomes the tool output. ' +
+      'Actions: create (name+description+command, optional parameters JSON array, permission, timeoutMs); test (name+args — verify before relying on it); list; show (name); remove (name — archived).',
     parameters: [
       { name: 'action', type: 'string', description: 'create | test | list | show | remove', required: true },
       { name: 'name', type: 'string', description: 'Tool name: lowercase a-z + digits + underscores, must start with a letter (e.g. db_row_count)', required: false },

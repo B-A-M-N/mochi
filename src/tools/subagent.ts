@@ -12,7 +12,7 @@ export const subagentTool: Tool = {
   def: {
     name: 'subagent',
     description:
-      'Delegate a well-scoped subtask or concurrent batch of subtasks to fresh child agents. Provide either a single "prompt" (with optional "role") or a list of "tasks" ([{prompt: string, role?: string}]) to parallelize research, testing, or isolated subproblems. Returns child summary(s).',
+      'Delegate a well-scoped subtask (or batch of subtasks) to fresh child agents: single "prompt" (+ optional "role") or a "tasks" list to parallelize research, testing, or isolated subproblems. Returns child summaries. Keep prompts self-contained — the child cannot ask questions.',
     parameters: [
       { name: 'prompt', type: 'string', description: 'Self-contained instructions for a single subtask', required: false },
       { name: 'role', type: 'string', description: 'Specialized role for the child: lead, coder, reviewer, tester, researcher, debugger, security, architect, devops, db_admin, frontend, backend, performance, tech_writer, qa_engineer, data_scientist (defaults to coder)', required: false },

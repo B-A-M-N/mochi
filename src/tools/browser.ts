@@ -52,12 +52,11 @@ export const browserTool: Tool = {
   def: {
     name: 'browser',
     description:
-      'Automate a real web browser (Cline-grade). Launch a headless Firefox/Chromium, ' +
-      'navigate, extract page text/DOM/links/inputs, click, type/fill, run JS, and take ' +
-      'screenshots. Useful for testing web apps, scraping dynamic pages, and verifying UI. ' +
+      'Drive a real headless browser (navigate, read text/DOM/links, click, type/fill, eval JS, screenshot). ' +
+      'For testing web apps, dynamic pages, and UI verification. ' +
       'Commands: navigate <url> | click <css> | type <css> <text> | fill <css> <text> | ' +
       'text [css] | links [css] | html [css] | inputs [css] | eval <js> | screenshot <path>. ' +
-      'Pass `url:` to open a page AND act on it in one call (e.g. `click a.button url:https://...`).',
+      'Prefix `url:` to open a page and act in one call.',
     parameters: [
       { name: 'command', type: 'string', description: 'Action: navigate|get|click|type|fill|text|links|html|inputs|eval|screenshot|snap', required: true },
       { name: 'selector', type: 'string', description: 'CSS selector for click/type/fill/text/links/html/inputs', required: false },

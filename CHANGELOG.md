@@ -6,6 +6,8 @@
 - **GoalResult.filesModified plumbing (correctness)** — `GoalEngine` aggregates per-task `AgentResult.filesModified` (success + partial-failure work) into `GoalResult.filesModified`; SDK/daemon `runPromptDetailed` finally report real files instead of hardcoded `[]`. Proven end-to-end by a scripted write→ledger test.
 - **Hooks lifecycle audit closed** — all 17 `HookName` values pinned: every one fires through `runBefore`/`runAfter` with marker scripts, veto semantics verified, plus a static test failing on any future hook name without a lifecycle call site. Hook subprocesses moved onto the central exec policy (timeout→SIGKILL, output cap).
 - **Windows CI + vitest 5** — matrix adds `windows-latest` (bash shell for POSIX steps); toolchain bumped to vitest 5.0.3 + vite 7, full suite green (1494 passed), `npm audit` back to **0 vulnerabilities**.
+- **Token efficiency** — tool-schema diet on the heaviest defs (tool_factory/skill_manage/browser/subagent trimmed with semantics preserved); Anthropic prompt-cache breakpoints (above) attack the ~5KB/turn system-prompt rebill; lean/heavy tiers verified wired as the default path.
+- **Shell completions** — `mochi completion bash|zsh|fish` with a self-checking command table (a test fails on any CLI command without completion coverage); bash output validated with `bash -n` + live eval.
 - **`as any`: 125 → 0** in shipped source (only comments mention it now); every removal either dropped a needless cast or fixed the underlying lie (dead `/circle` read, malformed browser events, `[object Object]` badge, capability/read-cache fork, untyped FFI boundary, mistyped exec errors).
 - **Multi-tab sessions (opencode-style)**
 

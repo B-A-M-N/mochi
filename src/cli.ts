@@ -230,6 +230,7 @@ Usage:
   mochi reasoning [low|med|high|max] # view or set reasoning depth
   mochi tui
   mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
+  mochi completion <bash|zsh|fish>   # print shell completion script
   mochi perf
   mochi "<prompt>" --plan            # plan-then-act: research + return a plan, no edits
 
@@ -706,6 +707,24 @@ async function main() {
   if (first === 'tui') {
     const { launchTui } = await import('./tui/app.js');
     await launchTui(runtime);
+    return;
+  }
+  if (first === 'completion') {
+    const { completionFor } = await import('./completion.js');
+    const shell = positional[1] ?? '';
+    if (!shell || shell === 'help' || shell === '--help') {
+      console.log('Usage: mochi completion <bash|zsh|fish>  # print the init script; eval it or save to your rc file');
+      console.log('  bash: eval "$(mochi completion bash)"');
+      console.log('  zsh:  mochi completion zsh > ~/.zfunc/_mochi  # + fpath');
+      console.log('  fish: mochi completion fish > ~/.config/fish/completions/mochi.fish');
+      return;
+    }
+    try {
+      console.log(completionFor(shell));
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
     return;
   }
   if (first === 'term' || first === 'terminal' || first === 'open') {

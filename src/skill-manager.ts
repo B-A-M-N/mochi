@@ -341,16 +341,9 @@ export const skillManageTool: Tool = {
   def: {
     name: 'skill_manage',
     description:
-      'Create, edit, patch, or delete your own reusable procedural-memory skills (SKILL.md files). ' +
-      'Skills are how you get smarter over time: capture every non-obvious fix, repeated workflow, or hard-won ' +
-      'convention as a structured guide (trigger conditions → numbered steps with reasons → pitfalls → verification) ' +
-      'so future sessions start with the answer instead of re-deriving it. Load the `skill-authoring` skill once for ' +
-      'the quality bar before your first create. Skills are advertised to every future session and the user can list ' +
-      'and read them with `mochi skills`. Author-created skills persist across projects when saved via category ' +
-      '"global" (stored under ~/.mochi/skills/); default is per-project .mochi/skills/. The background curator keeps ' +
-      'the tree healthy. Actions: create (name+description+body, optional category); ' +
-      'edit (name + new description/body); patch (name + old_string/new_string, replace_all optional); ' +
-      'delete (name) — archives, never hard-deletes.',
+      'Author your own reusable SKILL.md skills (procedural memory): capture recurring fixes, workflows, and conventions as trigger conditions → numbered steps → pitfalls → verification, so future sessions start with answers. ' +
+      'Load the `skill-authoring` skill once for the quality bar before your first create. Default scope is per-project (.mochi/skills/); category "global" persists across projects (~/.mochi/skills/). ' +
+      'Actions: create (name+description+body, optional category); edit (name + new description/body); patch (name + old_string/new_string); delete (name — archived, never hard-deleted).',
     parameters: [
       { name: 'action', type: 'string', description: 'create | edit | patch | delete', required: true },
       { name: 'name', type: 'string', description: 'Skill name (slugified for the directory)', required: true },
