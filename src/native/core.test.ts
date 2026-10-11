@@ -10,6 +10,11 @@ import {
   nativeTruncateToTokens,
   nativeUnifiedDiff,
   nativeSkeletonizeSource,
+  nativeRedactSecrets,
+  nativeClassifyCommand,
+  nativeBudgetDecide,
+  nativeFoldOutput,
+  nativeCommandAvailable,
 } from './core.js';
 import { fuzzyFindUnique } from '../tools/fuzzy-match.js';
 
@@ -121,6 +126,85 @@ export class Calculator {
       expect(skeleton).toContain('Structural Skeleton');
       expect(skeleton).toContain('add');
       expect(skeleton).toContain('Calculator');
+    }
+  });
+});
+
+describe('slices 2-5 native ops (smoke presence + shape)', () => {
+  it('nativeRedactSecrets redacts an OpenAI key when available', () => {
+    if (!isNativeCoreAvailable()) return;
+    const out = nativeRedactSecrets('cfg.api_key="sk-abcdefghijklmnop1234"');
+    expect(out).not.toBeNull();
+    if (out !== null) {
+      expect(out).toContain('[secret-redacted]');
+      expect(out).not.toContain('sk-abcdefghijklmnop1234');
+    }
+  });
+
+  it('nativeClassifyCommand returns a known risk label when available', () => {
+    if (!isNativeCoreAvailable()) return;
+    expect(nativeClassifyCommand('ls -la')).toBe('low');
+    expect(nativeClassifyCommand('rm -rf /')).toBe('destructive');
+    expect(nativeClassifyCommand('npm install')).toBe('network');
+  });
+
+  it('nativeBudgetDecide returns ratio+phase in [0,1] when available', () => {
+    if (!isNativeCoreAvailable()) return;
+    const r = nativeBudgetDecide(
+      { maxTokens: 1000, maxCostUsd: 0.5, maxDurationMs: 60_000, maxToolCalls: Number.POSITIVE_INFINITY, maxModelCalls: Number.POSITIVE_INFINITY },
+      { usedTokens: 200, usedCostUsd: 0.1, usedDurationMs: 30_000, usedToolCalls: 0, usedModelCalls: 0 },
+    );
+    expect(r).not.toBeNull();
+    if (r !== null) {
+      expect(r.ratio).toBeGreaterThan(0);
+      expect(r.ratio).toBeLessThanOrEqual(1);
+      expect(typeof r.phase).toBe('number');
+      expect(['exhausted', 'verify', 'cheap', 'reduced', 'full']).toContain(r.phaseName);
+    }
+  });
+
+  it('nativeFoldOutput passthrough is totalLines==count for short input', () => {
+    if (!isNativeCoreAvailable()) return;
+    const r = nativeFoldOutput('a\nb\nc', 100, 1000);
+    expect(r).not.toBeNull();
+    if (r !== null) {
+      expect(r.truncated).toBe(false);
+      expect(r.head).toEqual(['a', 'b', 'c']);
+      expect(r.tail).toEqual([]);
+      expect(r.totalLines).toBe(3);
+    }
+  });
+
+  it('nativeCommandAvailable resolves /bin/sh (or sh on PATH)', () => {
+    if (!isNativeCoreAvailable()) return;
+    // First try absolute path (portable across distros).
+    const abs = nativeCommandAvailable('/bin/sh -c echo', '/', '');
+    if (abs !== null) {
+      expect(abs.available).toBe(true);
+      expect(abs.bin).toBe('/bin/sh');
+    }
+    // Then try PATH-resolved `sh` (always present on Unix).
+    const pathd = nativeCommandAvailable('sh -c echo', '/', process.env.PATH ?? '/usr/bin:/bin');
+    if (pathd !== null) {
+      expect(pathd.bin).toBe('sh');
+    }
+    // Unknown binary must report unavailable, not throw.
+    const none = nativeCommandAvailable('mochi-xyz-pretend-binary', '/', process.env.PATH ?? '/usr/bin:/bin');
+    if (none !== null) {
+      expect(none.available).toBe(false);
+      expect(none.bin).toBe('mochi-xyz-pretend-binary');
+    }
+  });
+
+  it('nativeCommandAvailable handles npx + cd && chain', () => {
+    if (!isNativeCoreAvailable()) return;
+    const r = nativeCommandAvailable('cd /tmp && ls -la', '/', process.env.PATH ?? '/usr/bin:/bin');
+    if (r !== null) {
+      expect(r.bin).toBe('ls');
+    }
+    const npx = nativeCommandAvailable('npx vitest run', '/', process.env.PATH ?? '/usr/bin:/bin');
+    if (npx !== null) {
+      expect(npx.bin).toBe('npm');
     }
   });
 });
