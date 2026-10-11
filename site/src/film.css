@@ -1,53 +1,64 @@
-/* ── CINEMATIC 35MM FILM SYSTEM ─────────────────────────────── */
+/* ── ANALOG VHS TAPE / 35MM FILM SYSTEM ─────────────────────── */
+/* Organic, shaky, living grain. No scanlines, no CRT geometry. */
 
-/* Layer 1: ORGANIC GRAIN — fine monochrome photographic noise.
-   3 stacked tiles at different scales break up tiling artifacts;
-   steps() timing gives the authentic frame-snap of real film. */
+/* Layer 1: MAIN GRAIN FIELD — irregular, living, panning.
+   Two turbulence tiles at different scales blended → organic clumping
+   like real film emulsion, not digital static. */
 .film-grain {
   position: fixed; inset: -100%;
   z-index: 9999; pointer-events: none;
-  opacity: .26;
+  opacity: .3;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.14 0 0 0 0.85 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.14 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' seed='71' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.14 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='3' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E");
   animation:
-    grainShift 0.48s steps(3) infinite,
-    grainBreathe 7s ease-in-out infinite;
+    grainJitter 0.24s steps(2) infinite,
+    grainDrift 4.5s ease-in-out infinite,
+    grainExposure 6s ease-in-out infinite;
   will-change: transform, opacity;
 }
 
-@keyframes grainShift {
+/* frame-snap: jumps to a new position every ~2 frames, like a projector gate */
+@keyframes grainJitter {
   0%   { transform: translate3d(0, 0, 0); }
-  16%  { transform: translate3d(-3.2%, 1.8%, 0); }
-  33%  { transform: translate3d(2.4%, -3.5%, 0); }
-  50%  { transform: translate3d(-1.6%, 2.9%, 0); }
-  66%  { transform: translate3d(3.6%, 0.9%, 0); }
-  83%  { transform: translate3d(-2.8%, -1.4%, 0); }
+  14%  { transform: translate3d(-4%, 2.6%, 0); }
+  28%  { transform: translate3d(3.2%, -3.8%, 0); }
+  42%  { transform: translate3d(-2.4%, 1.2%, 0); }
+  57%  { transform: translate3d(4.6%, 0.8%, 0); }
+  71%  { transform: translate3d(-3.2%, -2.2%, 0); }
+  85%  { transform: translate3d(1.8%, 3.4%, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
-/* organic irregular exposure: grain density subtly swells/fades per frame batch */
-@keyframes grainBreathe {
-  0%, 100% { opacity: .26; }
-  23% { opacity: .31; }
-  47% { opacity: .22; }
-  71% { opacity: .29; }
+/* slow organic wander: the whole grain field creeps around, like film
+   weave — the gate mechanism in a projector */
+@keyframes grainDrift {
+  0%, 100% { background-position: 0 0, 0 0; }
+  22% { background-position: -18px 12px, 8px -6px; }
+  45% { background-position: 14px -20px, -10px 14px; }
+  68% { background-position: -10px -8px, 16px -12px; }
+  86% { background-position: 20px 18px, -14px 6px; }
+}
+/* exposure breathing: grain density swells/fades like lamp brightness */
+@keyframes grainExposure {
+  0%, 100% { opacity: .3; }
+  25% { opacity: .36; }
+  52% { opacity: .25; }
+  74% { opacity: .34; }
 }
 
-/* Layer 2: CINEMATIC VIGNETTE — soft anamorphic falloff */
+/* Layer 2: VIGNETTE — soft anamorphic falloff */
 .film-vignette {
   position: fixed; inset: 0;
   z-index: 9998; pointer-events: none;
-  background:
-    radial-gradient(ellipse 120% 105% at 50% 46%, transparent 58%, rgba(18,14,38,.26) 100%);
+  background: radial-gradient(ellipse 125% 110% at 50% 46%, transparent 56%, rgba(18,14,38,.3) 100%);
 }
 
-/* Layer 3: EXPOSURE FLICKER — restrained, like a projector lamp */
+/* Layer 3: EXPOSURE FLICKER — the projector lamp, restrained */
 .film-flicker {
   position: fixed; inset: 0;
   z-index: 9997; pointer-events: none;
   background: #fff;
-  opacity: .015;
+  opacity: .012;
   animation: flick 5.5s linear infinite;
   will-change: opacity;
 }
@@ -64,15 +75,12 @@
   93% { opacity: .01; }
 }
 
-/* Layer 4: DUST + SCRATCHES — sparse motes, hair-thin scratches that
-   drift and occasionally appear/disappear like film wear */
+/* Layer 4: TAPE DUST + HAIR SCRATCHES — sparse motes + 1px vertical
+   hairlines that occasionally slide across frame like worn film */
 .film-dust {
   position: fixed; inset: -100%;
-  z-index: 9995; pointer-events: none;
-  background-image:
-    /* scratches: 1px vertical hairlines at varying opacity */
-    linear-gradient(to bottom, transparent 96%, rgba(255,255,255,.0) 96%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900'%3E%3Cg stroke='%23ffffff' stroke-width='1'%3E%3Cline x1='211' y1='0' x2='209' y2='900' opacity='0.05'/%3E%3Cline x1='634' y1='0' x2='637' y2='900' opacity='0.035'/%3E%3Cline x1='1082' y1='0' x2='1080' y2='900' opacity='0.06'/%3E%3C/g%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='330' cy='120' r='0.9' opacity='0.10'/%3E%3Ccircle cx='902' cy='510' r='0.7' opacity='0.08'/%3E%3Ccircle cx='1210' cy='260' r='1.1' opacity='0.07'/%3E%3Ccircle cx='480' cy='700' r='0.6' opacity='0.09'/%3E%3Ccircle cx='760' cy='80' r='0.8' opacity='0.06'/%3E%3Ccircle cx='1120' cy='820' r='0.7' opacity='0.08'/%3E%3Ccircle cx='150' cy='420' r='1.0' opacity='0.05'/%3E%3Ccircle cx='990' cy='330' r='0.5' opacity='0.09'/%3E%3C/g%3E%3Cg fill='%23141026'%3E%3Ccircle cx='540' cy='240' r='0.8' opacity='0.10'/%3E%3Ccircle cx='1250' cy='600' r='0.6' opacity='0.08'/%3E%3Ccircle cx='270' cy='780' r='0.9' opacity='0.07'/%3E%3Ccircle cx='830' cy='460' r='0.7' opacity='0.09'/%3E%3C/g%3E%3C/svg%3E");
+  z-index: 9996; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900'%3E%3Cg stroke='%23ffffff' stroke-width='1'%3E%3Cline x1='211' y1='0' x2='209' y2='900' opacity='0.055'/%3E%3Cline x1='634' y1='0' x2='637' y2='900' opacity='0.04'/%3E%3Cline x1='1082' y1='0' x2='1080' y2='900' opacity='0.065'/%3E%3C/g%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='330' cy='120' r='0.9' opacity='0.11'/%3E%3Ccircle cx='902' cy='510' r='0.7' opacity='0.09'/%3E%3Ccircle cx='1210' cy='260' r='1.1' opacity='0.08'/%3E%3Ccircle cx='480' cy='700' r='0.6' opacity='0.10'/%3E%3Ccircle cx='760' cy='80' r='0.8' opacity='0.07'/%3E%3Ccircle cx='1120' cy='820' r='0.7' opacity='0.09'/%3E%3Ccircle cx='150' cy='420' r='1.0' opacity='0.06'/%3E%3Ccircle cx='990' cy='330' r='0.5' opacity='0.10'/%3E%3C/g%3E%3Cg fill='%23141026'%3E%3Ccircle cx='540' cy='240' r='0.8' opacity='0.11'/%3E%3Ccircle cx='1250' cy='600' r='0.6' opacity='0.09'/%3E%3Ccircle cx='270' cy='780' r='0.9' opacity='0.08'/%3E%3Ccircle cx='830' cy='460' r='0.7' opacity='0.10'/%3E%3C/g%3E%3C/svg%3E");
   background-repeat: repeat;
   animation: dustDrift 13s steps(8) infinite;
   opacity: .8;
@@ -88,10 +96,10 @@
 /* Layer 5: WARM LIGHT LEAKS — subtle amber breathes at screen edges */
 .film-leak {
   position: fixed; inset: 0;
-  z-index: 9994; pointer-events: none;
+  z-index: 9995; pointer-events: none;
   background:
-    radial-gradient(ellipse 40% 55% at 0% 30%, rgba(255,158,88,.05), transparent 70%),
-    radial-gradient(ellipse 35% 50% at 100% 70%, rgba(255,120,80,.04), transparent 70%);
+    radial-gradient(ellipse 40% 55% at 0% 30%, rgba(255,158,88,.055), transparent 70%),
+    radial-gradient(ellipse 35% 50% at 100% 70%, rgba(255,120,80,.045), transparent 70%);
   animation: leakBreathe 11s ease-in-out infinite;
   will-change: opacity;
 }
@@ -101,27 +109,9 @@
   62% { opacity: .35; }
 }
 
-/* Layer 6: CRT SCANLINES — kept from previous round */
-.film-scanlines {
-  position: fixed; inset: 0;
-  z-index: 9996; pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(20, 16, 40, 0.06) 3px,
-    transparent 4px
-  );
-  animation: scanDrift 8s linear infinite;
-}
-@keyframes scanDrift {
-  from { background-position: 0 0; }
-  to { background-position: 0 100px; }
-}
-
 /* Reduced motion: freeze all animation, keep static texture only */
 @media (prefers-reduced-motion: reduce) {
-  .film-grain, .film-dust, .film-flicker, .film-leak, .film-scanlines {
+  .film-grain, .film-dust, .film-flicker, .film-leak {
     animation: none !important;
   }
   .film-flicker { opacity: .015; }
@@ -130,6 +120,6 @@
 
 /* Mobile: lighter grain (denser DPR makes noise heavier) + no leaks */
 @media (max-width: 768px) {
-  .film-grain { opacity: .18; }
+  .film-grain { opacity: .22; }
   .film-leak { display: none; }
 }
