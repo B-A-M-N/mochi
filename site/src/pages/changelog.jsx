@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import Noise from '../Noise.jsx';
 import { AnimatedContent, SplitText, ScrollFloat } from '../anim.jsx';
 
 const RELEASES = [
@@ -58,31 +57,23 @@ function Changelog() {
   const [open, setOpen] = useState('0.20.0');
   return (
     <>
-      <Noise opacity={0.09} size={1} fps={30} blendMode="overlay" contrast={0.6} dust={0.2} scratches={0.15} flicker={0.1} fixed zIndex={9999} />
       <div className="pagehead">
         <div className="wrap">
-          <div className="pagehead-row">
-            <div className="pagehead-col">
-              <AnimatedContent direction="bottom" delay={0.1}>
-                <div className="hero-eyebrow">
-                  <span className="sparkle" />
-                  CHANGELOG
-                </div>
-              </AnimatedContent>
-              <ScrollFloat moveDistance={24}>
-                <h1 className="pagehead-title">Every release, on the record.</h1>
-              </ScrollFloat>
-              <AnimatedContent direction="bottom" delay={0.5}>
-                <p className="lede" style={{ marginTop: 16, maxWidth: 620 }}>
-                  31 releases shipped. Click any version to expand the full notes.
-                </p>
-              </AnimatedContent>
+          <div className="pagehead-inner">
+            <div className="hero-badge">
+              <span className="badge-glow" />
+              <span className="badge-pill">CHANGELOG</span>
+              <span>31 Releases Shipped · Full Traceability</span>
             </div>
+            <h1 className="pagehead-title">Every release, on the record.</h1>
+            <p className="pagehead-lede">
+              Continuous delivery from Day 1. Inspect architectural milestones, runtime hardening, and release notes across all 31 releases.
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="wrap" style={{ padding: '24px 24px 80px' }}>
+      <div className="wrap" style={{ padding: '0 24px 80px' }}>
         <div className="rel-list">
           {RELEASES.map((r, i) => (
             <AnimatedContent key={r.v} direction="bottom" delay={Math.min(i * 0.04, 0.3)}>
