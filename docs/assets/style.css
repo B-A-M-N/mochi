@@ -1112,3 +1112,196 @@ html { scroll-behavior: smooth; }
 
 /* remove ALL emojis from UI: hide emoji glyph spans */
 .card-icon, .emoji { display: none !important; }
+
+
+/* ═══════════ v16 — PREMIUM DESIGN OVERHAUL ═══════════ */
+
+/* refined type: tighter display tracking, larger scale contrast */
+:root {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Space Grotesk', -apple-system, sans-serif;
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --shadow-card: 0 1px 2px rgba(20,16,50,.04), 0 12px 40px -12px rgba(90,70,220,.10);
+  --shadow-lift: 0 2px 4px rgba(20,16,50,.05), 0 24px 64px -16px rgba(90,70,220,.18);
+}
+
+/* ── TYPOGRAPHY ── */
+.hero-title, .section-title, .pagehead-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  font-weight: 560;
+}
+.hero-title { font-size: clamp(3.4rem, 7.5vw, 6.2rem) !important; }
+.section-title { font-size: clamp(2.2rem, 4.6vw, 3.6rem) !important; }
+.accent-title { font-style: italic; font-weight: 480; }
+.hero-sub {
+  font-size: clamp(1.05rem, 1.5vw, 1.24rem) !important;
+  line-height: 1.65 !important;
+  letter-spacing: -0.008em;
+  max-width: 34em;
+}
+.section-desc, .flow-desc, .hero-eyebrow, .section-tag {
+  letter-spacing: 0.02em;
+}
+.hero-eyebrow, .section-tag {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  border-radius: 100px !important;
+  padding: 8px 16px !important;
+}
+
+/* ── BUTTONS: solid, generous, no gradient toys ── */
+.btn {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  border-radius: 100px !important;
+  padding: 15px 28px !important;
+  font-size: 15px !important;
+  transition: transform .35s var(--ease-out), box-shadow .35s var(--ease-out), background .2s !important;
+}
+.btn-primary {
+  background: var(--ink) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 30px -8px rgba(20,16,50,.35) !important;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 44px -10px rgba(20,16,50,.42) !important; }
+.btn-secondary, .btn-outline {
+  background: rgba(255,255,255,.7) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline) !important;
+  color: var(--ink) !important;
+}
+.btn-secondary:hover, .btn-outline:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139,117,246,.45) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* ── CARDS: quiet luxury — hairline, deep soft shadow on hover ── */
+.card, .rel, .feat-card, .cap-card, .term, .metric-block, .big-stat {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--hairline) !important;
+  box-shadow: var(--shadow-card) !important;
+  transition: transform .5s var(--ease-out), box-shadow .5s var(--ease-out), border-color .3s !important;
+}
+.card:hover, .rel:hover, .feat-card:hover, .cap-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift) !important;
+  border-color: rgba(139,117,246,.28) !important;
+}
+
+/* ── NAV: cleaner, tighter ── */
+header.site, .site-nav {
+  border-radius: 100px !important;
+  padding: 10px 14px !important;
+  backdrop-filter: blur(16px) saturate(1.4);
+  background: rgba(255,255,255,.72) !important;
+  box-shadow: 0 1px 3px rgba(20,16,50,.06), 0 12px 40px -12px rgba(90,70,220,.12) !important;
+}
+.nav-link { font-size: 13.5px !important; }
+.nav-cta {
+  border-radius: 100px !important;
+  background: var(--ink) !important; color: #fff !important;
+  padding: 9px 18px !important;
+}
+
+/* ── SECTIONS: more breathing room, rhythm ── */
+section, .section { padding-block: clamp(90px, 12vh, 150px); }
+.wrap, .container { max-width: 1160px; }
+
+/* stats: huge numerals, quiet labels */
+.stat-val {
+  font-family: var(--font-display) !important;
+  font-size: clamp(2.6rem, 4.5vw, 4rem) !important;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.stat-label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px !important;
+  font-weight: 600;
+}
+
+/* flow: numbers as display accents */
+.flow-num {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.4em;
+}
+
+/* ── TERMINAL BLOCK: premium depth ── */
+.term {
+  background: linear-gradient(175deg, #16141f 0%, #100e18 100%) !important;
+  box-shadow: 0 24px 80px -24px rgba(60,40,160,.45), inset 0 1px 0 rgba(255,255,255,.06) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+}
+.term-head { border-bottom: 1px solid rgba(255,255,255,.06) !important; }
+
+/* ── MASCOT AREA: soft glow pedestal ── */
+.mascot-stage, .hero-art {
+  filter: drop-shadow(0 40px 60px rgba(120,90,255,.22));
+}
+
+/* ── FOOTER: airy ── */
+.site-footer { padding-block: 80px 40px; }
+.footer-col h5 {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px !important;
+}
+
+/* ── CHARTS: rounder bars, softer tracks ── */
+.htrack, .bchart-track { border-radius: 100px !important; }
+.hfill, .bchart-fill { border-radius: 100px !important; }
+
+/* scroll progress accent */
+.scroll-progress, .scroll-progress-bar {
+  background: linear-gradient(90deg, var(--purple), var(--purple-dark)) !important;
+}
+
+/* selection */
+::selection { background: rgba(139,117,246,.25); }
+
+/* focus rings */
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* smooth global easing */
+* { -webkit-font-smoothing: antialiased; }
+html { scroll-behavior: smooth; }
+
+/* v16.1 fixes from audit */
+
+/* headline line 2: quiet confidence — no gradient, no italic weight strain */
+.accent-title.hero-title, .hero-title.accent-title {
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--purple-dark) !important;
+  font-style: italic;
+  font-weight: 500 !important;
+}
+
+/* blobs: keep decor out of text areas */
+.bg-blob { opacity: .32; }
+.bg-blob-2 { left: -220px !important; }
+.bg-dot, .bg-sparkle { opacity: .14; }
+
+/* v16.2: blob under step text — kill overlap friction at the source */
+.bg-blob-3 { bottom: -260px !important; left: -260px !important; opacity: .22 !important; }
+.bg-blob-1 { right: -280px !important; opacity: .28 !important; }
+/* body copy: darker for AA contrast everywhere */
+.hero-sub, .section-desc, .flow-desc, .cap-desc, .card p, .card-desc,
+.doc-body p, .doc-body li, .rel-sum, .rel-body {
+  color: #565568 !important;
+  font-weight: 480 !important;
+}
