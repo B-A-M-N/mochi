@@ -18,6 +18,8 @@ import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo.js';
 import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../taskkind.js';
+import { trimToLeanTier } from '../tools/index.js';
+import { classifyTaskTier } from '../model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../diagnostics.js';
 import type { AgentProfile } from '../types.js';
@@ -387,6 +389,7 @@ export class Agent {
   private selfReviewCount = 0;
   private taskRunExecuted = false;
   private taskKind?: import('../taskkind.js').TaskKind;
+  private task?: import('../types.js').Task;
   private contextCutoffNudged = false;
   private lastCompletionAnswer = '';
   private sameAnswerStreak = 0;
@@ -641,15 +644,26 @@ Continue from 'Next:', do not redo completed progress.`,
     } catch { /* best-effort */ }
 
     let taskKind = this.taskKind = classifyTaskKind(task);
+    this.task = task;
     // MCH-91: task-adaptive tool advertising — focused coding tasks don't need
     // browser/db/PR/SQL schemas burning ~4-5K tokens on EVERY call. Trim heavy
     // tools unless the task text itself signals them (trimHeavyTools is a no-op
     // then); the model can pull any back mid-run via `load_tools`.
     if (taskKind === 'implement' || taskKind === 'fix' || taskKind === 'refactor' || taskKind === 'test') {
-      const trimmed = trimHeavyTools(this.tools, `${task.title} ${task.description ?? ''}`);
+      const taskText = `${task.title} ${task.description ?? ''}`;
+      // MCH-110: lean tier first — simple focused coding tasks advertise only
+      // the ~20 core tools (~2.5K tokens) instead of ~56 (~7K). Restores are
+      // identical to mch91: the model calls `load_tools` mid-run.
+      const leaned = trimToLeanTier(this.tools, taskText);
+      if (leaned > 0) {
+        this.toolDefs = [...this.tools.values()].map((t) => t.def);
+        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch110] lean tier: deferred ${leaned} tools for ${taskKind} task (load_tools restores them)` });
+      } else {
+      const trimmed = trimHeavyTools(this.tools, taskText);
       if (trimmed > 0) {
         this.toolDefs = [...this.tools.values()].map((t) => t.def);
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
+      }
       }
     }
     const repo = detectRepo(this.cwd);
@@ -2023,23 +2037,32 @@ Continue from 'Next:', do not redo completed progress.`,
         }
         // Empty response: the model returned nothing (common with overloaded
         // free providers or reasoning models that only emit thinking tokens).
-        // Retry with real exponential backoff — free-tier queues routinely
-        // drop one or two requests in a row and recover within seconds —
-        // then give up instead of spinning to maxIterations.
+        // Quality slice 2: escalate EARLIER — 2 consecutive empty responses is
+        // a strong signal the active model is misbehaving (rate-limited,
+        // overloaded, or returning reasoning-only). Try one backoff, then
+        // step up to a different model on the same provider; if that fails,
+        // switch providers. Don't burn 4 attempts before reacting — each
+        // empty response is a 30-90s round-trip the user is waiting for.
         this.emptyResponseCount++;
-        if (this.emptyResponseCount >= 4) {
+        if (this.emptyResponseCount === 2) {
+          // First escalation: try a different model on the same provider.
           const alt = this.pickAlternateModel();
           if (alt) {
-            this.events.emit({ type: 'agent:log', agentId: this.id, message: `[empty-response] model repeatedly empty; failing over to ${alt}` });
+            this.events.emit({ type: 'agent:log', agentId: this.id, message: `[empty-response] 2 in a row; switching to fallback model ${alt}` });
             this.setActiveModel(alt);
             this.emptyResponseCount = 0;
+            this.context.addMessage({ role: 'system', content: 'STRUGGLE STATE: The previous model was returning empty responses. Try a different approach — re-read the relevant files, reduce the scope, or use a different tool before responding.' });
             continue;
           }
+        }
+        if (this.emptyResponseCount >= 3) {
+          // Second escalation: switch provider if available.
           if (this.switchToNextProvider()) {
             this.emptyResponseCount = 0;
+            this.context.addMessage({ role: 'system', content: 'STRUGGLE STATE: The previous provider was returning empty responses. The harness has switched providers. Re-read state before responding.' });
             continue;
           }
-          return this.finish(task, false, 'Model returned empty responses repeatedly. The provider may be overloaded — try again or switch models with /model.', 'model_error');
+          return this.finish(task, false, 'Model returned empty responses repeatedly across providers. The provider pool may be exhausted — try again or switch models with /model.', 'model_error');
         }
         const backoffMs = [1500, 4000, 9000][this.emptyResponseCount - 1] ?? 9000;
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[empty-response] retry ${this.emptyResponseCount}/3 in ${backoffMs}ms (provider returned no content)` });
@@ -2158,6 +2181,13 @@ Continue from 'Next:', do not redo completed progress.`,
   private pickProvider(): ReturnType<typeof createProvider> {
     const base = this.profile.defaultModel ?? 'coding';
     let profile: ModelProfile = base;
+    // MCH-111: route hard tasks (architecture/audit/multi-file) to the
+    // 'reasoning' profile when one is configured, before the cheap-phase
+    // downgrade — a strong model up front beats recovering from a bad plan.
+    if (this.taskKind && this.task && !this.budget?.shouldUseCheaperModel()) {
+      const tier = classifyTaskTier(this.task.title + ' ' + (this.task.description ?? ''), this.task.role);
+      if (tier === 'reasoning') profile = 'reasoning';
+    }
     if (this.budget && this.budget.shouldUseCheaperModel()) {
       profile = 'fast';
     }
