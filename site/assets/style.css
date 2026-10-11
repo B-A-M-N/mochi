@@ -59,7 +59,7 @@ header.site {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
   z-index: 100; display: flex; align-items: center; gap: 8px;
   padding: 8px 16px;
-  background: rgba(249,248,252,.85);
+  background: rgba(252,251,255,.94);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: 100px;
@@ -69,8 +69,9 @@ header.site {
   overflow: visible !important;
 }
 .nav-brand {
-  font-family: var(--font-display); font-size: 20px; font-weight: 800;
+  font-family: var(--font-display); font-size: 21px; font-weight: 900;
   color: var(--ink) !important; text-decoration: none; letter-spacing: -.03em;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   display: flex; align-items: center; gap: 4px;
   margin-right: 16px; padding: 6px 10px;
 }
@@ -82,9 +83,9 @@ header.site {
 .nav-links { display: flex; gap: 4px; list-style: none; }
 .nav-link {
   position: relative; display: block; padding: 8px 16px;
-  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
   letter-spacing: .02em;
-  color: var(--ink-soft); text-decoration: none;
+  color: var(--ink); text-decoration: none;
   border-radius: 100px; transition: all .3s var(--ease);
   white-space: nowrap;
 }
@@ -946,42 +947,6 @@ code { font-family: var(--font-mono); }
 .card p { font-size: 14px; color: var(--ink-soft); line-height: 1.65; }
 .card code { font-family: var(--font-mono); font-size: 12.5px; background: var(--purple-lighter); color: var(--purple-dark); padding: 2px 8px; border-radius: 6px; }
 
-/* ── RETRO FILM GRAIN OVERLAY (site-wide) ───────────────────── */
-.film-grain {
-  position: fixed; inset: -100%;
-  z-index: 9999; pointer-events: none;
-  opacity: .28;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.15 0 0 0 0 0.12 0 0 0 0 0.2 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  animation: grainShift 0.9s steps(6) infinite;
-}
-
-@keyframes grainShift {
-  0%   { transform: translate(0, 0); }
-  20%  { transform: translate(-15%, 5%); }
-  40%  { transform: translate(10%, -20%); }
-  60%  { transform: translate(-5%, 15%); }
-  80%  { transform: translate(20%, 8%); }
-  100% { transform: translate(0, 0); }
-}
-/* subtle vignette + scanline flicker for the old-camera look */
-.film-vignette {
-  position: fixed; inset: 0;
-  z-index: 9998; pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(20,16,40,.22) 100%);
-}
-.film-flicker {
-  position: fixed; inset: 0;
-  z-index: 9997; pointer-events: none;
-  background: rgba(255,255,255,.02);
-  animation: flick 4s infinite;
-}
-@keyframes flick {
-  0%, 100% { opacity: .3; }
-  50% { opacity: .55; }
-  92% { opacity: .35; }
-  93% { opacity: .7; }
-}
-
 /* ═══════════ v7 REDESIGN ═════════════════════════════════════ */
 /* full-window rhythm */
 html { scroll-behavior: smooth; }
@@ -1144,28 +1109,7 @@ html { scroll-behavior: smooth; }
   html { scroll-behavior: smooth; }
 }
 
-/* film grain STRONGER (site-wide, incl. subpages) */
-.film-vignette { opacity: .45 !important; }
-.film-flicker { opacity: .08 !important; }
 
 /* remove ALL emojis from UI: hide emoji glyph spans */
 .card-icon, .emoji { display: none !important; }
 
-/* CRT scanlines — horizontal raster lines over everything */
-.film-scanlines {
-  position: fixed; inset: 0;
-  z-index: 9996; pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(20, 16, 40, 0.06) 3px,
-    transparent 4px
-  );
-  animation: scanDrift 8s linear infinite;
-}
-@keyframes scanDrift {
-  from { background-position: 0 0; }
-  to { background-position: 0 100px; }
-}
-.film-vignette { opacity: .6 !important; }
