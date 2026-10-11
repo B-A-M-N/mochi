@@ -950,7 +950,7 @@ code { font-family: var(--font-mono); }
 .film-grain {
   position: fixed; inset: -100%;
   z-index: 9999; pointer-events: none;
-  opacity: .2;
+  opacity: .28;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.15 0 0 0 0 0.12 0 0 0 0 0.2 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   animation: grainShift 0.9s steps(6) infinite;
 }
@@ -1150,3 +1150,22 @@ html { scroll-behavior: smooth; }
 
 /* remove ALL emojis from UI: hide emoji glyph spans */
 .card-icon, .emoji { display: none !important; }
+
+/* CRT scanlines — horizontal raster lines over everything */
+.film-scanlines {
+  position: fixed; inset: 0;
+  z-index: 9996; pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(20, 16, 40, 0.06) 3px,
+    transparent 4px
+  );
+  animation: scanDrift 8s linear infinite;
+}
+@keyframes scanDrift {
+  from { background-position: 0 0; }
+  to { background-position: 0 100px; }
+}
+.film-vignette { opacity: .6 !important; }

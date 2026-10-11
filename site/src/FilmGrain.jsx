@@ -4,6 +4,7 @@ export default function FilmGrain() {
       <div className="film-grain" aria-hidden="true" />
       <div className="film-vignette" aria-hidden="true" />
       <div className="film-flicker" aria-hidden="true" />
+      <div className="film-scanlines" aria-hidden="true" />
     </>
   );
 }
