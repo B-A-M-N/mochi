@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import TerminalRain from '../TerminalRain.jsx';
+import FilmGrain from '../FilmGrain.jsx';
 import { AnimatedContent, SplitText, ScrollFloat } from '../anim.jsx';
 
 /* REAL measured data — docs/BENCHMARKS.md methodology (10 launches, warm cache,
@@ -56,7 +56,7 @@ function BarChart({ data, max, unit, delayBase = 0 }) {
 function Benchmarks() {
   return (
     <>
-      <TerminalRain />
+      <FilmGrain />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">

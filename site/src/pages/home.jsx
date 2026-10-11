@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
-import TerminalRain from '../TerminalRain.jsx';
+import FilmGrain from '../FilmGrain.jsx';
 import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, Magnetic, Marquee2, ScrollProgress,
@@ -247,7 +247,7 @@ function CodaSection() {
 export default function Home() {
   return (
     <>
-      <TerminalRain />
+      <FilmGrain />
       <ScrollProgress />
       <HeroSection />
       <Ticker />
