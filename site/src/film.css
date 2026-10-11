@@ -7,13 +7,13 @@
 .film-grain {
   position: fixed; inset: -100%;
   z-index: 9999; pointer-events: none;
-  opacity: .55;
+  opacity: .26;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='4' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.85 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='3' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E");
   animation:
-    grainJitter 0.18s steps(2) infinite,
-    grainDrift 4.5s ease-in-out infinite,
+    grainJitter 0.14s steps(2) infinite,
+    grainDrift 3.5s ease-in-out infinite,
     grainExposure 6s ease-in-out infinite;
   will-change: transform, opacity;
 }
@@ -21,12 +21,12 @@
 /* frame-snap: jumps to a new position every ~2 frames, like a projector gate */
 @keyframes grainJitter {
   0%   { transform: translate3d(0, 0, 0); }
-  14%  { transform: translate3d(-4%, 2.6%, 0); }
-  28%  { transform: translate3d(3.2%, -3.8%, 0); }
-  42%  { transform: translate3d(-2.4%, 1.2%, 0); }
-  57%  { transform: translate3d(4.6%, 0.8%, 0); }
-  71%  { transform: translate3d(-3.2%, -2.2%, 0); }
-  85%  { transform: translate3d(1.8%, 3.4%, 0); }
+  14%  { transform: translate3d(-9%, 5%, 0); }
+  28%  { transform: translate3d(7%, -7%, 0); }
+  42%  { transform: translate3d(-5%, 3%, 0); }
+  57%  { transform: translate3d(10%, 2%, 0); }
+  71%  { transform: translate3d(-7%, -4%, 0); }
+  85%  { transform: translate3d(4%, 6%, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
 /* slow organic wander: the whole grain field creeps around, like film
@@ -40,10 +40,10 @@
 }
 /* exposure breathing: grain density swells/fades like lamp brightness */
 @keyframes grainExposure {
-  0%, 100% { opacity: .55; }
-  22% { opacity: .62; }
-  48% { opacity: .42; }
-  70% { opacity: .6; }
+  0%, 100% { opacity: .26; }
+  22% { opacity: .34; }
+  48% { opacity: .18; }
+  70% { opacity: .32; }
   86% { opacity: .35; }
 }
 
@@ -172,3 +172,44 @@
   opacity: .8;
 }
 @media (prefers-reduced-motion: reduce) { .film-grade { animation: none !important; } }
+
+/* Layer 9: FILM GATE SHAKE — whole-frame wobble like the gate
+   mechanism grabbing the sprockets on a projector. Visible motion,
+   but never enough to hurt readability. */
+.film-shake {
+  position: fixed; inset: -3%;
+  z-index: 9990; pointer-events: none;
+  background: radial-gradient(ellipse 110% 100% at 50% 50%, transparent 62%, rgba(10,8,22,.12) 100%);
+  animation: gateShake 1.9s cubic-bezier(.36,.07,.19,.97) infinite;
+}
+@keyframes gateShake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(1.4px, -0.8px) rotate(0.05deg); }
+  20% { transform: translate(-1.8px, 1.1px) rotate(-0.06deg); }
+  30% { transform: translate(0.9px, -1.4px) rotate(0.03deg); }
+  40% { transform: translate(-1.2px, 0.6px) rotate(-0.04deg); }
+  50% { transform: translate(1.6px, 1.3px) rotate(0.06deg); }
+  60% { transform: translate(-1.5px, -0.7px) rotate(-0.05deg); }
+  70% { transform: translate(1.1px, -1.2px) rotate(0.04deg); }
+  80% { transform: translate(-0.8px, 0.9px) rotate(-0.03deg); }
+  90% { transform: translate(1.3px, 0.4px) rotate(0.05deg); }
+}
+
+/* occasional vertical roll like tape tracking slip */
+.film-shake::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 48%, rgba(255,255,255,.04) 49%, rgba(255,255,255,0) 51%);
+  animation: trackingLine 7s linear infinite;
+  opacity: 0;
+}
+@keyframes trackingLine {
+  0%, 84%, 100% { opacity: 0; transform: translateY(0); }
+  86% { opacity: 1; transform: translateY(30%); }
+  90% { opacity: 1; transform: translateY(-40%); }
+  94% { opacity: 0; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .film-shake { animation: none !important; }
+  .film-shake::before { display: none; }
+}

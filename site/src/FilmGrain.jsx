@@ -18,6 +18,7 @@ export default function FilmGrain() {
       <div className="film-track" aria-hidden="true" />
       <div className="film-fringe" aria-hidden="true" />
       <div className="film-grade" aria-hidden="true" />
+      <div className="film-shake" aria-hidden="true" />
     </>
   );
 }
