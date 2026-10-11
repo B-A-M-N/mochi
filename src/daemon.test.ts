@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { startDaemonInProcess, daemonInfoPath, daemonRunning } from './daemon.js';
+import { startDaemonInProcess, daemonInfoPath, daemonRunning, readDaemonInfo, rotateAuth, isTokenExpired, DAEMON_TOKEN_TTL_MS } from './daemon.js';
 
 /** Poll `fn` every 250ms until it returns non-undefined or `timeout` elapses. */
 async function retryUntil<T>(fn: () => T | undefined, timeout: number): Promise<T> {
@@ -45,6 +45,65 @@ it('starts, writes info, serves status with the token', async () => {
     method: 'POST', headers: { authorization: 'Bearer nope' },
   });
   expect(bad.status).toBe(401);
+}, 30_000);
+
+it('rotates the bearer token: old dies, new works, info persists', async () => {
+  const d2 = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-rot-'));
+  try {
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d2, shell: '/bin/sh' });
+    const h = await startDaemonInProcess({ cwd: d2, token: 'old-token' });
+    try {
+      const rr = await fetch(`http://127.0.0.1:${h.info.port}/api/rotate`, {
+        method: 'POST', headers: { authorization: 'Bearer old-token' }, body: '{}',
+      });
+      expect(rr.status).toBe(200);
+      const data = (await rr.json()) as { ok: boolean; token: string; expiresAt: number };
+      expect(data.ok).toBe(true);
+      expect(data.token).not.toBe('old-token');
+      expect(data.expiresAt).toBeGreaterThan(Date.now());
+      // Old token is dead on arrival now.
+      const stale = await fetch(`http://127.0.0.1:${h.info.port}/api/status`, {
+        method: 'POST', headers: { authorization: 'Bearer old-token' }, body: '{}',
+      });
+      expect(stale.status).toBe(401);
+      // New token works and was persisted to the info file.
+      const fresh = await fetch(`http://127.0.0.1:${h.info.port}/api/status`, {
+        method: 'POST', headers: { authorization: `Bearer ${data.token}` }, body: '{}',
+      });
+      expect(fresh.status).toBe(200);
+      expect(readDaemonInfo(resolve(d2, '.mochi'))?.token).toBe(data.token);
+    } finally {
+      await h.close();
+    }
+  } finally {
+    rmSync(d2, { recursive: true, force: true });
+  }
+}, 30_000);
+
+it('rejects requests with an expired token and unit-tests the helpers', async () => {
+  expect(isTokenExpired({ expiresAt: null })).toBe(false);
+  expect(isTokenExpired({ expiresAt: Date.now() + 60_000 })).toBe(false);
+  expect(isTokenExpired({ expiresAt: Date.now() - 1000 })).toBe(true);
+  const auth = { token: 'x', expiresAt: null as number | null };
+  const next = rotateAuth(auth, 1_000_000);
+  expect(next.token).not.toBe('x');
+  expect(next.expiresAt).toBe(1_000_000 + DAEMON_TOKEN_TTL_MS);
+  const d3 = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-exp-'));
+  try {
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d3, shell: '/bin/sh' });
+    const h = await startDaemonInProcess({ cwd: d3, token: 'short-lived', expiresAt: Date.now() - 1000 });
+    try {
+      const res = await fetch(`http://127.0.0.1:${h.info.port}/api/status`, {
+        method: 'POST', headers: { authorization: 'Bearer short-lived' }, body: '{}',
+      });
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: string }).error).toBe('token_expired');
+    } finally {
+      await h.close();
+    }
+  } finally {
+    rmSync(d3, { recursive: true, force: true });
+  }
 }, 30_000);
 
 it('runs a goal through the daemon with a scripted model', async () => {

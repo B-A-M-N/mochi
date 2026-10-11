@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execArgvText, runShellString } from './exec.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { diff as gitDiff, status as gitStatus } from './git.js';
@@ -13,12 +13,7 @@ import { runMutationCheck, type MutationCheck } from './mutation.js';
 import { classifyContentOnly } from './one-shot.js';
 
 function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string> {
-  return new Promise((res, rej) => {
-    execFile(cmd, args, { cwd, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-      if (err) rej(err instanceof Error ? err : new Error(String(err)));
-      else res(String(stdout ?? ''));
-    });
-  });
+  return execArgvText(cmd, args, { cwd, maxBuffer: 4 * 1024 * 1024 });
 }
 
 export type VerificationStatus = 'PASS' | 'FAIL' | 'PARTIAL' | 'BLOCKED';
@@ -330,13 +325,12 @@ export class VerifierEngine {
     }
   }
 
-  private runCommand(command: string, timeout = 120): Promise<string> {
-    return new Promise((resolve) => {
-      execFile('sh', ['-c', command], { cwd: this.cwd, timeout: timeout * 1000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-        const exit = error ? (error as any).code ?? 1 : 0;
-        resolve(`exit_code: ${exit}\nstdout:\n${String(stdout ?? '')}\nstderr:\n${String(stderr ?? '')}`);
-      });
-    });
+  private async runCommand(command: string, timeout = 120): Promise<string> {
+    // Central policy (timeout/SIGKILL/output cap) via exec.ts; the
+    // exit_code/stdout/stderr envelope is byte-identical to before.
+    const r = await runShellString(command, { cwd: this.cwd, timeoutMs: timeout * 1000, maxOutput: 1024 * 1024 });
+    const exit = r.code ?? (r.timedOut ? 124 : 1);
+    return `exit_code: ${exit}\nstdout:\n${r.stdout}\nstderr:\n${r.stderr}`;
   }
 
   /** Reuse the shell runner for the mutation check, returning just the exit code. */

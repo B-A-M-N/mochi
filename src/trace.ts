@@ -7,7 +7,7 @@
 // The recorder subscribes to the EventBus and appends one JSON object per
 // entry: {t: <unix ms>, kind, agentId, ...payload}. All payload strings pass
 // through security.redact() so secrets never land in a trace file.
-import { mkdirSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, appendFileSync, readFileSync, existsSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { EventBus } from './events.js';
 import type { MochiEvent } from './types.js';
@@ -30,6 +30,9 @@ export class TraceRecorder {
     mkdirSync(dir, { recursive: true });
     this.file = resolve(dir, `${runId}.jsonl`);
     try { appendFileSync(this.file, ''); } catch { /* best effort */ }
+    // Retention janitor: each new run reaps oldest traces past the cap, so
+    // the directory can never grow without bound (was 3.6M+ unchecked).
+    try { pruneTraces(workspaceDir); } catch { /* best effort */ }
   }
 
   /** Subscribe to an EventBus; returns this for chaining. Disposes on close. */
@@ -89,15 +92,54 @@ export function formatTrace(entries: TraceEntry[]): string {
   const lines: string[] = [];
   for (const e of entries) {
     switch (e.kind) {
-      case 'task:started': lines.push(`▸ started: ${String((e.task as any)?.title ?? '')}`); break;
+      case 'task:started': lines.push(`▸ started: ${String((e.task as { title?: unknown } | undefined)?.title ?? '')}`); break;
       case 'task:completed': lines.push(`[OK] done (${e.stopReason ?? 'completed'})`); break;
       case 'task:failed': lines.push(`[ERR] failed: ${String(e.reason ?? '').slice(0, 120)}`); break;
       case 'tool:called': lines.push(`  tool ${e.tool} ${JSON.stringify(e.args ?? {}).slice(0, 120)}`); break;
-      case 'tool:completed': lines.push(`  tool ${e.tool} → ${String((e.result as any)?.output ?? '').slice(0, 100)}`); break;
+      case 'tool:completed': lines.push(`  tool ${e.tool} → ${String((e.result as { output?: unknown } | undefined)?.output ?? '').slice(0, 100)}`); break;
       case 'tool:failed': lines.push(`  tool ${e.tool} [ERR] ${String(e.error).slice(0, 100)}`); break;
       case 'agent:log': lines.push(`  [log] ${String(e.message).slice(0, 120)}`); break;
       default: break;
     }
   }
   return lines.join('\n');
+}
+
+/** Retention policy for `<workspace>/traces`: keep the newest `maxFiles`
+ *  runs AND stay under `maxBytes` total — oldest first out. Best-effort and
+ *  never throws (a janitor must never break the agent). Returns the number
+ *  of files removed. */
+export function pruneTraces(workspaceDir: string, maxFiles = 100, maxBytes = 32 * 1024 * 1024): number {
+  let removed = 0;
+  try {
+    const dir = resolve(workspaceDir, 'traces');
+    if (!existsSync(dir)) return 0;
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith('.jsonl'))
+      .map((f) => {
+        const p = resolve(dir, f);
+        try {
+          const st = statSync(p);
+          return { p, mtime: st.mtimeMs, size: st.size };
+        } catch {
+          return null;
+        }
+      })
+      .filter((x): x is { p: string; mtime: number; size: number } => x !== null)
+      .sort((a, b) => b.mtime - a.mtime);
+    const victims = new Set<string>();
+    for (let i = maxFiles; i < files.length; i++) victims.add(files[i].p);
+    let total = files.reduce((n, f) => n + f.size, 0);
+    for (const f of [...files].reverse()) {
+      if (total <= maxBytes) break;
+      if (!victims.has(f.p)) {
+        victims.add(f.p);
+        total -= f.size;
+      }
+    }
+    for (const p of victims) {
+      try { unlinkSync(p); removed++; } catch { /* best effort */ }
+    }
+  } catch { /* best effort */ }
+  return removed;
 }

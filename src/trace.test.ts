@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { EventBus } from './events.js';
-import { TraceRecorder, readTrace, formatTrace } from './trace.js';
+import { TraceRecorder, readTrace, formatTrace, pruneTraces } from './trace.js';
 
 describe('TraceRecorder', () => {
   it('captures events to a trace file and redacts secrets', async () => {
@@ -45,6 +45,27 @@ describe('TraceRecorder', () => {
     expect(out).toContain('Do it');
     expect(out).toContain('tool edit');
     expect(out).toContain('completed');
+  });
+
+  it('pruneTraces keeps newest files and enforces the byte cap', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-trace-prune-'));
+    const tdir = resolve(dir, 'traces');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(tdir, { recursive: true });
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(resolve(tdir, `run${i}.jsonl`), JSON.stringify({ t: i, kind: 'x' }) + '\n');
+      // Ensure distinct mtimes (oldest = run0).
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const removed = pruneTraces(dir, 3, 1024 * 1024);
+    expect(removed).toBe(2);
+    expect(existsSync(resolve(tdir, 'run4.jsonl'))).toBe(true);
+    expect(existsSync(resolve(tdir, 'run0.jsonl'))).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('pruneTraces never throws on a missing directory', () => {
+    expect(pruneTraces(resolve(tmpdir(), 'mochi-trace-missing-xyz'))).toBe(0);
   });
 });
 

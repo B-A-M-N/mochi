@@ -35,6 +35,15 @@ export type StallStrategy =
   | 'confidence_gate'
   | 'hybrid';
 
+export const CHAMELEON_MODES: readonly ChameleonMode[] = [
+  'flash', 'turbo', 'easy', 'medium', 'hard', 'deep', 'extreme', 'genius', 'god', 'auto',
+];
+
+export const STALL_STRATEGIES: readonly StallStrategy[] = [
+  'chain_of_draft', 'budget_force', 'constitutional', 'devils_advocate',
+  'self_consistency', 'confidence_gate', 'hybrid',
+];
+
 export interface EnhanceOptions {
   task: string;
   mode?: ChameleonMode;

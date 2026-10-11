@@ -1,47 +1,45 @@
 // Pure helpers for mouse text selection in the chat transcript. These are
 // importable so they can be unit-tested without booting a terminal.
+//
+// All ranges are TERMINAL CELLS (not UTF-16 units): CJK wide chars and emoji
+// count 2, combining marks 0 — matching how mouse columns arrive from SGR
+// reports and how rows are measured in wrap.ts.
 
-const ANSI_M = /^\x1b\[[0-9;]*m/;
+import { cellWidth, visibleCells } from './wrap.js';
 
-/** Count the visible (non-ANSI) cell width of a string, treating ANSI SGR
- *  sequences as zero-width. Double-width characters count as one cell here. */
+const ANSI = /^\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|^\x1b\[[0-9;?]*[ -/]*[@-~]|^\x1b[()][0-9A-B]/;
+
+/** Count the visible terminal cells of a string (ANSI = zero-width). */
 export function visibleLen(s: string): number {
-  let n = 0;
-  for (let i = 0; i < s.length; i++) {
-    if (s[i] === '\x1b' && ANSI_M.test(s.slice(i))) {
-      i += s.slice(i).match(ANSI_M)![0].length - 1;
-      continue;
-    }
-    if (s.charCodeAt(i) >= 0x1100) {
-      // Collapse wide East-Asian ranges so a plain JS slice stays aligned.
-    }
-    n++;
-  }
-  return n;
+  return visibleCells(s);
 }
 
-/** Slice an ANSI-colored string to the visible characters in [from,to),
+/** Slice an ANSI-colored string to the visible cells in [from,to),
  *  preserving color codes for the requested range so it renders correctly.
- *  If to exceeds the visible width, trailing color codes are preserved. */
+ *  A wide char straddling a boundary is dropped (never half-rendered), and
+ *  surrogate pairs are never split. If to exceeds the visible width,
+ *  trailing color codes are preserved. */
 export function sliceVisibleRange(s: string, from: number, to: number): string {
   if (to <= from) return '';
   let out = '';
-  let vis = 0;
+  let cell = 0;
   let i = 0;
-  while (i < s.length && vis < to) {
-    if (s[i] === '\x1b' && ANSI_M.test(s.slice(i))) {
-      const m = s.slice(i).match(ANSI_M)![0];
-      out += m;
-      i += m.length;
-      continue;
+  while (i < s.length && cell < to) {
+    if (s[i] === '\x1b') {
+      const m = s.slice(i).match(ANSI);
+      if (m) {
+        out += m[0];
+        i += m[0].length;
+        continue;
+      }
     }
-    if (vis >= from) out += s[i];
-    vis++;
-    i++;
-  }
-  if (vis > to) {
-    // A double-width char straddled the boundary; drop the partial cell.
-    out = out.slice(0, -1);
+    const cp = s.codePointAt(i) as number;
+    const w = cellWidth(cp);
+    // Include only chars fully inside the range: a straddling wide char is
+    // dropped so the highlight can never spill past the selection edge.
+    if (cell >= from && cell + w <= to) out += String.fromCodePoint(cp);
+    cell += w;
+    i += cp > 0xffff ? 2 : 1;
   }
   return out;
 }

@@ -63,6 +63,26 @@ describe('visibleLen', () => {
     expect(visibleLen('\x1b[1;34mbold\x1b[0m')).toBe(4);
     expect(visibleLen('plain')).toBe(5);
   });
+
+  it('counts CJK wide chars as 2 cells and combining marks as 0', () => {
+    expect(visibleLen('日本')).toBe(4);
+    expect(visibleLen('é')).toBe(1);
+    expect(visibleLen('🔍')).toBe(2);
+  });
+});
+
+describe('sliceVisibleRange (cell semantics)', () => {
+  it('never splits a surrogate pair: CJK/emoji slice on cell boundaries', () => {
+    // 日本 = 4 cells; slicing cells [0,2) yields exactly 日.
+    expect(sliceVisibleRange('日本語', 0, 2)).toBe('日');
+    expect(sliceVisibleRange('日本語', 2, 4)).toBe('本');
+    // A wide char straddling the edge is dropped, never half-rendered.
+    expect(sliceVisibleRange('a日本', 0, 2)).toBe('a');
+    expect(sliceVisibleRange('🔍🔍', 0, 2)).toBe('🔍');
+    for (const out of [sliceVisibleRange('日本語', 0, 2), sliceVisibleRange('🔍🔍', 0, 2)]) {
+      expect(out).not.toContain('�');
+    }
+  });
 });
 
 describe('SGR mouse protocol parser (smoke test)', () => {

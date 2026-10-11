@@ -1,4 +1,5 @@
 import type { ChatMessage, ModelResponse, StreamChunk, ToolDefinition } from '../types.js';
+import { contentText } from '../types.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
 import { nextKey, retireKey } from './credential-pool.js';
@@ -96,11 +97,11 @@ export function createOpenAIProvider(config: ProviderConfig) {
     for (let i = reuseLen; i < messages.length; i++) {
       const m = messages[i];
       if (m.role === 'tool') {
-        out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: m.content ?? '' });
+        out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: contentText(m) });
         continue;
       }
       if (m.role === 'assistant' && m.tool_calls) {
-        out.push({ role: 'assistant', content: m.content ?? null, tool_calls: m.tool_calls });
+        out.push({ role: 'assistant', content: contentText(m) || null, tool_calls: m.tool_calls });
         continue;
       }
       // Some OpenAI-compatible models (observed: qwen3.6-35b on
@@ -113,10 +114,10 @@ export function createOpenAIProvider(config: ProviderConfig) {
       // compatible shape.
       const seenUserTurn = messages.slice(0, i).some((x) => x.role === 'user');
       if (m.role === 'system' && seenUserTurn) {
-        out.push({ role: 'user', content: `[system notice] ${m.content ?? ''}` });
+        out.push({ role: 'user', content: `[system notice] ${contentText(m)}` });
         continue;
       }
-      const mapped: any = { role: m.role, content: m.content ?? '' };
+      const mapped: { role: string; content: unknown; cache_control?: unknown } = { role: m.role, content: contentText(m) };
       // MCH-109: multimodal user messages pass content parts through verbatim
       // (OpenAI wire format: [{type:'text'},{type:'image_url'}]).
       if (Array.isArray(m.content)) {

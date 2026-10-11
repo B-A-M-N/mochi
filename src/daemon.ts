@@ -22,6 +22,32 @@ export interface DaemonInfo {
   token: string;
   pid: number;
   startedAt: string;
+  /** Epoch ms the current token was issued. Older files predate the field (0). */
+  createdAt: number;
+  /** Epoch ms after which the token is rejected. Null = no expiry. */
+  expiresAt: number | null;
+}
+
+/** Default bearer-token lifetime: 30 days. Rotation (`mochi daemon rotate`
+ *  / POST /api/rotate) issues a fresh token with a fresh deadline. */
+export const DAEMON_TOKEN_TTL_MS = 30 * 24 * 3600 * 1000;
+
+/** Mutable auth holder shared by the HTTP handler: rotation swaps the token
+ *  in place so a live server never needs a restart. */
+export interface DaemonAuth {
+  token: string;
+  expiresAt: number | null;
+}
+
+export function isTokenExpired(auth: Pick<DaemonAuth, 'expiresAt'>, now = Date.now()): boolean {
+  return auth.expiresAt !== null && now > auth.expiresAt;
+}
+
+/** Rotate to a fresh token with a fresh deadline. Returns the new credentials. */
+export function rotateAuth(auth: DaemonAuth, now = Date.now()): { token: string; expiresAt: number } {
+  auth.token = randomBytes(24).toString('hex');
+  auth.expiresAt = now + DAEMON_TOKEN_TTL_MS;
+  return { token: auth.token, expiresAt: auth.expiresAt };
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +60,16 @@ export function readDaemonInfo(workspaceDir: string): DaemonInfo | undefined {
   const p = daemonInfoPath(workspaceDir);
   if (!existsSync(p)) return undefined;
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as DaemonInfo;
+    const raw = JSON.parse(readFileSync(p, 'utf8')) as Partial<DaemonInfo>;
+    if (typeof raw.port !== 'number' || typeof raw.token !== 'string' || typeof raw.pid !== 'number') return undefined;
+    return {
+      port: raw.port,
+      token: raw.token,
+      pid: raw.pid,
+      startedAt: typeof raw.startedAt === 'string' ? raw.startedAt : new Date(0).toISOString(),
+      createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : 0,
+      expiresAt: typeof raw.expiresAt === 'number' ? raw.expiresAt : null,
+    };
   } catch {
     return undefined;
   }
@@ -116,22 +151,39 @@ export async function startDaemonInProcess(opts: {
   port?: number;
   config?: Partial<MochiConfig>;
   token?: string;
+  /** Override the token deadline (tests). Null/undefined = default TTL. */
+  expiresAt?: number | null;
 }): Promise<{ info: DaemonInfo; close: () => Promise<void>; runtime: Runtime }> {
   const port = opts.port ?? 0;
   const token = opts.token ?? randomBytes(24).toString('hex');
+  const now = Date.now();
+  const auth: DaemonAuth = { token, expiresAt: opts.expiresAt === undefined ? now + DAEMON_TOKEN_TTL_MS : opts.expiresAt };
   const wsDir = resolve(opts.cwd, '.mochi');
   const runtime = Runtime.create({ cwd: opts.cwd, config: opts.config });
 
+  const persist = () => {
+    const info: DaemonInfo = {
+      port: addr.port,
+      token: auth.token,
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      createdAt: now,
+      expiresAt: auth.expiresAt,
+    };
+    writeInfo(wsDir, info);
+  };
   const server = createServer(async (req, res) => {
-    await handleRequest(req, res, token, runtime);
+    await handleRequest(req, res, auth, runtime, { onRotate: persist });
   });
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', () => resolve()));
   const addr = server.address() as { port: number };
   const info: DaemonInfo = {
     port: addr.port,
-    token,
+    token: auth.token,
     pid: process.pid,
     startedAt: new Date().toISOString(),
+    createdAt: now,
+    expiresAt: auth.expiresAt,
   };
   writeInfo(wsDir, info);
 
@@ -254,6 +306,16 @@ function getDashboardHtml(token: string): string {
   <script>
     const token = '${token}' || new URLSearchParams(window.location.search).get('token') || localStorage.getItem('mochi_token') || '';
     if (token) localStorage.setItem('mochi_token', token);
+    // Hygiene: a token that arrived via ?token= share link is scrubbed from
+    // the address bar immediately so it never lingers in browser history,
+    // proxy logs, or screenshots of the URL bar.
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has('token')) {
+        u.searchParams.delete('token');
+        window.history.replaceState(null, '', u.toString());
+      }
+    } catch { /* non-browser context: ignore */ }
 
     async function sendGoal() {
       const input = document.getElementById('prompt-input');
@@ -325,8 +387,9 @@ function getDashboardHtml(token: string): string {
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  token: string,
+  auth: DaemonAuth,
   runtime: Runtime,
+  opts?: { onRotate?: () => void },
 ): Promise<void> {
   const send = (code: number, body: unknown) => {
     res.writeHead(code, { 'content-type': 'application/json' });
@@ -338,21 +401,32 @@ async function handleRequest(
   const queryToken = parsedUrl.searchParams.get('token') ?? '';
   const authHeader = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   const reqToken = authHeader || queryToken;
+  const tokenOk = Boolean(reqToken) && timingSafeEqualStr(reqToken, auth.token);
+  const expired = isTokenExpired(auth);
 
   // Serve Web UI Dashboard on GET / or /dashboard
   if (req.method === 'GET' && (path === '/' || path === '/dashboard')) {
-    if (reqToken && !timingSafeEqualStr(reqToken, token)) {
+    if (reqToken && !tokenOk) {
       res.writeHead(401, { 'content-type': 'text/html' });
       res.end('<h1>401 Unauthorized</h1><p>Invalid daemon token.</p>');
       return;
     }
+    if (tokenOk && expired) {
+      res.writeHead(401, { 'content-type': 'text/html' });
+      res.end('<h1>401 Token expired</h1><p>Run <code>mochi daemon rotate</code> in the workspace, then reconnect with the new token.</p>');
+      return;
+    }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(getDashboardHtml(reqToken || token));
+    res.end(getDashboardHtml(reqToken || auth.token));
     return;
   }
 
-  if (!reqToken || !timingSafeEqualStr(reqToken, token)) {
+  if (!tokenOk) {
     send(401, { error: 'unauthorized' });
+    return;
+  }
+  if (expired) {
+    send(401, { error: 'token_expired', hint: 'run `mochi daemon rotate` in the workspace to issue a fresh token' });
     return;
   }
   if (req.method !== 'POST') {
@@ -389,6 +463,13 @@ async function handleRequest(
             }
           : undefined,
       });
+    } else if (path === '/api/rotate') {
+      // Zero-downtime credential rotation: the caller proves the CURRENT
+      // token, we swap in a fresh one (new deadline) and persist it. The old
+      // token stops working on the very next request.
+      const next = rotateAuth(auth);
+      try { opts?.onRotate?.(); } catch { /* persist is best-effort */ }
+      send(200, { ok: true, token: next.token, expiresAt: next.expiresAt });
     } else if (path === '/api/jobs') {
       const ids = runtime.workspace.listGoals();
       const jobs: Array<{ id: string; status: string; objective?: string; progress?: number }> = [];
@@ -500,8 +581,13 @@ export async function serverMain(argv: string[]): Promise<void> {
     throw new Error('daemon-server <port> <token> <cwd> [host]');
   }
   const rt = Runtime.create({ cwd, config: {} });
+  const now = Date.now();
+  const auth: DaemonAuth = { token, expiresAt: now + DAEMON_TOKEN_TTL_MS };
+  const persist = (port: number) => {
+    writeInfo(resolve(cwd, '.mochi'), { port, token: auth.token, pid: process.pid, startedAt: new Date().toISOString(), createdAt: now, expiresAt: auth.expiresAt });
+  };
   const server = createServer(async (req, res) => {
-    await handleRequest(req, res, token, rt);
+    await handleRequest(req, res, auth, rt, { onRotate: () => persist((server.address() as { port: number }).port) });
   });
   // Cron ticker for the detached server too.
   let processing = false;
@@ -520,7 +606,7 @@ export async function serverMain(argv: string[]): Promise<void> {
   }, 10_000);
   server.listen(Number(port), host, () => {
     const addr = server.address() as { port: number };
-    writeInfo(resolve(cwd, '.mochi'), { port: addr.port, token, pid: process.pid, startedAt: new Date().toISOString() });
+    persist(addr.port);
   });
 }
 

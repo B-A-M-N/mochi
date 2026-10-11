@@ -119,8 +119,15 @@ function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; p
   return { flags, positional };
 }
 
-function configFromFlags(flags: Record<string, string | boolean>): Partial<MochiConfig> {
-  const overrides: Partial<MochiConfig> = {};
+/** CLI flag overrides plus the two UI-contract markers the permission layer
+ *  reads without config hacks (typed — no `as any` at the boundary). */
+export interface FlagOverrides extends Partial<MochiConfig> {
+  __yolo?: boolean;
+  __uncensored?: boolean;
+}
+
+function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides {
+  const overrides: FlagOverrides = {};
   const model: Partial<MochiConfig['model']> = {};
   if (flags.provider) model.provider = String(flags.provider);
   if (flags.model) model.model = String(flags.model);
@@ -141,7 +148,12 @@ function configFromFlags(flags: Record<string, string | boolean>): Partial<Mochi
   if (flags.quiet) overrides.quiet = true;
   if (flags.verbose) overrides.verbose = true;
   if (flags.debug) overrides.debug = true;
-  if (flags.reasoning) overrides.reasoning = String(flags.reasoning).toLowerCase() as any;
+  if (flags.reasoning) {
+    const lvl = String(flags.reasoning).toLowerCase();
+    const valid: readonly string[] = ['low', 'medium', 'high', 'max', 'off', 'auto'];
+    overrides.reasoning = (valid.includes(lvl) ? lvl : 'auto') as import('./types.js').ReasoningLevel;
+    if (lvl !== overrides.reasoning) console.error(`Unknown reasoning level "${lvl}" — using auto.`);
+  }
   // Plan-then-act: `--plan` (a dashed boolean; the bare `plan` subcommand
   // is positional and unaffected) makes every agent in the run research and
   // return a plan instead of editing files.
@@ -149,7 +161,7 @@ function configFromFlags(flags: Record<string, string | boolean>): Partial<Mochi
   // --uncensored / -u / --yolo / -y / --dangerously-skip-permissions: bypass all permission gates
   const isUncensored = flags.uncensored === true || flags.u === true || process.env.MOCHI_UNCENSORED === '1';
   if (isUncensored) {
-    overrides.safety = { ...(overrides.safety ?? {} as any), mode: 'uncensored' as const };
+    overrides.safety = { ...(overrides.safety ?? {} as MochiConfig['safety']), mode: 'uncensored' as const };
     overrides.permissions = {
       read: true,
       write: true,
@@ -158,13 +170,13 @@ function configFromFlags(flags: Record<string, string | boolean>): Partial<Mochi
       gitDestructive: true,
       admin: true,
     };
-    (overrides as any).__uncensored = true;
-    (overrides as any).__yolo = true;
+    overrides.__uncensored = true;
+    overrides.__yolo = true;
     process.env.MOCHI_UNCENSORED = '1';
   } else if (flags.yolo || flags.y || flags['dangerously-skip-permissions'] ||
       process.env.MOCHI_DANGEROUSLY_SKIP_PERMISSIONS === '1') {
-    overrides.safety = { ...(overrides.safety ?? {} as any), mode: 'auto' as const };
-    (overrides as any).__yolo = true;
+    overrides.safety = { ...(overrides.safety ?? {} as MochiConfig['safety']), mode: 'auto' as const };
+    overrides.__yolo = true;
   }
   return overrides;
 }
@@ -202,6 +214,7 @@ Usage:
   mochi acp                          # editor-native stdio server (Agent Client Protocol)
   mochi daemon start [--port <n>] [--token <t>]
   mochi daemon status
+  mochi daemon rotate               # issue a fresh bearer token (old one dies immediately)
   mochi daemon jobs
   mochi daemon send "<goal>"
   mochi daemon approve
@@ -341,12 +354,12 @@ async function main() {
 
   // Permission policy — propagate --yolo / --uncensored / env var to the runtime object so
   // the TUI status badge and PermissionManager can read it without config hacks.
-  const isYolo = (configOverrides as any).__yolo === true ||
+  const isYolo = configOverrides.__yolo === true ||
     process.env.MOCHI_DANGEROUSLY_SKIP_PERMISSIONS === '1';
-  const isUncensored = (configOverrides as any).__uncensored === true ||
+  const isUncensored = configOverrides.__uncensored === true ||
     configOverrides.safety?.mode === 'uncensored' ||
     process.env.MOCHI_UNCENSORED === '1';
-  (runtime as any).__permPolicy = (isUncensored || isYolo) ? 'yolo'
+  runtime.permPolicy = (isUncensored || isYolo) ? 'yolo'
     : (configOverrides.safety?.mode === 'auto' ? 'workspace-safe' : 'strict');
   if (isUncensored) {
     console.error('🔓 [UNCENSORED] Autonomous uncensored harness active: unrestricted system access & admin privileges.');
@@ -390,7 +403,22 @@ async function main() {
         console.log('No daemon running for this workspace.');
         return;
       }
-      console.log(`Daemon running on 127.0.0.1:${info?.port} (pid ${info?.pid}, started ${info?.startedAt}).`);
+      const expiry = info?.expiresAt ? `, token expires ${new Date(info.expiresAt).toLocaleDateString()}` : '';
+      console.log(`Daemon running on 127.0.0.1:${info?.port} (pid ${info?.pid}, started ${info?.startedAt}${expiry}).`);
+      return;
+    }
+    if (action === 'rotate') {
+      if (!info || !daemonRunning(wsDir)) {
+        console.log('No daemon running for this workspace.');
+        return;
+      }
+      const res = await fetch(`http://127.0.0.1:${info.port}/api/rotate`, {
+        method: 'POST', headers: { authorization: `Bearer ${info.token}` }, body: '{}',
+      });
+      const data = (await res.json()) as { ok?: boolean; token?: string; expiresAt?: number; error?: string; hint?: string };
+      if (!res.ok || !data.token) { console.error(data.hint ?? data.error ?? 'Rotate failed'); process.exit(1); }
+      console.log(`Token rotated. New token expires ${new Date(data.expiresAt as number).toLocaleString()}.`);
+      console.log(`New token: ${data.token}`);
       return;
     }
     if (action === 'jobs') {
@@ -1264,7 +1292,7 @@ async function main() {
     const { execFile } = await import('node:child_process');
     execFile('sh', ['-c', cmd], { cwd }, (e, o, er) => {
       console.log(String(o ?? ''));
-      if (er) { console.error(String(er)); process.exitCode = (e as any)?.code ?? 1; }
+      if (er) { console.error(String(er)); process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1; }
     });
     return;
   }
@@ -1275,7 +1303,7 @@ async function main() {
     const { execFile } = await import('node:child_process');
     execFile('sh', ['-c', cmd], { cwd }, (e, _stdout, stderr) => {
       if (stderr) console.error(String(stderr));
-      if (e) process.exitCode = (e as any)?.code ?? 1;
+      if (e) process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1;
     });
     return;
   }
@@ -1304,12 +1332,19 @@ async function main() {
   if (first === 'enhance' || first === 'chameleon') {
     const question = positional.slice(1).join(' ');
     if (!question) { console.error('Usage: mochi chameleon "<task>" [--mode <mode>] [--strategy <strategy>]'); process.exit(1); }
-    const mode = flags.mode ? String(flags.mode) : 'auto';
-    const strategy = flags.strategy ? String(flags.strategy) : 'hybrid';
+    const modeFlag = flags.mode ? String(flags.mode).toLowerCase() : 'auto';
+    const strategyFlag = flags.strategy ? String(flags.strategy).toLowerCase() : 'hybrid';
+    // Validate CLI strings against the engine unions (invalid → default with
+    // a warning) instead of casting arbitrary input with `as any`.
+    const { CHAMELEON_MODES, STALL_STRATEGIES } = await import('./cognitive/chameleon.js');
+    const mode = (CHAMELEON_MODES as readonly string[]).includes(modeFlag) ? modeFlag : 'auto';
+    const strategy = (STALL_STRATEGIES as readonly string[]).includes(strategyFlag) ? strategyFlag : 'hybrid';
+    if (mode !== modeFlag) console.error(`Unknown chameleon mode "${modeFlag}" — using auto.`);
+    if (strategy !== strategyFlag) console.error(`Unknown chameleon strategy "${strategyFlag}" — using hybrid.`);
     try {
       const { ChameleonEngine } = await import('./chameleon.js');
       const engine = new ChameleonEngine(runtime.config);
-      const r = await engine.enhance({ task: question, mode: mode as any, strategy: strategy as any, cwd: runtime.cwd });
+      const r = await engine.enhance({ task: question, mode: mode as import('./cognitive/chameleon.js').ChameleonMode, strategy: strategy as import('./cognitive/chameleon.js').StallStrategy, cwd: runtime.cwd });
       console.log(`[Lazy Chameleon v2.4 — Mode: ${r.mode}, Strategy: ${r.strategy}, ${r.strategies.length} passes, ${r.tokensUsed} tokens, ${r.durationMs}ms]\n`);
       console.log(r.context);
     } catch (e) {

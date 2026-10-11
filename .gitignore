@@ -24,3 +24,6 @@ __pycache__
 
 # Test coverage artifacts
 coverage/
+
+# Non-deterministic benchmark outputs (rewritten every arena run; flakes pollute diffs)
+bench/arena-results.json

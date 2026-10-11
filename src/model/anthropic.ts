@@ -1,4 +1,5 @@
 import type { ChatMessage, ModelResponse, StreamChunk, ToolDefinition } from '../types.js';
+import { contentText } from '../types.js';
 import type { ProviderConfig } from './router.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
@@ -12,7 +13,7 @@ export function createAnthropicProvider(config: ProviderConfig) {
   const base = config.baseUrl.replace(/\/$/, '');
   const model = config.model;
 
-  const sysMsg = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => m.content ?? '').join('\n');
+  const sysMsg = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
   const bodyMsg = (m: ChatMessage) => {
     if (m.role === 'system') return null;
     if (m.role === 'tool') {
@@ -22,14 +23,15 @@ export function createAnthropicProvider(config: ProviderConfig) {
           {
             type: 'tool_result',
             tool_use_id: m.tool_call_id,
-            content: m.content ?? '',
+            content: contentText(m),
           },
         ],
       };
     }
     if (m.role === 'assistant' && m.tool_calls) {
-      const contentBlocks: any[] = [];
-      if (m.content) contentBlocks.push({ type: 'text', text: m.content });
+      const contentBlocks: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }> = [];
+      const text = contentText(m);
+      if (text) contentBlocks.push({ type: 'text', text });
       for (const tc of m.tool_calls) {
         let input = {};
         try {
@@ -44,7 +46,7 @@ export function createAnthropicProvider(config: ProviderConfig) {
       }
       return { role: 'assistant', content: contentBlocks };
     }
-    return { role: m.role, content: m.content ?? '' };
+    return { role: m.role, content: contentText(m) };
   };
 
   async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { reasoningEffort?: string }): Promise<ModelResponse> {
@@ -82,12 +84,16 @@ export function createAnthropicProvider(config: ProviderConfig) {
         throw new ProviderError(err instanceof Error ? err.message : String(err), { retryable: classifyError(err).retryable, cause: err });
       }
     }, { maxAttempts: 4, onBackoff: (attempt, delayMs, err) => logBackoff(attempt, delayMs, err) });
-    const data: any = await res.json();
+    const data = await res.json() as {
+      content?: Array<{ type?: string; text?: string; thinking?: string; id?: string; name?: string; input?: unknown }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      stop_reason?: string;
+    };
     const blocks = data.content ?? [];
-    const text = blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    const thinkingBlocks = blocks.filter((b: any) => b.type === 'thinking');
-    const reasoningText = thinkingBlocks.map((b: any) => b.thinking).filter(Boolean).join('\n');
-    const toolUses = blocks.filter((b: any) => b.type === 'tool_use');
+    const text = blocks.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
+    const thinkingBlocks = blocks.filter((b) => b.type === 'thinking');
+    const reasoningText = thinkingBlocks.map((b) => b.thinking).filter(Boolean).join('\n');
+    const toolUses = blocks.filter((b) => b.type === 'tool_use');
     const toolCalls = toolUses.map((b: any) => ({ id: b.id, type: 'function' as const, function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) } }));
     const usage = data.usage ? { promptTokens: data.usage.input_tokens ?? 0, completionTokens: data.usage.output_tokens ?? 0, totalTokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0) } : undefined;
     return { content: text, reasoningContent: reasoningText || undefined, toolCalls: toolCalls.length ? toolCalls : undefined, finishReason: data.stop_reason, usage };
@@ -95,7 +101,7 @@ export function createAnthropicProvider(config: ProviderConfig) {
 
   async function* streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?: { reasoningEffort?: string }): AsyncGenerator<StreamChunk> {
     const resp = await chat(messages, tools, options);
-    yield { content: resp.content, reasoningContent: (resp as any).reasoningContent, toolCalls: resp.toolCalls, finishReason: resp.finishReason as any, usage: resp.usage };
+    yield { content: resp.content, reasoningContent: resp.reasoningContent, toolCalls: resp.toolCalls, finishReason: resp.finishReason as StreamChunk['finishReason'], usage: resp.usage };
   }
 
   return { chat, streamChat };

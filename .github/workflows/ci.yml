@@ -31,6 +31,15 @@ jobs:
         run: |
           if command -v rustc >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
             npm run build:native
+            # Fail loudly if the build silently no-op'd: build:native uses
+            # `|| true` per-tool, so a broken accelerator used to pass CI
+            # with parity tests self-skipping. Any missing binary is a bug.
+            missing=0
+            for bin in native/bin/mochi-agent native/bin/mochi_core.node native/bin/fuzzy_rust native/bin/search_rust native/bin/fuzzy_cpp; do
+              if [ ! -f "$bin" ]; then echo "native binary missing after build: $bin"; missing=1; fi
+            done
+            [ "$missing" -eq 0 ] || exit 1
+            echo "native binaries OK"
           else
             echo "toolchain missing; native parity tests will self-skip"
           fi
@@ -38,6 +47,15 @@ jobs:
       # ── Lint gate (MCH-13/MCH-23): no unused locals/params, strict types ──
       - name: Typecheck (strict — noUnusedLocals enforced)
         run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Skip-budget guard (no silent test-scope shrink)
+        run: node scripts/check-skips.mjs
+
+      - name: Dependency audit (shipped surface must be clean)
+        # Full `npm audit` includes dev-only vitest/vite advisories whose fix
+        # is a breaking vitest 5 bump (tracked separately); the SHIPPED agent
+        # is zero-dependency, so the production surface must audit clean.
+        run: npm audit --omit=dev --audit-level=moderate
 
       # ── Tests with coverage (MCH-23) ──
       - name: Tests

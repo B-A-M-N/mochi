@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import type { Tool } from './types.js';
 import { classifyCommand } from '../security.js';
 
@@ -131,89 +130,34 @@ export const shellTool: Tool = {
       env.PATH = `${currentPath}:${missingPaths.join(':')}`;
     }
 
-    return new Promise((resolve, reject) => {
-      const shellBin = process.platform === 'win32'
-        ? (process.env.ComSpec || 'cmd.exe')
-        : (process.env.SHELL || '/bin/bash');
-      const child = spawn(shellBin, ['-c', command], { cwd: targetCwd, env, stdio: 'pipe' });
-      let stdout = '';
-      let stderr = '';
-      const killed = { value: false };
-      let settled = false;
-
-      const finish = (code: number | null, reason?: string) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-        const out = clipToolOutput([
-          `exit_code: ${code ?? 1}`,
-          `stdout:\n${stdout || '(empty)'}`,
-          `stderr:\n${stderr || '(empty)'}`,
-        ].join('\n'));
-        if (reason) {
-          resolve(out + `\n[${reason}]`);
-        } else if (killed.value) {
-          resolve(out + '\n[command timed out or was cancelled]');
-        } else {
-          resolve(out);
-        }
-      };
-
-      const timer = setTimeout(() => {
-        killed.value = true;
-        try { child.kill('SIGTERM'); } catch {}
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-        setTimeout(() => {
-          if (!settled) {
-            try { child.kill('SIGKILL'); } catch {}
-            finish(124, `command timed out after ${timeoutMs / 1000}s`);
+    // Central execution policy (timeout → SIGTERM → SIGKILL, output caps,
+    // abort handling) via exec.ts. The exit_code/stdout/stderr envelope below
+    // is byte-identical to the old inline spawner.
+    const { runShellString } = await import('../exec.js');
+    let r: { stdout: string; stderr: string; code: number | null; timedOut: boolean; cancelled: boolean };
+    try {
+      r = await runShellString(command, {
+        cwd: targetCwd,
+        env,
+        timeoutMs,
+        maxOutput: MAX_OUTPUT,
+        signal: ctx.abortSignal,
+        onAudit: (info) => {
+          if (risk !== 'low' && ctx.events) {
+            ctx.events.emit({ type: 'agent:log', agentId: ctx.agentId, message: `[shell:${risk}] ${command.slice(0, 160)} (${info.durationMs}ms)` });
           }
-        }, 1500);
-      }, timeoutMs);
-
-      ctx.abortSignal?.addEventListener('abort', () => {
-        if (settled) return;
-        killed.value = true;
-        try { child.kill('SIGTERM'); } catch {}
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-        setTimeout(() => {
-          if (!settled) {
-            try { child.kill('SIGKILL'); } catch {}
-            finish(130, 'command was cancelled');
-          }
-        }, 800);
+        },
       });
-
-      child.stdout?.on('data', (chunk) => {
-        stdout += String(chunk);
-        if (stdout.length > MAX_OUTPUT) {
-          stdout = stdout.slice(0, MAX_OUTPUT) + '\n... [truncated]';
-          child.stdout?.destroy();
-        }
-      });
-
-      child.stderr?.on('data', (chunk) => {
-        stderr += String(chunk);
-        if (stderr.length > MAX_OUTPUT) {
-          stderr = stderr.slice(0, MAX_OUTPUT) + '\n... [truncated]';
-          child.stderr?.destroy();
-        }
-      });
-
-      child.on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(err);
-      });
-
-      child.on('close', (code) => {
-        finish(code);
-      });
-    });
+    } catch (err) {
+      throw err;
+    }
+    const out = clipToolOutput([
+      `exit_code: ${r.code ?? 1}`,
+      `stdout:\n${r.stdout || '(empty)'}`,
+      `stderr:\n${r.stderr || '(empty)'}`,
+    ].join('\n'));
+    if (r.timedOut) return out + `\n[command timed out after ${timeoutMs / 1000}s]`;
+    if (r.cancelled) return out + '\n[command was cancelled]';
+    return out;
   },
 };

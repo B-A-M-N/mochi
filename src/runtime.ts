@@ -38,6 +38,14 @@ export class Runtime {
   private abortController: AbortController;
   private abortSignal: AbortSignal;
   activeSessionId?: string;
+  /** UI-driven permission-policy override (`yolo` | `strict` | `workspace-safe`).
+   *  Written by the CLI (`--yolo`/uncensored flags) and the TUI (`/yolo`);
+   *  read by the TUI to render the auto-approve state. The tool-permission
+   *  layer reads `config.safety`; this field is the UI's shared override. */
+  permPolicy?: string;
+  /** Max self-review/auto-improve passes, adjustable from the TUI (/review).
+   *  Undefined = engine default. */
+  maxRuns?: number;
 
   constructor(opts: RuntimeOptions = {}) {
     this.config = loadConfig(opts.config);
@@ -576,9 +584,13 @@ export class Runtime {
     const { createTask } = await import('./goals/task.js');
     const { classifyTaskKind } = await import('./taskkind.js');
     const goal = await this.goals.createGoal(prompt);
-    const kind = classifyTaskKind({ title: prompt.split('\n')[0].slice(0, 80), description: prompt, role: 'coder' as any });
+    const kind = classifyTaskKind({ title: prompt.split('\n')[0].slice(0, 80), description: prompt, role: 'coder' });
     const isChat = kind === 'chat';
-    const task = createTask(prompt.split('\n')[0].slice(0, 80), prompt, { role: isChat ? 'assistant' as any : 'coder', acceptanceCriteria: [] });
+    // Chat tasks use the coder profile (profiles.get falls back to coder for
+    // unknown roles anyway); 'coder' here keeps the type honest with zero
+    // behavior change. Chat-ness is carried by `kind`, not the role.
+    const task = createTask(prompt.split('\n')[0].slice(0, 80), prompt, { role: 'coder', acceptanceCriteria: [] });
+    void isChat;
     if (opts?.images?.length) task.images = opts.images;
     goal.tasks.push(task.id);
     this.workspace.saveGoal(goal);

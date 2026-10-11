@@ -1,5 +1,16 @@
 # Mochi Changelog
 
+## Unreleased — Reliability, security & TUI correctness sweep
+
+- **Cron notify hardening** — `src/cron.ts`: new `validateNotify()` (webhook scheme/length checks, 500-char shell cap, NUL guard) enforced at `addJob` time AND re-checked at execution; `loadJobs` schema-validates every entry so a hand-edited `cron.json` cannot inject malformed jobs; summary passed via `MOCHI_JOB_SUMMARY` env only (the old `"` rewrite corrupted text). 5 new tests.
+- **Multimodal mapper sweep** — `src/model/openai.ts`, `anthropic.ts`, `gemini.ts` now flatten `ContentPart[]` through `contentText()` instead of `m.content ?? ''` (which stringified `[object Object]` for image parts); killed 6 `as any`/`any[]` sites with real wire types.
+- **Cell-aware terminal widths** — `src/tui/wrap.ts` gains `stripAnsi` (full CSI+OSC), `cellWidth` (wcwidth-style: CJK/emoji 2, combining 0), `visibleCells`, and `sliceCells` (never splits surrogates/wide chars); `view.ts`, `cards.ts`, `selection.ts` unified on it (4 duplicated implementations → 1). Hard-split wrapping, truncation, and mouse selection are now CJK/emoji-correct.
+- **Layout lockstep** — `transcriptGeometry` recomputed with `renderFrame`'s exact formula (was 4:3 vs 3:2+1, breaking selection/scroll sync on short terminals).
+- **NO_COLOR + reduced-motion** — `honorsNoColor()` strips every escape byte; `prefersReducedMotion()` (env/`NO_COLOR`/dumb) stills splash + spinner. 4 new theme tests.
+- **Trace retention** — `pruneTraces()` (100 files / 32MB caps, oldest-first, best-effort) runs on every new run; `bench/arena-results.json` untracked + gitignored (was rewriting every arena run).
+- **Green main** — `vitest.config.ts` aliases `bun:test` to a portable shim: the 9 bun-authored files that failed collection under `npm test` now run (38 tests). Full suite: **1428 passed / 4 skipped, 0 failed** (was 9 unloadable files). CI asserts native binaries exist post-build instead of silently self-skipping parity tests.
+- **Docs + dashboard hygiene** — `ARCHITECTURE.md` regenerated (122 modules / 975 symbols); dashboard scrubs `?token=` from the URL bar after login.
+
 ## 0.22.0 — Speculative stack complete
 
 - **Repo map (MCH-49)** — `src/repo-map.ts`: Aider-style repo map built on the codegraph. Resolves `calls.callee` symbols to their defining files via the `symbols` table, builds file→file call adjacency, runs 30-iteration PageRank (damping 0.85), returns the top-15 structurally important files. Injected as a `REPO MAP` system message at task start. ~60ms warm on a 19k-line repo; ranks `loop.ts`, `codegraph.ts`, `events.ts`, `memory.ts` first.

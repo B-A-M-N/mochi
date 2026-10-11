@@ -1,5 +1,6 @@
 import { TOOL_ALIASES, normalizeToolArgs } from '../tools/index.js';
 import { T, R } from './view.js';
+import { sliceCells, visibleCells } from './wrap.js';
 
 const TOOL_NAMES: Record<string, string> = {
   write: 'write', edit: 'edit', patch: 'patch', delete: 'delete',
@@ -35,12 +36,8 @@ function toolGlyph(tool: string): string {
   return '◇';
 }
 
-function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-}
-
 function visibleLen(s: string): number {
-  return stripAnsi(s).length;
+  return visibleCells(s);
 }
 
 function padEnd(s: string, n: number): string {
@@ -50,25 +47,8 @@ function padEnd(s: string, n: number): string {
 }
 
 export function truncate(s: string, max: number): string {
-  const vis = visibleLen(s);
-  if (vis <= max) return s;
-  let out = '';
-  let cells = 0;
-  let i = 0;
-  while (i < s.length && cells < max - 1) {
-    if (s[i] === '\x1b') {
-      const m = s.slice(i).match(/^\x1b\[[0-9;]*[A-Za-z]/);
-      if (m) {
-        out += m[0];
-        i += m[0].length;
-        continue;
-      }
-    }
-    out += s[i];
-    cells++;
-    i++;
-  }
-  return out + T.reset + '…';
+  if (visibleCells(s) <= max) return s;
+  return sliceCells(s, Math.max(0, max - 1)).text + T.reset + '…';
 }
 
 function formatDuration(ms: number | undefined): string {

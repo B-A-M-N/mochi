@@ -77,35 +77,16 @@ export const MAX_COLLAPSED_LINES = 5;
 export const TRANSCRIPT_MAX_WIDTH = 100;
 
 // ---- Shared helpers --------------------------------------------------------
-export function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*m/g, '');
-}
+// Cell-aware ANSI/width primitives live in wrap.ts (single source of truth —
+// CJK wide chars count 2 cells, emoji 2, combining marks 0, full CSI stripped).
+import { stripAnsi, visibleLen, visibleCells, cellWidth, sliceCells } from './wrap.js';
+export { stripAnsi, visibleLen, visibleCells, cellWidth, sliceCells };
 
-export function visibleLen(s: string): number {
-  return stripAnsi(s).length;
-}
-
-/** Truncate with ellipsis on a visible-length budget, preserving ANSI color codes. */
+/** Truncate with ellipsis on a visible-cell budget, preserving ANSI color codes
+ *  and never splitting a surrogate pair or wide character. */
 export function ellipsize(s: string, max: number): string {
-  const vis = visibleLen(s);
-  if (vis <= max) return s;
-  let out = '';
-  let visCount = 0;
-  let i = 0;
-  while (i < s.length && visCount < max - 1) {
-    if (s[i] === '\x1b') {
-      const match = s.slice(i).match(/^\x1b\[[0-9;]*m/);
-      if (match) {
-        out += match[0];
-        i += match[0].length;
-        continue;
-      }
-    }
-    out += s[i];
-    visCount++;
-    i++;
-  }
-  return out + '\x1b[0m…';
+  if (visibleLen(s) <= max) return s;
+  return sliceCells(s, Math.max(0, max - 1)).text + '\x1b[0m…';
 }
 
 export function padEnd(s: string, n: number): string {

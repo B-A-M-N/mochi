@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wrap, visibleLen } from './wrap.js';
+import { wrap, visibleLen, visibleCells, cellWidth, sliceCells, stripAnsi } from './wrap.js';
 
 describe('wrap', () => {
   it('wraps a normal sentence to the given width without overflow', () => {
@@ -39,5 +39,36 @@ describe('wrap', () => {
     const one = wrap('x'.repeat(20), 1);
     expect(one.every((l) => visibleLen(l) <= 1)).toBe(true);
     expect(one.length).toBe(20);
+  });
+
+  it('counts CJK wide chars as 2 cells and never overflows', () => {
+    expect(visibleCells('日本語')).toBe(6);
+    expect(cellWidth('語'.codePointAt(0) as number)).toBe(2);
+    const lines = wrap('日本語テストですよろしく', 10);
+    for (const l of lines) expect(visibleCells(l)).toBeLessThanOrEqual(10);
+    expect(lines.join('')).toBe('日本語テストですよろしく');
+  });
+
+  it('counts emoji as 2 cells and combining marks as 0', () => {
+    expect(cellWidth('🔍'.codePointAt(0) as number)).toBe(2);
+    expect(visibleCells('é')).toBe(1); // e + U+0301 combining acute
+    expect(visibleCells('⚡ ok')).toBe(2 + 3);
+  });
+
+  it('strips full CSI sequences (not just SGR) from width math', () => {
+    expect(stripAnsi('\x1b[2K\rprompt')).toBe('\rprompt');
+    expect(visibleCells('\x1b[38;5;199mhi\x1b[0m')).toBe(2);
+  });
+
+  it('never splits a surrogate pair or wide char when hard-splitting', () => {
+    const lines = wrap('🔍'.repeat(10), 5);
+    for (const l of lines) {
+      expect(visibleCells(l)).toBeLessThanOrEqual(5);
+      expect(l).not.toContain('�');
+    }
+    expect(lines.join('')).toBe('🔍'.repeat(10));
+    const { text } = sliceCells('\x1b[31m日本語\x1b[0m', 4);
+    expect(visibleCells(text)).toBeLessThanOrEqual(4);
+    expect(text).toContain('\x1b[31m');
   });
 });

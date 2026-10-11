@@ -1,9 +1,9 @@
 // Cron scheduler: interval + 5-field cron parsing and job persistence.
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { everyInterval, nextRunFor, addJob, listJobs, dueJobs, removeJob, bumpJob, isRunnable, updateJob, notifyJobResult } from './cron.js';
+import { everyInterval, nextRunFor, addJob, listJobs, dueJobs, removeJob, bumpJob, isRunnable, updateJob, notifyJobResult, validateNotify } from './cron.js';
 
 let dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -124,5 +124,49 @@ describe('notifyJobResult', () => {
     await notifyJobResult(job, 'the summary text');
     expect(readFileSync(out, 'utf8').trim()).toBe('the summary text');
   }, 15_000);
+
+  it('refuses to execute a target that fails validation', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-notify-'));
+    const out = resolve(dir, 'nope.txt');
+    const job = { id: 'job3', prompt: 'x', schedule: 'every 1m', lastRun: null, nextRun: 0, createdAt: 0, enabled: true, runs: 0, notify: 'x'.repeat(501) + ` > ${out}` };
+    await notifyJobResult(job as never, 'should never run');
+    expect(existsSync(out)).toBe(false);
+  }, 15_000);
+});
+
+describe('validateNotify', () => {
+  it('accepts https webhooks and bounded shell commands', () => {
+    expect(validateNotify('https://example.com/hook')).toBeNull();
+    expect(validateNotify('echo "$MOCHI_JOB_SUMMARY"')).toBeNull();
+    expect(validateNotify(undefined as never)).not.toBeNull();
+  });
+  it('rejects oversized and NUL-containing targets', () => {
+    expect(validateNotify('echo ' + 'x'.repeat(500))).not.toBeNull();
+    expect(validateNotify('echo hi\0')).not.toBeNull();
+    expect(validateNotify('http://[::1')).not.toBeNull();
+  });
+  it('addJob rejects a bad notify target without writing a job', () => {
+    const dir = tmp();
+    const r = addJob(dir, 'x', 'every 1m', 'echo ' + 'y'.repeat(600));
+    expect(r.error).toBeTruthy();
+    expect(r.id).toBeUndefined();
+    expect(listJobs(dir).length).toBe(0);
+  });
+  it('loadJobs drops malformed entries instead of executing them', () => {
+    const dir = tmp();
+    mkdirSync(resolve(dir, '.mochi'), { recursive: true });
+    writeFileSync(resolve(dir, '.mochi', 'cron.json'), JSON.stringify([
+      { id: 'good', prompt: 'p', schedule: 'every 1m', nextRun: 1, createdAt: 1, enabled: true, runs: 0 },
+      { id: 'evil', prompt: 'p', schedule: 'every 1m', nextRun: 1, createdAt: 1, enabled: true, runs: 0, notify: 'z'.repeat(9000) },
+      'not-an-object',
+      { id: 42, prompt: 'p' },
+    ]));
+    const jobs = listJobs(dir);
+    expect(jobs.length).toBe(2);
+    expect(jobs.every((j) => j.notify === undefined)).toBe(true);
+  });
 });
 

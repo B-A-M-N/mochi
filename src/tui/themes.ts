@@ -123,6 +123,29 @@ function rgbTo256(r: number, g: number, b: number): number {
   return grayDist < cubeDist ? grayIdx : cubeIdx;
 }
 
+/** Parse the first `38;2;r;g;b` (fg) or `48;2;r;g;b` (bg) triple out of an
+ *  ANSI color string. Returns null when the string carries no truecolor code
+ *  (256-color downgraded themes, empty NO_COLOR strings). */
+export function parseThemeRgb(s: string, code: 38 | 48): [number, number, number] | null {
+  const m = s.match(new RegExp(`\\x1b\\[${code};2;(\\d+);(\\d+);(\\d+)m`));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+/** WCAG contrast ratio of a theme's body text (fg) on the user-message
+ *  surface (bgUser). Null when either side isn't truecolor-parseable. */
+export function themeContrastRatio(t: MochiTheme): number | null {
+  const fg = parseThemeRgb(t.colors.fg, 38);
+  const bg = parseThemeRgb(t.colors.bgUser, 48) ?? parseThemeRgb(t.colors.bgUser, 38);
+  if (!fg || !bg) return null;
+  const x = relativeLuminance(fg), y = relativeLuminance(bg);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
 /** Rewrite a color string's 24-bit codes as 256-color codes. */
 function downgradeColorCodes(s: string): string {
   return s.replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g, (_m, r: string, g: string, b: string) =>
@@ -137,9 +160,41 @@ export function supportsTruecolor(): boolean {
   return term.includes('truecolor') || term.includes('24bit');
 }
 
+/** True when the user asked for no color (NO_COLOR convention:
+ *  https://no-color.org — presence and non-emptiness of NO_COLOR means off). */
+export function honorsNoColor(): boolean {
+  const v = process.env.NO_COLOR;
+  return v !== undefined && v !== '' && v !== '0';
+}
+
+/** True when animation should be stilled: reduced-motion request or dumb terminal. */
+export function prefersReducedMotion(): boolean {
+  const rm = (process.env.MOCHI_REDUCED_MOTION ?? '').toLowerCase();
+  if (rm === '1' || rm === 'true' || rm === 'yes') return true;
+  if (honorsNoColor()) return true;
+  return (process.env.TERM ?? '').toLowerCase() === 'dumb';
+}
+
+/** Strip every ANSI color sequence from a theme (NO_COLOR): text stays
+ *  fully readable, layout/contrast unchanged, zero escape bytes emitted. */
+export function stripThemeColors(t: MochiTheme): MochiTheme {
+  const blank = (obj: Record<string, unknown>) => Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? '' : v]),
+  );
+  return {
+    ...t,
+    colors: blank(t.colors as unknown as Record<string, unknown>) as unknown as ThemeColors,
+    roleColors: t.roleColors
+      ? (blank(t.roleColors as unknown as Record<string, unknown>) as Partial<RoleColors>)
+      : undefined,
+  };
+}
+
 /** Downgrade all theme colors to xterm-256 when the terminal lacks truecolor
- *  support so semantic colors still render instead of being stripped/ignored. */
+ *  support so semantic colors still render instead of being stripped/ignored.
+ *  Honors NO_COLOR first (no escape bytes at all). */
 export function adaptThemeColors(t: MochiTheme): MochiTheme {
+  if (honorsNoColor()) return stripThemeColors(t);
   if (supportsTruecolor()) return t;
   const downgradeEntries = (obj: Record<string, unknown>) => Object.fromEntries(
     Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? downgradeColorCodes(v) : v]),
@@ -985,6 +1040,56 @@ export const THEMES: MochiTheme[] = [
     },
     splashStops: [
       [49, 10, 94], [139, 92, 246], [167, 139, 250], [216, 180, 254], [245, 243, 255],
+    ],
+  },
+  {
+    id: 'paper-light',
+    name: 'Paper Light',
+    description: 'Ink on paper — dark indigo text on warm paper for light terminals and bright rooms',
+    colors: {
+      act: '\x1b[38;2;0;120;150m',
+      plan: '\x1b[38;2;150;110;0m',
+      success: '\x1b[38;2;30;140;60m',
+      error: '\x1b[38;2;200;40;40m',
+      warning: '\x1b[38;2;170;110;0m',
+      gray: '\x1b[38;2;110;105;120m',
+      grayDark: '\x1b[38;2;150;145;160m',
+      fg: '\x1b[38;2;43;38;58m',
+      bgUser: '\x1b[48;2;238;233;222m',
+      rule: '\x1b[38;2;190;180;195m',
+      pink: '\x1b[38;2;210;80;140m',
+      magenta: '\x1b[38;2;190;40;130m',
+      violet: '\x1b[38;2;110;70;190m',
+      cyan: '\x1b[38;2;0;130;150m',
+      lime: '\x1b[38;2;60;150;60m',
+      orange: '\x1b[38;2;200;110;20m',
+      teal: '\x1b[38;2;0;140;130m',
+    },
+    roleColors: {
+      assistantGutter: '\x1b[38;2;110;70;190m',
+      assistantText: '\x1b[38;2;43;38;58m',
+      toolMarker: '\x1b[38;2;0;130;150m',
+      userGutter: '\x1b[38;2;190;40;130m',
+      userFg: '\x1b[38;2;43;38;58m',
+      thoughtGutter: '\x1b[38;2;150;145;160m',
+      taskMark: '\x1b[38;2;0;120;150m',
+      goalMark: '\x1b[38;2;210;80;140m',
+      codeKeyword: '\x1b[38;2;110;70;190m',
+      codeString: '\x1b[38;2;30;140;60m',
+      codeNumber: '\x1b[38;2;200;110;20m',
+      codeComment: '\x1b[38;2;150;145;160m',
+      codePunct: '\x1b[38;2;0;140;130m',
+      codeType: '\x1b[38;2;0;120;150m',
+      codeFn: '\x1b[38;2;0;130;150m',
+      mdHeading: '\x1b[38;2;110;70;190m',
+      mdLink: '\x1b[38;2;0;120;150m',
+      mdBold: '\x1b[38;2;43;38;58m',
+      thinkingLabel: '\x1b[38;2;110;70;190m',
+      reasoningBadge: '\x1b[38;2;110;70;190m',
+      reasonBadge: { low: '\x1b[38;2;0;130;150m', medium: '\x1b[38;2;30;140;60m', high: '\x1b[38;2;110;70;190m', max: '\x1b[38;2;200;40;40m' },
+    },
+    splashStops: [
+      [238, 233, 222], [190, 180, 195], [110, 70, 190], [43, 38, 58], [0, 120, 150],
     ],
   },
 ];

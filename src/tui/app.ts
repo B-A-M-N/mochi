@@ -8,12 +8,14 @@ import { PROVIDERS, providerById } from '../providers.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
+import { prefersReducedMotion } from './themes.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { kvCache } from '../kv-cache.js';
 import { prefetchBadge } from '../prefetch.js';
 import { recordFeedback } from '../feedback.js';
 import type { FeedbackVerdict } from '../feedback.js';
-import { formatModes } from '../modes.js';
+import { formatModes, isMode } from '../modes.js';
+import type { AgentMode } from '../modes.js';
 import {
   T,
   R,
@@ -179,7 +181,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     /** cline-style plan/act mode (Tab) */
     uiMode: (runtime.config.planMode ? 'plan' : 'act') as 'plan' | 'act',
     /** auto-approve all (Shift+Tab) — mirrors /yolo */
-    autoApprove: (runtime as any).__permPolicy === 'yolo',
+    autoApprove: runtime.permPolicy === 'yolo',
     autoImproveArmed: false,
     /** slash autocomplete */
     dropActive: false,
@@ -272,8 +274,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   const startSpinner = () => {
     if (spinnerTimer) return;
+    // Reduced-motion (MOCHI_REDUCED_MOTION=1, NO_COLOR, or dumb terminal):
+    // skip the animated splash entirely and render the final frame once.
+    if (prefersReducedMotion() && state.splashTick < SPLASH_TICKS) {
+      state.splashTick = SPLASH_TICKS;
+      state.splashProgress = 1;
+    }
     spinnerTimer = setInterval(() => {
-      state.spinner = (state.spinner + 1) % 60;
+      state.spinner = prefersReducedMotion() ? 0 : (state.spinner + 1) % 60;
       if (state.splashTick < SPLASH_TICKS) {
         state.splashTick++;
         state.splashProgress = Math.min(1, state.splashTick / SPLASH_TICKS);
@@ -366,11 +374,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       dirty < transCache.length &&
       dirty < state.lines.length &&
       transCache[dirty].text === state.lines[dirty].text &&
-      (transCache[dirty] as any).kind === state.lines[dirty].kind
+      transCache[dirty].kind === state.lines[dirty].kind
     ) dirty++;
     for (let i = dirty; i < state.lines.length; i++) {
       transCache[i].text = state.lines[i].text;
-      (transCache[i] as any).kind = state.lines[i].kind;
+      transCache[i].kind = state.lines[i].kind;
       transCache[i].out = wrapLine(state.lines[i], maxWidth);
     }
     transCache.length = state.lines.length;
@@ -549,14 +557,17 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   // ---- Mouse text-selection: highlight + copy ----------------------------
   /** Recompute the same transcript window renderFrame uses, so selection and
-   *  scroll clamping agree with what is actually on screen. */
+   *  scroll clamping agree with what is actually on screen. This MUST stay in
+   *  lockstep with renderFrame's layout block (status rows, composer growth,
+   *  auto-approve row); any drift re-opens the selection-vs-screen mismatch. */
   function transcriptGeometry(w: number): { chatMw: number; availableH: number } {
     const h = height();
-    const statusRows = h >= 20 ? 4 : 3;
+    const statusRows = h >= 20 ? 3 : 2;
     const innerW = Math.max(1, w - 6);
-    const textRows = state.input ? wrap(state.input, innerW).length : 1;
-    const composerRows = Math.min(Math.max(4, Math.floor(h / 3)), textRows + 2);
-    const bottomRows = composerRows + statusRows;
+    const rawRows = state.input ? wrap(state.input, innerW) : [''];
+    const minComposer = h < 24 ? (rawRows.length > 1 ? 4 : 3) : 4;
+    const composerRows = Math.min(Math.max(minComposer, Math.floor(h / 3)), rawRows.length + 2);
+    const bottomRows = composerRows + statusRows + 1;
     const contentH = Math.max(1, h - bottomRows);
     const availableH = state.busy ? Math.max(1, contentH - 1) : contentH;
     const indent = transcriptIndent(w);
@@ -959,7 +970,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       totalCost: state.totalCost,
       maxInputTokens: runtime.config.safety.contextBudgetTokens,
       mode: state.uiMode,
-      agentMode: (runtime.config.mode as any) ?? 'normal',
+      agentMode: runtime.config.mode ?? 'normal',
       reasoningLevel: runtime.getReasoning(),
       workspaceName: projectName,
       gitBranch: branch || null,
@@ -1299,7 +1310,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/mode' || line.startsWith('/mode ')) {
       const specific = line.startsWith('/mode ') ? line.slice(6).trim() : '';
       if (!specific) {
-        push('system', `${formatModes((runtime.config.mode as any) ?? 'normal')}\n\nUsage: /mode <name>`);
+        push('system', `${formatModes(isMode(runtime.config.mode ?? '') ? (runtime.config.mode as AgentMode) : 'normal')}\n\nUsage: /mode <name>`);
         return;
       }
       await run(async () => {
@@ -1311,7 +1322,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       return;
     }
     if (line === '/modes') {
-      push('system', formatModes((runtime.config.mode as any) ?? 'normal'));
+      push('system', formatModes(isMode(runtime.config.mode ?? '') ? (runtime.config.mode as AgentMode) : 'normal'));
       return;
     }
     if (line === '/plugins') {
@@ -1362,7 +1373,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
     if (line.startsWith('/forget ')) { await run(async () => { const { forgetFact } = await import('../memory-store.js'); const q = line.slice(8).trim(); if (!q) return 'usage: /forget <substring|id>'; const n = forgetFact(q); return `forgot ${n} fact(s)`; }); return; }
     if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Press g/b on an assistant turn to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
-    if (line === '/circle') { await run(async () => { const v = (await import('../circle.js')).detectCircle((runtime as any).messages ?? [], 4); return v.circling ? `CIRCLE: ${v.signals.join(' · ')}` : `ok (signals=${v.signals.length})`; }); return; }
+    if (line === '/circle') { await run(async () => {
+      const { detectCircle } = await import('../circle.js');
+      const { SessionStore } = await import('../session-store.js');
+      const store = new SessionStore(projectRoot);
+      const sid = runtime.activeSessionId;
+      const messages = sid ? store.messages(sid).map((m) => ({ role: m.role as 'assistant' | 'user' | 'system' | 'tool', content: m.content })) : [];
+      const v = detectCircle(messages, 4);
+      return v.circling ? `CIRCLE: ${v.signals.join(' · ')}` : `ok (signals=${v.signals.length})`;
+    }); return; }
     if (line === '/tasks') { await run(async () => listTasks()); return; }
     if (line === '/checkpoint') { await run(async () => { const cp = await runtime.checkpoint(); return `${cp.type} ${cp.ref}`; }); return; }
     if (line === '/rollback') { await run(async () => runtime.rollback()); return; }
@@ -1815,19 +1834,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
     // Permission policy slash commands
     if (line === '/yolo' || line === '/yolo on' || line === '/dangerously-skip-permissions' || line === '/dangerously-skip-permissions on') {
-      (runtime as any).__permPolicy = 'yolo';
+      runtime.permPolicy = 'yolo';
       push('system', '[YOLO] YOLO mode ENABLED — all permission prompts bypassed. Type /yolo off to restore.');
       scheduleRender();
       return;
     }
     if (line === '/yolo off' || line === '/dangerously-skip-permissions off') {
-      (runtime as any).__permPolicy = 'strict';
+      runtime.permPolicy = 'strict';
       push('system', '[SAFE] YOLO mode disabled. Strict permissions restored.');
       scheduleRender();
       return;
     }
     if (line === '/workspace-safe') {
-      (runtime as any).__permPolicy = 'workspace-safe';
+      runtime.permPolicy = 'workspace-safe';
       push('system', '[AUTO] Workspace-safe mode: reads + workspace edits auto-approved, shell requires approval.');
       scheduleRender();
       return;
@@ -1869,7 +1888,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       // iterating until the model declares the work DONE (verified) or progress
       // converges, instead of repeating a "keep going" nudge. This delegates to
       // Runtime.autoImprove so the TUI and headless paths share ONE behavior.
-      const passes = (runtime as any).__maxRuns ?? 5;
+      const passes = runtime.maxRuns ?? 5;
       state.autoImproveArmed = false;
       state.autoImproveAbort = false;
       await run(async () => {
@@ -2010,9 +2029,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const runs = [3, 10, 20, 40, 0];
       const chosen = runs[index] ?? 0;
       if (chosen > 0) {
-        (runtime as any).__maxRuns = chosen;
+        runtime.maxRuns = chosen;
         state.autoApprove = true;
-        (runtime as any).__permPolicy = 'yolo';
+        runtime.permPolicy = 'yolo';
         push('system', `Auto improve: ON — up to ${chosen} self-review passes. Each pass reviews + verifies the previous one and iterates until it's verified done, then moves on. Send a message to begin.`);
         state.autoImproveArmed = true;
       } else {
@@ -2028,10 +2047,10 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   async function runShell(cmd: string) {
     if (!cmd) { push('error', 'No command given'); return; }
     await run(async () => {
-      const { execFile } = await import('node:child_process');
-      const out = await new Promise<string>((res) => execFile('sh', ['-c', cmd], { cwd: projectRoot, maxBuffer: 4 * 1024 * 1024 }, (e, stdout, stderr) => {
-        res((e ? `exit_code: ${(e as any).code ?? 1}\n` : 'exit_code: 0\n') + String(stdout ?? '') + String(stderr ?? ''));
-      }));
+      const { runShellString } = await import('../exec.js');
+      const r = await runShellString(cmd, { cwd: projectRoot, timeoutMs: 120_000, maxOutput: 2_000_000, signal: runtime.signal });
+      const out = `exit_code: ${r.code ?? (r.timedOut ? 124 : 1)}\nstdout:\n${r.stdout || '(empty)'}\nstderr:\n${r.stderr || '(empty)'}` +
+        (r.timedOut ? '\n[command timed out]' : r.cancelled ? '\n[command was cancelled]' : '');
       return out.slice(0, 12000);
     });
   }
@@ -2041,11 +2060,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const { detectRepo } = await import('../repo.js');
       const repo = detectRepo(projectRoot);
       const cmd = extra ? `node --run ${extra} 2>/dev/null || ${repo.testCommand}` : (repo.testCommand ?? 'no test command detected');
-      const { execFile } = await import('node:child_process');
-      const resolved = cmd.includes(' || ') ? cmd : cmd;
-      const out = await new Promise<string>((resolve) => execFile('sh', ['-c', resolved], { cwd: projectRoot, maxBuffer: 4 * 1024 * 1024 }, (e, stdout, stderr) => {
-        resolve((e ? `exit code: ${(e as any).code ?? 1}\n` : 'exit code: 0\n') + String(stdout ?? '').slice(0, 6000) + String(stderr ?? '').slice(0, 3000));
-      }));
+      const { runShellString } = await import('../exec.js');
+      const r = await runShellString(cmd, { cwd: projectRoot, timeoutMs: 600_000, maxOutput: 2_000_000, signal: runtime.signal });
+      const out = `exit code: ${r.code ?? (r.timedOut ? 124 : 1)}\n` + String(r.stdout ?? '').slice(0, 6000) + String(r.stderr ?? '').slice(0, 3000);
       return out;
     });
   }
@@ -2379,12 +2396,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       }
 
       if (line.kind === 'tool') {
-        const full = line.fullContent || (line.metadata as any)?.output || line.text;
-        const toolName = (line.metadata as any)?.tool || 'tool';
+        const full = line.fullContent || line.metadata?.output || line.text;
+        const toolName = line.metadata?.tool || 'tool';
         const contentLines = full.split('\n');
-        const rawArgs = (line.metadata as any)?.args;
+        const rawArgs = line.metadata?.args as Record<string, unknown> | undefined;
         const argSummary = typeof rawArgs === 'object' && rawArgs
-          ? String((rawArgs as any).command || (rawArgs as any).path || (rawArgs as any).query || '')
+          ? String(rawArgs?.command ?? rawArgs?.path ?? rawArgs?.query ?? '')
           : '';
         items.push({
           title: `Tool: ${toolName} ${argSummary} (${contentLines.length} lines)`,
@@ -3155,16 +3172,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       scheduleRender();
     }
     // Keep the status bar's git stats + token meter live.
-    const type = String((event as any).type);
+    const type = event.type;
     if (type === 'file:changed' || type === 'tool:completed') void refreshGitStats();
     if (type === 'usage:updated') {
       // REAL provider numbers: input (net of cache hits), output, cache reads, and USD cost.
-      state.inTokens = Number((event as any).inputTokens ?? 0);
-      state.outTokens = Number((event as any).outputTokens ?? 0);
-      state.cacheTokens = Number((event as any).cacheTokens ?? 0);
-      state.totalTokens = Number((event as any).totalTokens ?? 0);
-      if ((event as any).costUsd !== undefined) {
-        state.totalCost = Number((event as any).costUsd ?? 0);
+      state.inTokens = Number(event.type === 'usage:updated' ? event.inputTokens : 0);
+      state.outTokens = Number(event.type === 'usage:updated' ? event.outputTokens : 0);
+      state.cacheTokens = Number(event.type === 'usage:updated' ? event.cacheTokens : 0);
+      state.totalTokens = Number(event.type === 'usage:updated' ? event.totalTokens : 0);
+      if (event.type === 'usage:updated' && event.costUsd !== undefined) {
+        state.totalCost = Number(event.type === 'usage:updated' ? (event.costUsd ?? 0) : 0);
       }
       scheduleRender();
     }

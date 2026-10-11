@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch } from './themes.js';
+import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch, honorsNoColor, prefersReducedMotion, stripThemeColors, adaptThemeColors, themeContrastRatio, parseThemeRgb } from './themes.js';
 import { setTheme, T } from './view.js';
 
 describe('mochi themes', () => {
-  it('defines 21 unique themes', () => {
-    expect(THEMES.length).toBe(21);
+  it('defines 22 unique themes', () => {
+    expect(THEMES.length).toBe(22);
     const ids = new Set(THEMES.map((t) => t.id));
-    expect(ids.size).toBe(21);
+    expect(ids.size).toBe(22);
   });
 
   it('every theme has all required color tokens and description', () => {
@@ -125,5 +125,53 @@ describe('themes are visually distinct', () => {
     for (const required of ['dracula', 'tokyo-night', 'catppuccin-mocha', 'gruvbox', 'one-dark']) {
       expect(ids.has(required), `missing required theme: ${required}`).toBe(true);
     }
+  });
+
+  it('NO_COLOR strips every escape byte from the adapted theme', () => {
+    const prev = process.env.NO_COLOR;
+    try {
+      process.env.NO_COLOR = '1';
+      expect(honorsNoColor()).toBe(true);
+      const stripped = adaptThemeColors(THEMES[0]);
+      for (const v of Object.values(stripped.colors)) {
+        if (typeof v === 'string') expect(v).not.toContain('\x1b');
+      }
+      expect(stripThemeColors(THEMES[0]).colors.fg).toBe('');
+    } finally {
+      if (prev === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = prev;
+    }
+    expect(honorsNoColor()).toBe(false);
+  });
+
+  it('reduced-motion is honored via env, NO_COLOR, or dumb terminal', () => {
+    const prev = { ...process.env };
+    try {
+      delete process.env.NO_COLOR;
+      process.env.TERM = 'xterm-256color';
+      process.env.MOCHI_REDUCED_MOTION = '1';
+      expect(prefersReducedMotion()).toBe(true);
+      delete process.env.MOCHI_REDUCED_MOTION;
+      expect(prefersReducedMotion()).toBe(false);
+      process.env.TERM = 'dumb';
+      expect(prefersReducedMotion()).toBe(true);
+    } finally {
+      process.env = prev;
+    }
+  });
+
+  it('every theme passes WCAG AA body-text contrast (fg on bgUser ≥ 4.5)', () => {
+    for (const t of THEMES) {
+      const ratio = themeContrastRatio(t);
+      expect(ratio, `${t.id} contrast unparseable`).not.toBeNull();
+      expect(ratio as number, `${t.id} body contrast ${ratio?.toFixed(2)} below AA 4.5`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('ships a light theme for bright rooms (paper-light ≥ 7)', () => {
+    const light = getTheme('paper-light');
+    expect(light).toBeTruthy();
+    expect(themeContrastRatio(light as never) as number).toBeGreaterThanOrEqual(7);
+    expect(parseThemeRgb('no color here', 38)).toBeNull();
   });
 });

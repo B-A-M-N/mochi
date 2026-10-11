@@ -1,4 +1,5 @@
 import type { ChatMessage, ModelResponse, StreamChunk, ToolDefinition } from '../types.js';
+import { contentText } from '../types.js';
 import type { ProviderConfig } from './router.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
@@ -42,8 +43,9 @@ export function createGeminiProvider(config: ProviderConfig) {
       .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
       .map((m) => {
         if (m.role === 'assistant') {
-          const parts: any[] = [];
-          if (m.content) parts.push({ text: m.content });
+          const parts: Array<{ text?: string; functionCall?: { name: string; args: unknown } }> = [];
+          const text = contentText(m);
+          if (text) parts.push({ text });
           if (m.tool_calls) {
             for (const tc of m.tool_calls) {
               let args = {};
@@ -67,16 +69,16 @@ export function createGeminiProvider(config: ProviderConfig) {
               {
                 functionResponse: {
                   name: m.name ?? 'tool',
-                  response: { name: m.name ?? 'tool', content: m.content ?? '' },
+                  response: { name: m.name ?? 'tool', content: contentText(m) },
                 },
               },
             ],
           };
         }
-        return { role: 'user', parts: [{ text: m.content ?? '' }] };
+        return { role: 'user', parts: [{ text: contentText(m) }] };
       });
 
-  const system = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => m.content ?? '').join('\n');
+  const system = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
 
   async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { reasoningEffort?: string }): Promise<ModelResponse> {
     const url = `${base}/v1beta/models/${model}:generateContent?key=${config.apiKey ?? ''}`;
@@ -114,14 +116,17 @@ export function createGeminiProvider(config: ProviderConfig) {
         throw new ProviderError(err instanceof Error ? err.message : String(err), { retryable: classifyError(err).retryable, cause: err });
       }
     }, { maxAttempts: 4, onBackoff: (attempt, delayMs, err) => logBackoff(attempt, delayMs, err) });
-    const data: any = await res.json();
+    const data = await res.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name: string; args?: unknown } }> }; finishReason?: string }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+    };
     const candidates = data.candidates ?? [];
     const parts = candidates[0]?.content?.parts ?? [];
-    const textParts = parts.filter((p: any) => !p.thought && p.text && !p.functionCall).map((p: any) => p.text);
-    const thoughtParts = parts.filter((p: any) => p.thought && p.text).map((p: any) => p.text);
+    const textParts = parts.filter((p) => !p.thought && p.text && !p.functionCall).map((p) => p.text as string);
+    const thoughtParts = parts.filter((p) => p.thought && p.text).map((p) => p.text as string);
     const functionCalls = parts
-      .filter((p: any) => p.functionCall)
-      .map((p: any, idx: number) => ({
+      .filter((p): p is { text?: string; thought?: boolean; functionCall: { name: string; args?: unknown } } => !!p.functionCall)
+      .map((p, idx: number) => ({
         id: `call_${Date.now()}_${idx}`,
         type: 'function' as const,
         function: {
@@ -145,9 +150,9 @@ export function createGeminiProvider(config: ProviderConfig) {
     const resp = await chat(messages, tools, options);
     yield {
       content: resp.content,
-      reasoningContent: (resp as any).reasoningContent,
+      reasoningContent: resp.reasoningContent,
       toolCalls: resp.toolCalls,
-      finishReason: resp.finishReason as any,
+      finishReason: resp.finishReason as StreamChunk['finishReason'],
       usage: resp.usage,
     };
   }

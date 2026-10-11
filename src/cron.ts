@@ -105,7 +105,29 @@ function loadJobs(dir: string): CronJob[] {
     const f = resolve(dir, '.mochi', 'cron.json');
     if (!existsSync(f)) return [];
     const raw = JSON.parse(readFileSync(f, 'utf8'));
-    return Array.isArray(raw) ? (raw as CronJob[]) : [];
+    if (!Array.isArray(raw)) return [];
+    // Schema-validate each entry so a hand-edited or attacker-written job
+    // file cannot inject unexpected shapes (e.g. non-string notify targets).
+    const clean: CronJob[] = [];
+    for (const j of raw) {
+      if (!j || typeof j !== 'object') continue;
+      const r = j as Record<string, unknown>;
+      if (typeof r.id !== 'string' || typeof r.prompt !== 'string' || typeof r.schedule !== 'string') continue;
+      if (typeof r.nextRun !== 'number' || typeof r.createdAt !== 'number') continue;
+      const job: CronJob = {
+        id: String(r.id).slice(0, 32),
+        prompt: String(r.prompt).slice(0, 8000),
+        schedule: String(r.schedule).slice(0, 64),
+        lastRun: typeof r.lastRun === 'number' ? r.lastRun : null,
+        nextRun: r.nextRun,
+        createdAt: r.createdAt,
+        enabled: r.enabled !== false,
+        runs: typeof r.runs === 'number' && r.runs >= 0 ? Math.floor(r.runs) : 0,
+      };
+      if (typeof r.notify === 'string' && validateNotify(r.notify) === null) job.notify = r.notify;
+      clean.push(job);
+    }
+    return clean;
   } catch {
     return [];
   }
@@ -116,6 +138,30 @@ function saveJobs(dir: string, jobs: CronJob[]): void {
   writeFileSync(resolve(dir, '.mochi', 'cron.json'), JSON.stringify(jobs, null, 2));
 }
 
+/** Validate a notify target: https? webhook URL or a bounded shell command.
+ *  Returns null when valid, or a human-readable error. Shell targets are
+ *  executed via `sh -c` with the summary passed ONLY through the
+ *  MOCHI_JOB_SUMMARY env var + stdin (never interpolated into the command),
+ *  so validation here is defense-in-depth: length caps, NUL/newline guards,
+ *  and scheme check for URLs. */
+export function validateNotify(notify: string): string | null {
+  if (typeof notify !== 'string' || !notify.trim()) return 'Notify target must be a non-empty string.';
+  const t = notify.trim();
+  if (t.includes('\0')) return 'Notify target must not contain NUL bytes.';
+  if (/^https?:\/\//i.test(t)) {
+    if (t.length > 2000) return 'Notify webhook URL is too long (max 2000 chars).';
+    try {
+      const u = new URL(t);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'Notify URL must be http(s).';
+    } catch {
+      return 'Notify URL is malformed.';
+    }
+    return null;
+  }
+  if (t.length > 500) return 'Notify shell command is too long (max 500 chars).';
+  return null;
+}
+
 /** Add a recurring job; returns its id or a validation error. */
 export function addJob(dir: string, prompt: string, schedule: string, notify?: string): { id?: string; error?: string } {
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -123,6 +169,10 @@ export function addJob(dir: string, prompt: string, schedule: string, notify?: s
   }
   const n = nextRunFor(schedule);
   if (n === null) return { id: undefined, error: `Unparseable schedule "${schedule}". Use "every 30m" or a 5-field cron like "0 9 * * 1-5".` };
+  if (notify !== undefined) {
+    const bad = validateNotify(notify);
+    if (bad) return { id: undefined, error: bad };
+  }
   const jobs = loadJobs(dir);
   const job: CronJob = {
     id: randomUUID().slice(0, 8),
@@ -141,12 +191,20 @@ export function addJob(dir: string, prompt: string, schedule: string, notify?: s
 }
 
 /** Deliver a job result to its configured notify target (webhook or command).
- *  Webhooks get a POST with JSON; shell commands get the summary as an ENV var
- *  and stdin. Never throws — notification failures are logged, not fatal. */
+ *  Webhooks get a POST with JSON; shell commands get the summary via the
+ *  MOCHI_JOB_SUMMARY env var. Never throws — failures are logged, not fatal. */
 export async function notifyJobResult(job: CronJob, summary: string): Promise<void> {
   const target = job.notify;
   if (!target) return;
-  const summaryLine = summary.replace(/"/g, '\"');
+  // Defense in depth: re-validate at execution time; a job file edited
+  // behind our back with a malformed target is dropped, not executed.
+  if (validateNotify(target) !== null) {
+    console.warn(`[cron] notify target failed validation for job ${job.id} — skipped.`);
+    return;
+  }
+  // Env vars carry arbitrary bytes safely; no shell escaping needed (the old
+  // `"\"` rewrite corrupted summaries). Cap sizes to bound the child env.
+  const summaryCapped = summary.slice(0, 4000);
   const ok = await (async () => {
     try {
       if (/^https?:\/\//i.test(target)) {
@@ -157,17 +215,19 @@ export async function notifyJobResult(job: CronJob, summary: string): Promise<vo
         });
         return res.ok;
       }
-      // shell command: pass the summary through stdin + an env var with bounded timeout & buffer
-      const { execFile } = await import('node:child_process');
-      return await new Promise<boolean>((resolve2) => {
-        execFile('sh', ['-c', target], {
-          env: { ...process.env, MOCHI_JOB_SUMMARY: summaryLine },
-          timeout: 15_000,
-          maxBuffer: 1024 * 1024,
-        }, (err, _stdout, _stderr) => {
-          resolve2(!err);
+      // shell command: summary via MOCHI_JOB_SUMMARY env under central policy
+      // (timeout/SIGKILL/output cap). Never interpolated into the command.
+      const { runArgv } = await import('./exec.js');
+      try {
+        const r = await runArgv('sh', ['-c', target], {
+          env: { ...process.env, MOCHI_JOB_SUMMARY: summaryCapped },
+          timeoutMs: 15_000,
+          maxOutput: 1024 * 1024,
         });
-      });
+        return (r.code ?? 1) === 0;
+      } catch {
+        return false;
+      }
     } catch {
       return false;
     }
