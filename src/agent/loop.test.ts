@@ -1857,3 +1857,113 @@ describe('quality harness end-to-end (drives a scripted "stuck" model and verifi
     }
   });
 });
+
+describe('repeated tool result detection (quality slice 5 — flag when the model re-reads the same content)', () => {
+  function makeBareAgent() {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-repeat-result-'));
+    const config = makeConfig(dir, 'http://localhost:0');
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const context = new ContextEngine(config, dir);
+    const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+    return { agent, dir };
+  }
+
+  it('same output 3x from the same tool surfaces as STRUGGLE STATE', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      // Three identical outputs from the same tool — the model has clearly
+      // lost the thread. The hash map should record 3 occurrences, the
+      // injected struggle message should mention the redundancy.
+      const out = 'function foo() { return 1; }';
+      (agent as any).trackToolResultHash('read', out);
+      (agent as any).trackToolResultHash('read', out);
+      (agent as any).trackToolResultHash('read', out);
+      // Force a 2-iteration gap so the rate-limit doesn't drop the injection.
+      (agent as any).lastStruggleInjectIter = -10;
+      (agent as any).injectStruggleState(0);
+      const msgs = (agent as any).context.messages as Array<{ role: string; content: string }>;
+      const struggle = msgs.find((m) => m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggle).toBeDefined();
+      expect(struggle!.content).toContain('identical content');
+      expect(struggle!.content).toContain('3 times');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('different outputs from the same tool do not trigger redundancy', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).trackToolResultHash('read', 'content v1');
+      (agent as any).trackToolResultHash('read', 'content v2');
+      (agent as any).trackToolResultHash('read', 'content v3');
+      (agent as any).lastStruggleInjectIter = -10;
+      (agent as any).injectStruggleState(0);
+      const msgs = (agent as any).context.messages as Array<{ role: string; content: string }>;
+      const struggle = msgs.find((m) => m.role === 'system' && m.content.includes('identical content'));
+      expect(struggle).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the same output from DIFFERENT tools still counts as redundancy', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      const out = 'function foo() { return 1; }';
+      (agent as any).trackToolResultHash('read', out);
+      (agent as any).trackToolResultHash('search', out);
+      (agent as any).trackToolResultHash('grep', out);
+      (agent as any).lastStruggleInjectIter = -10;
+      (agent as any).injectStruggleState(0);
+      const msgs = (agent as any).context.messages as Array<{ role: string; content: string }>;
+      const struggle = msgs.find((m) => m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggle).toBeDefined();
+      expect(struggle!.content).toContain('identical content');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('empty output is a no-op (do not pollute the map with empty hashes)', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).trackToolResultHash('read', '');
+      (agent as any).trackToolResultHash('read', '');
+      (agent as any).trackToolResultHash('read', '');
+      // The map should be empty — empty output is filtered.
+      expect((agent as any).crossToolResultHash.size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the map is bounded at 50 entries (memory safety)', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      // Insert 100 unique outputs.
+      for (let i = 0; i < 100; i++) {
+        (agent as any).trackToolResultHash('read', `content-${i}-${Math.random()}`);
+      }
+      expect((agent as any).crossToolResultHash.size).toBeLessThanOrEqual(50);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the same redundant output is counted but does not block other tool calls', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      const out = 'content';
+      (agent as any).trackToolResultHash('read', out);
+      (agent as any).trackToolResultHash('read', out);
+      (agent as any).trackToolResultHash('read', out);
+      // Now a different tool with a different output — should still be tracked.
+      (agent as any).trackToolResultHash('search', 'different');
+      expect((agent as any).crossToolResultHash.size).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

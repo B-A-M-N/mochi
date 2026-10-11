@@ -373,6 +373,12 @@ export class Agent {
   /** MCH-60: error-signature -> last tool that produced it + total count, so a
    *  shared root cause alternating across tool names still trips the advisory. */
   private crossToolErrorSig = new Map<string, { tool: string; count: number }>();
+  /** Quality slice 5: tool result hash -> last tool that produced it + count.
+   *  When the model re-reads the same file (or any tool returns the same
+   *  output repeatedly) it has lost the thread — track the redundancy and
+   *  inject a STRUGGLE STATE so the model changes strategy instead of
+   *  blindly re-issuing the same call. */
+  private crossToolResultHash = new Map<string, { tool: string; count: number }>();
   /** MCH-61: prefetch effectiveness ledger — this run's prediction list and
    *  the cache keys warmed at start (warm ≠ read; excluded from hit counts). */
   private prefetchLedger: import('../prefetch.js').PrefetchEntry[] = [];
@@ -388,6 +394,7 @@ export class Agent {
   private emptyResponseCount = 0;
   private selfReviewCount = 0;
   private taskRunExecuted = false;
+  private finishHintSent = false;
   private taskKind?: import('../taskkind.js').TaskKind;
   private task?: import('../types.js').Task;
   private contextCutoffNudged = false;
@@ -531,6 +538,18 @@ export class Agent {
     // finish and emits exactly one typed IterationTrace event.
     const sm = this.sm = new LoopStateMachine(this.events, this.id);
     this.context.updateState({ nextAction: `Start task: ${task.title}` });
+    // MCH-113: express lane for simple script tasks — pre-run `git status
+    // --short` harness-side and seed it into context. Live traces (spd3/dbl1)
+    // show the model burning its ENTIRE first provider round (~2.4-6s) on
+    // nothing but `git status`; the answer is deterministic, so the harness
+    // supplies it free and the model starts writing immediately.
+    if (isSimpleScriptTask(task) && !this.planMode) {
+      const st = await this.runShell('git status --short', 15);
+      this.context.addMessage({
+        role: 'system',
+        content: `[pre-run] git status --short (harness-supplied, current at task start — do NOT re-run just to inspect state):\n${st.trim() || '(clean tree)'}`,
+      });
+    }
     // Active execution mode (modeInstruction from modes.ts) is injected here so
     // spec/security/codemod/chaos directives reach the model every turn.
     if (this.config.mode && isMode(this.config.mode)) {
@@ -1943,6 +1962,19 @@ Continue from 'Next:', do not redo completed progress.`,
             this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch100] auto-ran task command: ${runCmd}` });
           }
         }
+        // MCH-113b: after the first file write in a simple script task, tell
+        // the model the finish line is one command away. Live traces (spd3)
+        // show the model spending its FINAL provider round (~2.4-14s) on
+        // `git diff --stat && git diff` ceremony before finishing. The local
+        // hygiene review (mch101) already covers script-sized diffs, so the
+        // diff round-trip buys nothing for this task class.
+        else if (isSimpleScriptTask(task) && !this.finishHintSent && response.toolCalls.some((tc) => ['write', 'edit', 'patch', 'replace_symbol'].includes(TOOL_ALIASES[tc.function.name] || tc.function.name))) {
+          this.finishHintSent = true;
+          this.context.addMessage({
+            role: 'system',
+            content: `[express finish] File change done. Run your task's own verification command (if any) next, then FINISH — do not run git status/git diff or re-inspect state; the harness reviews the diff locally.`,
+          });
+        }
         continue;
       }
 
@@ -2470,6 +2502,45 @@ Continue from 'Next:', do not redo completed progress.`,
         const m = line.match(/^- (?:added|updated|deleted) (.+?)(?: \(\d+ lines\))?$/);
         if (m) this.context.addModifiedFile(resolve(this.cwd, m[1]));
       }
+    }
+  }
+
+  /**
+   * Quality slice 5: track tool result redundancy. The model has lost the
+   * thread when it re-reads the same file (or any tool returns the same
+   * output) repeatedly. We track per-hash: tool name + count, so the next
+   * STRUGGLE STATE injection can say "you've seen this exact output N
+   * times — change strategy". Cheap FNV-1a 64-bit hash on the post-fold
+   * output (already ANSI-stripped and redacted).
+   *
+   * The map is bounded to 50 entries (LRU-ish — full eviction when full
+   * to keep memory predictable for very long tasks).
+   */
+  private trackToolResultHash(toolName: string, output: string): void {
+    if (!output) return;
+    // 64-bit FNV-1a — same algorithm as `nativeHashPrompt` so we can swap
+    // for the native op later without changing the contract.
+    let h = 0xcbf29ce484222325n;
+    const prime = 0x100000001b3n;
+    for (let i = 0; i < output.length; i++) {
+      h ^= BigInt(output.charCodeAt(i));
+      h = (h * prime) & 0xffffffffffffffffn;
+    }
+    const key = h.toString(16);
+    const canonical = TOOL_ALIASES[toolName] || toolName;
+    const prev = this.crossToolResultHash.get(key);
+    if (prev && prev.tool !== canonical) {
+      // Same content from a DIFFERENT tool — even stronger signal. Count up.
+      this.crossToolResultHash.set(key, { tool: canonical, count: prev.count + 1 });
+    } else if (prev) {
+      this.crossToolResultHash.set(key, { tool: canonical, count: prev.count + 1 });
+    } else {
+      this.crossToolResultHash.set(key, { tool: canonical, count: 1 });
+    }
+    // Bound the map to 50 entries — drop oldest when full.
+    if (this.crossToolResultHash.size > 50) {
+      const firstKey = this.crossToolResultHash.keys().next().value;
+      if (firstKey !== undefined) this.crossToolResultHash.delete(firstKey);
     }
   }
 
@@ -3231,6 +3302,11 @@ Continue from 'Next:', do not redo completed progress.`,
           if (typeof saved.plan === 'string' && saved.plan) this.planAcceptedText = saved.plan;
         } catch { /* fall back to prose */ }
       }
+      // Quality slice 5: track result-hash redundancy. When the model re-reads
+      // the same file (or any tool returns the same output repeatedly) it has
+      // lost the thread. The result-hash map feeds the STRUGGLE STATE
+      // injector on the next iteration. Cap entries at 50 to bound memory.
+      this.trackToolResultHash(toolName, foldedOutput);
     }
     this.context.addMessage({ role: 'tool', tool_call_id: tc.id, content: foldedOutput, name: tc.function.name });
     this.events.emit({ type: 'tool:completed', tool: tc.function.name, result, agentId: this.id });
@@ -3780,6 +3856,19 @@ Continue from 'Next:', do not redo completed progress.`,
       }
       if (cross.length) {
         parts.push(`Cross-tool same-signature failures (shared root cause):\n${cross.join('\n')}`);
+      }
+    }
+
+    // 2b) Cross-tool repeated RESULT bodies (model is re-reading the same
+    // content — quality slice 5). Distinct from error sigs: this is the
+    // model losing the thread, not the model hitting the same error.
+    if (this.crossToolResultHash.size) {
+      const dupes: string[] = [];
+      for (const [hash, v] of this.crossToolResultHash) {
+        if (v.count >= 3) dupes.push(`  - ${v.tool} returned identical content ${v.count} times (hash ${hash.slice(0, 8)})`);
+      }
+      if (dupes.length) {
+        parts.push(`Tool returned the same output repeatedly (you've seen this content before):\n${dupes.join('\n')}`);
       }
     }
 
