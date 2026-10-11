@@ -5,7 +5,7 @@ import type { Attempt, ChatMessage, MochiConfig, ModelProfile, Task, ToolDefinit
 import { contentText } from '../types.js';
 import type { EventBus } from '../events.js';
 import type { Workspace } from '../workspace.js';
-import { ContextEngine } from '../context.js';
+import { ContextEngine, approxTokens } from '../context.js';
 import { MemoryStore } from '../memory.js';
 import { projectMemoryPrefix, recordProjectMemory } from '../project-memory.js';
 import { loadReadCache, saveReadCache } from '../read-cache-store.js';
@@ -2177,7 +2177,13 @@ Continue from 'Next:', do not redo completed progress.`,
   private async digestOldMessages(floorTokens: number): Promise<void> {
     const msgs = (this.context as unknown as { messages?: ChatMessage[] }).messages;
     if (!msgs || msgs.length < 12) return;
-    const est = () => msgs.reduce((s, m) => s + Math.ceil((m.content ?? '').length / 4), 0);
+    // Use approxTokens() so the native BPE tokenizer runs when available;
+    // the previous raw `length / 4` shortcut bypassed the native path.
+    const est = () => msgs.reduce((s, m) => {
+      const c = m.content;
+      const text = typeof c === 'string' ? c : JSON.stringify(c);
+      return s + approxTokens(text);
+    }, 0);
     if (est() <= floorTokens) return;
     // Digest window: all but the last RECENT_KEEP messages (current working set).
     const RECENT_KEEP = 8;
