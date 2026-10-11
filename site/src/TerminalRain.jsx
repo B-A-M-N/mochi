@@ -1,17 +1,15 @@
 import { useEffect, useRef } from 'react';
 
 /* Terminal Rain — streams of glowing glyphs raining down layered columns.
-   Canvas-based, DPR-aware, pauses offscreen / on reduced-motion.
-   Palette: emerald matrix green on ink; purple accents for the mascot accent. */
+   All purple with a white-hot fading head. Canvas, DPR-aware.
+   Reduced-motion → static field. Cheap enough to always run. */
 
-const GLYPHS = 'ﾐﾑｼﾍｻﾜﾓｵｱｸｻﾀﾅﾆｻ0123456789ABCDEF<>/{}[]$#*+-=;:%^&ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏ';
-const GREEN = '#4ade80';
-const GREEN_HI = '#a7f3d0';
-const PURPLE = '#8b75f6';
+const GLYPHS = 'ﾐﾑｼﾍｻﾜﾓｵｱｸﾀﾅﾆﾇﾈﾉ0123456789ABCDEF<>/{}[]$#*+-=;:%^&ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾊﾋﾌﾍﾎﾏﾓﾔﾕﾖﾗﾘﾙﾚﾛ';
+const PURPLE = '#b79cff';
+const PURPLE_DEEP = '#8558ff';
+const WHITE = '#ffffff';
 
-function randGlyph() {
-  return GLYPHS[(Math.random() * GLYPHS.length) | 0];
-}
+const randGlyph = () => GLYPHS[(Math.random() * GLYPHS.length) | 0];
 
 export default function TerminalRain({ className = '' }) {
   const canvasRef = useRef(null);
@@ -22,29 +20,24 @@ export default function TerminalRain({ className = '' }) {
     const ctx = canvas.getContext('2d');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    let raf = 0;
-    let running = true;
-    let W = 0, H = 0, dpr = 1;
-    let cols = [];
     const FONT = 15;
     const LAYERS = 3;
+    let raf = 0, W = 0, H = 0, cols = [];
 
     function spawnColumn(x, layer, fresh) {
-      const speed = (0.5 + Math.random() * 0.9) * (layer + 1) * 0.55;
-      const len = 8 + ((Math.random() * 22) | 0);
+      const speed = (0.6 + Math.random() * 1.2) * (layer + 1) * 0.7;
+      const len = 10 + ((Math.random() * 24) | 0);
       return {
         x, layer,
         y: fresh ? Math.random() * H : -len * FONT,
-        speed,
-        len,
-        trail: Array.from({ length: len }, () => randGlyph()),
-        swapAt: Math.random() * 4,
-        purple: Math.random() < 0.06,
+        speed, len,
+        trail: Array.from({ length: len }, randGlyph),
+        purple: true,
       };
     }
 
     function build() {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = canvas.clientWidth; H = canvas.clientHeight;
       canvas.width = W * dpr; canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -61,64 +54,57 @@ export default function TerminalRain({ className = '' }) {
     }
 
     function frame() {
-      if (!running) return;
       ctx.clearRect(0, 0, W, H);
       for (const c of cols) {
         c.y += c.speed;
-        if (Math.random() < 0.02) c.trail[(Math.random() * c.len) | 0] = randGlyph();
+        if (Math.random() < 0.03) c.trail[(Math.random() * c.len) | 0] = randGlyph();
         if (c.y - c.len * FONT > H) {
           Object.assign(c, spawnColumn(c.x, c.layer, false));
           continue;
         }
-        const alpha = [0.16, 0.3, 0.5][c.layer];
-        const color = c.purple ? PURPLE : GREEN;
+        const alpha = [0.35, 0.55, 0.8][c.layer];
         for (let i = 0; i < c.len; i++) {
           const gy = c.y - i * FONT;
           if (gy < -FONT || gy > H + FONT) continue;
+          const fade = 1 - i / c.len;
           if (i === 0) {
-            ctx.fillStyle = c.purple ? '#c4b5fd' : GREEN_HI;
-            ctx.globalAlpha = Math.min(1, alpha + 0.35);
+            // white-hot head with glow
+            ctx.globalAlpha = Math.min(1, alpha + 0.4);
+            ctx.fillStyle = WHITE;
+            ctx.shadowColor = '#c4b5fd';
+            ctx.shadowBlur = 14;
+          } else if (i < 3) {
+            // near-head: pale lavender
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#e9e4ff';
+            ctx.shadowBlur = 0;
           } else {
-            const fade = 1 - i / c.len;
-            ctx.fillStyle = color;
-            ctx.globalAlpha = alpha * fade * fade;
+            // deep purple tail, fading out
+            ctx.globalAlpha = alpha * fade;
+            ctx.fillStyle = i > c.len * 0.55 ? PURPLE_DEEP : PURPLE;
+            ctx.shadowColor = PURPLE;
+            ctx.shadowBlur = 5;
           }
           ctx.fillText(c.trail[i], c.x, gy);
         }
       }
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
       raf = requestAnimationFrame(frame);
     }
 
     function still() {
-      ctx.clearRect(0, 0, W, H);
-      for (const c of cols) {
-        const alpha = [0.16, 0.3, 0.5][c.layer];
-        for (let i = 0; i < c.len; i++) {
-          const gy = c.y - i * FONT;
-          if (gy < 0 || gy > H) continue;
-          ctx.fillStyle = c.purple ? PURPLE : GREEN;
-          ctx.globalAlpha = alpha * (1 - i / c.len);
-          ctx.fillText(c.trail[i], c.x, gy);
-        }
-      }
-      ctx.globalAlpha = 1;
+      // one static render for reduced-motion users
+      frame();
+      cancelAnimationFrame(raf);
     }
-
-    const io = new IntersectionObserver(([e]) => {
-      running = e.isIntersecting && !reduce;
-      if (running) { cancelAnimationFrame(raf); raf = requestAnimationFrame(frame); }
-    });
-    io.observe(canvas);
 
     build();
     window.addEventListener('resize', build);
     if (reduce) still(); else raf = requestAnimationFrame(frame);
 
     return () => {
-      running = false;
       cancelAnimationFrame(raf);
-      io.disconnect();
       window.removeEventListener('resize', build);
     };
   }, []);
