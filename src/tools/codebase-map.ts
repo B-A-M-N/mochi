@@ -326,7 +326,8 @@ export const codebaseMapTool: Tool = {
     if (!existsSync(dir)) throw new Error(`Directory not found: ${dir}`);
 
     const maxDepth = args.max_depth ? Number(args.max_depth) : 3;
-    const detailLevel = (args.detail_level as any) || 'standard';
+    const detailFlag = typeof args.detail_level === 'string' ? args.detail_level : 'standard';
+    const detailLevel = (['deep', 'compact', 'standard'] as const).includes(detailFlag as 'deep' | 'compact' | 'standard') ? (detailFlag as 'deep' | 'compact' | 'standard') : 'standard';
     const includeExports = args.include_exports !== undefined ? Boolean(args.include_exports) : detailLevel !== 'compact';
 
     const result = generateCodebaseMap(dir, { maxDepth, detailLevel, includeExports });

@@ -1,7 +1,7 @@
 # 🍡 Project Architecture & API Reference
 
 > Automatically generated architecture graph and API specification.
-> **Modules**: 122 | **Total Symbols**: 975
+> **Modules**: 125 | **Total Symbols**: 1003
 
 ## 🏗️ Architecture Diagram
 
@@ -17,7 +17,7 @@ graph TD;
   src_checkpoint_manager_ts["src/checkpoint-manager.ts (7 symbols)"]
   src_circle_ts["src/circle.ts (7 symbols)"]
   src_clarify_ts["src/clarify.ts (11 symbols)"]
-  src_cli_ts["src/cli.ts (11 symbols)"]
+  src_cli_ts["src/cli.ts (12 symbols)"]
   src_codebase_sql_test_ts["src/codebase-sql.test.ts (1 symbols)"]
   src_codebase_sql_ts["src/codebase-sql.ts (1 symbols)"]
   src_codegraph_ts["src/codegraph.ts (33 symbols)"]
@@ -148,15 +148,16 @@ graph TD;
 | :--- | :--- | :--- |
 | 39 | `function` | `function logCrash(kind: string, err: unknown): void` |
 | 90 | `function` | `function parseArgs(argv: string[]):` |
-| 122 | `function` | `function configFromFlags(flags: Record<string, string \| boolean>): Partial<MochiConfig>` |
-| 172 | `function` | `function printHelp()` |
-| 251 | `function` | `function cliDirname(): string` |
-| 256 | `function` | `function srcFileNewer(dir: string, mtime: number): boolean` |
-| 273 | `function` | `async function main()` |
-| 453 | `function` | `const post = async (action2: string, extra: Record<string, unknown> = {}) => ...` |
-| 1335 | `function` | `const onData = (c: Buffer) => ...` |
-| 1454 | `function` | `const files = (() => ...` |
-| 1513 | `function` | `async function interactive(runtime: import('./runtime.js').Runtime, initialPrompt?: string)` |
+| 124 | `interface` | `export interface FlagOverrides extends Partial<MochiConfig>` |
+| 129 | `function` | `function configFromFlags(flags: Record<string, string \| boolean>): FlagOverrides` |
+| 187 | `function` | `function printHelp()` |
+| 268 | `function` | `function cliDirname(): string` |
+| 273 | `function` | `function srcFileNewer(dir: string, mtime: number): boolean` |
+| 290 | `function` | `async function main()` |
+| 485 | `function` | `const post = async (action2: string, extra: Record<string, unknown> = {}) => ...` |
+| 1415 | `function` | `const onData = (c: Buffer) => ...` |
+| 1534 | `function` | `const files = (() => ...` |
+| 1593 | `function` | `async function interactive(runtime: import('./runtime.js').Runtime, initialPrompt?: string)` |
 
 ### `src/codebase-sql.test.ts`
 | Line | Kind | Signature |
@@ -171,39 +172,39 @@ graph TD;
 ### `src/codegraph.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 13 | `function` | `function tsc(): typeof import('typescript')` |
-| 22 | `function` | `export function hasSqlite(): boolean` |
-| 37 | `type` | `export type LanguageId` |
-| 98 | `function` | `function heritage(node: ts.ClassLikeDeclaration \| ts.InterfaceDeclaration): string[]` |
-| 111 | `function` | `function indexFile(file: string, rel: string, database: SqliteDb): void` |
-| 115 | `function` | `const lineOf = (p: number) => ...` |
-| 118 | `function` | `const emit = (name: string, kind: string, start: number, body: string) => ...` |
-| 123 | `function` | `function visit(node: ts.Node): void` |
-| 155 | `type` | `export type ParserBackend` |
-| 194 | `function` | `function nameOf(node: any): string \| undefined` |
-| 221 | `function` | `export function isLightMode(): boolean` |
-| 226 | `function` | `function treeSitterAvailable(): boolean` |
-| 240 | `function` | `async function ensureCore(): Promise<boolean>` |
-| 264 | `function` | `export async function ensureLanguage(lang: LanguageId \| string): Promise<boolean>` |
-| 299 | `function` | `async function preloadGrammars(cwd: string, langs?: readonly string[]): Promise<void>` |
-| 332 | `function` | `export function loadTreeSitter():` |
-| 343 | `function` | `export function getParserBackend(): ParserBackend` |
-| 354 | `function` | `export async function ensureParserLoaded(): Promise<void>` |
-| 356 | `function` | `function namedChildren(node: any): any[]` |
-| 369 | `function` | `function tsIndexFile(file: string, rel: string, database: SqliteDb): void` |
-| 412 | `function` | `function callName(node: any): string \| undefined` |
-| 431 | `interface` | `interface CachedDb` |
-| 438 | `function` | `function fingerprint(full: string): string` |
-| 447 | `function` | `function db(cwd: string): SqliteDb` |
-| 496 | `function` | `export async function getFunctionSynapse(cwd: string, name: string): Promise<string>` |
-| 507 | `function` | `export async function findCallers(cwd: string, name: string): Promise<string>` |
-| 553 | `function` | `export async function typeHierarchy(cwd: string, name: string): Promise<string>` |
-| 566 | `interface` | `export interface BlastRadiusReport` |
-| 579 | `function` | `export async function computeSymbolBlastRadius(cwd: string, name: string): Promise<BlastRadiusReport>` |
-| 620 | `interface` | `interface Sym` |
-| 626 | `function` | `export function querySymbolGraph(cwd: string, sql: string, maxRows = 50): Promise<` |
-| 638 | `function` | `export function querySymbolGraphSync(cwd: string, sql: string, maxRows = 50):` |
-| 659 | `function` | `export async function warmCodegraph(cwd: string, langs?: readonly string[]): Promise<void>` |
+| 14 | `function` | `function tsc(): typeof import('typescript')` |
+| 23 | `function` | `export function hasSqlite(): boolean` |
+| 38 | `type` | `export type LanguageId` |
+| 99 | `function` | `function heritage(node: ts.ClassLikeDeclaration \| ts.InterfaceDeclaration): string[]` |
+| 112 | `function` | `function indexFile(file: string, rel: string, database: SqliteDb): void` |
+| 116 | `function` | `const lineOf = (p: number) => ...` |
+| 119 | `function` | `const emit = (name: string, kind: string, start: number, body: string) => ...` |
+| 124 | `function` | `function visit(node: ts.Node): void` |
+| 156 | `type` | `export type ParserBackend` |
+| 195 | `function` | `function nameOf(node: any): string \| undefined` |
+| 222 | `function` | `export function isLightMode(): boolean` |
+| 227 | `function` | `function treeSitterAvailable(): boolean` |
+| 241 | `function` | `async function ensureCore(): Promise<boolean>` |
+| 265 | `function` | `export async function ensureLanguage(lang: LanguageId \| string): Promise<boolean>` |
+| 302 | `function` | `async function preloadGrammars(cwd: string, langs?: readonly string[]): Promise<void>` |
+| 335 | `function` | `export function loadTreeSitter():` |
+| 346 | `function` | `export function getParserBackend(): ParserBackend` |
+| 357 | `function` | `export async function ensureParserLoaded(): Promise<void>` |
+| 359 | `function` | `function namedChildren(node: any): any[]` |
+| 372 | `function` | `function tsIndexFile(file: string, rel: string, database: SqliteDb): void` |
+| 418 | `function` | `function callName(node: any): string \| undefined` |
+| 437 | `interface` | `interface CachedDb` |
+| 444 | `function` | `function fingerprint(full: string): string` |
+| 453 | `function` | `function db(cwd: string): SqliteDb` |
+| 502 | `function` | `export async function getFunctionSynapse(cwd: string, name: string): Promise<string>` |
+| 513 | `function` | `export async function findCallers(cwd: string, name: string): Promise<string>` |
+| 559 | `function` | `export async function typeHierarchy(cwd: string, name: string): Promise<string>` |
+| 572 | `interface` | `export interface BlastRadiusReport` |
+| 585 | `function` | `export async function computeSymbolBlastRadius(cwd: string, name: string): Promise<BlastRadiusReport>` |
+| 626 | `interface` | `interface Sym` |
+| 632 | `function` | `export function querySymbolGraph(cwd: string, sql: string, maxRows = 50): Promise<` |
+| 644 | `function` | `export function querySymbolGraphSync(cwd: string, sql: string, maxRows = 50):` |
+| 665 | `function` | `export async function warmCodegraph(cwd: string, langs?: readonly string[]): Promise<void>` |
 
 ### `src/config.ts`
 | Line | Kind | Signature |
@@ -275,26 +276,27 @@ graph TD;
 | 207 | `interface` | `export interface ContextPacket` |
 | 214 | `class` | `export class ContextEngine` |
 | 309 | `method` | `getMessages(): readonly ChatMessage[]` |
-| 315 | `method` | `estimateTokens(): number` |
-| 326 | `method` | `async estimateTokensAsync(): Promise<number>` |
-| 335 | `method` | `private loadMemory(query = ''): string` |
-| 365 | `method` | `private loadProjectRules(task?: Task): string` |
-| 405 | `method` | `private skills(task?: Task, tools?: ToolDefinition[]): string` |
-| 446 | `method` | `private buildSystemPrompt(tools: ToolDefinition[], repo?: RepoInfo, task?: Task): string` |
-| 507 | `method` | `private toolGuidelines(tools: ToolDefinition[]): string` |
-| 510 | `function` | `const add = (names: string[], text: string) => ...` |
-| 541 | `method` | `private buildVolatilePrompt(task?: Task): string` |
-| 608 | `method` | `private tinyWorkspaceLine(): string \| null` |
-| 629 | `method` | `private buildStatePrompt(task?: Task): string` |
-| 664 | `method` | `buildPacket(tools: ToolDefinition[], task?: Task, repo?: RepoInfo): ContextPacket` |
-| 773 | `method` | `private trackFileOp(message: ChatMessage)` |
-| 803 | `method` | `detectStaleFiles(): string[]` |
-| 818 | `method` | `stalenessWarning(): string` |
-| 838 | `method` | `effectiveContextTokens(): number` |
-| 855 | `method` | `shrinkOldToolOutputs(): number` |
-| 881 | `method` | `private stateLedger(): string` |
-| 922 | `method` | `async previewCompact(): Promise<ChatMessage[] \| null>` |
-| 928 | `method` | `async compact(checkpoint?: string)` |
+| 315 | `method` | `get messageCount(): number` |
+| 321 | `method` | `estimateTokens(): number` |
+| 332 | `method` | `async estimateTokensAsync(): Promise<number>` |
+| 341 | `method` | `private loadMemory(query = ''): string` |
+| 371 | `method` | `private loadProjectRules(task?: Task): string` |
+| 411 | `method` | `private skills(task?: Task, tools?: ToolDefinition[]): string` |
+| 452 | `method` | `private buildSystemPrompt(tools: ToolDefinition[], repo?: RepoInfo, task?: Task): string` |
+| 513 | `method` | `private toolGuidelines(tools: ToolDefinition[]): string` |
+| 516 | `function` | `const add = (names: string[], text: string) => ...` |
+| 547 | `method` | `private buildVolatilePrompt(task?: Task): string` |
+| 614 | `method` | `private tinyWorkspaceLine(): string \| null` |
+| 635 | `method` | `private buildStatePrompt(task?: Task): string` |
+| 670 | `method` | `buildPacket(tools: ToolDefinition[], task?: Task, repo?: RepoInfo): ContextPacket` |
+| 779 | `method` | `private trackFileOp(message: ChatMessage)` |
+| 809 | `method` | `detectStaleFiles(): string[]` |
+| 824 | `method` | `stalenessWarning(): string` |
+| 844 | `method` | `effectiveContextTokens(): number` |
+| 861 | `method` | `shrinkOldToolOutputs(): number` |
+| 887 | `method` | `private stateLedger(): string` |
+| 928 | `method` | `async previewCompact(): Promise<ChatMessage[] \| null>` |
+| 934 | `method` | `async compact(checkpoint?: string)` |
 
 ### `src/contract.ts`
 | Line | Kind | Signature |
@@ -353,24 +355,29 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 20 | `interface` | `export interface DaemonInfo` |
-| 29 | `function` | `export function daemonInfoPath(workspaceDir: string): string` |
-| 33 | `function` | `export function readDaemonInfo(workspaceDir: string): DaemonInfo \| undefined` |
-| 43 | `function` | `function pidAlive(pid: number): boolean` |
-| 53 | `function` | `function timingSafeEqualStr(a: string, b: string): boolean` |
-| 61 | `function` | `export function daemonRunning(workspaceDir: string): boolean` |
-| 66 | `function` | `function writeInfo(workspaceDir: string, info: DaemonInfo): void` |
-| 81 | `function` | `export async function startDaemon(opts:` |
-| 114 | `function` | `export async function startDaemonInProcess(opts:` |
-| 143 | `function` | `const runDue = async () => ...` |
-| 176 | `function` | `function getDashboardHtml(token: string): string` |
-| 268 | `function` | `async function sendGoal()` |
-| 316 | `function` | `function sendQuick(cmd)` |
-| 321 | `function` | `function addMsg(text, type)` |
-| 335 | `function` | `async function handleRequest(` |
-| 341 | `function` | `const send = (code: number, body: unknown) => ...` |
-| 470 | `function` | `const sse = (event: string, data: unknown) => ...` |
-| 476 | `function` | `const onAbort = () => ...` |
-| 507 | `function` | `export async function serverMain(argv: string[]): Promise<void>` |
+| 37 | `interface` | `export interface DaemonAuth` |
+| 42 | `function` | `export function isTokenExpired(auth: Pick<DaemonAuth, 'expiresAt'>, now = Date.now()): boolean` |
+| 47 | `function` | `export function rotateAuth(auth: DaemonAuth, now = Date.now()):` |
+| 55 | `function` | `export function daemonInfoPath(workspaceDir: string): string` |
+| 59 | `function` | `export function readDaemonInfo(workspaceDir: string): DaemonInfo \| undefined` |
+| 78 | `function` | `function pidAlive(pid: number): boolean` |
+| 88 | `function` | `function timingSafeEqualStr(a: string, b: string): boolean` |
+| 96 | `function` | `export function daemonRunning(workspaceDir: string): boolean` |
+| 101 | `function` | `function writeInfo(workspaceDir: string, info: DaemonInfo): void` |
+| 116 | `function` | `export async function startDaemon(opts:` |
+| 149 | `function` | `export async function startDaemonInProcess(opts:` |
+| 164 | `function` | `const persist = () => ...` |
+| 195 | `function` | `const runDue = async () => ...` |
+| 228 | `function` | `function getDashboardHtml(token: string): string` |
+| 320 | `function` | `async function sendGoal()` |
+| 368 | `function` | `function sendQuick(cmd)` |
+| 373 | `function` | `function addMsg(text, type)` |
+| 387 | `function` | `async function handleRequest(` |
+| 394 | `function` | `const send = (code: number, body: unknown) => ...` |
+| 541 | `function` | `const sse = (event: string, data: unknown) => ...` |
+| 547 | `function` | `const onAbort = () => ...` |
+| 578 | `function` | `export async function serverMain(argv: string[]): Promise<void>` |
+| 586 | `function` | `const persist = (port: number) => ...` |
 
 ### `src/diagnosis.ts`
 | Line | Kind | Signature |
@@ -432,17 +439,18 @@ graph TD;
 ### `src/doctor.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 13 | `interface` | `export interface SkillHealthEntry` |
-| 19 | `interface` | `export interface DoctorReport` |
-| 40 | `function` | `export async function doctorReport(opts:` |
-| 56 | `function` | `const tsAvailable = (() => ...` |
-| 83 | `function` | `const checkFile = (skillPath: string, name: string) => ...` |
-| 89 | `function` | `const size = (() => ...` |
-| 100 | `function` | `const walk = (dir: string) => ...` |
-| 178 | `function` | `export function formatDoctor(r: DoctorReport): string` |
-| 179 | `function` | `const ok = (b: boolean) => ...` |
-| 200 | `interface` | `export interface RepairItem` |
-| 207 | `function` | `export async function repairDoctor(opts:` |
+| 14 | `interface` | `export interface SkillHealthEntry` |
+| 20 | `interface` | `export interface DoctorReport` |
+| 42 | `function` | `export async function doctorReport(opts:` |
+| 58 | `function` | `const tsAvailable = (() => ...` |
+| 85 | `function` | `const checkFile = (skillPath: string, name: string) => ...` |
+| 91 | `function` | `const size = (() => ...` |
+| 102 | `function` | `const walk = (dir: string) => ...` |
+| 183 | `function` | `export function currentThemeInfo():` |
+| 195 | `function` | `export function formatDoctor(r: DoctorReport): string` |
+| 196 | `function` | `const ok = (b: boolean) => ...` |
+| 218 | `interface` | `export interface RepairItem` |
+| 225 | `function` | `export async function repairDoctor(opts:` |
 
 ### `src/dox.ts`
 | Line | Kind | Signature |
@@ -481,6 +489,19 @@ graph TD;
 | 116 | `method` | `flush(): void` |
 | 124 | `method` | `async emitAwait(event: MochiEvent): Promise<void>` |
 | 144 | `method` | `private stamp(event: MochiEvent): void` |
+
+### `src/exec.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 10 | `interface` | `export interface ExecOptions` |
+| 25 | `interface` | `export interface ExecResult` |
+| 37 | `function` | `function finishSpawn(` |
+| 51 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 76 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 86 | `function` | `const onAbort = () => ...` |
+| 125 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 140 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 154 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
 
 ### `src/fast-events.ts`
 | Line | Kind | Signature |
@@ -528,18 +549,23 @@ graph TD;
 | 102 | `function` | `export async function preEditSnapshot(cwd: string, message = 'mochi pre-edit', stateDir = '.mochi'): Promise<CheckpointResult \| null>` |
 | 124 | `function` | `export async function rollbackToSnapshot(cwd: string, cp: CheckpointResult, stateDir = '.mochi'): Promise<string>` |
 
+### `src/hooks.test.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 75 | `function` | `const walk = (d: string) => ...` |
+
 ### `src/hooks.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 5 | `type` | `export type HookName` |
-| 24 | `interface` | `export interface HookConfig` |
-| 28 | `interface` | `export interface HookResult` |
-| 35 | `class` | `export class HookManager` |
-| 58 | `method` | `list(): HookName[]` |
-| 62 | `method` | `enabled(name: HookName): boolean` |
-| 66 | `method` | `private commandsFor(name: HookName): string[]` |
-| 73 | `method` | `async runBefore(name: HookName, context: Record<string, string> =` |
-| 85 | `method` | `async runAfter(name: HookName, context: Record<string, string> =` |
+| 3 | `type` | `export type HookName` |
+| 22 | `interface` | `export interface HookConfig` |
+| 26 | `interface` | `export interface HookResult` |
+| 33 | `class` | `export class HookManager` |
+| 56 | `method` | `list(): HookName[]` |
+| 60 | `method` | `enabled(name: HookName): boolean` |
+| 64 | `method` | `private commandsFor(name: HookName): string[]` |
+| 71 | `method` | `async runBefore(name: HookName, context: Record<string, string> =` |
+| 83 | `method` | `async runAfter(name: HookName, context: Record<string, string> =` |
 
 ### `src/kv-cache.ts`
 | Line | Kind | Signature |
@@ -907,48 +933,48 @@ graph TD;
 | :--- | :--- | :--- |
 | 23 | `interface` | `export interface RuntimeOptions` |
 | 28 | `class` | `export class Runtime` |
-| 75 | `method` | `abort(reason = 'aborted by user'): void` |
-| 80 | `method` | `resetAbort(): void` |
-| 87 | `method` | `get aborted(): boolean` |
-| 93 | `method` | `get signal(): AbortSignal` |
-| 100 | `function` | `const onSig = () => ...` |
-| 113 | `method` | `static create(opts?: RuntimeOptions): Runtime` |
-| 117 | `method` | `async checkpoint(message = 'mochi checkpoint'): Promise<CheckpointResult>` |
-| 126 | `method` | `async rollback(): Promise<string>` |
-| 136 | `method` | `async speculate(question: string): Promise<SpeculativeResult>` |
-| 148 | `method` | `setMode(mode: string): string` |
-| 155 | `method` | `setReasoning(level: string): string` |
-| 183 | `method` | `getReasoning(): import('./types.js').ReasoningLevel` |
-| 188 | `method` | `newSession(): string` |
-| 196 | `method` | `branchSession(title?: string): string` |
-| 221 | `method` | `resetSession(): void` |
-| 226 | `method` | `listTools(): Array<` |
-| 237 | `method` | `getToolNames(): string[]` |
-| 246 | `method` | `async inspect(query: string)` |
-| 252 | `method` | `steer(text: string): number` |
-| 256 | `method` | `async goal(objective: string, constraints: string[] = [], opts?:` |
-| 265 | `method` | `async runGoal(objective: string, constraints: string[] = [], opts?:` |
-| 301 | `method` | `async autoImprove(prompt: string, runs: number, opts?:` |
-| 405 | `method` | `async selfTrain(opts:` |
-| 445 | `method` | `private composeImprovementTask(cycle: number, total: number, focus?: string):` |
-| 472 | `method` | `async team(objective: string, opts?:` |
-| 489 | `method` | `async plan(objective: string): Promise<string>` |
-| 503 | `method` | `async approvePlan(): Promise<string>` |
-| 517 | `method` | `async resumeGoal(goalId: string): Promise<string>` |
-| 553 | `method` | `async enhance(task: string, mode?: import('./chameleon.js').ChameleonMode, budget?: import('./budget.js').BudgetEngine)` |
-| 559 | `method` | `async runPrompt(prompt: string, opts?:` |
-| 567 | `method` | `async runPromptDetailed(prompt: string, opts?:` |
-| 620 | `method` | `async review(input: string): Promise<string>` |
-| 641 | `method` | `async fix(input: string): Promise<string>` |
-| 656 | `method` | `private recordUsage(goal: string, result:` |
-| 669 | `method` | `providerInfo(): string` |
-| 673 | `method` | `modelList(): string[]` |
-| 677 | `method` | `async useProvider(providerId: string, model?: string)` |
-| 687 | `method` | `async loginProvider(provider: string, apiKey: string, model?: string)` |
-| 702 | `method` | `private syncEngines()` |
-| 725 | `method` | `async recordGood(): Promise<string>` |
-| 729 | `method` | `return (lines.length ? lines.join('\n') : '  (no checks configured)') + '\nRecorded as known-good baseline.';` |
-| 732 | `method` | `async knownGood(): Promise<string>` |
+| 83 | `method` | `abort(reason = 'aborted by user'): void` |
+| 88 | `method` | `resetAbort(): void` |
+| 95 | `method` | `get aborted(): boolean` |
+| 101 | `method` | `get signal(): AbortSignal` |
+| 108 | `function` | `const onSig = () => ...` |
+| 121 | `method` | `static create(opts?: RuntimeOptions): Runtime` |
+| 125 | `method` | `async checkpoint(message = 'mochi checkpoint'): Promise<CheckpointResult>` |
+| 134 | `method` | `async rollback(): Promise<string>` |
+| 144 | `method` | `async speculate(question: string): Promise<SpeculativeResult>` |
+| 156 | `method` | `setMode(mode: string): string` |
+| 163 | `method` | `setReasoning(level: string): string` |
+| 191 | `method` | `getReasoning(): import('./types.js').ReasoningLevel` |
+| 196 | `method` | `newSession(): string` |
+| 204 | `method` | `branchSession(title?: string): string` |
+| 229 | `method` | `resetSession(): void` |
+| 234 | `method` | `listTools(): Array<` |
+| 245 | `method` | `getToolNames(): string[]` |
+| 254 | `method` | `async inspect(query: string)` |
+| 260 | `method` | `steer(text: string): number` |
+| 264 | `method` | `async goal(objective: string, constraints: string[] = [], opts?:` |
+| 273 | `method` | `async runGoal(objective: string, constraints: string[] = [], opts?:` |
+| 309 | `method` | `async autoImprove(prompt: string, runs: number, opts?:` |
+| 413 | `method` | `async selfTrain(opts:` |
+| 453 | `method` | `private composeImprovementTask(cycle: number, total: number, focus?: string):` |
+| 480 | `method` | `async team(objective: string, opts?:` |
+| 497 | `method` | `async plan(objective: string): Promise<string>` |
+| 511 | `method` | `async approvePlan(): Promise<string>` |
+| 525 | `method` | `async resumeGoal(goalId: string): Promise<string>` |
+| 561 | `method` | `async enhance(task: string, mode?: import('./chameleon.js').ChameleonMode, budget?: import('./budget.js').BudgetEngine)` |
+| 567 | `method` | `async runPrompt(prompt: string, opts?:` |
+| 575 | `method` | `async runPromptDetailed(prompt: string, opts?:` |
+| 629 | `method` | `async review(input: string): Promise<string>` |
+| 650 | `method` | `async fix(input: string): Promise<string>` |
+| 665 | `method` | `private recordUsage(goal: string, result:` |
+| 678 | `method` | `providerInfo(): string` |
+| 682 | `method` | `modelList(): string[]` |
+| 686 | `method` | `async useProvider(providerId: string, model?: string)` |
+| 696 | `method` | `async loginProvider(provider: string, apiKey: string, model?: string)` |
+| 711 | `method` | `private syncEngines()` |
+| 734 | `method` | `async recordGood(): Promise<string>` |
+| 738 | `method` | `return (lines.length ? lines.join('\n') : '  (no checks configured)') + '\nRecorded as known-good baseline.';` |
+| 741 | `method` | `async knownGood(): Promise<string>` |
 
 ### `src/scheduler.ts`
 | Line | Kind | Signature |
@@ -1142,23 +1168,26 @@ graph TD;
 | 173 | `function` | `export function loadProjectSkills(projectDir: string, userDir?: string, extraDirs: string[] = []):` |
 | 177 | `function` | `function add(skills: Skill[], d: string[])` |
 | 200 | `function` | `export function formatSkillsForPrompt(skills: Skill[], limit?: number): string` |
-| 221 | `function` | `export function skillUsagePath(projectDir: string): string` |
-| 225 | `interface` | `export interface SkillUsage` |
-| 228 | `function` | `export function loadSkillUsage(projectDir: string): Map<string, SkillUsage>` |
-| 242 | `function` | `export function recordSkillUsage(projectDir: string, name: string, won?: boolean): void` |
-| 256 | `function` | `export function usageBoostMap(usage: Map<string, SkillUsage>): Map<string, number>` |
-| 266 | `function` | `export function staleSkills(skills: Skill[], now = Date.now()): string[]` |
-| 287 | `function` | `export function skillConflicts(skills: Skill[]): Array<` |
-| 298 | `function` | `function skillConflictScore(a: Skill, b: Skill): number` |
-| 301 | `function` | `const tok = (s: string) => ...` |
-| 314 | `function` | `function esc(s: string): string` |
-| 319 | `function` | `export function readSkillBody(skill: Skill, projectDir: string): string` |
-| 333 | `type` | `export type SkillContext` |
-| 338 | `function` | `export function bundledSkillsDir(): string \| null` |
-| 362 | `function` | `export function defaultUserSkillsDir(): string` |
-| 369 | `function` | `export function additionalUserSkillDirs(): string[]` |
-| 382 | `function` | `export function loadAllSkills(projectDir: string, userDir?: string):` |
-| 387 | `function` | `const add = (d: string) => ...` |
+| 217 | `interface` | `export interface SkillSearchHit` |
+| 227 | `function` | `function searchTokens(s: string): Set<string>` |
+| 241 | `function` | `export function searchSkills(` |
+| 300 | `function` | `export function skillUsagePath(projectDir: string): string` |
+| 304 | `interface` | `export interface SkillUsage` |
+| 307 | `function` | `export function loadSkillUsage(projectDir: string): Map<string, SkillUsage>` |
+| 321 | `function` | `export function recordSkillUsage(projectDir: string, name: string, won?: boolean): void` |
+| 335 | `function` | `export function usageBoostMap(usage: Map<string, SkillUsage>): Map<string, number>` |
+| 345 | `function` | `export function staleSkills(skills: Skill[], now = Date.now()): string[]` |
+| 366 | `function` | `export function skillConflicts(skills: Skill[]): Array<` |
+| 377 | `function` | `function skillConflictScore(a: Skill, b: Skill): number` |
+| 380 | `function` | `const tok = (s: string) => ...` |
+| 393 | `function` | `function esc(s: string): string` |
+| 398 | `function` | `export function readSkillBody(skill: Skill, projectDir: string): string` |
+| 412 | `type` | `export type SkillContext` |
+| 417 | `function` | `export function bundledSkillsDir(): string \| null` |
+| 441 | `function` | `export function defaultUserSkillsDir(): string` |
+| 448 | `function` | `export function additionalUserSkillDirs(): string[]` |
+| 461 | `function` | `export function loadAllSkills(projectDir: string, userDir?: string):` |
+| 466 | `function` | `const add = (d: string) => ...` |
 
 ### `src/speculative.ts`
 | Line | Kind | Signature |
@@ -1293,6 +1322,18 @@ graph TD;
 | 93 | `function` | `export function isTrivialWriteTask(task: Task): boolean` |
 | 100 | `function` | `export function kindHint(kind: TaskKind): string` |
 
+### `src/terminal-launch.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 15 | `interface` | `export interface TerminalChoice` |
+| 34 | `type` | `export type TerminalName` |
+| 37 | `function` | `export function findTerminalEmulator(pathEnv = process.env.PATH ?? ''): TerminalChoice \| undefined` |
+| 51 | `interface` | `export interface LaunchGeometry` |
+| 60 | `function` | `export function buildLaunchArgs(` |
+| 95 | `function` | `export function resolveSelfCommand(execPath: string, argv: string[]): string[]` |
+| 101 | `interface` | `export interface LaunchResult` |
+| 111 | `function` | `export async function launchInNewTerminal(` |
+
 ### `src/termix.test.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -1382,11 +1423,11 @@ graph TD;
 | 201 | `interface` | `export interface StreamToolCall` |
 | 211 | `interface` | `export interface StreamChunk` |
 | 219 | `interface` | `export interface ModelResponse` |
-| 227 | `interface` | `export interface AgentState` |
-| 238 | `interface` | `export interface RepoInfo` |
-| 250 | `type` | `export type MochiEvent` |
-| 317 | `interface` | `export interface EventMeta` |
-| 329 | `interface` | `export interface PlanStep` |
+| 231 | `interface` | `export interface AgentState` |
+| 242 | `interface` | `export interface RepoInfo` |
+| 254 | `type` | `export type MochiEvent` |
+| 321 | `interface` | `export interface EventMeta` |
+| 333 | `interface` | `export interface PlanStep` |
 
 ### `src/usage.ts`
 | Line | Kind | Signature |
@@ -1426,20 +1467,19 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 15 | `function` | `function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string>` |
-| 24 | `type` | `export type VerificationStatus` |
-| 26 | `interface` | `export interface VerificationEvidence` |
-| 35 | `interface` | `export interface VerificationResult` |
-| 44 | `interface` | `export interface VerifierOptions` |
-| 55 | `class` | `export class VerifierEngine` |
-| 74 | `method` | `async verify(task: Task, agentSummary: string): Promise<VerificationResult>` |
-| 222 | `method` | `private ruleBased(task: Task, evidence: VerificationEvidence[]): VerificationResult` |
-| 258 | `method` | `private build(` |
-| 287 | `function` | `const inScope = (f: string) => ...` |
-| 333 | `method` | `private runCommand(command: string, timeout = 120): Promise<string>` |
-| 361 | `interface` | `export interface VerificationBaseline` |
-| 370 | `function` | `export function failureSignature(output: string): string` |
-| 397 | `function` | `export async function captureBaseline(` |
-| 424 | `function` | `export function matchesBaseline(baseline: VerificationBaseline \| undefined, command: string, output: string): boolean` |
+| 19 | `type` | `export type VerificationStatus` |
+| 21 | `interface` | `export interface VerificationEvidence` |
+| 30 | `interface` | `export interface VerificationResult` |
+| 39 | `interface` | `export interface VerifierOptions` |
+| 50 | `class` | `export class VerifierEngine` |
+| 69 | `method` | `async verify(task: Task, agentSummary: string): Promise<VerificationResult>` |
+| 217 | `method` | `private ruleBased(task: Task, evidence: VerificationEvidence[]): VerificationResult` |
+| 253 | `method` | `private build(` |
+| 282 | `function` | `const inScope = (f: string) => ...` |
+| 355 | `interface` | `export interface VerificationBaseline` |
+| 364 | `function` | `export function failureSignature(output: string): string` |
+| 391 | `function` | `export async function captureBaseline(` |
+| 418 | `function` | `export function matchesBaseline(baseline: VerificationBaseline \| undefined, command: string, output: string): boolean` |
 
 ### `src/vnext-phases.test.ts`
 | Line | Kind | Signature |

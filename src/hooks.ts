@@ -1,7 +1,5 @@
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-
 export type HookName =
   | 'before_goal'
   | 'after_goal'
@@ -93,16 +91,15 @@ export class HookManager {
   private async run(command: string, context: Record<string, string>): Promise<HookResult> {
     const env: NodeJS.ProcessEnv = { ...process.env, MOCHI_HOOK: '1' };
     for (const [k, v] of Object.entries(context)) env[`MOCHI_${k.toUpperCase()}`] = v;
-    return new Promise((resolve) => {
-      execFile('sh', ['-c', command], { env, timeout: 5000 }, (error, stdout, stderr) => {
-        const exitCode = error ? ((error as any).code ?? 1) : 0;
-        resolve({
-          allowed: exitCode === 0,
-          exitCode,
-          stdout: String(stdout ?? ''),
-          stderr: String(stderr ?? ''),
-        });
-      });
-    });
+    // Central exec policy (timeout → SIGTERM → SIGKILL, output cap) instead
+    // of a bare execFile: a hanging hook can no longer stall a run forever.
+    const { runArgv } = await import('./exec.js');
+    try {
+      const r = await runArgv('sh', ['-c', command], { env, timeoutMs: 5000, maxOutput: 1024 * 1024 });
+      const exitCode = r.code ?? (r.timedOut ? 124 : 1);
+      return { allowed: exitCode === 0, exitCode, stdout: r.stdout, stderr: r.stderr };
+    } catch {
+      return { allowed: false, exitCode: 1, stdout: '', stderr: '' };
+    }
   }
 }

@@ -207,10 +207,10 @@ async function connectServer(name: string, cfg: { command?: string; args?: strin
 }
 
 /** Wrap one MCP tool as a native Mochi Tool. */
-function wrapMcpTool(conn: McpConnection, t: { name: string; description?: string; inputSchema?: any; annotations?: { readOnlyHint?: boolean } }): Tool {
+function wrapMcpTool(conn: McpConnection, t: { name: string; description?: string; inputSchema?: unknown; annotations?: { readOnlyHint?: boolean } }): Tool {
   const mochiName = `mcp_${conn.name}_${t.name}`.replace(/[^a-zA-Z0-9_]/g, '_');
-  const schema = t.inputSchema ?? {};
-  const props: Record<string, any> = schema.properties ?? {};
+  const schema = (t.inputSchema ?? {}) as { properties?: Record<string, unknown>; required?: unknown };
+  const props: Record<string, unknown> = schema.properties ?? {};
   const required: string[] = Array.isArray(schema.required) ? schema.required : [];
   const readOnly = t.annotations?.readOnlyHint === true;
   const def: ToolDefinition = {
@@ -218,8 +218,8 @@ function wrapMcpTool(conn: McpConnection, t: { name: string; description?: strin
     description: `[mcp:${conn.name}] ${t.description ?? t.name}`,
     parameters: Object.entries(props).map(([k, v]) => ({
       name: k,
-      type: paramType((v as any).type),
-      description: (v as any).description ?? '',
+      type: paramType(typeof v === 'object' && v !== null ? (v as { type?: unknown }).type as string | undefined : undefined),
+      description: typeof v === 'object' && v !== null && typeof (v as { description?: unknown }).description === 'string' ? (v as { description: string }).description : '',
       required: required.includes(k),
     })),
     permission: readOnly ? 'read' : 'network',

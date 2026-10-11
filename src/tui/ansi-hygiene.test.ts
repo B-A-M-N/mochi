@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripAllAnsi, scrubAnsiFragments, ANSI_RE, ORPHAN_SGR_RE } from './ansi-hygiene.js';
+import { stripAllAnsi, scrubAnsiFragments, ANSI_RE, ORPHAN_SGR_RE, terminateRow, paintCanvasBg } from './ansi-hygiene.js';
 
 describe('ansi-hygiene', () => {
   it('strips complete SGR sequences', () => {
@@ -42,5 +42,61 @@ describe('ansi-hygiene', () => {
   it('regexes are module-level (no per-call recompile) and global', () => {
     expect(ANSI_RE.global).toBe(true);
     expect(ORPHAN_SGR_RE.global).toBe(true);
+  });
+});
+
+describe('terminateRow (SGR leak guard)', () => {
+  it('passes through empty rows and already-terminated rows', () => {
+    expect(terminateRow('')).toBe('');
+    expect(terminateRow('plain text')).toBe('plain text[0m');
+    expect(terminateRow('ok[0m')).toBe('ok[0m');
+    expect(terminateRow('ok[m')).toBe('ok[m');
+  });
+  it('closes live colors and reverse-video so EL cannot inherit them', () => {
+    // Model prose ending mid-color: without termination the frame EL would
+    // clear to EOL in red and tint every following row.
+    expect(terminateRow('[31mred text')).toBe('[31mred text[0m');
+    // Selection highlight closes with 27m (attrs off) but SGR stays live.
+    expect(terminateRow('a[7mhi[27m')).toBe('a[7mhi[27m[0m');
+  });
+});
+
+describe('paintCanvasBg (black canvas & gray-bar elimination)', () => {
+  const black = '[48;2;0;0;0m';
+
+  it('passes through when bg is empty (light themes / transparent term)', () => {
+    expect(paintCanvasBg('plain text', '')).toBe('plain text[0m');
+    expect(paintCanvasBg('[31mred[0m', '')).toBe('[31mred[0m');
+  });
+
+  it('re-asserts canvas bg immediately after resets so text never sits on gray', () => {
+    const raw = '  [31mword1[0m [32mword2[0m';
+    const painted = paintCanvasBg(raw, black);
+    // Every reset is paired with the forced canvas background
+    expect(painted).toContain('[0m[48;2;0;0;0m [32mword2');
+    expect(painted.endsWith('[0m[48;2;0;0;0m')).toBe(true);
+    // No bare reset followed by space can survive
+    expect(painted).not.toMatch(/\[0m /);
+  });
+
+  it('re-asserts canvas bg on compound resets like \x1b[0;31m', () => {
+    const raw = '[0;31mred text[0m';
+    const painted = paintCanvasBg(raw, black);
+    expect(painted).toBe('[0m[48;2;0;0;0m[31mred text[0m[48;2;0;0;0m');
+  });
+
+  it('replaces \x1b[49m (default-bg reset) with forced canvas bg', () => {
+    const raw = '[48;2;14;7;26mpill[49m trail';
+    const painted = paintCanvasBg(raw, black);
+    expect(painted).toContain('[48;2;14;7;26mpill[48;2;0;0;0m trail');
+  });
+
+  it('preserves custom element background colors within their spans', () => {
+    // User message has a tinted bgUser pill ([48;2;14;7;26m); it must keep
+    // its tint, and return to black only at the trailing reset.
+    const userRow = '  [35m❯[0m [48;2;14;7;26m[1muser input[0m';
+    const painted = paintCanvasBg(userRow, black);
+    expect(painted).toContain('[48;2;14;7;26m[1muser input');
+    expect(painted.endsWith('[0m[48;2;0;0;0m')).toBe(true);
   });
 });

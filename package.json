@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "prebuild:bin": "node scripts/sync-version.mjs",
     "build:bin": "bun build src/cli.ts --compile --outfile dist/mochi-bin --target=bun",
     "build:rust": "cargo build --release --manifest-path native/mochi_core/Cargo.toml && cp --remove-destination native/mochi_core/target/release/mochi-agent native/bin/ && cp --remove-destination native/mochi_core/target/release/libmochi_core.so native/bin/mochi_core.node && cp --remove-destination native/mochi_core/target/release/libmochi_core.so native/bin/",
     "build:native": "mkdir -p native/bin && (cargo build --release --manifest-path native/mochi_core/Cargo.toml && cp --remove-destination native/mochi_core/target/release/mochi-agent native/bin/ && cp --remove-destination native/mochi_core/target/release/libmochi_core.so native/bin/mochi_core.node && cp --remove-destination native/mochi_core/target/release/libmochi_core.so native/bin/ || true) && (rustc -O -o native/bin/fuzzy_rust native/rust/fuzzy.rs || true) && (rustc -O -o native/bin/search_rust native/rust/search.rs || true) && (g++ -O2 -std=c++17 -o native/bin/fuzzy_cpp native/cpp/fuzzy.cpp || true)",
@@ -40,10 +41,11 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^5.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0",
-    "vitest": "^2.0.0"
+    "vite": "^7.3.7",
+    "vitest": "^5.0.3"
   },
   "optionalDependencies": {
     "tree-sitter-c-sharp": "^0.23.5",

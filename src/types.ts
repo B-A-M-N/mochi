@@ -222,6 +222,10 @@ export interface ModelResponse {
   toolCalls?: ToolCall[];
   finishReason?: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  /** Set by the stream gatherer when the response tripped the degenerate-
+   *  repetition guard (stream-degen rolling window). Consumers bound the
+   *  transcript and fail over. Absent = clean response. */
+  looped?: boolean;
 }
 
 export interface AgentState {

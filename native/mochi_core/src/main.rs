@@ -26,7 +26,7 @@ use mochi_core::stream::strip_think_tags_native;
 use mochi_core::tui_renderer::TerminalRenderer;
 use mochi_core::tokenizer::BpeTokenizer;
 
-const VERSION: &str = "0.10.6";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn print_banner() {
     println!("\x1b[1;38;2;163;230;53m  [MOCHI] mochi-agent (Native Rust Runtime v{})\x1b[0m", VERSION);

@@ -36,7 +36,7 @@ export const dbInspectTool: Tool = {
           return 'Error: Only read-only queries (SELECT, PRAGMA, EXPLAIN) are permitted with db_inspect.';
         }
         const stmt = db.prepare(sql);
-        const rows = stmt.all() as any[];
+        const rows = stmt.all() as Array<Record<string, unknown>>;
         db.close();
         const capped = rows.slice(0, 50);
         return `# Query Results (${capped.length} rows):\n\`\`\`json\n${JSON.stringify(capped, null, 2)}\n\`\`\``;

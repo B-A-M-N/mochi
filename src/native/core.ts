@@ -17,10 +17,30 @@ export interface NativeDiffStats {
   deletions: number;
 }
 
-let napiModule: any = null;
-let bunLib: any = null;
+let napiModule: Record<string, unknown> | null = null;
+let bunLib: { symbols: Record<string, (...args: unknown[]) => number> } | null = null;
+/** Cached Bun `ptr()` from init: set iff bunLib was loaded (same branch). */
+let bunPtr: ((buf: object) => unknown) | null = null;
 let ffiAvailable = false;
 let probed = false;
+
+/** Minimal typing for Bun's optional FFI surface. The harness runs on node
+ *  by default; every access is feature-detected through `detectBunFFI()`,
+ *  never assumed — unknown runtimes fall through to the TS implementations. */
+interface BunFFI {
+  dlopen(path: string, defs: Record<string, unknown>): { symbols: Record<string, (...args: unknown[]) => number> };
+  FFIType: Record<string, unknown>;
+  ptr(buf: object): unknown;
+}
+
+function detectBunFFI(): BunFFI | undefined {
+  const g = globalThis as unknown as { Bun?: Partial<BunFFI> };
+  const b = g.Bun;
+  if (b && typeof b.dlopen === 'function' && b.FFIType && typeof b.ptr === 'function') {
+    return b as BunFFI;
+  }
+  return undefined;
+}
 
 function findNativePaths(): { nodeAddon: string | null; sharedLib: string | null } {
   try {
@@ -77,9 +97,10 @@ function initNativeCore() {
   }
 
   // 2. Try Bun native FFI (if running under Bun runtime)
-  if (sharedLib && typeof (globalThis as any).Bun !== 'undefined') {
+  const bun = detectBunFFI();
+  if (sharedLib && bun) {
     try {
-      const { dlopen, FFIType } = (globalThis as any).Bun;
+      const { dlopen, FFIType } = bun;
       bunLib = dlopen(sharedLib, {
         mochi_fuzzy_match: {
           args: [FFIType.cstring, FFIType.cstring, FFIType.ptr, FFIType.ptr],
@@ -139,6 +160,7 @@ function initNativeCore() {
         },
       });
       if (bunLib) {
+        bunPtr = (buf: object) => bun.ptr(buf);
         ffiAvailable = true;
         return;
       }
@@ -165,7 +187,8 @@ export function nativeFuzzyMatch(text: string, needle: string): NativeFuzzyResul
     try {
       const startBuf = new BigUint64Array(1);
       const endBuf = new BigUint64Array(1);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const res = bunLib.symbols.mochi_fuzzy_match(
         Buffer.from(text + '\0'),
         Buffer.from(needle + '\0'),
@@ -199,7 +222,8 @@ export function nativeGitBranch(dir: string): string | null {
   if (bunLib) {
     try {
       const buf = Buffer.alloc(256);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const len = bunLib.symbols.mochi_git_branch(
         Buffer.from(dir + '\0'),
         ptr(buf),
@@ -232,7 +256,8 @@ export function nativeSearchDir(dir: string, query: string, glob = '', limit = 6
   if (bunLib) {
     try {
       const buf = Buffer.alloc(256_000);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const len = bunLib.symbols.mochi_search(
         Buffer.from(dir + '\0'),
         Buffer.from(query + '\0'),
@@ -268,7 +293,8 @@ export function nativeStripThinkTags(text: string): string | null {
   if (bunLib) {
     try {
       const buf = Buffer.alloc(Math.max(4096, text.length + 128));
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const len = bunLib.symbols.mochi_strip_think_tags(
         Buffer.from(text + '\0'),
         ptr(buf),
@@ -300,7 +326,8 @@ export function nativeHashPrompt(text: string): bigint | null {
   if (bunLib) {
     try {
       const buf = Buffer.from(text, 'utf8');
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const h = bunLib.symbols.mochi_hash_prompt(ptr(buf), buf.length);
       return BigInt(h);
     } catch {}
@@ -364,7 +391,8 @@ export function nativeDiffNumstat(output: string): NativeDiffStats | null {
       const filesBuf = new BigUint64Array(1);
       const addBuf = new BigUint64Array(1);
       const delBuf = new BigUint64Array(1);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const res = bunLib.symbols.mochi_diff_numstat(
         Buffer.from(output + '\0'),
         ptr(filesBuf),
@@ -527,7 +555,8 @@ export function nativeRedactSecrets(input: string): string | null {
       // overkill but safe for inputs that are mostly secrets).
       const cap = Math.max(64, input.length * 2 + 64);
       const buf = Buffer.alloc(cap);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const written = bunLib.symbols.mochi_redact_secrets(
         Buffer.from(input + '\0'),
         ptr(buf),
@@ -601,7 +630,8 @@ export function nativeBudgetDecide(
     try {
       const cap = 256;
       const buf = Buffer.alloc(cap);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const written = bunLib.symbols.mochi_budget_decide(
         Buffer.from(input + '\0'),
         ptr(buf),
@@ -707,7 +737,8 @@ export function nativeFoldOutput(
     try {
       const cap = 65_536;
       const buf = Buffer.alloc(cap);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const written = bunLib.symbols.mochi_fold_output(
         Buffer.from(input + '\0'),
         ptr(buf),
@@ -768,7 +799,8 @@ export function nativeCommandAvailable(
   if (!jsonOut && bunLib) {
     try {
       const buf = Buffer.alloc(256);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const written = bunLib.symbols.mochi_command_available(
         Buffer.from(input + '\0'),
         ptr(buf),
@@ -815,7 +847,8 @@ export function nativeStripAnsi(text: string): string | null {
     try {
       const cap = Math.max(64, text.length + 32);
       const buf = Buffer.alloc(cap);
-      const { ptr } = (globalThis as any).Bun;
+      if (!bunPtr) throw new Error('bun FFI ptr unavailable');
+      const ptr = bunPtr;
       const written = bunLib.symbols.mochi_strip_ansi(
         Buffer.from(text + '\0'),
         ptr(buf),

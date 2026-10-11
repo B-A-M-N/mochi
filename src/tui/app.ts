@@ -2,13 +2,16 @@ import {highlightRange} from './selection.js';
 import { execFile, spawn } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 import { findProjectRoot } from '../repo.js';
-import type { Runtime } from '../runtime.js';
+import { Runtime } from '../runtime.js';
 import type { MochiEvent } from '../types.js';
 import { PROVIDERS, providerById } from '../providers.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
-import { prefersReducedMotion } from './themes.js';
+import { terminateRow, paintCanvasBg } from './ansi-hygiene.js';
+import { prefersReducedMotion, applyTheme, canvasBg } from './themes.js';
+import { TabManager, tabBarCells, tabBarHit } from './tabs.js';
+import { chromeLayout } from './chrome.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { kvCache } from '../kv-cache.js';
 import { prefetchBadge } from '../prefetch.js';
@@ -51,6 +54,8 @@ const AUTOWRAP = '\x1b[?7h';
 const BRACKET_PASTE_ON = '\x1b[?2004h';
 const BRACKET_PASTE_OFF = '\x1b[?2004l';
 const RESET = '\x1b[0m';
+const OSC_BG_BLACK = '\x1b]11;#000000\x07';
+const OSC_BG_RESET = '\x1b]111\x07';
 
 type LineKind = 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'task' | 'goal' | 'plain' | 'thought' | 'summary';
 
@@ -84,8 +89,9 @@ const COMMANDS = [
   { name: '/copy', hint: 'Copy last assistant message to clipboard (works without mouse)' },
   { name: '/model', hint: 'Select AI model provider & model' },
   { name: '/reasoning', hint: 'Adjust reasoning effort & compute (low, medium, high, max)' },
-  { name: '/theme', hint: 'Select color theme (21 styles)' },
-  { name: '/skills', hint: 'Browse & activate specialized engineering skills' },
+  { name: '/theme', hint: 'Select color theme (22 styles)' },
+  { name: '/skills', hint: 'Browse, search & activate specialized engineering skills' },
+  { name: '/mcp', hint: 'Search, add & manage MCP servers (1-command install)' },
   { name: '/mode', hint: 'Set execution mode (normal, spec, security, chaos)' },
   { name: '/providers', hint: 'List connected AI model providers' },
   { name: '/login', hint: 'Authenticate a model provider API key' },
@@ -124,6 +130,7 @@ const COMMANDS = [
   { name: '/review [staged|last]', hint: 'Review the working-tree diff before commit' },
   { name: '/security-review [staged|last]', hint: 'Security-focused review of the diff' },
   { name: '/new', hint: 'Start a fresh conversation session' },
+  { name: '/tab', hint: 'Multi-session tabs: new|close|next|prev|rename|list|N (Alt+T/W/1-8)' },
   { name: '/branch [title]', hint: 'Branch the current session (forks the transcript, keeps lineage)' },
   { name: '/skip', hint: 'Skip/interrupt current in-flight task' },
   { name: '/stop', hint: 'Interrupt current in-flight task' },
@@ -141,11 +148,17 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   });
   let modelShort = runtime.config.model.model.split('/').pop() ?? runtime.config.model.model;
 
-  // Synchronize saved theme immediately on launch
+  // Paint the saved theme immediately on launch. NOTE: never persist here —
+  // persisting a fallback-resolved theme would CLOBBER the user's files when
+  // the saved id is momentarily unresolvable (e.g. stale dist). Persistence
+  // happens only on explicit user action (/theme, theme menu).
   const savedTheme = getCurrentTheme();
   setTheme(savedTheme.id);
 
-  const state = {
+  // Tab bar occupies the top terminal row (always visible, opencode-style).
+  const TAB_BAR_ROWS = 1;
+
+  let state = {
     input: '',
     cursor: 0,
     history: [] as string[],
@@ -223,6 +236,195 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     inspectorScroll: 0,
   };
 
+  /** Per-tab TUI state object (same shape as the active `state` binding). */
+  type AppState = typeof state;
+
+  // ---- Multi-tab sessions (opencode-style) ---------------------------------
+  // Each tab owns an isolated Runtime (own abort, session, budget) plus its
+  // own transcript/input/scroll state. `state` + `runtime` are rebound on
+  // every switch, so the hundreds of existing references keep working
+  // untouched. Background runs continue; their events badge the tab unread.
+  const tabs = new TabManager();
+  const tabStates = new Map<string, AppState>();
+  const tabRuntimes = new Map<string, Runtime>();
+  let activeTabId = tabs.activeTab().id;
+  tabStates.set(activeTabId, state);
+  tabRuntimes.set(activeTabId, runtime);
+
+  /** Render the pinned top tab-bar row from the shared layout (tabs.ts), so
+   *  styled columns match hit-test columns EXACTLY (ANSI is zero-width).
+   *  opencode-style pills: the active tab gets a filled surface pill, idle
+   *  tabs are dim text, then a `+ New session` button. */
+  function tabBarRow(w: number): string {
+    // Active-pill fill: a real 48;2 background surface (userBg highlight).
+    // If a theme ever ships a non-bg userBg, fall back to bold accent text.
+    const fill = typeof R.userBg === 'string' && R.userBg.includes('48;2') ? R.userBg : '';
+    const layout = tabBarCells(tabs.list(), activeTabId, w);
+    // Styled twins of the plain ` {title}{unread}{busy} ` cells: identical
+    // visible cells, so hit-testing stays exact (ANSI is zero-width).
+    // Styled twins of the plain ` {title}{unread}{busy} ` cells: identical
+    // visible cells, so hit-testing stays exact (ANSI is zero-width).
+    // No key-hint suffix — the bar keeps sessions only (Alt+T/W/1-8 live in
+    // /tab list and the TUI help instead).
+    const styled = layout.cells.map((c) => {
+      if (c.tabId === null) return `${T.grayDark}+ New session${T.reset}`;
+      const isActive = c.tabId === activeTabId;
+      const unread = c.unread ? ` ${T.act}•${T.reset}` : '';
+      const busy = c.busy ? ` ${T.warning}●${T.reset}` : '';
+      if (isActive) {
+        const dot = c.unread ? ` ${T.act}•` : '';
+        const mark = c.busy ? ` ${T.warning}●` : '';
+        return fill
+          ? `${fill}${T.bold}${T.fg} ${c.title}${dot}${mark} ${T.reset}`
+          : `${T.bold}${T.act} ${c.title}${unread}${busy} ${T.reset}`;
+      }
+      return ` ${T.grayDark}${c.title}${T.reset}${unread}${busy} `;
+    });
+    return styled.join('');
+  }
+
+  /** Click handling for the tab bar (screen row 0, 0-based column). */
+  function tabBarClick(col: number): void {
+    if (state.menuActive || state.promptActive || state.inspectorActive) return;
+    const layout = tabBarCells(tabs.list(), activeTabId, width());
+    const hit = tabBarHit(layout, col);
+    if (!hit) return;
+    try {
+      if (hit.kind === 'plus') {
+        // New tabs boot clean (splash showing, empty transcript): the tab
+        // bar itself is the feedback, so no transcript line is added here.
+        // (A system line would both spam context AND kill the new splash.)
+        newTab();
+      } else {
+        switchTab(hit.index);
+      }
+    } catch (e) {
+      push('error', e instanceof Error ? e.message : String(e));
+    }
+    scheduleRender();
+  }
+
+  /** Switch the active bindings to another tab (state + runtime + caches). */
+  function switchTab(index: number): void {
+    if (state.menuActive || state.promptActive || state.inspectorActive) return;
+    const next = tabs.switchTo(index);
+    if (next.id === activeTabId) return;
+    activeTabId = next.id;
+    state = tabStates.get(activeTabId) as AppState;
+    runtime = tabRuntimes.get(activeTabId) as Runtime;
+    transCache = [];
+    transMw = 0;
+    transSeenTrimmed = 0;
+    clearSelection();
+    scheduleRender();
+  }
+
+  /** Open a fresh tab with an isolated runtime (same cwd + config). */
+  function newTab(title?: string): void {
+    if (state.menuActive || state.promptActive || state.inspectorActive) return;
+    const info = tabs.create(title);
+    const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+    const st = freshTabState();
+    tabStates.set(info.id, st);
+    tabRuntimes.set(info.id, rt);
+    subscribeTab(info.id, rt);
+    activeTabId = info.id;
+    state = st;
+    runtime = rt;
+    transCache = [];
+    transMw = 0;
+    transSeenTrimmed = 0;
+    clearSelection();
+    scheduleRender();
+  }
+
+  /** Minimal non-splash state for tabs 2+: same shape, no intro animation. */
+  function freshTabState(): AppState {
+    return {
+      ...state,
+      input: '',
+      cursor: 0,
+      history: [],
+      historyIndex: -1,
+      lines: [],
+      tasks: new Map(),
+      busy: false,
+      spinner: 0,
+      scroll: 0,
+      promptActive: false,
+      menuActive: false,
+      menuItems: [],
+      menuSelected: 0,
+      menuMark: new Set<number>(),
+      currentTool: '',
+      currentTask: '',
+      activeSubagents: new Map(),
+      activeToolArgs: new Map(),
+      activeToolLine: new Map(),
+      tokenVelocity: 0,
+      lastUsageAt: 0,
+      lastTokens: 0,
+      lastStatus: '',
+      chatVer: 0,
+      trimmed: 0,
+      gitDiff: null,
+      totalTokens: 0,
+      totalCost: 0,
+      inTokens: 0,
+      outTokens: 0,
+      cacheTokens: 0,
+      splashTick: 0,
+      splashProgress: 0,
+      splashBurst: 0,
+      splashDismissed: false,
+      userScrolled: false,
+      selActive: false,
+      selStart: null,
+      selEnd: null,
+      pasting: false,
+      autoImproveAbort: false,
+      inspectorActive: false,
+      inspectorTitle: '',
+      inspectorLines: [],
+      inspectorScroll: 0,
+      dropActive: false,
+      dropSelected: 0,
+    };
+  }
+
+  /** Close the active tab (aborts its run first). Never strands zero tabs. */
+  function closeActiveTab(): void {
+    if (state.menuActive || state.promptActive || state.inspectorActive) return;
+    const closing = activeTabId;
+    const rt = tabRuntimes.get(closing);
+    try { rt?.abort('Tab closed by user'); } catch { /* already idle */ }
+    const wasLast = tabs.count() === 1;
+    const next = tabs.close(closing);
+    tabStates.delete(closing);
+    tabRuntimes.delete(closing);
+    if (wasLast) {
+      // Fresh slate in place: new runtime + dismissed splash.
+      const rt2 = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+      const st2 = freshTabState();
+      tabStates.set(next.id, st2);
+      tabRuntimes.set(next.id, rt2);
+      subscribeTab(next.id, rt2);
+    }
+    activeTabId = next.id;
+    state = tabStates.get(activeTabId) as AppState;
+    runtime = tabRuntimes.get(activeTabId) as Runtime;
+    transCache = [];
+    transMw = 0;
+    transSeenTrimmed = 0;
+    clearSelection();
+    scheduleRender();
+  }
+
+  /** Route one runtime's events into ITS tab's state (badges background tabs). */
+  function subscribeTab(tabId: string, rt: Runtime): void {
+    rt.events.onAll((e) => onRuntimeEventFor(tabId, e));
+  }
+
   let pendingResolver: ((v: string) => void) | undefined;
   let menuResolver: ((i: number) => void) | undefined;
   let lastCtrlCAt = 0;
@@ -248,15 +450,19 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   const width = () => process.stdout.columns || 100;
   const height = () => process.stdout.rows || 34;
 
-  const push = (kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => {
+  const pushTo = (target: AppState, kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => {
     // Splash stays visible until user sends a message
-    const last = state.lines[state.lines.length - 1];
+    const last = target.lines[target.lines.length - 1];
     if (last && last.kind === kind && last.text === text) return;
-    state.lines.push({ kind, text, fullContent, metadata });
-    state.chatVer++;
-    trimTranscript(state);
-    if (!state.userScrolled) state.scroll = 0;
-    scheduleRender();
+    target.lines.push({ kind, text, fullContent, metadata });
+    target.chatVer++;
+    trimTranscript(target);
+    if (!target.userScrolled) target.scroll = 0;
+    if (target === state) scheduleRender();
+  };
+
+  const push = (kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => {
+    pushTo(state, kind, text, fullContent, metadata);
   };
 
   let lastRenderTime = 0;
@@ -557,21 +763,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   // ---- Mouse text-selection: highlight + copy ----------------------------
   /** Recompute the same transcript window renderFrame uses, so selection and
-   *  scroll clamping agree with what is actually on screen. This MUST stay in
-   *  lockstep with renderFrame's layout block (status rows, composer growth,
-   *  auto-approve row); any drift re-opens the selection-vs-screen mismatch. */
+   *  scroll clamping agree with what is actually on screen. Delegates to the
+   *  shared chromeLayout (single source of truth — see chrome.ts). */
   function transcriptGeometry(w: number): { chatMw: number; availableH: number } {
     const h = height();
-    const statusRows = h >= 20 ? 3 : 2;
-    const innerW = Math.max(1, w - 6);
-    const rawRows = state.input ? wrap(state.input, innerW) : [''];
-    const minComposer = h < 24 ? (rawRows.length > 1 ? 4 : 3) : 4;
-    const composerRows = Math.min(Math.max(minComposer, Math.floor(h / 3)), rawRows.length + 2);
-    const bottomRows = composerRows + statusRows + 1;
-    const contentH = Math.max(1, h - bottomRows);
-    const availableH = state.busy ? Math.max(1, contentH - 1) : contentH;
-    const indent = transcriptIndent(w);
-    const chatMw = Math.min(w - indent * 2, Math.max(24, w - 4));
+    const { chatMw, availableH } = chromeLayout({ w, h, inputText: state.input, busy: state.busy, topRows: TAB_BAR_ROWS, indent: transcriptIndent(w) });
     return { chatMw, availableH };
   }
 
@@ -779,40 +975,24 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (state.selActive) {
       const t = selectedText();
       if (t && t.length > 0) {
+        // Silent copy by design: the highlight + OS clipboard ARE the
+        // feedback. Announcing "Copied N chars" into the transcript spams the
+        // AI's context AND dismisses the splash screen (any transcript line
+        // hides it) — a click should never destroy the welcome screen.
+        // Only a FAILED copy speaks up (actionable, rare).
         const via = copyToClipboard(t);
-        const lines = t.split('\n').length;
-        const word = lines > 1 ? ` (${lines} lines)` : '';
         if (via === 'failed') {
           push(
             'system',
-            `Selected ${t.length} char${t.length !== 1 ? 's' : ''}${word}, but clipboard copy failed. ` +
+            `Selected ${t.length} char${t.length !== 1 ? 's' : ''}, but clipboard copy failed. ` +
               `Install xclip / wl-copy / pbcopy, or hold Shift while dragging for the host terminal's native selection.`,
           );
-        } else {
-          const label = via === 'osc52' ? 'terminal' : via;
-          push('system', `Copied ${t.length} char${t.length !== 1 ? 's' : ''}${word} to clipboard via ${label}.`);
         }
         scheduleRender();
       } else {
-        // The drag produced a visible highlight but the underlying cell
-        // content is empty (e.g. user dragged across the splash screen,
-        // or across a blank line below the chat). Tell them what to do
-        // instead instead of silently doing nothing.
-        const onSplash = !state.splashDismissed && state.lines.length === 0;
-        if (onSplash) {
-          push(
-            'system',
-            'No text to copy yet — the drag landed on the splash screen. ' +
-              'Send mochi a message first, then drag-select the chat. ' +
-              'Tip: /copy works without the mouse.',
-          );
-        } else {
-          push(
-            'system',
-            'No text in the selected region (drag landed on a blank area). ' +
-              'Tip: /copy pastes the last assistant message.',
-          );
-        }
+        // Empty drag (splash screen, blank area): stay silent too — a hint
+        // line would dismiss the splash the user is still looking at.
+        // Tip: /copy works without the mouse.
         clearSelection();
         scheduleRender();
       }
@@ -833,6 +1013,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   let lastFrame: string[] = [];
   let lastW = 0;
+  let currentOscDark = canvasBg() !== '';
 
   function render() {
     if (exited) return;
@@ -879,52 +1060,42 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const w = width();
     const h = height();
 
-    // Refactored layout
-    const statusRows: number = h >= 20 ? 3 : 2; 
-    const innerW = Math.max(1, w - 6);
-    const rawRows = state.input ? wrap(state.input, innerW) : [''];
-    
-    // Composer expands as user types, up to 1/3 of screen height
-    // In short windowed mode (h < 24), use 3 rows (top border, 1 input line, bottom)
-    // when input is 1 line, or 4 rows if input is multiline, up to 1/3 h
-    const minComposer = h < 24 ? (rawRows.length > 1 ? 4 : 3) : 4;
-    const composerBoxRows = Math.min(Math.max(minComposer, Math.floor(h / 3)), rawRows.length + 2);
-    const composerRows = composerBoxRows;
-    
-    // Bottom consists of composer, status bars, and auto-approve row
-    const bottomRows = composerRows + statusRows + 1;
-    const contentH = Math.max(1, h - bottomRows);
-
+    // Single source of truth for chrome geometry (see chrome.ts): tab bar on
+    // top, transcript in the middle, composer + status + approve at bottom.
     const indent = transcriptIndent(w);
-    const chatMw = Math.min(w - indent * 2, Math.max(24, w - 4));
-    
-    const availableH = state.busy ? Math.max(1, contentH - 1) : contentH;
+    const { statusRows, composerRows, bottomRows, contentH, chatMw, availableH } = chromeLayout({
+      w, h, inputText: state.input, busy: state.busy, topRows: TAB_BAR_ROWS, indent,
+    });
+
     const chatLines = transcriptLines(chatMw);
     const visible = chatLines.slice(Math.max(0, chatLines.length - availableH - state.scroll), Math.max(0, chatLines.length - state.scroll));
 
     const rows: string[] = new Array(h).fill('');
     const lead = ' '.repeat(indent);
-    
+
+    // Pinned tab bar (row 0): transcript content starts at TAB_BAR_ROWS.
+    rows[0] = tabBarRow(w);
+
     const showSplash = !state.splashDismissed && state.lines.length === 0;
     if (showSplash) {
       const splash = splashFrame(state.splashTick, w, pkg.version, state.splashProgress, state.splashBurst);
-      const top = Math.max(0, Math.floor((contentH - splash.length) / 2));
+      const top = TAB_BAR_ROWS + Math.max(0, Math.floor((contentH - splash.length) / 2));
       for (let i = 0; i < splash.length && i < contentH; i++) {
         // Apply selection to splash rows too so drag-select works from the
         // very first frame (before any chat lines exist).
-        const rendered = lead + applySelection(splash[i], top + i, indent);
+        const rendered = lead + applySelection(splash[i], top + i - TAB_BAR_ROWS, indent);
         rows[top + i] = visibleLen(rendered) > w ? ellipsize(rendered, w) : rendered;
       }
     } else {
       for (let i = 0; i < availableH && i < contentH; i++) {
-        const r = i;
-        const rendered = lead + applySelection(visible[i] ?? '', r, indent);
+        const r = TAB_BAR_ROWS + i;
+        const rendered = lead + applySelection(visible[i] ?? '', i, indent);
         rows[r] = visibleLen(rendered) > w ? ellipsize(rendered, w) : rendered;
       }
     }
 
     if (state.busy) {
-      const r = Math.max(0, contentH - 1);
+      const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
       const busyStr = '  ' + thinkingLine(state.spinner, state.currentTool || state.currentTask || '');
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
     }
@@ -1015,10 +1186,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const actDot = state.uiMode === 'act' ? `${T.act}● Act${T.reset}` : `${T.grayDark}○ Act${T.reset}`;
       const toggle = `${planDot} ${actDot} ${T.grayDark}(Tab)${T.reset}`;
       const miniToggle = `${planDot} ${actDot}`;
-      let barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text} ${T.gray}${Math.round(ctx.pct * 100)}%${T.reset}${cacheSeg}`;
-      if (w < 55) {
-        barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text}`;
-      }
+      const barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text} ${T.gray}${Math.round(ctx.pct * 100)}%${T.reset}${cacheSeg}`;
+      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
       const baseLen = visibleLen(barsRowFull);
       let rowContent: string;
       if (baseLen + visibleLen(toggle) + 2 <= w) {
@@ -1030,7 +1199,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       }
       // Clamp: this row had no width budget and hard-wrapped in windowed mode.
       const barsRow = visibleLen(rowContent) > w ? ellipsize(rowContent, w) : rowContent;
-      
+
       rows[s1 + 1] = barsRow;
       rows[s1 + 2] = statusBarRow2(statusModel, w);
       rows[s1 + 3] = composerHintRow(hintWithMode(w), w);
@@ -1042,28 +1211,33 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     }
 
     rows[cTop] = composerTopRule(w);
-    const visibleTextRows = composerBoxRows - 2;
+    const visibleTextRows = composerRows - 2;
     // Cursor-following scroll: instead of always pinning the TAIL of a long
     // input (which hides the caret and the text you're actively typing),
     // anchor the visible slice around the cursor's wrapped row. The caret stays
     // on-screen while you type/edit any line; the tail is only pinned when the
     // cursor is already on the last visible row. (This is the multiline-editor
     // scroll the old `slice(-visibleTextRows)` never did.)
-    const caretRow = Math.max(0, wrap(state.input.slice(0, state.cursor), innerW).length - 1);
+    const composerInnerW = Math.max(1, w - 6);
+    const composerRawRows = state.input ? wrap(state.input, composerInnerW) : [''];
+    const caretRow = Math.max(0, wrap(state.input.slice(0, state.cursor), composerInnerW).length - 1);
     let sliceStart = caretRow - Math.floor((visibleTextRows - 1) / 2);
-    sliceStart = Math.max(0, Math.min(Math.max(0, rawRows.length - visibleTextRows), sliceStart));
-    const shownRows = rawRows.slice(sliceStart, sliceStart + visibleTextRows);
+    sliceStart = Math.max(0, Math.min(Math.max(0, composerRawRows.length - visibleTextRows), sliceStart));
+    const shownRows = composerRawRows.slice(sliceStart, sliceStart + visibleTextRows);
     const firstVisibleRow = sliceStart;
     for (let i = 0; i < visibleTextRows; i++) {
       const r = cTop + 1 + i;
       if (r < h) {
-        if (i < shownRows.length) {
+        if (i === 0 && !state.input) {
+          // Empty composer: the opencode-style placeholder (this branch used
+          // to sit AFTER the shownRows check, where wrap('') === [''] made it
+          // unreachable dead code — no placeholder ever rendered).
+          rows[r] = composerPlaceholderRow('Message mochi… (type / for commands)', w);
+        } else if (i < shownRows.length) {
           // Only the FIRST visible row carries the `❯` prompt glyph; wrapped
           // continuation rows render without it so a long input doesn't stack
           // ❯❯❯ symbols and corrupt the box edge.
           rows[r] = composerRow(shownRows[i], w, i === 0);
-        } else if (i === 0 && !state.input) {
-          rows[r] = composerPlaceholderRow('Message mochi… (type / for commands)', w);
         } else {
           rows[r] = composerRow('', w, i === 0);
         }
@@ -1182,9 +1356,22 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       rows[1 + visH] = pad + T.cyan + '╰' + '─'.repeat(fLeft) + T.reset + T.grayDark + footerHint + T.reset + T.cyan + '─'.repeat(fRight) + '╯' + T.reset;
     }
 
-    let out = HIDE;
+    // Forced-black canvas (opencode parity) on dark themes: every row is
+    // painted over explicit black, so the terminal profile color (gray on some
+    // setups) can never show through — and a leaked SGR bg can never tint a
+    // whole row via EL. canvasBg() picks 24-bit vs 256-palette black by
+    // capability (24-bit codes degrade unpredictably on 256-color terms);
+    // light themes + NO_COLOR + dumb terms stay transparent. Recomputed per
+    // frame so mid-session /theme switches apply instantly.
+    const BLACK_BG = canvasBg();
+    const forceBlackBg = BLACK_BG !== '';
+    if (forceBlackBg !== currentOscDark) {
+      currentOscDark = forceBlackBg;
+      safeWrite(forceBlackBg ? OSC_BG_BLACK : OSC_BG_RESET);
+    }
+    let out = `${forceBlackBg ? BLACK_BG : RESET}${HIDE}`;
     if (lastW !== w || lastFrame.length !== h) {
-      out += '\x1b[2J';
+      out += (forceBlackBg ? BLACK_BG : '') + '\x1b[2J';
       lastFrame = [];
     }
     for (let i = 0; i < h; i++) {
@@ -1201,7 +1388,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         line = ellipsize(line, maxCol);
       }
       if (line !== lastFrame[i]) {
-        out += '\x1b[' + (i + 1) + ';1H' + line + '\x1b[K';
+        // paintCanvasBg: re-asserts BLACK_BG after every SGR reset so text, spaces,
+        // and padding never revert to the terminal profile's default color (the
+        // "gray bars everywhere" bug). Trailing EL (\x1b[K) clears the rest of
+        // the row on BLACK_BG.
+        const painted = forceBlackBg ? paintCanvasBg(line, BLACK_BG) : terminateRow(line);
+        out += '\x1b[' + (i + 1) + ';1H' + (forceBlackBg ? BLACK_BG : '') + painted +
+          (forceBlackBg ? BLACK_BG : '') + '\x1b[K';
       }
     }
     // Cursor placement: the composer spans the FULL terminal width from col 0,
@@ -1209,13 +1402,18 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     // no transcript indent. Row tracks the cursor's actual wrapped line,
     // scrolled into the visible window like the text itself.
     const beforeCursor = state.input.slice(0, state.cursor);
-    const beforeLines = wrap(beforeCursor, innerW);
+    const beforeLines = wrap(beforeCursor, composerInnerW);
     const cursorVisualRow = Math.max(0, beforeLines.length - 1);
     // `firstVisibleRow`/`caretRow` are defined above (cursor-following scroll),
     // so the caret row simply = slice offset + caret's position in the window,
     // clamped into the box so a short box can't push it off-screen.
     const cursorRow = cTop + 1 + Math.min(Math.max(0, visibleTextRows - 1), Math.max(0, cursorVisualRow - firstVisibleRow));
-    const cursorCol = Math.min(Math.max(1, w - 1), 4 + (beforeLines.length ? visibleLen(beforeLines[beforeLines.length - 1]) : 0));
+    // Empty composer: park the block on the blank cell right after ❯ (col 3),
+    // opencode-style (▊Ask…) — otherwise it sits on top of the placeholder's
+    // first letter and visibly eats it (`❯ █essage`).
+    const cursorCol = !state.input
+      ? 3
+      : Math.min(Math.max(1, w - 1), 4 + (beforeLines.length ? visibleLen(beforeLines[beforeLines.length - 1]) : 0));
     if (state.inspectorActive) {
       out += '\x1b[' + h + ';1H' + HIDE;
     } else {
@@ -1548,7 +1746,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const specific = line.startsWith('/theme ') ? line.slice(7).trim() : '';
       if (specific) {
         const t = setTheme(specific);
-        push('system', `Theme switched to ${t.name} — ${t.description}`);
+        try { applyTheme(specific); } catch { /* best-effort */ }
+        push('system', `Theme switched to ${t.name} — saved, it will stick next launch.`);
         scheduleRender();
       } else {
         await themeMenu();
@@ -1574,6 +1773,35 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
           await renderSourcePacks(chosen);
         } else {
           await renderSourcePacks(want);
+        }
+        return;
+      }
+      if (specific === 'search' || specific.startsWith('search ')) {
+        // /skills search <keywords> — interactive discovery over every loaded
+        // skill (local + user + bundled), usage-boosted, picker to preview.
+        const q = specific === 'search' ? '' : specific.slice(7).trim();
+        const { loadAllSkills, searchSkills, readSkillBody, loadSkillUsage, usageBoostMap } = await import('../skills.js');
+        const { skills } = loadAllSkills(projectRoot);
+        const runSearch = async (query: string) => {
+          const usage = loadSkillUsage(projectRoot);
+          const hits = searchSkills(skills, query, { limit: 8, usageBoost: usageBoostMap(usage) });
+          if (!hits.length) {
+            push('system', `No skills match "${query}". Try broader words (e.g. "test", "review", "deploy") or /skills to browse all ${skills.length}.`);
+            scheduleRender();
+            return;
+          }
+          const items = hits.map((h) => `${T.cyan}${h.skill.name.padEnd(24)}${T.reset} ${T.grayDark}${h.snippet.slice(0, 64)}${T.reset}`);
+          const idx = await openMenu(`Skills matching "${query}" (${hits.length})`, items);
+          if (idx < 0 || idx >= hits.length) return;
+          const body = readSkillBody(hits[idx].skill, projectRoot);
+          push('system', `=== Skill: ${hits[idx].skill.name} ===\n${body || hits[idx].skill.description}`);
+          scheduleRender();
+        };
+        if (!q) {
+          const query = await ask('Search skills for:');
+          if (query.trim()) await runSearch(query.trim());
+        } else {
+          await runSearch(q);
         }
         return;
       }
@@ -1620,6 +1848,58 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       }
       return;
     }
+    if (line === '/mcp' || line.startsWith('/mcp ')) {
+      // /mcp [search <q> | add <id> | list] — 1-command MCP discovery +
+      // install into .mcp.json. No YAML hand-editing, no restart dance
+      // (doctor picks it up; the next run loads it).
+      const rest = (line === '/mcp' ? '' : line.slice(5)).trim();
+      const { searchMcpServers, addMcpServerConfig, BUILTIN_MCP_SERVERS } = await import('../tools/mcp-manage.js');
+      const [sub, ...words] = rest.split(/\s+/).filter(Boolean);
+      const query = words.join(' ');
+      if (!sub || sub === 'list') {
+        const items = BUILTIN_MCP_SERVERS.map((s) => `${T.cyan}${s.id.padEnd(24)}${T.reset}  ${T.grayDark}${s.description.slice(0, 60)}${T.reset}`);
+        const idx = await openMenu(`MCP servers (${BUILTIN_MCP_SERVERS.length} built-in)`, items);
+        if (idx >= 0 && idx < BUILTIN_MCP_SERVERS.length) {
+          const s = BUILTIN_MCP_SERVERS[idx];
+          const pick = await openMenu(s.name, ['Install into .mcp.json', 'Show install guide', 'Back']);
+          if (pick === 0) {
+            const r = addMcpServerConfig(projectRoot, s.id);
+            push('system', r.message);
+            scheduleRender();
+          } else if (pick === 1) {
+            push('system', `## ${s.name}\n${s.description}\n\nSetup: ${s.installHint ?? 'npx-bundled, no setup'}\n${s.env ? 'Env: ' + Object.keys(s.env).join(', ') : ''}`);
+            scheduleRender();
+          }
+        }
+        return;
+      }
+      if (sub === 'search') {
+        const q = query || await ask('Search MCP servers for:');
+        if (!q.trim()) return;
+        const hits = searchMcpServers(q.trim());
+        if (!hits.length) {
+          push('system', `No MCP servers match "${q.trim()}". Try /mcp list to browse all ${BUILTIN_MCP_SERVERS.length}.`);
+          scheduleRender();
+          return;
+        }
+        const idx = await openMenu(`MCP matching "${q.trim()}"`, hits.map((h) => `${T.cyan}${h.server.id.padEnd(24)}${T.reset}  ${T.grayDark}${h.snippet.slice(0, 60)}${T.reset}`));
+        if (idx < 0 || idx >= hits.length) return;
+        const r = addMcpServerConfig(projectRoot, hits[idx].server.id);
+        push('system', r.message);
+        scheduleRender();
+        return;
+      }
+      if (sub === 'add') {
+        if (!query) { push('error', 'Usage: /mcp add <server-id> (see /mcp list)'); scheduleRender(); return; }
+        const r = addMcpServerConfig(projectRoot, query);
+        push(r.ok ? 'system' : 'error', r.message);
+        scheduleRender();
+        return;
+      }
+      push('error', `Unknown /mcp command "${sub}". Use: /mcp [list|search <q>|add <id>]`);
+      scheduleRender();
+      return;
+    }
     if (line === '/history' || line === '/sessions' || line === '/resume') {
       await historySessionMenu();
       return;
@@ -1649,6 +1929,43 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     }
     if (line === '/export') { await exportSession(); return; }
     if (line === '/import') { await importFlow(); return; }
+    if (line === '/tab' || line.startsWith('/tab ')) {
+      // /tab [new [title] | close | next | prev | rename <title> | list | N] —
+      // opencode-style multi-session control from the keyboard.
+      const arg = (line === '/tab' ? '' : line.slice(5)).trim();
+      const [sub, ...restWords] = arg.split(/\s+/).filter(Boolean);
+      const titleRest = restWords.join(' ');
+      try {
+        if (!sub || sub === 'list') {
+          const rows = tabs.list().map((t) =>
+            `${t.id === activeTabId ? '▸' : ' '} ${t.index}: ${t.title}${t.busy ? ' ●running' : ''}${t.unread ? ` [${t.unread} new]` : ''}`);
+          push('system', `Tabs (${tabs.count()}/${8}):\n${rows.join('\n')}\n\nAlt+T new · Alt+W close · Alt+1-8 switch · /tab new|close|next|prev|rename|N`);
+        } else if (sub === 'new') {
+          // Boot clean: no transcript line (it would kill the new splash).
+          newTab(titleRest || undefined);
+        } else if (sub === 'close') {
+          const closing = tabs.activeTab().title;
+          closeActiveTab();
+          push('system', `Closed "${closing}". Now on ${tabs.activeTab().title}.`);
+        } else if (sub === 'next') {
+          switchTab((tabs.activeIndex() + 1) % tabs.count());
+        } else if (sub === 'prev') {
+          switchTab((tabs.activeIndex() - 1 + tabs.count()) % tabs.count());
+        } else if (sub === 'rename') {
+          if (!titleRest) { push('error', 'Usage: /tab rename <title>'); scheduleRender(); return; }
+          tabs.rename(activeTabId, titleRest);
+          scheduleRender();
+        } else if (/^[1-8]$/.test(sub)) {
+          switchTab(Number(sub) - 1);
+        } else {
+          push('error', `Unknown /tab command "${sub}". Use: /tab [new|close|next|prev|rename|list|N]`);
+        }
+      } catch (e) {
+        push('error', e instanceof Error ? e.message : String(e));
+      }
+      scheduleRender();
+      return;
+    }
     if (line === '/new' || line === '/clear-all') {
       runtime.resetSession();
       runtime.workspace.clearCheckpoint();
@@ -1913,14 +2230,20 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   const pendingImages: string[] = [];
 
   async function run(fn: () => Promise<string>, echo = true): Promise<string> {
-    state.busy = true;
+    // Origin capture: the tab that STARTED the run owns its transcript and
+    // busy flag even if the user switches tabs mid-run (background runs
+    // continue; their events badge the tab unread via onRuntimeEventFor).
+    const rs = state;
+    const tabId = activeTabId;
+    tabs.setBusy(tabId, true);
+    rs.busy = true;
     startSpinner();
     scheduleRender();
     let out = '';
     try {
       const result = await fn();
       out = result;
-      if (echo) push('assistant', result);
+      if (echo) pushTo(rs, 'assistant', result);
     } catch (e) {
       // Provider failures get a clean one-liner instead of a raw error dump,
       // and transient ones (cooldown/network/rate-limit) auto-retry ONCE after
@@ -1928,23 +2251,27 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const raw = e instanceof Error ? e.message : String(e);
       const pf = describeProviderFailure(e);
       if (pf.kind === 'transient') {
-        push('system', `◌ ${pf.headline}`);
+        pushTo(rs, 'system', `◌ ${pf.headline}`);
         scheduleRender();
         await new Promise((res) => setTimeout(res, Math.min(pf.retryAfterMs ?? 2_000, 15_000)));
         try {
           const result = await fn();
-          if (echo) push('assistant', result);
-          push('system', '✓ recovered');
+          if (echo) pushTo(rs, 'assistant', result);
+          pushTo(rs, 'system', '✓ recovered');
         } catch (e2) {
           const raw2 = e2 instanceof Error ? e2.message : String(e2);
           const pf2 = describeProviderFailure(e2);
-          push('error', pf2.kind === 'transient' ? `${pf2.headline} (still degraded — raw: ${raw2.slice(0, 160)})` : raw2.slice(0, 400));
+          pushTo(rs, 'error', pf2.kind === 'transient' ? `${pf2.headline} (still degraded — raw: ${raw2.slice(0, 160)})` : raw2.slice(0, 400));
         }
       } else {
-        push('error', raw.length > 200 ? `${pf.headline} (raw: ${raw.slice(0, 160)})` : raw);
+        pushTo(rs, 'error', raw.length > 200 ? `${pf.headline} (raw: ${raw.slice(0, 160)})` : raw);
       }
     } finally {
-      state.busy = false;
+      rs.busy = false;
+      tabs.setBusy(tabId, false);
+      // A run that finished while its tab was in the background badges once
+      // (per-event badging would pin the counter at 99 mid-stream).
+      if (tabId !== activeTabId) tabs.markUnread(tabId);
       stopSpinner();
       scheduleRender();
       // Drain the message queue: messages typed mid-run send now, in order.
@@ -2181,11 +2508,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     });
     const curIdx = themes.findIndex((t) => t.id === curTheme.id);
     state.menuSelected = Math.max(0, curIdx);
-    const idx = await openMenu('Select Color Theme (15 Styles)', items);
+    const idx = await openMenu(`Select Color Theme (${themes.length} Styles)`, items);
     if (idx < 0 || idx >= themes.length) return;
     const chosen = themes[idx];
     setTheme(chosen.id);
-    push('system', `Theme switched to ${chosen.name} — ${chosen.description}`);
+    try { applyTheme(chosen.id); } catch { /* best-effort */ }
+    push('system', `Theme switched to ${chosen.name} — saved, it will stick next launch.`);
     scheduleRender();
   }
 
@@ -2552,7 +2880,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // left raw + cursor-hidden + alt-screen = permanently frozen. A failing
     // restore must never win over finishing the restore.
     try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
-    try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}`); } catch { /* EPIPE */ }
+    try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}`); } catch { /* EPIPE */ }
     try { for (const fn of cleanupFns) fn(); } catch { /* cleanup must not block exit */ }
     try { process.exit(0); } catch { process.exitCode = 0; }
   }
@@ -2639,11 +2967,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
             const start = Math.max(0, Math.min(state.dropSelected - pageSize + 1, items.length - pageSize));
             const visibleCount = Math.min(pageSize, items.length - start);
             const h = height();
-            const statusRows = h >= 20 ? 3 : 2;
-            const innerW = Math.max(1, width() - 6);
-            const inputRows = state.input ? wrap(state.input, innerW).length : 1;
-            const composerRows = Math.min(Math.max(4, Math.floor(h / 3)), inputRows + 2);
-            const bottomRows = composerRows + statusRows + 1;
+            const { bottomRows } = chromeLayout({ w: width(), h, inputText: state.input, busy: state.busy, topRows: TAB_BAR_ROWS, indent: transcriptIndent(width()) });
             const dropTop = h - bottomRows - (visibleCount + 2) - 1;
             const dropWidth = Math.min(width() - transcriptIndent(width()), 64);
             const dropLeft = Math.max(0, Math.floor((width() - dropWidth) / 2));
@@ -2676,14 +3000,24 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         const col = Number(sgrMouse[2]);
         if (isPress) {
           const isMotion = (btn & 32) !== 0;
+          // Screen row 1 (1-based) is the pinned tab bar: clicks switch tabs
+          // or hit the opencode-style `+` button — never start selections.
+          if (row === 1 && !isMotion && (btn & 3) === 0) {
+            tabBarClick(col - 1);
+            continue;
+          }
+          // Screen row 0 is the pinned tab bar — transcript rows start below
+          // it, so convert to window-relative rows (never negative).
+          const trow = row - 1 - TAB_BAR_ROWS;
+          if (trow < 0 && !isMotion) continue;
           if (isMotion) {
-            updateSelection(row - 1, col - 1);
+            updateSelection(Math.max(0, trow), col - 1);
           } else {
             // Click-count detection for double (word) / triple (whole line)
             // selection. A click within 500ms of the last one on the same row
             // increments the count; otherwise it resets to a fresh drag start.
             const now = Date.now();
-            const r0 = row - 1;
+            const r0 = trow;
             if (state.lastClickRow === r0 && now - state.lastClickAt < 500) {
               state.clickCount += 1;
             } else {
@@ -2904,6 +3238,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
             state.input = '';
             state.cursor = 0;
           } else {
+            // First real prompt names a default tab (once — renames stick).
+            if (!text.trim().startsWith('/')) tabs.autoTitle(activeTabId, text);
             Promise.resolve(handleCommand(text)).catch((e) => {
               push('error', e instanceof Error ? `${e.message}` : String(e));
               state.busy = false;
@@ -2959,6 +3295,23 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           scheduleRender();
           i++;
           continue;
+        }
+        if (rest.length >= 2 && !rest.startsWith('\x1b[') && !rest.startsWith('\x1b]') && !rest.startsWith('\x1bO')) {
+          // Alt+key tab control (opencode-style): Alt+1..8 switch, Alt+T new,
+          // Alt+W close. Plain CSI/SS3 sequences fall through to handleEscape.
+          const alt = rest[1];
+          const isTabKey = (alt >= '1' && alt <= '8') || alt === 't' || alt === 'T' || alt === 'w' || alt === 'W';
+          if (isTabKey && !state.menuActive && !state.promptActive && !state.inspectorActive) {
+            try {
+              if (alt >= '1' && alt <= '8') switchTab(Number(alt) - 1);
+              else if (alt === 't' || alt === 'T') newTab();
+              else closeActiveTab();
+            } catch (e) {
+              push('error', e instanceof Error ? e.message : String(e));
+            }
+            i += 2;
+            continue;
+          }
         }
         if (rest.length >= 2) {
           i += 2;
@@ -3159,6 +3512,28 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     scheduleRender();
   }
 
+  /** Route one runtime's events into ITS tab's state. Background tabs reduce
+   *  silently (transcript preserved); only the active tab gets live chrome
+   *  side effects (git stats, token meter, spinner splash-cut). */
+  function onRuntimeEventFor(tabId: string, event: MochiEvent) {
+    const target = tabStates.get(tabId);
+    if (!target) return;
+    const isActive = tabId === activeTabId;
+    if (!isActive) {
+      reduceEvent(target, event as unknown as Record<string, unknown>);
+      if (event.type === 'usage:updated') {
+        target.inTokens = event.inputTokens;
+        target.outTokens = event.outputTokens;
+        target.cacheTokens = event.cacheTokens;
+        target.totalTokens = event.totalTokens;
+        if (event.costUsd !== undefined) target.totalCost = event.costUsd;
+      }
+      scheduleRender();
+      return;
+    }
+    onRuntimeEvent(event);
+  }
+
   function onRuntimeEvent(event: MochiEvent) {
     // First real event (model streaming, tools) means startup is done: finish
     // the splash immediately so it never covers live output.
@@ -3197,8 +3572,10 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // Without ?1002 a drag produces only a press+release pair — the user
     // sees no inline highlight, and copy() returns the single character
     // that was clicked. That's the "highlight doesn't work" bug.
+    const initialBg = canvasBg();
+    const oscBg = initialBg ? OSC_BG_BLACK : '';
     try {
-      process.stdout.write(ALT_ENTER + NO_AUTOWRAP + HIDE + '\x1b[?1000h\x1b[?1002h\x1b[?1006h' + BRACKET_PASTE_ON);
+      process.stdout.write(ALT_ENTER + oscBg + NO_AUTOWRAP + HIDE + '\x1b[?1000h\x1b[?1002h\x1b[?1006h' + BRACKET_PASTE_ON);
     } catch { /* EPIPE or dead tty */ }
     try { process.stdin.setRawMode?.(true); } catch { /* not a tty / errno 5 */ }
     try { process.stdin.resume(); } catch { /* ignore */ }
@@ -3219,7 +3596,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       // skips the remaining resets and the terminal stays frozen.
       try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
       try {
-        process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}\x1b[?1000l\x1b[?1002l\x1b[?1006l` + BRACKET_PASTE_OFF);
+        process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}\x1b[?1000l\x1b[?1002l\x1b[?1006l` + BRACKET_PASTE_OFF);
       } catch { /* EPIPE on a dead pane */ }
     };
     process.on('exit', exitListener);
@@ -3229,7 +3606,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     process.on('SIGINT', signalExit);
     process.on('SIGTERM', signalExit);
     process.on('SIGHUP', signalExit);
-    runtime.events.onAll(onRuntimeEvent);
+    subscribeTab(activeTabId, runtime);
     void refreshGitStats(); // seed the status bar diff stats
     cleanupFns = [
       () => process.stdin.off('data', keyListener),

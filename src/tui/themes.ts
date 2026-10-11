@@ -136,6 +136,17 @@ function relativeLuminance([r, g, b]: [number, number, number]): number {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
+/** True for dark-background themes (light text on dark surface),
+ *  decided by comparing fg vs bg luminance — no per-theme flag to drift.
+ *  The TUI forces a pure-black canvas behind dark themes (opencode parity);
+ *  light themes stay transparent so the terminal background shows. */
+export function themeIsDark(t: MochiTheme): boolean {
+  const fg = parseThemeRgb(t.colors.fg, 38);
+  const bg = parseThemeRgb(t.colors.bgUser, 48) ?? parseThemeRgb(t.colors.bgUser, 38);
+  if (!fg || !bg) return true;
+  return relativeLuminance(fg) > relativeLuminance(bg);
+}
+
 /** WCAG contrast ratio of a theme's body text (fg) on the user-message
  *  surface (bgUser). Null when either side isn't truecolor-parseable. */
 export function themeContrastRatio(t: MochiTheme): number | null {
@@ -150,6 +161,19 @@ export function themeContrastRatio(t: MochiTheme): number | null {
 function downgradeColorCodes(s: string): string {
   return s.replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g, (_m, r: string, g: string, b: string) =>
     `\x1b[38;5;${rgbTo256(Number(r), Number(g), Number(b))}m`);
+}
+
+/** Canvas background escape for the TUI frame writer (opencode parity):
+ *  dark themes paint every row over explicit black so the terminal profile
+ *  color can never show through. Truecolor terminals get 24-bit black;
+ *  256-color terminals get palette black (16) — 24-bit codes degrade
+ *  unpredictably there (gray tint / garbage cells). Dumb terminals,
+ *  NO_COLOR, and light themes stay fully transparent. */
+export function canvasBg(): string {
+  if (honorsNoColor()) return '';
+  if ((process.env.TERM ?? '').toLowerCase() === 'dumb') return '';
+  if (!themeIsDark(getCurrentTheme())) return '';
+  return supportsTruecolor() ? '\x1b[48;2;0;0;0m' : '\x1b[48;5;16m';
 }
 
 /** True when the terminal advertises 24-bit color support. */
@@ -1043,6 +1067,57 @@ export const THEMES: MochiTheme[] = [
     ],
   },
   {
+    id: 'mochi-purple',
+    name: 'Mochi Purple',
+    description: 'Signature mochi look — crisp white + violet on pure black',
+    colors: {
+      act: '\x1b[38;2;167;139;250m',
+      plan: '\x1b[38;2;216;180;254m',
+      success: '\x1b[38;2;134;239;172m',
+      error: '\x1b[38;2;252;165;165m',
+      warning: '\x1b[38;2;253;224;71m',
+      gray: '\x1b[38;2;161;153;185m',
+      grayDark: '\x1b[38;2;112;104;144m',
+      fg: '\x1b[38;2;248;248;255m',
+      bgUser: '\x1b[48;2;14;7;26m',
+      rule: '\x1b[38;2;139;92;246m',
+      pink: '\x1b[38;2;232;121;249m',
+      magenta: '\x1b[38;2;217;70;239m',
+      violet: '\x1b[38;2;139;92;246m',
+      cyan: '\x1b[38;2;165;180;252m',
+      lime: '\x1b[38;2;190;242;100m',
+      orange: '\x1b[38;2;251;146;60m',
+      teal: '\x1b[38;2;94;234;212m',
+    },
+    roleColors: {
+      assistantGutter: '\x1b[38;2;139;92;246m',
+      assistantText: '\x1b[38;2;248;248;255m',
+      toolMarker: '\x1b[38;2;167;139;250m',
+      userGutter: '\x1b[38;2;217;70;239m',
+      userFg: '\x1b[38;2;255;255;255m',
+      userBg: '\x1b[48;2;14;7;26m',
+      thoughtGutter: '\x1b[38;2;112;104;144m',
+      taskMark: '\x1b[38;2;165;180;252m',
+      goalMark: '\x1b[38;2;232;121;249m',
+      codeKeyword: '\x1b[38;2;167;139;250m',
+      codeString: '\x1b[38;2;134;239;172m',
+      codeNumber: '\x1b[38;2;253;224;71m',
+      codeComment: '\x1b[38;2;112;104;144m',
+      codePunct: '\x1b[38;2;94;234;212m',
+      codeType: '\x1b[38;2;216;180;254m',
+      codeFn: '\x1b[38;2;165;180;252m',
+      mdHeading: '\x1b[38;2;216;180;254m',
+      mdLink: '\x1b[38;2;165;180;252m',
+      mdBold: '\x1b[38;2;255;255;255m',
+      thinkingLabel: '\x1b[38;2;139;92;246m',
+      reasoningBadge: '\x1b[38;2;216;180;254m',
+      reasonBadge: { low: '\x1b[38;2;165;180;252m', medium: '\x1b[38;2;134;239;172m', high: '\x1b[38;2;216;180;254m', max: '\x1b[38;2;252;165;165m' },
+    },
+    splashStops: [
+      [10, 5, 20], [76, 29, 149], [139, 92, 246], [196, 181, 253], [248, 248, 255],
+    ],
+  },
+  {
     id: 'paper-light',
     name: 'Paper Light',
     description: 'Ink on paper — dark indigo text on warm paper for light terminals and bright rooms',
@@ -1153,15 +1228,21 @@ export function resolveRoleColors(theme: MochiTheme): RoleColors {
   };
 }
 
+/** Home directory honoring $HOME overrides (containers, sudo, tests):
+ *  os.homedir() reads the passwd entry and ignores $HOME. */
+export function homeDir(): string {
+  return process.env.HOME || homedir();
+}
+
 function getThemeConfigPaths(): string[] {
   return [
-    resolve(homedir(), '.config', 'mochi', 'theme.json'),
-    resolve(homedir(), '.mochi', 'theme.json'),
+    resolve(homeDir(), '.config', 'mochi', 'theme.json'),
+    resolve(homeDir(), '.mochi', 'theme.json'),
     resolve(process.cwd(), '.mochi', 'theme.json'),
   ];
 }
 
-function loadSavedTheme(): MochiTheme {
+export function loadSavedTheme(): MochiTheme {
   const envTheme = process.env.MOCHI_THEME;
   if (envTheme) {
     const found = getTheme(envTheme);
@@ -1180,7 +1261,7 @@ function loadSavedTheme(): MochiTheme {
   }
   // Check main config.json
   try {
-    const cfgPath = resolve(homedir(), '.config', 'mochi', 'config.json');
+    const cfgPath = resolve(homeDir(), '.config', 'mochi', 'config.json');
     if (existsSync(cfgPath)) {
       const data = JSON.parse(readFileSync(cfgPath, 'utf8'));
       if (data?.theme) {
@@ -1189,7 +1270,7 @@ function loadSavedTheme(): MochiTheme {
       }
     }
   } catch {}
-  return THEMES.find((t) => t.id === 'royal-orchid') ?? THEMES[0];
+  return THEMES.find((t) => t.id === 'mochi-purple') ?? THEMES[0];
 }
 
 let currentTheme: MochiTheme = loadSavedTheme();
@@ -1224,7 +1305,7 @@ export function applyTheme(id: string): MochiTheme {
     }
     // Also save to main config.json
     try {
-      const cfgPath = resolve(homedir(), '.config', 'mochi', 'config.json');
+      const cfgPath = resolve(homeDir(), '.config', 'mochi', 'config.json');
       if (existsSync(cfgPath)) {
         const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
         cfg.theme = found.id;

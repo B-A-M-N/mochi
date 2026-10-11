@@ -24,7 +24,7 @@ import type { MochiConfig } from './types.js';
 // Resolve the version from package.json when running from source; when Mochi is
 // compiled to a standalone binary there is no package.json next to it, so fall
 // back to the constant (kept in sync with package.json at build time).
-let VERSION = '0.20.0';
+let VERSION = '0.22.0';
 try {
   const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../package.json');
   VERSION = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
@@ -120,7 +120,7 @@ function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; p
 }
 
 /** CLI flag overrides plus the two UI-contract markers the permission layer
- *  reads without config hacks (typed — no `as any` at the boundary). */
+ *  reads without config hacks (typed — no loose casts at the boundary). */
 export interface FlagOverrides extends Partial<MochiConfig> {
   __yolo?: boolean;
   __uncensored?: boolean;
@@ -174,7 +174,10 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
     overrides.__yolo = true;
     process.env.MOCHI_UNCENSORED = '1';
   } else if (flags.yolo || flags.y || flags['dangerously-skip-permissions'] ||
-      process.env.MOCHI_DANGEROUSLY_SKIP_PERMISSIONS === '1') {
+      process.env.MOCHI_DANGEROUSLY_SKIP_PERMISSIONS === '1' ||
+      process.env.MOCHI_YOLO === '1') {
+    // MOCHI_YOLO=1 is the persistent admin switch (export it in .bashrc):
+    // same as --yolo — auto-approve everything, no per-tool prompts.
     overrides.safety = { ...(overrides.safety ?? {} as MochiConfig['safety']), mode: 'auto' as const };
     overrides.__yolo = true;
   }
@@ -226,6 +229,7 @@ Usage:
   mochi termix ["<task>"] [--coms|--sep] [--sessions N]
   mochi reasoning [low|med|high|max] # view or set reasoning depth
   mochi tui
+  mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
   mochi perf
   mochi "<prompt>" --plan            # plan-then-act: research + return a plan, no edits
 
@@ -702,6 +706,47 @@ async function main() {
   if (first === 'tui') {
     const { launchTui } = await import('./tui/app.js');
     await launchTui(runtime);
+    return;
+  }
+  if (first === 'term' || first === 'terminal' || first === 'open') {
+    // Native terminal window: Mochi in its OWN emulator (black bg, monospace,
+    // known geometry) instead of inheriting the caller's terminal quirks.
+    const { launchInNewTerminal } = await import('./terminal-launch.js');
+    // Parse RAW argv (the global parser eats a bare `--` plus the word after
+    // it as a flag value, which would swallow forwarded subcommands).
+    const aliasIdx = process.argv.findIndex((a) => a === 'term' || a === 'terminal' || a === 'open');
+    const raw = aliasIdx >= 0 ? process.argv.slice(aliasIdx + 1) : [];
+    const fwd: string[] = [];
+    let dryRun = false;
+    let title = 'Mochi';
+    let cols = 190;
+    let rows = 45;
+    for (let i = 0; i < raw.length; i++) {
+      const a = raw[i];
+      if (a === '--dry-run') dryRun = true;
+      else if (a === '--title' && i + 1 < raw.length) title = raw[++i];
+      else if (a.startsWith('--title=')) title = a.slice('--title='.length);
+      else if (a === '--geometry' && i + 1 < raw.length) {
+        const m = raw[++i].match(/(\d+)\s*x\s*(\d+)/i);
+        if (m) { cols = Number(m[1]); rows = Number(m[2]); }
+      } else if (a.startsWith('--geometry=')) {
+        const m = a.slice('--geometry='.length).match(/(\d+)\s*x\s*(\d+)/i);
+        if (m) { cols = Number(m[1]); rows = Number(m[2]); }
+      } else if (a === '--') {
+        fwd.push(...raw.slice(i + 1));
+        break;
+      } else fwd.push(a);
+    }
+    const r = await launchInNewTerminal(fwd, { title, cols, rows });
+    if (dryRun || !r.ok) {
+      if (r.command) console.log(['MOCHI-TERM:'].concat(r.command).join(' '));
+      if (!r.ok) {
+        console.error(r.error ?? 'Could not open a terminal window.');
+        process.exit(1);
+      }
+      return;
+    }
+    console.log(`Opened Mochi in a new ${r.emulator} window (pid ${r.pid}).`);
     return;
   }
   if (first === 'reasoning' || first === 'depth') {
@@ -1335,7 +1380,7 @@ async function main() {
     const modeFlag = flags.mode ? String(flags.mode).toLowerCase() : 'auto';
     const strategyFlag = flags.strategy ? String(flags.strategy).toLowerCase() : 'hybrid';
     // Validate CLI strings against the engine unions (invalid → default with
-    // a warning) instead of casting arbitrary input with `as any`.
+    // a warning) instead of casting arbitrary input loosely.
     const { CHAMELEON_MODES, STALL_STRATEGIES } = await import('./cognitive/chameleon.js');
     const mode = (CHAMELEON_MODES as readonly string[]).includes(modeFlag) ? modeFlag : 'auto';
     const strategy = (STALL_STRATEGIES as readonly string[]).includes(strategyFlag) ? strategyFlag : 'hybrid';

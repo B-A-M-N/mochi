@@ -63,7 +63,7 @@ export function synthesizeDenseDataset(task: string, cwd?: string, difficultyMod
       for (const word of words.slice(0, 3)) {
         const res = querySymbolGraphSync(root, `SELECT file, name, line, kind FROM symbols WHERE name LIKE '%${word.replace(/['"]/g, '')}%' LIMIT 3`);
         if (!res || !('rows' in res) || !Array.isArray(res.rows)) continue;
-        for (const row of res.rows as any[]) {
+        for (const row of res.rows as Array<{ file?: unknown; name?: unknown; line?: unknown; kind?: unknown }>) {
           if (row?.file && row?.name) {
             foundSymbols.push(`${row.file}:${row.line ?? 1} (${row.kind ?? 'symbol'} ${row.name})`);
           }

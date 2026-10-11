@@ -13,7 +13,17 @@ export function createAnthropicProvider(config: ProviderConfig) {
   const base = config.baseUrl.replace(/\/$/, '');
   const model = config.model;
 
-  const sysMsg = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
+  // Prompt-cache breakpoints (mirrors the OpenAI mapper's MCH-38 pattern):
+  // the system prompt is byte-stable across turns, so mark it as one cached
+  // prefix block. Without this Anthropic bills every turn at full input price
+  // (~5KB system prompt × every iteration). String form when empty preserves
+  // the old wire shape exactly.
+  const sysText = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
+  const sysMsg = (msgs: ChatMessage[]) => {
+    const text = sysText(msgs);
+    if (!text) return undefined;
+    return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+  };
   const bodyMsg = (m: ChatMessage) => {
     if (m.role === 'system') return null;
     if (m.role === 'tool') {

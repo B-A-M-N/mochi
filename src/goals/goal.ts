@@ -22,6 +22,11 @@ export interface GoalResult {
   goal: Goal;
   completedTasks: Task[];
   failedTasks: Task[];
+  /** Union of every task run's AgentResult.filesModified (deduped, in-run
+   *  order): the files actually touched on disk, including partial work from
+   *  failed tasks. SDK/daemon/TUI consumers read THIS, not Task (which
+   *  carries no file list). */
+  filesModified: string[];
   summary: string;
   tokensUsed: number;
   costUsd: number;
@@ -64,6 +69,17 @@ export class GoalEngine {
 
   /** MCH-81: per-task token/cost attribution, filled as tasks finish. */
   private taskCosts: Array<{ title: string; tokens: number; costUsd: number }> = [];
+
+  /** Files touched on disk across the current goal run (deduped, in-run
+   *  order), filled as tasks finish — success or partial failure alike.
+   *  Reset per runGoal alongside goalStats. */
+  private goalFiles: string[] = [];
+
+  private noteGoalFiles(files: readonly string[] | undefined): void {
+    for (const f of files ?? []) {
+      if (typeof f === 'string' && f && !this.goalFiles.includes(f)) this.goalFiles.push(f);
+    }
+  }
 
   /** MCH-74: push mid-run guidance to every live agent of this engine.
    *  Returns the number of agents that received it (0 = nothing running). */
@@ -132,7 +148,7 @@ export class GoalEngine {
       return [task];
     }
 
-    this.events.emit({ type: 'agent:log', agentId: 'system', message: 'Planning tasks…' } as any);
+    this.events.emit({ type: 'agent:log', agentId: 'system', message: 'Planning tasks…' });
     const provider = createProvider(this.config.model, 'reasoning');
     const ctx = new ContextEngine(this.config, this.cwd);
     ctx.setGoal(goal.objective);
@@ -213,6 +229,7 @@ Return ONLY the JSON array, no markdown.`;
         goal,
         completedTasks: [],
         failedTasks: [],
+        filesModified: [],
         summary: 'Goal blocked by before_goal hook.',
         tokensUsed: 0,
         costUsd: 0,
@@ -220,6 +237,7 @@ Return ONLY the JSON array, no markdown.`;
       };
     }
     this.goalStats = { tokens: 0, duration: 0 };
+    this.goalFiles = [];
     const budget = new BudgetEngine(this.config.safety);
     budget.start();
     // MCH-79: expose the run's budget ledger so the TUI /usage card can show
@@ -358,6 +376,7 @@ Return ONLY the JSON array, no markdown.`;
       tokensUsed: this.goalStats.tokens,
       costUsd: budget.snapshot(this.config.model.model).usedCostUsd,
       durationMs: this.goalStats.duration,
+      filesModified: [...this.goalFiles],
     };
     await this.hooks.runAfter('after_goal', { goal: goal.id, status: goal.status });
     // Persist real run failures into workspace memory so later runs in this
@@ -453,6 +472,9 @@ Return ONLY the JSON array, no markdown.`;
     // MCH-81: per-task cost attribution for the goal summary card (guard: agent
     // run results don't always carry costUsd — crash found by live probe).
     this.taskCosts.push({ title: task.title, tokens: result.tokensUsed ?? 0, costUsd: result.costUsd ?? 0 });
+    // Files touched on disk (success or partial failure alike) accumulate at
+    // the goal level so SDK/daemon/TUI get a true file list.
+    this.noteGoalFiles(result.filesModified);
     if (hasSqlite() && (sessionId || goal.id)) {
       try {
         const sid = sessionId ?? this.store.begin({ goalId: goal.id });

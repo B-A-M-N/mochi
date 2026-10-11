@@ -330,7 +330,7 @@ export const securityAuditTool: Tool = {
   async execute(args, ctx) {
     const path = typeof args.path === 'string' ? args.path : undefined;
     const includeTests = Boolean(args.include_tests || args.includeTests);
-    const minSeverity = typeof args.min_severity === 'string' ? (args.min_severity.toUpperCase() as any) : undefined;
+    const minSeverity = typeof args.min_severity === 'string' ? (args.min_severity.toUpperCase() as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | undefined) : undefined;
     const findings = runSecurityAudit(ctx.cwd, { path, includeTests, minSeverity });
     return formatSecurityReport(findings);
   },

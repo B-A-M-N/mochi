@@ -17,10 +17,15 @@ export const chameleonTool: Tool = {
     const task = String(args.task ?? '').trim();
     if (!task) throw new Error('chameleon requires a task');
     const engine = new ChameleonEngine(ctx.config);
+    // Validate tool args against the engine unions (same rule as the CLI:
+    // unknown strings fall back with no silent misbehavior).
+    const { CHAMELEON_MODES, STALL_STRATEGIES } = await import('../cognitive/chameleon.js');
+    const modeFlag = typeof args.mode === 'string' ? args.mode.toLowerCase() : 'auto';
+    const strategyFlag = typeof args.strategy === 'string' ? args.strategy.toLowerCase() : 'hybrid';
     const r = await engine.enhance({
       task,
-      mode: (args.mode as any) ?? 'auto',
-      strategy: (args.strategy as any) ?? 'hybrid',
+      mode: (CHAMELEON_MODES as readonly string[]).includes(modeFlag) ? (modeFlag as import('../cognitive/chameleon.js').ChameleonMode) : 'auto',
+      strategy: (STALL_STRATEGIES as readonly string[]).includes(strategyFlag) ? (strategyFlag as import('../cognitive/chameleon.js').StallStrategy) : 'hybrid',
       cwd: ctx.cwd,
     });
     return `[Chameleon ${r.mode} (${r.strategy}) — ${r.strategies.length} passes, ${r.tokensUsed} tokens, ${r.durationMs}ms]\n\n${r.context}`;

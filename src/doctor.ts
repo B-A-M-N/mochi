@@ -9,6 +9,7 @@ import { listJobs } from './cron.js';
 import { loadSkillFile, staleSkills, skillConflicts } from './skills.js';
 import { SessionStore } from './session-store.js';
 import { runRetention } from './retention.js';
+import { loadSavedTheme, getTheme, getCurrentTheme } from './tui/themes.js';
 
 export interface SkillHealthEntry {
   name: string;
@@ -31,6 +32,7 @@ export interface DoctorReport {
   daemon: { running: boolean; port?: number; jobs: number };
   cron: { jobs: number };
   sessions: { sqlite: boolean; count: number };
+  theme: { id: string; name: string; stuck: boolean };
   diagnostics: { typescript: boolean; python: boolean };
   skills: { total: number; healthy: number; degraded: SkillHealthEntry[] };
   problems: string[];
@@ -155,6 +157,7 @@ export async function doctorReport(opts: {
     daemon: { running: opts.daemon?.running ?? false, port: opts.daemon?.port, jobs: cronJobs },
     cron: { jobs: cronJobs },
     sessions: { sqlite, count: sessionCount },
+  theme: currentThemeInfo(),
     diagnostics: { typescript: tsAvailable, python: pyAvailable },
     skills: { total: totalSkills, healthy: healthySkills, degraded: degradedSkills },
     problems,
@@ -172,6 +175,20 @@ export async function doctorReport(opts: {
     }
   }
   return report;
+}
+
+/** Live UI theme info. `stuck` is true when the saved theme id is not
+ *  registered in THIS build (stale binary still running) — the user must
+ *  relaunch for theming fixes to take effect. */
+export function currentThemeInfo(): { id: string; name: string; stuck: boolean } {
+  try {
+    const saved = loadSavedTheme();
+    const live = getCurrentTheme();
+    const known = getTheme(saved.id);
+    return { id: live.id, name: live.name, stuck: !known };
+  } catch {
+    return { id: 'unknown', name: 'unknown', stuck: false };
+  }
 }
 
 /** Human-readable doctor output. */
@@ -192,6 +209,7 @@ export function formatDoctor(r: DoctorReport): string {
     `  daemon        ${ok(r.daemon.running)} ${r.daemon.running ? `running on :${r.daemon.port}` : 'not running'}`,
     `  diagnostics   TS:${r.diagnostics.typescript ? 'yes' : 'no'} Python:${r.diagnostics.python ? 'yes' : 'no'}`,
     `  skills        ${ok(r.skills.degraded.length === 0)} ${skillLine}`,
+    `  theme         ${r.theme.id} (${r.theme.name})${r.theme.stuck ? '  STUCK — relaunch the TUI to pick up theming fixes' : ''}`,
     '',
     ...(r.problems.length === 0 ? ['No problems detected.'] : [`Problems (${r.problems.length}):`, ...r.problems.map((p) => `  • ${p}`)]),
   ].join('\n');

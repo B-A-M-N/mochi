@@ -52,9 +52,13 @@ export const R: RoleColors = resolveRoleColors(adaptThemeColors(getCurrentTheme(
 
 /** Switch active theme dynamically. Updates T (palette) AND R (role colors)
  *  in place so any code that has a reference to either sees the new theme
- *  immediately without re-importing. */
+ *  immediately without re-importing. Paint-only: NEVER persists (persistence
+ *  is an explicit user action via applyTheme — auto-persisting here once
+ *  cemented a stale fallback over the user's real theme files). */
 export function setTheme(themeId: string): MochiTheme {
-  const t = adaptThemeColors(applyTheme(themeId));
+  const found = getTheme(themeId);
+  if (!found) return getCurrentTheme();
+  const t = adaptThemeColors(found);
   Object.assign(T, t.colors);
   Object.assign(R, resolveRoleColors(t));
   return t;
@@ -135,6 +139,12 @@ export function thinkingLine(frame: number, note = ''): string {
   return `${spinnerColored(frame)} ${R.thinkingLabel}Thinking…${T.reset} ${spinnerSweep(frame, 8)}${note_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
+/** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
+ *  theme token. Theme grayDark renders as a VISIBLE gray bar (12+10+6 gray
+ *  blocks at idle) — the "grey bars" defect. This fixed dim track reads as
+ *  empty on black canvases and as a subtle rail on light ones. */
+const TRACK = '\x1b[38;2;58;54;70m';
+
 // ---- jcode-style animated context + cache bars ----------------------------
 export interface GradientBar {
   text: string;
@@ -175,7 +185,7 @@ export function gradientContextBar(used: number, total: number | undefined, widt
         ? `${T.bold}${rgb(255, 255, 255)}█${T.reset}`
         : `${rgb(c[0], c[1], c[2])}█${T.reset}`);
     } else {
-      cells.push(`${T.grayDark}░${T.reset}`);
+      cells.push(`${TRACK}░${T.reset}`);
     }
   }
   return { text: cells.join(''), pct };
@@ -196,7 +206,7 @@ export function gradientCacheBar(hitRate: number, width = 10, tick = 0): Gradien
         ? `${T.bold}${rgb(220, 255, 200)}▪${T.reset}`
         : `${rgb(c[0], c[1], c[2])}▪${T.reset}`);
     } else {
-      cells.push(`${T.grayDark}▪${T.reset}`);
+      cells.push(`${TRACK}▪${T.reset}`);
     }
   }
   return { text: cells.join(''), pct };
@@ -283,11 +293,18 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
   const toggle = width >= 78 ? fullToggle : width >= 56 ? compactToggle : miniToggle;
   const toggleLen = visibleLen(toggle);
 
+  // Level-keyed badge color with a safe fallback: an unknown level name can
+  // never print `[object Object]` (the old `?? R.reasonBadge` fallback did
+  // exactly that when the key missed, since reasonBadge is an object).
+  const badgeFor = (lvl: string): string => {
+    const hit = (R.reasonBadge as Record<string, string | undefined>)[lvl.toLowerCase()];
+    return typeof hit === 'string' ? hit : R.reasoningBadge;
+  };
   const reasoningBadge = m.reasoningLevel
     ? width >= 70
-      ? ` ${(R.reasonBadge as any)[m.reasoningLevel] ?? R.reasoningBadge}${T.bold}[REASON: ${m.reasoningLevel.toUpperCase()}]${T.reset}`
+      ? ` ${badgeFor(m.reasoningLevel)}${T.bold}[REASON: ${m.reasoningLevel.toUpperCase()}]${T.reset}`
       : width >= 48
-        ? ` ${(R.reasonBadge as any)[m.reasoningLevel] ?? R.reasoningBadge}${T.bold}[${m.reasoningLevel.toUpperCase()}]${T.reset}`
+        ? ` ${badgeFor(m.reasoningLevel)}${T.bold}[${m.reasoningLevel.toUpperCase()}]${T.reset}`
         : ''
     : '';
 
@@ -303,12 +320,12 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
   let barText = '';
   if (width >= 82) {
     barText = bar
-      ? ` ${T.fg}${bar.filled}${T.grayDark}${bar.empty}${T.reset} ${T.gray}${usage}${T.reset}`
+      ? ` ${T.fg}${bar.filled}${TRACK}${bar.empty}${T.reset} ${T.gray}${usage}${T.reset}`
       : ` ${T.gray}${usage}${T.reset}`;
   } else if (width >= 62) {
     const shortUsage = m.totalTokens >= 1000 ? `${(m.totalTokens / 1000).toFixed(1)}k tok` : `${m.totalTokens} tok`;
     barText = bar
-      ? ` ${T.fg}${bar.filled.slice(0, 4)}${T.grayDark}${bar.empty.slice(0, 4)}${T.reset} ${T.gray}${shortUsage}${T.reset}`
+      ? ` ${T.fg}${bar.filled.slice(0, 4)}${TRACK}${bar.empty.slice(0, 4)}${T.reset} ${T.gray}${shortUsage}${T.reset}`
       : ` ${T.gray}${shortUsage}${T.reset}`;
   } else if (width >= 46) {
     const shortTokens = m.totalTokens >= 1000 ? `${(m.totalTokens / 1000).toFixed(1)}k` : `${m.totalTokens}`;
@@ -471,7 +488,7 @@ export function renderMetricGauge(label: string, value: number, max: number, uni
   const filled = Math.round(ratio * width);
   const empty = Math.max(0, width - filled);
   const color = ratio < 0.6 ? R.contextLow : ratio < 0.85 ? R.contextMid : R.contextHigh;
-  const bar = `${color}${'█'.repeat(filled)}${T.grayDark}${'░'.repeat(empty)}${T.reset}`;
+  const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${T.reset}`;
   const pct = Math.round(ratio * 100);
   const formattedVal = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${value}`;
   const formattedMax = max >= 1000 ? `${(max / 1000).toFixed(1)}k` : `${max}`;
@@ -1091,6 +1108,7 @@ export function composerBottomRule(width: number): string {
   return `${T.rule}└${'─'.repeat(inner)}┘${T.reset}`;
 }
 
+
 /** Hint line rendered ABOVE the composer box, left-aligned under the
  *  auto-approve row (user request). Previously lived inside the bottom
  *  border, where it clipped when the input wrapped to the last row. */
@@ -1247,7 +1265,7 @@ export function splashFrame(tick: number, width: number, version: string, progre
         barCells.push(`${rgb(pulseColor[0], pulseColor[1], pulseColor[2])}━${T.reset}`);
       }
     } else {
-      barCells.push(`${T.grayDark}─${T.reset}`);
+      barCells.push(`${TRACK}─${T.reset}`);
     }
   }
 

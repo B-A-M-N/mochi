@@ -105,7 +105,7 @@ export function withFailover(chain: RawProvider[], primaryName: string): RawProv
       ? `All ${chain.length} model providers (${primaryName} + fallbacks) failed:\n${errors.join('\n')}`
       : (lastErr instanceof Error ? lastErr.message : String(lastErr ?? 'Unknown error'));
     const combinedErr = new Error(combinedMsg);
-    (combinedErr as any).cause = lastErr;
+    (combinedErr as Error & { cause?: unknown }).cause = lastErr;
     throw combinedErr;
   }
 
@@ -126,7 +126,7 @@ export function withFailover(chain: RawProvider[], primaryName: string): RawProv
       ? `All ${chain.length} model providers (${primaryName} + fallbacks) failed:\n${errors.join('\n')}`
       : (lastErr instanceof Error ? lastErr.message : String(lastErr ?? 'Unknown error'));
     const combinedErr = new Error(combinedMsg);
-    (combinedErr as any).cause = lastErr;
+    (combinedErr as Error & { cause?: unknown }).cause = lastErr;
     throw combinedErr;
   }
 

@@ -7,16 +7,16 @@ import type { EventBus } from '../events.js';
 import type { Workspace } from '../workspace.js';
 import type { MochiConfig } from '../types.js';
 import type { AgentResult } from '../agent/loop.js';
+import type { ReadCache } from '../tools/types.js';
 
 export type CapabilityKind = 'native' | 'mcp' | 'acp' | 'subagent' | 'skill';
 
 export type CapabilityPermissionLevel = 'ALLOW' | 'DENY' | 'ASK' | 'SANDBOX';
 
-export interface ReadCache {
-  get(path: string): string | undefined;
-  set(path: string, content: string): void;
-  invalidate(path?: string): void;
-}
+// NOTE: the read cache is the tools-layer Map (mtime/size/content entries),
+// shared by reference with the agent loop — a single definition in
+// tools/types.ts. Do NOT reintroduce a second shape here; the last duplicate
+// hid a real context incompatibility behind `as any`.
 
 export interface CapabilityContext {
   readonly cwd: string;

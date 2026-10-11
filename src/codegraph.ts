@@ -3,6 +3,7 @@ import * as fsp from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, relative, dirname } from 'node:path';
 import type * as ts from 'typescript';
+import type * as TreeSitter from 'web-tree-sitter';
 import { hasSqlite as driverAvailable, openDb, type SqliteDb } from './sqlite.js';
 import { mutationGeneration } from './tools/fs-signal.js';
 
@@ -154,7 +155,7 @@ function indexFile(file: string, rel: string, database: SqliteDb): void {
 // ---------------------------------------------------------------------------
 export type ParserBackend = 'tsc' | 'tree-sitter';
 
-let _Parser: any = null;              // web-tree-sitter Parser class (post-init)
+let _Parser: typeof TreeSitter.Parser | null = null; // web-tree-sitter Parser class (post-init)
 const _languages = new Map<LanguageId, any>(); // LanguageId -> Parser.Language
 let _tsInitError = '';
 
@@ -212,7 +213,7 @@ function nameOf(node: any): string | undefined {
 // for exactly one grammar. MOCHI_LIGHT / MOCHI_NO_EMBED / MOCHI_NO_INDEX skip
 // the parser entirely, making light mode genuinely zero-parser + zero-embed.
 
-let _mod: any = null;                 // web-tree-sitter module (post-init)
+let _mod: typeof TreeSitter | null = null;   // web-tree-sitter module (post-init)
 let _corePromise: Promise<boolean> | null = null;
 const _grammarPromises = new Map<string, Promise<boolean>>();
 let _availableCache: boolean | null = null;
@@ -244,8 +245,8 @@ async function ensureCore(): Promise<boolean> {
     _corePromise = (async () => {
       try {
         const req = createRequire(import.meta.url);
-        const mod = await import('web-tree-sitter' as any);
-        const Parser = mod.Parser as any;
+        const mod: typeof TreeSitter = await import('web-tree-sitter');
+        const Parser = mod.Parser;
         const wasmPath = req.resolve('web-tree-sitter/web-tree-sitter.wasm');
         await Parser.init({ locateFile: () => wasmPath });
         _mod = mod;
@@ -270,11 +271,13 @@ export async function ensureLanguage(lang: LanguageId | string): Promise<boolean
   if (!p) {
     p = (async () => {
       try {
+        const mod = _mod;
+        if (!mod) return false;
         const req = createRequire(import.meta.url);
         const pkgJson = req.resolve(`${spec.pkg}/package.json`);
         const wasmFile = resolve(dirname(pkgJson), spec.file);
         const grammarBuf = readFileSync(wasmFile);
-        const grammar = await _mod.Language.load(grammarBuf);
+        const grammar = await mod.Language.load(grammarBuf);
         _languages.set(lang as LanguageId, grammar);
         return true;
       } catch (e) {
@@ -373,10 +376,13 @@ function tsIndexFile(file: string, rel: string, database: SqliteDb): void {
   if (!grammar) return;
   let text: string;
   try { text = readFileSync(file, 'utf8'); } catch { return; }
+  const ParserClass = _Parser;
+  if (!ParserClass) return;
   try {
-    const parser = new _Parser();
+    const parser = new ParserClass();
     parser.setLanguage(grammar);
     const tree = parser.parse(String(text));
+    if (!tree) return;
     const ins = database.prepare('INSERT INTO symbols(name,line,kind,file,rel,body) VALUES (?,?,?,?,?,?)');
     const callIns = database.prepare('INSERT INTO calls(callee,caller,kind,file,rel,line) VALUES (?,?,?,?,?,?)');
     const kinds = DECL_KINDS[lang] ?? {};
@@ -512,7 +518,7 @@ export async function findCallers(cwd: string, name: string): Promise<string> {
   // Graph answer first: exact call edges recorded at index time. This catches
   // cross-file and cross-language calls with the caller's enclosing symbol,
   // which a line grep cannot attribute.
-  const edges = database.prepare('SELECT caller,rel,line FROM calls WHERE callee=? ORDER BY rel,line').all(name) as any[];
+  const edges = database.prepare('SELECT caller,rel,line FROM calls WHERE callee=? ORDER BY rel,line').all(name) as Array<{ caller: string; rel: string; line: number }>;
   const graphHits: string[] = [];
   if (edges.length > 0) {
     for (const e of edges.slice(0, 12)) {
@@ -526,7 +532,7 @@ export async function findCallers(cwd: string, name: string): Promise<string> {
   // declaration itself so the answer shows call SITES only.
   const q = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
   const declSet = new Set<string>();
-  for (const r of database.prepare('SELECT file,line FROM symbols WHERE name=?').all(name) as any[]) {
+  for (const r of database.prepare('SELECT file,line FROM symbols WHERE name=?').all(name) as Array<{ file: string; line: number }>) {
     declSet.add(`${r.file}:${r.line}`);
   }
   const hits: string[] = graphHits;
@@ -554,8 +560,8 @@ export async function typeHierarchy(cwd: string, name: string): Promise<string> 
   if (!hasSqlite()) return `Code index unavailable on this machine (needs node:sqlite, Node >= 22.5).`;
   await preloadGrammars(cwd);
   const database = db(cwd);
-  const up = database.prepare('SELECT dst FROM relations WHERE src=? AND kind=?').all(name, 'extends') as any[];
-  const down = database.prepare('SELECT src FROM relations WHERE dst=? AND kind=?').all(name, 'extends') as any[];
+  const up = database.prepare('SELECT dst FROM relations WHERE src=? AND kind=?').all(name, 'extends') as Array<{ dst: string }>;
+  const down = database.prepare('SELECT src FROM relations WHERE dst=? AND kind=?').all(name, 'extends') as Array<{ src: string }>;
   const out: string[] = [];
   if (up.length) out.push(`super-types of ${name}: ${up.map((r: any) => r.dst).join(', ')}`);
   if (down.length) out.push(`sub-types of ${name}:\n  ` + down.map((r: any) => '• ' + r.src).join('\n  '));
@@ -590,13 +596,13 @@ export async function computeSymbolBlastRadius(cwd: string, name: string): Promi
 
   await preloadGrammars(cwd);
   const database = db(cwd);
-  const edges = database.prepare('SELECT caller,rel,line FROM calls WHERE callee=? ORDER BY rel,line').all(name) as any[];
+  const edges = database.prepare('SELECT caller,rel,line FROM calls WHERE callee=? ORDER BY rel,line').all(name) as Array<{ caller: string; rel: string; line: number }>;
   const callers = edges.map((e) => ({ caller: String(e.caller || 'anonymous'), file: String(e.rel || ''), line: Number(e.line || 1) }));
   
   const affectedFiles = [...new Set(callers.map((c) => c.file).filter(Boolean))];
   
-  const up = database.prepare('SELECT dst FROM relations WHERE src=? AND kind=?').all(name, 'extends') as any[];
-  const down = database.prepare('SELECT src FROM relations WHERE dst=? AND kind=?').all(name, 'extends') as any[];
+  const up = database.prepare('SELECT dst FROM relations WHERE src=? AND kind=?').all(name, 'extends') as Array<{ dst: string }>;
+  const down = database.prepare('SELECT src FROM relations WHERE dst=? AND kind=?').all(name, 'extends') as Array<{ src: string }>;
   const superTypes = up.map((r: any) => String(r.dst));
   const subTypes = down.map((r: any) => String(r.src));
 

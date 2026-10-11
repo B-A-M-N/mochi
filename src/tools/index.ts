@@ -239,7 +239,7 @@ export function buildTools(config: MochiConfig, allowed?: string[]): Map<string,
     if (allowed && !allowed.includes(name) && !alwaysInclude) continue;
     // Keep default advertised schema clean and focused on engineering primitives.
     // Auxiliary tools remain executable via ALL_TOOLS_MAP without cluttering the prompt.
-    if (!allowed && AUXILIARY_TOOL_NAMES.has(name) && !(config as any)?.enableAuxiliaryTools) continue;
+    if (!allowed && AUXILIARY_TOOL_NAMES.has(name) && !(config as { enableAuxiliaryTools?: unknown } | undefined)?.enableAuxiliaryTools) continue;
     // For weak models, only include core tools to keep tool schema lean.
     if (weak && !CORE_TOOL_NAMES.has(name) && !alwaysInclude) continue;
     map.set(name, tool);

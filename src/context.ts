@@ -310,6 +310,12 @@ export class ContextEngine {
     return this.messages;
   }
 
+  /** Transcript length without exposing the private array (the TUI's budget
+   *  floor check needs the count, not the messages). */
+  get messageCount(): number {
+    return this.messages.length;
+  }
+
   /** Rough size of the current transcript in approximate tokens (excludes the
    *  per-request system/state/tool headers, which are re-added separately). */
   estimateTokens(): number {

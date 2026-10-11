@@ -345,7 +345,8 @@ export function reduceEvent(state: TuiState, event: Record<string, unknown>): bo
       state.currentTool = '';
       // Pull the args back out so the card can show path / command / etc.
       // alongside the outcome line.
-      const callId = String((event.result as any)?.toolCallId ?? '');
+      const result = event.result as { toolCallId?: unknown; output?: unknown; error?: unknown } | undefined;
+      const callId = String(result?.toolCallId ?? '');
       const fallbackKey = String(event.tool ?? '');
       const lookupKey = (callId && state.activeToolLine.has(callId)) ? callId : fallbackKey;
       // Even if we don't have the args, the completed card uses the tool
@@ -353,16 +354,19 @@ export function reduceEvent(state: TuiState, event: Record<string, unknown>): bo
       const args =
         (callId && state.activeToolArgs.get(callId)) ??
         state.activeToolArgs.get(fallbackKey);
+      // Narrow the unknown event payload to exactly what the card needs —
+      // non-string outputs can never render, so they are dropped here.
+      const cardResult = result ? {
+        ...(typeof result.output === 'string' ? { output: result.output } : {}),
+        ...(typeof result.error === 'string' ? { error: result.error } : {}),
+        ...(typeof (result as { durationMs?: unknown }).durationMs === 'number' ? { durationMs: (result as { durationMs: number }).durationMs } : {}),
+      } : undefined;
       const formatted = formatToolCompletedCard(
         String(event.tool ?? ''),
         args,
-        event.result as any,
+        cardResult,
       );
-      const fullOut = typeof (event.result as any)?.output === 'string'
-        ? (event.result as any).output
-        : typeof (event.result as any)?.error === 'string'
-        ? (event.result as any).error
-        : undefined;
+      const fullOut = cardResult?.output ?? cardResult?.error ?? undefined;
       const meta = {
         tool: String(event.tool ?? ''),
         args,

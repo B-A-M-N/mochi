@@ -70,6 +70,8 @@ describe('GoalEngine', () => {
     expect(result.success).toBe(true);
     expect(readFileSync(resolve(dir, 'generated.txt'), 'utf8')).toBe('mochi goal');
     expect(result.summary).toContain('1 done');
+    // File ledger survives to the goal boundary (SDK/daemon/TUI read this).
+    expect(result.filesModified.some((f) => f.endsWith('generated.txt'))).toBe(true);
   });
 
   it('decomposes a one-shot answer objective into a single no-verify task', async () => {

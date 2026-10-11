@@ -214,6 +214,85 @@ export function formatSkillsForPrompt(skills: Skill[], limit?: number): string {
   return lines.join('\n');
 }
 
+export interface SkillSearchHit {
+  skill: Skill;
+  /** 0..1+ ranked score (exact name = 1.0, usage-boosted can exceed base). */
+  score: number;
+  /** One-line why-it-matched excerpt for pickers. */
+  snippet: string;
+}
+
+const SEARCH_STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'for', 'on', 'with', 'that', 'is', 'be', 'how', 'what', 'my', 'me']);
+
+function searchTokens(s: string): Set<string> {
+  const t = new Set<string>();
+  for (const w of (s.toLowerCase().match(/[a-z0-9]+/g) ?? [])) {
+    if (!SEARCH_STOPWORDS.has(w)) t.add(w);
+  }
+  return t;
+}
+
+/** Interactive skill search: multi-signal fuzzy rank over name + description
+ *  (+ usage boost), returning best-effort ranked hits with snippets — never
+ *  an empty "no results" dead-end when anything remotely matches. Unlike
+ *  `selectRelevantSkills` (auto path, thresholded to zero), this is the
+ *  USER-facing discovery path (`/skills search <q>`): recall first, the
+ *  picker does the final judgment. Pure + deterministic. */
+export function searchSkills(
+  skills: Skill[],
+  query: string,
+  opts: { limit?: number; usageBoost?: Map<string, number> } = {},
+): SkillSearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const limit = opts.limit ?? 8;
+  const qToks = searchTokens(q);
+  const hits: SkillSearchHit[] = [];
+  for (const s of skills) {
+    const name = s.name.toLowerCase();
+    const desc = (s.description ?? '').toLowerCase();
+    let score = 0;
+    let snippet = s.description.split('\n')[0].slice(0, 120);
+    if (name === q) {
+      score = 1.0;
+      snippet = `exact name match`;
+    } else if (name.startsWith(q)) {
+      score = 0.9;
+      snippet = `name starts with "${query.trim()}"`;
+    } else if (name.includes(q)) {
+      score = 0.75;
+      snippet = `name contains "${query.trim()}"`;
+    } else if (desc.includes(q) && q.length >= 3) {
+      score = 0.55;
+      const i = desc.indexOf(q);
+      snippet = '…' + s.description.slice(Math.max(0, i - 24), i + q.length + 48).replace(/\s+/g, ' ') + '…';
+    } else if (qToks.size > 0) {
+      // Token overlap, name-weighted: shared vocabulary with the NAME counts
+      // double — a query token in the name is a stronger signal than one
+      // buried in a long description.
+      const nameToks = searchTokens(s.name.replace(/-/g, ' '));
+      const descToks = searchTokens(s.description);
+      let inter = 0;
+      for (const t of qToks) {
+        if (nameToks.has(t)) inter += 2;
+        else if (descToks.has(t)) inter += 1;
+      }
+      const denom = Math.min(Math.max(qToks.size, 1), nameToks.size * 2 + descToks.size);
+      const overlap = denom > 0 ? inter / (denom + nameToks.size) : 0;
+      if (overlap > 0.12) {
+        score = Math.min(0.7, 0.25 + overlap);
+        snippet = `shares ${inter > 1 ? 'terms' : 'a term'} with "${query.trim()}"`;
+      }
+    }
+    if (score > 0) {
+      if (opts.usageBoost) score += Math.min(0.15, ((opts.usageBoost.get(s.name) ?? 0) / 20) * 0.15);
+      hits.push({ skill: s, score, snippet });
+    }
+  }
+  hits.sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
+  return hits.slice(0, Math.max(1, limit));
+}
+
 
 // ---- MCH-40 (skills v2): usage stats + staleness + conflict detection ------
 

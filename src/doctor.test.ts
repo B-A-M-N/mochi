@@ -57,4 +57,10 @@ describe('doctorReport', () => {
     expect(out).toContain('api key');
     expect(out).toMatch(/MISS/);
   });
+
+  it('reports the live theme id so stale binaries are detectable', async () => {
+    const r = await doctorReport({ provider: 'openai', baseUrl: 'x', model: 'gpt', apiKey: 'k', workspaceDir: tmp() });
+    expect(r.theme.id).toBeTruthy();
+    expect(formatDoctor(r)).toContain('theme');
+  });
 });

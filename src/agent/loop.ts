@@ -501,7 +501,7 @@ export class Agent {
     // MCH-33: MCP servers (config.mcpServers / .mcp.json) are loaded lazily
     // on first run() so the constructor stays sync; see loadMcpInRun.
     this.provider = createProvider(this.config.model, opts.modelProfile ?? this.profile.defaultModel ?? 'coding');
-    this.events.emit({ type: 'agent:spawned', id: this.id, role: opts.role as any, taskId: '' });
+    this.events.emit({ type: 'agent:spawned', id: this.id, role: opts.role as import('../types.js').AgentRole, taskId: '' });
   }
 
   /** Effective reasoning tier for a task. Distilled from Claude Code's
@@ -945,10 +945,10 @@ Continue from 'Next:', do not redo completed progress.`,
       // proportional so long coding runs hold live repo code in-window.
       const ceiling = Math.floor(this.config.safety.contextBudgetTokens * 0.8);
       const floor = Math.min(this.config.safety.contextBudgetTokens * 0.6, ceiling);
-      const msgCount = (this.context as any).messages?.length ?? 0;
+      const msgCount = this.context.messageCount;
       // Batch token count via the Rust runtime (1 stdio round-trip instead of
       // N FFI calls); falls back to the sync estimate when native is absent.
-      const ctxTokens = await (this.context as any).estimateTokensAsync();
+      const ctxTokens = await this.context.estimateTokensAsync();
       if (i > 0 && msgCount >= 10 && ctxTokens > floor) {
         // MCH-30: CC-style two-stage pressure response. Stage 1 (cheap):
         // shrink old tool outputs in place — keeps every turn's structure, no
@@ -1112,18 +1112,18 @@ Continue from 'Next:', do not redo completed progress.`,
         const turnStartedAt = Date.now();
         let lastHeartbeatAt = turnStartedAt;
         const HEARTBEAT_MS = 30_000;
-        for await (const chunk of activeProvider.streamChat(messages, this.toolDefs, { temperature: 0.2, signal: activeCallSignal.signal, reasoningEffort: activeReasoning as any })) {
+        for await (const chunk of activeProvider.streamChat(messages, this.toolDefs, { temperature: 0.2, signal: activeCallSignal.signal, reasoningEffort: activeReasoning })) {
           const now = Date.now();
           if (now - lastHeartbeatAt >= HEARTBEAT_MS) {
             lastHeartbeatAt = now;
             const elapsedS = Math.round((now - turnStartedAt) / 1000);
-            this.events.emit({ type: 'agent:log' as any, agentId: this.id, message: `[heartbeat] model thinking ${elapsedS}s… (still alive, ${this.context.effectiveContextTokens()} ctx tokens)` });
+            this.events.emit({ type: 'agent:log', agentId: this.id, message: `[heartbeat] model thinking ${elapsedS}s… (still alive, ${this.context.effectiveContextTokens()} ctx tokens)` });
           }
           chunks.push(chunk);
           // MCH-64: accumulate streaming tool-call args and spec-execute the
           // moment a read-only call's JSON is complete.
           if (chunk.toolCalls) {
-            for (const stc of chunk.toolCalls as any[]) {
+            for (const stc of chunk.toolCalls ?? []) {
               const idx = stc.index ?? 0;
               const acc = midStreamAcc.get(idx) ?? { id: stc.id ?? '', name: '', args: '' };
               if (!acc.id && stc.id) acc.id = stc.id;
@@ -1268,23 +1268,23 @@ Continue from 'Next:', do not redo completed progress.`,
                   if (partialMatch) {
                     const safeChunk = streamBuf.slice(0, streamBuf.length - partialMatch[0].length);
                     if (safeChunk) {
-                      this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(safeChunk), agentId: this.id } as any);
+                      this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(safeChunk), agentId: this.id });
                     }
                     streamBuf = partialMatch[0];
                     break;
                   } else {
-                    this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(streamBuf), agentId: this.id } as any);
+                    this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(streamBuf), agentId: this.id });
                     streamBuf = '';
                   }
                 } else {
                   const pre = streamBuf.slice(0, openIdx);
                   if (pre) {
-                    this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(pre), agentId: this.id } as any);
+                    this.events.emit({ type: 'message:chunk', content: scrubAnsiFragments(pre), agentId: this.id });
                   }
                   const isThought = openIdx === thoughtOpenIdx;
                   streamBuf = streamBuf.slice(openIdx + (isThought ? 9 : 7));
                   inThinkTag = true;
-                  this.events.emit({ type: 'agent:log', agentId: this.id, message: 'Thinking…' } as any);
+                  this.events.emit({ type: 'agent:log', agentId: this.id, message: 'Thinking…' });
                 }
               } else {
                 const thinkCloseIdx = streamBuf.indexOf('</think>');
@@ -1323,10 +1323,10 @@ Continue from 'Next:', do not redo completed progress.`,
         const rawContent = chunks.map((c) => c.content || '').join('');
         const rawReasoning = chunks.map((c) => c.reasoningContent || '').join('');
         let content = stripThinkTags(rawContent);
-        const callsByIndex = new Map<number, any>();
+        const callsByIndex = new Map<number, { id: string; name: string; args: string }>();
         for (const chunk of chunks) {
           if (chunk.toolCalls) {
-            for (const tc of chunk.toolCalls as any[]) {
+            for (const tc of chunk.toolCalls ?? []) {
               const idx = tc.index ?? 0;
               const acc = callsByIndex.get(idx) ?? { id: tc.id, name: tc.function.name, args: '' };
               acc.name = acc.name || tc.function.name;
@@ -1619,19 +1619,21 @@ Continue from 'Next:', do not redo completed progress.`,
         );
         // Phase 4 (VNext): feed REAL provider usage into the context engine so
         // the compaction floor triggers on actuals instead of the chars/3.8 guess.
-        this.context.recordReportedUsage((response.usage as { promptTokens?: number }).promptTokens);
+        this.context.recordReportedUsage(response.usage?.promptTokens);
         // Surface REAL provider usage to the TUI: input, output, cache reads, and cost in USD.
-        const u = response.usage as { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+        const u = response.usage;
         const cacheRead = kvCache.totalCacheSaved || kvCache.lastCacheSaved;
-        const cost = estimateCostUsd({ promptTokens: u.promptTokens, completionTokens: u.completionTokens }, this.config.model.model);
+        const promptTokens = u?.promptTokens ?? 0;
+        const completionTokens = u?.completionTokens ?? 0;
+        const cost = estimateCostUsd({ promptTokens, completionTokens }, this.config.model.model);
         this.costUsd += cost;
         this.events.emit({
-          type: 'usage:updated' as any,
+          type: 'usage:updated',
           agentId: this.id,
-          inputTokens: Math.max(0, (u.promptTokens ?? 0) - cacheRead),
-          outputTokens: u.completionTokens ?? 0,
+          inputTokens: Math.max(0, promptTokens - cacheRead),
+          outputTokens: completionTokens,
           cacheTokens: cacheRead,
-          totalTokens: u.totalTokens ?? 0,
+          totalTokens: u?.totalTokens ?? 0,
           costUsd: this.budget?.snapshot(this.config.model.model).usedCostUsd ?? cost,
         });
       }
@@ -1660,7 +1662,7 @@ Continue from 'Next:', do not redo completed progress.`,
       // of times in one response (common with overloaded free-tier models). Stop
       // flooding the transcript: nudge it once to answer briefly; if it loops
       // again, FAIL OVER to an alternate model before giving up entirely.
-      if ((response as any).looped) {
+      if (response.looped) {
         this.streamLoopNudges++;
         this.events.emit({ type: 'agent:log', agentId: this.id, message: '[stream-loop] model repeated the same content; bounding' });
         // Truncate the degenerate content so it doesn't pollute the transcript
@@ -2304,15 +2306,15 @@ Continue from 'Next:', do not redo completed progress.`,
       const { loadMcpTools, closeMcpConnections } = await import('../tools/mcp.js');
       const list = Object.entries(servers).map(([name, s]) => ({
         name,
-        command: (s as any).command ? String((s as any).command) : undefined,
-        args: Array.isArray((s as any).args) ? (s as any).args.map(String) : [],
-        url: (s as any).url ? String((s as any).url) : undefined,
-        headers: (s as any).headers as Record<string, string> | undefined,
-        env: (s as any).env as Record<string, string> | undefined,
+        command: s.command ? String(s.command) : undefined,
+        args: Array.isArray(s.args) ? s.args.map(String) : [],
+        url: s.url ? String(s.url) : undefined,
+        headers: s.headers,
+        env: s.env,
       })).filter((s) => s.command || s.url);
       const { tools, connections } = await loadMcpTools(list, (m) =>
         this.events.emit({ type: 'agent:log', agentId: this.id, message: m }));
-      this.mcpConnections = connections as unknown as typeof this.mcpConnections;
+      this.mcpConnections = connections;
       for (const t of tools) {
         if (!this.tools.has(t.def.name)) this.tools.set(t.def.name, t);
       }
@@ -3023,7 +3025,7 @@ Continue from 'Next:', do not redo completed progress.`,
         // bounded, honest early-finish beats an endless veto loop.
         if (this.budget.phase() === 'exhausted') {
           this.events.emit({
-            type: 'agent:log' as any,
+            type: 'agent:log',
             agentId: this.id,
             message: '[budget] exhausted — finishing with work completed so far.',
           });
@@ -3906,7 +3908,7 @@ Continue from 'Next:', do not redo completed progress.`,
       this.context.addMessage({ role: 'system', content: summary });
       this.lastStruggleInjectIter = iter;
       this.events.emit({
-        type: 'agent:log' as any,
+        type: 'agent:log',
         agentId: this.id,
         message: `[struggle] injected state summary (${parts.length} signal(s))`,
       });
@@ -3951,7 +3953,7 @@ Continue from 'Next:', do not redo completed progress.`,
           `Failure evidence to plan around: ${truncated}`,
       });
       this.events.emit({
-        type: 'agent:log' as any,
+        type: 'agent:log',
         agentId: this.id,
         message: `[auto-plan-escape] injected (verifyCount=${this.verifyCount}, toolErrors=${this.totalToolErrors()})`,
       });
@@ -4312,7 +4314,7 @@ Continue from 'Next:', do not redo completed progress.`,
           ].join('\n'),
         },
       ];
-      const response = await this.provider.chat(reviewMsg, [], { signal: this.abortSignal, reasoningEffort: 'low' as any });
+      const response = await this.provider.chat(reviewMsg, [], { signal: this.abortSignal, reasoningEffort: 'low' });
       const text = (response.content ?? '').trim();
       const tail = text.slice(0, 200);
       // A review only counts as a real problem when it actually cites a

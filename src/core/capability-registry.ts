@@ -114,6 +114,7 @@ export class CapabilityRegistry {
 }
 
 import type { Tool } from '../tools/types.js';
+import type { ToolContext } from '../tools/types.js';
 import { ALL_TOOLS, validateArgs } from '../tools/index.js';
 
 const READ_ONLY_TOOLS = new Set([
@@ -176,7 +177,23 @@ export function toolToCapability(tool: Tool): Capability {
 
       const start = performance.now();
       try {
-        const output = await tool.execute(req.args, req.context as any);
+        // Bridge the capability context to a tool context: same cwd/workspace/
+        // config/events/agentId/cache by reference; the subagent spawner is
+        // adapted (AgentResult → summary string) since the two layers type it
+        // differently. No `as any` — incompatibilities stay visible here.
+        const toolCtx: ToolContext = {
+          cwd: req.context.cwd,
+          workspace: req.context.workspace,
+          config: req.context.config,
+          events: req.context.events,
+          agentId: req.context.agentId,
+          abortSignal: req.context.abortSignal,
+          readCache: req.context.readCache,
+          ...(req.context.spawnSubagent
+            ? { spawnSubagent: async (prompt: string, opts?: { role?: string }) => (await req.context.spawnSubagent!(prompt, opts)).summary }
+            : {}),
+        };
+        const output = await tool.execute(req.args, toolCtx);
         const durationMs = Math.round(performance.now() - start);
         return {
           callId: req.callId,

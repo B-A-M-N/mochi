@@ -135,7 +135,7 @@ export function createOpenAIProvider(config: ProviderConfig) {
     return out;
   }
 
-  async function* streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal }): AsyncGenerator<StreamChunk> {
+  async function* streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal; reasoningEffort?: string }): AsyncGenerator<StreamChunk> {
     const body: Record<string, unknown> = {
       model,
       messages: mapMessages(messages),
@@ -149,12 +149,12 @@ export function createOpenAIProvider(config: ProviderConfig) {
       ...(() => {
         const isOpenAiNonReasoning = base.includes('api.openai.com') && !/^(o1|o3|o4|gpt-5)/i.test(model);
         if (isOpenAiNonReasoning) return {};
-        const rawEffort = String((options as any)?.reasoningEffort || process.env.MOCHI_REASONING || '').toLowerCase().trim();
+        const rawEffort = String(options?.reasoningEffort || process.env.MOCHI_REASONING || '').toLowerCase().trim();
         if (rawEffort === 'off') {
           // Provider-level minimal reasoning: omit reasoning_effort AND ask the
           // endpoint to skip reasoning where supported (OpenRouter-style
           // reasoning.exclude / reasoning: { enabled: false } tolerant shape).
-          return { reasoning_effort: 'low', reasoning: { enabled: false } } as any;
+          return { reasoning_effort: 'low', reasoning: { enabled: false } };
         }
         if (rawEffort === 'auto') {
           return {}; // model-default — send nothing
@@ -328,7 +328,7 @@ export function createOpenAIProvider(config: ProviderConfig) {
     }
   }
 
-  async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal }): Promise<ModelResponse> {
+  async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal; reasoningEffort?: string }): Promise<ModelResponse> {
     const chunks: StreamChunk[] = [];
     for await (const chunk of streamChat(messages, tools, options)) {
       chunks.push(chunk);

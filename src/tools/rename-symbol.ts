@@ -93,7 +93,7 @@ export const renameSymbolTool: Tool = {
 
       if (!preview) {
         writeFileSync(f, replaced, 'utf8');
-        if (ctx.events && typeof (ctx.events as any).emit === 'function') {
+        if (ctx.events && typeof (ctx.events as { emit?: unknown }).emit === 'function') {
           ctx.events.emit({ type: 'file:changed', path: f, operation: 'edit', agentId: ctx.agentId });
         }
       }

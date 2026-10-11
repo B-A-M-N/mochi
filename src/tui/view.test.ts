@@ -366,6 +366,17 @@ describe('gradient bars (jcode-style)', () => {
     expect(idle.text).not.toContain('38;2;255;255;255');
   });
 
+  it('empty tracks are near-black, never theme-gray (the grey-bars defect)', () => {
+    const empty = gradientContextBar(0, 100, 12, 0);
+    // 12 empty cells, zero filled cells
+    expect((empty.text.match(/░/g) ?? []).length).toBe(12);
+    expect(empty.text).not.toContain('█');
+    // No theme-gray fg on the track: grayDark (112,104,144) must be gone.
+    expect(empty.text).not.toContain('38;2;112;104;144');
+    // Fixed dim track instead (58,54,70 — near-black on dark canvases).
+    expect(empty.text).toContain('38;2;58;54;70');
+  });
+
   it('cache bar full at rate 1 with lime gradient', () => {
     const full = gradientCacheBar(1, 8, 0);
     expect(full.pct).toBe(1);
@@ -485,6 +496,14 @@ describe('renderMetricGauge', () => {
     expect(plain).toContain('Tokens:');
     expect(plain).toContain('50%');
     expect(plain).toContain('4.0k/8.0k tok');
+  });
+  it('paints the empty track near-black, never theme-gray', () => {
+    const gauge = renderMetricGauge('Tokens', 0, 8000, 'tok', 10);
+    // 10 empty cells, zero filled cells
+    expect((gauge.match(/░/g) ?? []).length).toBe(10);
+    expect(gauge).not.toContain('█');
+    expect(gauge).toContain('38;2;58;54;70');
+    expect(gauge).not.toContain('38;2;112;104;144');
   });
 });
 

@@ -21,7 +21,7 @@ const MAX_STDIN_BYTES = 1_000_000;
 
 /** Read piped stdin (false when stdin is a TTY or has nothing to give). */
 export async function readStdin(stream: NodeJS.ReadableStream = process.stdin): Promise<string> {
-  if ('isTTY' in stream && (stream as any).isTTY) return '';
+  if ('isTTY' in stream && (stream as { isTTY?: unknown }).isTTY) return '';
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of stream as AsyncIterable<Buffer>) {

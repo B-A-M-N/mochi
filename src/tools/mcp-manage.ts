@@ -2,6 +2,8 @@
 // Lists, describes, and generates install guides for built-in MCP servers.
 
 import type { Tool } from './types.js';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface BuiltinMcpServer {
   id: string;
@@ -128,21 +130,137 @@ function yamlSnippet(server: BuiltinMcpServer): string {
   ].filter(Boolean).join('\n');
 }
 
+export interface McpSearchHit {
+  server: BuiltinMcpServer;
+  score: number;
+  snippet: string;
+}
+
+/** Interactive MCP discovery: fuzzy rank over id + name + description +
+ *  install hints + env keys. Same recall-first contract as skill search —
+ *  the picker (TUI menu or model) makes the final call. Pure. */
+export function searchMcpServers(query: string, limit = 8): McpSearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const hits: McpSearchHit[] = [];
+  for (const s of BUILTIN_MCP_SERVERS) {
+    const id = s.id.toLowerCase();
+    const name = s.name.toLowerCase();
+    const desc = s.description.toLowerCase();
+    const extra = `${s.installHint ?? ''} ${Object.keys(s.env ?? {}).join(' ')}`.toLowerCase();
+    let score = 0;
+    let snippet = s.description;
+    if (id === q || id === `mcp-${q}`) {
+      score = 1.0;
+      snippet = 'exact id match';
+    } else if (id.includes(q) || name.includes(q)) {
+      score = 0.85;
+      snippet = s.description;
+    } else if (desc.includes(q) && q.length >= 3) {
+      score = 0.6;
+      snippet = s.description;
+    } else if (extra.includes(q) && q.length >= 3) {
+      score = 0.45;
+      snippet = s.installHint ?? s.description;
+    } else {
+      const toks = new Set(q.match(/[a-z0-9]+/g) ?? []);
+      if (toks.size === 0) continue;
+      const hay = new Set(`${id.replace(/-/g, ' ')} ${name} ${desc}`.match(/[a-z0-9]+/g) ?? []);
+      let inter = 0;
+      for (const t of toks) if (hay.has(t)) inter++;
+      if (inter / Math.max(1, toks.size) >= 0.5 && inter > 0) {
+        score = 0.35 + 0.1 * Math.min(2, inter);
+        snippet = s.description;
+      }
+    }
+    if (score > 0) hits.push({ server: s, score, snippet });
+  }
+  hits.sort((a, b) => b.score - a.score || a.server.id.localeCompare(b.server.id));
+  return hits.slice(0, Math.max(1, limit));
+}
+
+export interface McpAddResult {
+  ok: boolean;
+  message: string;
+  /** True when the server was already configured (no write needed). */
+  alreadyPresent?: boolean;
+}
+
+/** One-command MCP install: merges a built-in server into `<projectDir>/.mcp.json`
+ *  (`{ mcpServers: { <id>: { command, args, env? } } }`). Never clobbers an
+ *  existing entry or unrelated keys; corrupt files are refused with a message
+ *  (not overwritten). Synchronous + dependency-free for easy testing. */
+export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult {
+  const server = BUILTIN_MCP_SERVERS.find((s) => s.id === serverId);
+  if (!server) {
+    const ids = BUILTIN_MCP_SERVERS.map((s) => s.id).join(', ');
+    return { ok: false, message: `Unknown MCP server "${serverId}". Known: ${ids}` };
+  }
+  const file = resolve(projectDir, '.mcp.json');
+  let doc: Record<string, unknown> = {};
+  if (existsSync(file)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, message: `.mcp.json is corrupt (not an object) — refusing to overwrite. Back it up, delete it, and retry.` };
+      }
+      doc = parsed as Record<string, unknown>;
+    } catch {
+      return { ok: false, message: `.mcp.json is not valid JSON — refusing to overwrite. Back it up, delete it, and retry.` };
+    }
+  }
+  const servers = (doc.mcpServers ?? doc.servers ?? {}) as Record<string, unknown>;
+  if (servers[server.id] !== undefined) {
+    return { ok: true, alreadyPresent: true, message: `${server.id} is already configured in .mcp.json — no changes made.` };
+  }
+  const entry: Record<string, unknown> = { command: server.command, args: [...server.args] };
+  if (server.env) entry.env = { ...server.env };
+  doc.mcpServers = { ...(servers as Record<string, unknown>), [server.id]: entry };
+  try {
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+  } catch (e) {
+    return { ok: false, message: `Could not write .mcp.json: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  const envNote = server.env ? ` Set ${Object.keys(server.env).join(', ')} first.` : '';
+  return { ok: true, message: `Added ${server.id} (${server.name}) to .mcp.json.${envNote} Restart the session (or run /doctor) so the MCP client picks it up.` };
+}
+
 export const mcpManageTool: Tool = {
   def: {
     name: 'mcp_manage',
-    description: 'List built-in MCP servers, show install guides, and get config snippets for ~/.mochi/config.yaml.',
+    description: 'Discover and install MCP servers: search built-ins by keyword, one-command add to .mcp.json, list, install guides, and config snippets.',
     parameters: [
-      { name: 'action', type: 'string', description: "'list' | 'install-guide' | 'config'", required: true },
-      { name: 'server_id', type: 'string', description: 'Specific server ID (for config action)', required: false },
+      { name: 'action', type: 'string', description: "'search' | 'add' | 'list' | 'install-guide' | 'config'", required: true },
+      { name: 'query', type: 'string', description: 'Search keywords (for search action)', required: false },
+      { name: 'server_id', type: 'string', description: 'Specific server ID (for config/add actions)', required: false },
+      { name: 'project_dir', type: 'string', description: 'Project root for add (defaults to cwd)', required: false },
     ],
     permission: 'read',
   },
-  async execute(args) {
+  async execute(args, ctx) {
     const action = String(args.action || '').toLowerCase();
     const serverId = args.server_id ? String(args.server_id) : undefined;
 
     switch (action) {
+      case 'search': {
+        const q = typeof args.query === 'string' ? args.query : '';
+        const hits = searchMcpServers(q);
+        if (!hits.length) return `No MCP servers match "${q}". Try 'list' to browse all ${BUILTIN_MCP_SERVERS.length} built-ins.`;
+        return [
+          `## MCP search: "${q}" (${hits.length} match${hits.length === 1 ? '' : 'es'})`,
+          '',
+          ...hits.map((h) => `- \`${h.server.id}\` — **${h.server.name}**: ${h.snippet}`),
+          '',
+          'Use `mcp_manage(action="add", server_id="<id>")` to install one into .mcp.json.',
+        ].join('\n');
+      }
+      case 'add': {
+        if (!serverId) return 'add needs server_id (use search or list to find one).';
+        const dir = typeof args.project_dir === 'string' && args.project_dir ? args.project_dir : (ctx?.cwd ?? process.cwd());
+        const r = addMcpServerConfig(dir, serverId);
+        return r.message;
+      }
       case 'list': {
         const rows = BUILTIN_MCP_SERVERS.map(s =>
           `| \`${s.id}\` | ${s.name} | ${s.description} |`
@@ -194,7 +312,7 @@ export const mcpManageTool: Tool = {
       }
 
       default:
-        throw new Error(`Unknown action: ${action}. Use list|config|install-guide.`);
+        throw new Error(`Unknown action: ${action}. Use search|add|list|config|install-guide.`);
     }
   },
 };

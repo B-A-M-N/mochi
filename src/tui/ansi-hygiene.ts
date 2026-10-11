@@ -44,3 +44,39 @@ export function stripAllAnsi(s: string): string {
 export function scrubAnsiFragments(s: string): string {
   return s.replace(ANSI_RE, '').replace(ORPHAN_SGR_RE, '').replace(PARTIAL_CSI_TAIL_RE, '');
 }
+
+/** Terminate a fully-rendered screen row so SGR state can never leak past
+ *  it. Rows built from model prose or tool output can end with a live color
+ *  (or a reverse-video highlight closed only with `27m`): without a trailing
+ *  reset, the frame writer's EL clears the rest of the line IN that style and
+ *  every later row inherits it — the classic whole-screen tint / gray-block
+ *  defect. Empty rows pass through untouched (the writer paints the canvas). */
+export function terminateRow(line: string): string {
+  if (!line) return line;
+  if (line.endsWith('\x1b[0m') || line.endsWith('\x1b[m')) return line;
+  return line + '\x1b[0m';
+}
+
+/** Re-assert forced canvas background after any SGR reset sequence.
+ *
+ * In terminals whose default window background is not black (e.g. gray or
+ * slate profile), bare SGR resets (`\x1b[0m` or `\x1b[m`) and default-bg resets
+ * (`\x1b[49m`) revert the background color to the terminal's default, causing
+ * any subsequent characters, words, and padding spaces to render on gray boxes
+ * (the "gray bars" bug).
+ *
+ * This helper ensures that every reset in a row immediately re-applies the
+ * forced canvas background `bg` (e.g. `\x1b[48;2;0;0;0m` or `\x1b[48;5;16m`),
+ * guaranteeing that text, spaces, and padding sit seamlessly on pure black.
+ * When `bg` is empty (light themes or transparent terminal), returns safe as-is. */
+export function paintCanvasBg(line: string, bg: string): string {
+  const safe = terminateRow(line);
+  if (!bg) return safe;
+  return safe
+    .replace(/\x1b\[49m/g, bg)
+    .replace(/\x1b\[0(?:;([0-9;]*))?m/g, (_match, rest) => {
+      return rest ? `\x1b[0m${bg}\x1b[${rest}m` : `\x1b[0m${bg}`;
+    })
+    .replace(/\x1b\[m/g, `\x1b[0m${bg}`);
+}
+

@@ -337,7 +337,7 @@ export class Runtime {
             type: 'agent:log',
             agentId: 'auto-improve',
             message: `[auto-improve] self-review pass ${i + 1}/${boundedRuns} complete (${summary.length} chars)`,
-          } as any);
+          });
 
           if (priorSummary) {
             const isIdentical = summary.trim() === priorSummary.trim();
@@ -356,7 +356,7 @@ export class Runtime {
                 type: 'agent:log',
                 agentId: 'auto-improve',
                 message: `[auto-improve] work declared DONE and verified at pass ${i + 1}/${boundedRuns} — moving on.`,
-              } as any);
+              });
               priorSummary = summary;
               break;
             }
@@ -379,7 +379,7 @@ export class Runtime {
                 type: 'agent:log',
                 agentId: 'auto-improve',
                 message: `[auto-improve] early convergence reached at pass ${i + 1}/${boundedRuns}: no further work or improvements detected.`,
-              } as any);
+              });
               priorSummary = summary;
               break;
             }
@@ -582,15 +582,11 @@ export class Runtime {
     const sessionId = this.activeSessionId;
     // Single-agent one-shot task: create task directly without waiting for decompose LLM call.
     const { createTask } = await import('./goals/task.js');
-    const { classifyTaskKind } = await import('./taskkind.js');
     const goal = await this.goals.createGoal(prompt);
-    const kind = classifyTaskKind({ title: prompt.split('\n')[0].slice(0, 80), description: prompt, role: 'coder' });
-    const isChat = kind === 'chat';
     // Chat tasks use the coder profile (profiles.get falls back to coder for
     // unknown roles anyway); 'coder' here keeps the type honest with zero
-    // behavior change. Chat-ness is carried by `kind`, not the role.
+    // behavior change.
     const task = createTask(prompt.split('\n')[0].slice(0, 80), prompt, { role: 'coder', acceptanceCriteria: [] });
-    void isChat;
     if (opts?.images?.length) task.images = opts.images;
     goal.tasks.push(task.id);
     this.workspace.saveGoal(goal);
@@ -617,7 +613,8 @@ export class Runtime {
         costUsd: result.costUsd,
         durationMs: result.durationMs,
         goalId: goal.id,
-        filesModified: [...new Set(result.completedTasks.flatMap((t) => (t as any).filesModified ?? []))],
+      // Files touched, plumbed from GoalEngine (union of per-task agent runs).
+      filesModified: [...new Set(result.filesModified ?? [])],
       };
     } finally {
       recorder.close();

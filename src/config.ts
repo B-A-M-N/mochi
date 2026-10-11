@@ -122,7 +122,7 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
 
   const mcpJson = readJsonFile(resolve(cwd, '.mcp.json'));
   if (mcpJson && typeof mcpJson === 'object') {
-    const servers = (mcpJson as any).mcpServers ?? (mcpJson as any).servers;
+    const servers = (mcpJson as { mcpServers?: unknown; servers?: unknown }).mcpServers ?? (mcpJson as { servers?: unknown }).servers;
     if (servers && typeof servers === 'object') {
       cfg.mcpServers = { ...(cfg.mcpServers ?? {}), ...servers };
     }

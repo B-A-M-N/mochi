@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch, honorsNoColor, prefersReducedMotion, stripThemeColors, adaptThemeColors, themeContrastRatio, parseThemeRgb } from './themes.js';
+import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch, honorsNoColor, prefersReducedMotion, stripThemeColors, adaptThemeColors, themeContrastRatio, parseThemeRgb, loadSavedTheme, themeIsDark, canvasBg } from './themes.js';
 import { setTheme, T } from './view.js';
 
 describe('mochi themes', () => {
   it('defines 22 unique themes', () => {
-    expect(THEMES.length).toBe(22);
+    expect(THEMES.length).toBe(23);
     const ids = new Set(THEMES.map((t) => t.id));
-    expect(ids.size).toBe(22);
+    expect(ids.size).toBe(23);
   });
 
   it('every theme has all required color tokens and description', () => {
@@ -64,19 +64,45 @@ describe('mochi themes', () => {
     expect(solar.id).toBe('solar-flare');
     expect(T.act).toBe(solar.colors.act);
 
-    // Reset back to cyber-void
-    setTheme('cyber-void');
-    expect(getCurrentTheme().id).toBe('cyber-void');
+    // Reset back to the default (paint-only: setTheme never touches disk,
+    // so no test can cement a theme into the developer's real files).
+    // Assert the painted palette (T), not the module-cached currentTheme id:
+    // setTheme paints T/R in place while the id cache only moves on applyTheme.
+    const mp = setTheme('mochi-purple');
+    expect(T.act).toBe(mp.colors.act);
+    expect(T.bgUser).toBe(mp.colors.bgUser);
   });
 
-  it('persists chosen theme to disk and restores it across sessions', () => {
-    applyTheme('retro-arcade');
-    expect(process.env.MOCHI_THEME).toBe('retro-arcade');
-    expect(getCurrentTheme().id).toBe('retro-arcade');
+  it('persists chosen theme to disk and restores it across sessions', async () => {
+    // Sandboxed HOME+cwd: applyTheme writes real files by design, so this
+    // test must never run against the developer's actual home directory
+    // (it once cemented cyber-void into real files on every suite run).
+    const { mkdtempSync, rmSync, readFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const prevHome = process.env.HOME;
+    const prevCwd = process.cwd();
+    const prevTheme = getCurrentTheme().id;
+    const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
+    try {
+      process.env.HOME = fakeHome;
+      process.chdir(fakeHome);
+      applyTheme('retro-arcade');
+      expect(process.env.MOCHI_THEME).toBe('retro-arcade');
+      expect(getCurrentTheme().id).toBe('retro-arcade');
+      const saved = JSON.parse(readFileSync(resolve(fakeHome, '.config', 'mochi', 'theme.json'), 'utf8'));
+      expect(saved.theme).toBe('retro-arcade');
 
-    // Reset to cyber-void for subsequent test runs
-    applyTheme('cyber-void');
-    expect(getCurrentTheme().id).toBe('cyber-void');
+      applyTheme('mochi-purple');
+      expect(getCurrentTheme().id).toBe('mochi-purple');
+    } finally {
+      process.chdir(prevCwd);
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+      delete process.env.MOCHI_THEME;
+      setTheme(prevTheme);
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 });
 
@@ -173,5 +199,93 @@ describe('themes are visually distinct', () => {
     expect(light).toBeTruthy();
     expect(themeContrastRatio(light as never) as number).toBeGreaterThanOrEqual(7);
     expect(parseThemeRgb('no color here', 38)).toBeNull();
+  });
+});
+
+describe('theme persistence', () => {
+  it('applyTheme persists so loadSavedTheme restores it next launch', async () => {
+    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const prevHome = process.env.HOME;
+    const prevCwd = process.cwd();
+    const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
+    try {
+      process.env.HOME = fakeHome;
+      process.chdir(fakeHome);
+      applyTheme('dracula');
+      const saved = JSON.parse(readFileSync(resolve(fakeHome, '.config', 'mochi', 'theme.json'), 'utf8'));
+      expect(saved.theme).toBe('dracula');
+      // loadSavedTheme is module-cached; verify via fresh file read path:
+      // the file the next process reads must carry the choice.
+      expect(loadSavedTheme().id).toBeTruthy();
+    } finally {
+      process.chdir(prevCwd);
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('mochi-purple default', () => {
+  it('exists, is dark, and passes AA on near-black', () => {
+    const t = getTheme('mochi-purple');
+    expect(t).toBeTruthy();
+    expect(themeIsDark(t!)).toBe(true);
+    expect(themeContrastRatio(t!) as number).toBeGreaterThanOrEqual(7);
+  });
+  it('classifies light themes as light (no forced black canvas)', () => {
+    expect(themeIsDark(getTheme('paper-light')!)).toBe(false);
+    expect(themeIsDark(getTheme('cotton-candy')!)).toBe(false);
+  });
+});
+
+describe('canvasBg (capability-aware black canvas)', () => {
+  const prev = { ...process.env };
+  const reset = () => {
+    delete process.env.NO_COLOR;
+    delete process.env.MOCHI_THEME;
+    process.env.TERM = 'xterm-256color';
+    process.env.COLORTERM = 'truecolor';
+  };
+  it('emits 24-bit black on truecolor dark themes', () => {
+    reset();
+    expect(canvasBg()).toBe('\x1b[48;2;0;0;0m');
+  });
+  it('emits palette black (16) on 256-color terms — never 24-bit codes', () => {
+    reset();
+    delete process.env.COLORTERM;
+    expect(canvasBg()).toBe('\x1b[48;5;16m');
+  });
+  it('stays transparent for NO_COLOR and dumb terms', () => {
+    reset();
+    process.env.NO_COLOR = '1';
+    expect(canvasBg()).toBe('');
+    delete process.env.NO_COLOR;
+    process.env.TERM = 'dumb';
+    expect(canvasBg()).toBe('');
+    Object.assign(process.env, prev);
+  });
+  it('stays transparent on light themes (via the real applyTheme path)', async () => {
+    reset();
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const prevHome = process.env.HOME;
+    const prevTheme = getCurrentTheme().id;
+    const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
+    try {
+      process.env.HOME = fakeHome;
+      applyTheme('paper-light');
+      expect(getCurrentTheme().id).toBe('paper-light');
+      expect(canvasBg()).toBe('');
+    } finally {
+      applyTheme(prevTheme);
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+      Object.assign(process.env, prev);
+    }
   });
 });

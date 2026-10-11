@@ -47,15 +47,19 @@ export function validateTypeScriptSyntax(filePath: string, content: string): AST
       kind
     );
 
-    const diags = (sourceFile as any).parseDiagnostics ?? [];
-    if (!diags || diags.length === 0) {
+    const rawDiags: unknown = (sourceFile as { parseDiagnostics?: unknown }).parseDiagnostics ?? [];
+    const diags: Array<{ start?: number; messageText: unknown }> = Array.isArray(rawDiags) ? rawDiags : [];
+    if (diags.length === 0) {
       return { valid: true, errors: [] };
     }
 
     const errors: ASTDiagnosticError[] = [];
     for (const d of diags) {
       const pos = d.start !== undefined ? sourceFile.getLineAndCharacterOfPosition(d.start) : { line: 0, character: 0 };
-      const msg = typeof d.messageText === 'string' ? d.messageText : (d.messageText?.messageText ?? 'Syntax error');
+      const nested = d.messageText as { messageText?: unknown } | null | undefined;
+      const msg = typeof d.messageText === 'string'
+        ? d.messageText
+        : (typeof nested?.messageText === 'string' ? nested.messageText : 'Syntax error');
       errors.push({
         line: pos.line + 1,
         column: pos.character + 1,

@@ -103,14 +103,15 @@ export const browserTool: Tool = {
     if (timeoutMs !== 30000) driverArgs.push('--timeout', String(timeoutMs));
 
     ctx.events.emit({
-      type: 'tool:called', event: { name: 'browser', args },
-    } as any);
+      type: 'tool:called', tool: 'browser', args: { command, url }, agentId: ctx.agentId,
+    });
 
     const raw = await runDriver(driverArgs, timeoutMs + 4000).catch(() => '');
     const summary = summarizeResult(command, raw);
     ctx.events.emit({
-      type: 'tool:completed', event: { name: 'browser', durationMs: 0, result: { output: summary } },
-    } as any);
+      type: 'tool:completed', tool: 'browser', agentId: ctx.agentId,
+      result: { toolCallId: '', name: 'browser', output: summary, durationMs: 0 },
+    });
     return summary;
   },
 };
