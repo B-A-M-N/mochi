@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import FilmGrain from '../FilmGrain.jsx';
+import TerminalRain from '../TerminalRain.jsx';
 import { AnimatedContent, Reveal } from '../anim.jsx';
 
   const SKILLS = {
@@ -46,7 +46,7 @@ function Docs() {
   const [toolTab, setToolTab] = React.useState('Editing');
   return (
     <>
-      <FilmGrain />
+      <TerminalRain />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">

@@ -2,13 +2,13 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import RepoBrowser from '../RepoBrowser.jsx';
 import Footer from '../Footer.jsx';
-import FilmGrain from '../FilmGrain.jsx';
+import TerminalRain from '../TerminalRain.jsx';
 import { AnimatedContent, ScrollFloat } from '../anim.jsx';
 
 function Source() {
   return (
     <>
-      <FilmGrain />
+      <TerminalRain />
       <div className="pagehead">
         <div className="wrap">
           <AnimatedContent direction="bottom" delay={0.1}>

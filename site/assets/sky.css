@@ -13,21 +13,21 @@
 }
 .bg-blob-1 {
   width: 600px; height: 600px; top: -200px; right: -100px;
-  background: radial-gradient(circle, #E8E3FD 0%, transparent 70%);
+  background: radial-gradient(circle, #2a2352 0%, transparent 70%);
 }
 .bg-blob-2 {
   width: 500px; height: 500px; top: 40%; left: -150px;
-  background: radial-gradient(circle, #FCE7F3 0%, transparent 70%);
+  background: radial-gradient(circle, #3a2352 0%, transparent 70%);
   opacity: .4;
 }
 .bg-blob-3 {
   width: 400px; height: 400px; bottom: -100px; right: 20%;
-  background: radial-gradient(circle, #F0EDFE 0%, transparent 70%);
+  background: radial-gradient(circle, #241f48 0%, transparent 70%);
   opacity: .6;
 }
 .bg-dot {
   position: absolute; border-radius: 50%;
-  background: #8B75F6; opacity: .2;
+  background: #8B75F6; opacity: .35;
 }
 .bg-dot-1 { width: 12px; height: 12px; top: 20%; right: 15%; }
 .bg-dot-2 { width: 8px; height: 8px; top: 60%; left: 10%; }
@@ -58,7 +58,7 @@
 }
 .bg-sparkle-4 {
   width: 12px; height: 12px; top: 45%; right: 6%;
-  background: #E8E3FD;
+  background: #2a2352;
   clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
   animation-delay: .5s;
 }
@@ -82,7 +82,7 @@
 /* ── SOFT WAVE SHAPES ───────────────────────────────────────── */
 .bg-wave {
   position: absolute; border-radius: 50%;
-  background: linear-gradient(135deg, #E8E3FD 0%, #F0EDFE 100%);
+  background: linear-gradient(135deg, #2a2352 0%, #241f48 100%);
   opacity: .3;
 }
 .bg-wave-1 {
@@ -105,3 +105,7 @@
   33% { border-radius: 50% 60% 40% 60% / 60% 50% 60% 40%; }
   66% { border-radius: 40% 50% 60% 50% / 50% 40% 50% 60%; }
 }
+
+/* dark terminal variants */
+.bg-wave { background: linear-gradient(135deg,#2a2352,#241f48); opacity: .35; }
+.bg-sparkle { opacity: .5; }

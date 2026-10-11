@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import FilmGrain from '../FilmGrain.jsx';
+import TerminalRain from '../TerminalRain.jsx';
 import { AnimatedContent, SplitText, ScrollFloat } from '../anim.jsx';
 
 const RELEASES = [
@@ -58,7 +58,7 @@ function Changelog() {
   const [open, setOpen] = useState('0.20.0');
   return (
     <>
-      <FilmGrain />
+      <TerminalRain />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">
