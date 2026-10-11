@@ -16,6 +16,9 @@ import {
   nativeFoldOutput,
   nativeCommandAvailable,
   nativeStripAnsi,
+  nativeEstimateCostUsd,
+  nativeDiffNumstat,
+  nativeClassifyPrompt,
 } from './core.js';
 import { fuzzyFindUnique } from '../tools/fuzzy-match.js';
 
@@ -222,5 +225,49 @@ describe('slices 2-5 native ops (smoke presence + shape)', () => {
       const out = nativeStripAnsi(input);
       expect(out).toBe(expected);
     }
+  });
+});
+
+describe('slices 2-5 native ops + remaining coverage gap (estimateCost / diffNumstat / classifyPrompt)', () => {
+  it('nativeEstimateCostUsd returns positive cost for known model', () => {
+    if (!isNativeCoreAvailable()) return;
+    // gpt-4o: 2.50/M prompt, 10.00/M completion. 1M prompt = $2.50.
+    const cost = nativeEstimateCostUsd('gpt-4o', 1_000_000, 0, 0);
+    expect(cost).not.toBeNull();
+    if (cost !== null) {
+      expect(cost).toBeGreaterThan(2.0);
+      expect(cost).toBeLessThan(3.0);
+    }
+    // "free" model: zero cost regardless of tokens
+    expect(nativeEstimateCostUsd('deepseek-v4-flash-free', 1_000_000, 0, 0)).toBe(0);
+  });
+
+  it('nativeDiffNumstat parses git diff --numstat output', () => {
+    if (!isNativeCoreAvailable()) return;
+    const numstat =
+      '3\t2\tREADME.md\n' +
+      '10\t0\tsrc/foo.ts\n' +
+      '0\t5\tsrc/bar.ts\n' +
+      '-\t-\tbinary.png\n';
+    const r = nativeDiffNumstat(numstat);
+    expect(r).not.toBeNull();
+    if (r !== null) {
+      expect(r.files).toBe(4); // 3 real files + 1 binary ("--")
+      expect(r.additions).toBe(13); // 3 + 10 + 0 + 0
+      expect(r.deletions).toBe(7); // 2 + 0 + 5 + 0
+    }
+  });
+
+  it('nativeClassifyPrompt returns a valid task kind label', () => {
+    if (!isNativeCoreAvailable()) return;
+    // Question-shaped prompt should classify as investigation
+    const kind = nativeClassifyPrompt('Why does this code fail when run?');
+    expect(kind).not.toBeNull();
+    if (kind !== null) {
+      expect(['code-edit', 'investigation', 'testing', 'refactor', 'architecture', 'one-shot-answer']).toContain(kind);
+    }
+    // Pure edit prompt: code-edit
+    const edit = nativeClassifyPrompt('fix the bug in foo.ts');
+    expect(edit).not.toBeNull();
   });
 });

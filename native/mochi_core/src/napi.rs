@@ -209,8 +209,17 @@ unsafe extern "C" fn js_estimate_cost(env: NapiEnv, info: NapiCallbackInfo) -> N
     let completion_tokens = if argc > 2 { get_int64_arg(env, argv[2]) as u64 } else { 0 };
     let cache_tokens = if argc > 3 { get_int64_arg(env, argv[3]) as u64 } else { 0 };
 
-    let tracker = budget::BudgetTracker::default();
-    let cost = tracker.estimate_cost(&model, prompt_tokens, completion_tokens, cache_tokens);
+    // Route through the FFI export so the "free" convention (case-insensitive
+    // model name contains "free") is honored consistently. The C-ABI
+    // wrapper applies the short-circuit; calling BudgetTracker directly
+    // here would skip it.
+    let c_model = CString::new(model.as_str()).unwrap();
+    let cost = crate::mochi_estimate_cost_usd(
+        c_model.as_ptr(),
+        prompt_tokens,
+        completion_tokens,
+        cache_tokens,
+    );
 
     let mut res_val = std::ptr::null_mut();
     napi_create_double(env, cost, &mut res_val);

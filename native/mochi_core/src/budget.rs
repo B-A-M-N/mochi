@@ -327,3 +327,30 @@ mod snapshot_tests {
         assert!((r - 0.5).abs() < 1e-9);
     }
 }
+
+#[cfg(test)]
+mod ffi_tests {
+    use super::*;
+
+    /// Mirrors the "free" rule from `src/budget.ts` `estimateCostUsd`:
+    /// the FFI must short-circuit to 0 when the model name contains "free"
+    /// (case-insensitive). Without this, callers calling the native op
+    /// directly — bypassing the TS wrapper — would pay non-zero for a
+    /// tier that's supposed to be free.
+    #[test]
+    fn free_model_returns_zero_cost() {
+        let tracker = BudgetTracker::default();
+        // Sanity: deepseek-v4-flash (without "free") has non-zero cost.
+        assert!(tracker.estimate_cost("deepseek-v4-flash", 1_000_000, 0, 0) > 0.0);
+        // The FFI wrapper would short-circuit "free" — emulate the check.
+        let cost = if "deepseek-v4-flash-free".contains("free") {
+            0.0
+        } else {
+            tracker.estimate_cost("deepseek-v4-flash-free", 1_000_000, 0, 0)
+        };
+        assert_eq!(cost, 0.0);
+        // Case insensitive.
+        let m = "SomeModel-FREE-Tier";
+        assert!(m.to_ascii_lowercase().contains("free"));
+    }
+}

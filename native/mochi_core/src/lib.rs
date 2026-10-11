@@ -418,6 +418,11 @@ pub unsafe extern "C" fn mochi_estimate_cost_usd(
     } else {
         (unsafe { CStr::from_ptr(model_ptr) }).to_str().unwrap_or("default")
     };
+    // Honor the "free" convention (matches `src/budget.ts` `estimateCostUsd`):
+    // any model whose name contains "free" is treated as zero-cost.
+    if model.to_ascii_lowercase().contains("free") {
+        return 0.0;
+    }
     let tracker = budget::BudgetTracker::default();
     tracker.estimate_cost(model, prompt_tokens, completion_tokens, cache_read_tokens)
 }
