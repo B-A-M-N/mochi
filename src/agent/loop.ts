@@ -538,18 +538,11 @@ export class Agent {
     // finish and emits exactly one typed IterationTrace event.
     const sm = this.sm = new LoopStateMachine(this.events, this.id);
     this.context.updateState({ nextAction: `Start task: ${task.title}` });
-    // MCH-113: express lane for simple script tasks — pre-run `git status
-    // --short` harness-side and seed it into context. Live traces (spd3/dbl1)
-    // show the model burning its ENTIRE first provider round (~2.4-6s) on
-    // nothing but `git status`; the answer is deterministic, so the harness
-    // supplies it free and the model starts writing immediately.
-    if (isSimpleScriptTask(task) && !this.planMode) {
-      const st = await this.runShell('git status --short', 15);
-      this.context.addMessage({
-        role: 'system',
-        content: `[pre-run] git status --short (harness-supplied, current at task start — do NOT re-run just to inspect state):\n${st.trim() || '(clean tree)'}`,
-      });
-    }
+    // MCH-113: express lane — the preflight block below (line ~735) already
+    // runs `git status --short` harness-side and feeds it into the packet, so
+    // the model never needs to spend its first provider round on it. Nothing
+    // to do here beyond keeping isTrivialWriteTask/isSimpleScriptTask aligned
+    // with the finish-hint (mch113b) eligibility below.
     // Active execution mode (modeInstruction from modes.ts) is injected here so
     // spec/security/codemod/chaos directives reach the model every turn.
     if (this.config.mode && isMode(this.config.mode)) {
@@ -1968,12 +1961,13 @@ Continue from 'Next:', do not redo completed progress.`,
         // `git diff --stat && git diff` ceremony before finishing. The local
         // hygiene review (mch101) already covers script-sized diffs, so the
         // diff round-trip buys nothing for this task class.
-        else if (isSimpleScriptTask(task) && !this.finishHintSent && response.toolCalls.some((tc) => ['write', 'edit', 'patch', 'replace_symbol'].includes(TOOL_ALIASES[tc.function.name] || tc.function.name))) {
+        else if ((isSimpleScriptTask(task) || isTrivialWriteTask(task)) && !this.finishHintSent && response.toolCalls.some((tc) => ['write', 'edit', 'patch', 'replace_symbol'].includes(TOOL_ALIASES[tc.function.name] || tc.function.name))) {
           this.finishHintSent = true;
           this.context.addMessage({
             role: 'system',
             content: `[express finish] File change done. Run your task's own verification command (if any) next, then FINISH — do not run git status/git diff or re-inspect state; the harness reviews the diff locally.`,
           });
+          this.events.emit({ type: 'agent:log', agentId: this.id, message: '[mch113b] express finish hint sent after first file write' });
         }
         continue;
       }

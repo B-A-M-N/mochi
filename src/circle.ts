@@ -12,7 +12,8 @@
  *   "Stop enumerating. Ask for one concrete task instead of another list."
  */
 
-import type { ChatMessage } from './types.ts';
+import type { ChatMessage } from './types.js';
+import { contentText } from './types.js';
 
 export interface CircleVerdict {
   circling: boolean;
@@ -74,7 +75,7 @@ export function detectCircle(messages: ChatMessage[], windowSize = 4): CircleVer
   const signals: string[] = [];
 
   // 1. repeated opening prefixes
-  const prefixes = recent.map((m) => openingPrefix(m.content ?? ''));
+  const prefixes = recent.map((m) => openingPrefix(contentText(m)));
   const seen = new Map<string, number>();
   for (const p of prefixes) seen.set(p, (seen.get(p) ?? 0) + 1);
   const repeats: [string, number][] = [];
@@ -86,7 +87,7 @@ export function detectCircle(messages: ChatMessage[], windowSize = 4): CircleVer
   // 2. escalation markers in any recent turn
   for (const m of recent) {
     let hit = false;
-    const text = m.content ?? '';
+    const text = contentText(m);
     for (const pat of ESCALATION_PATTERNS) {
       if (pat.test(text)) { hit = true; break; }
     }
@@ -97,7 +98,7 @@ export function detectCircle(messages: ChatMessage[], windowSize = 4): CircleVer
   let questionOnlyCount = 0;
   let listOnlyCount = 0;
   for (const m of recent) {
-    const text = m.content ?? '';
+    const text = contentText(m);
     if (isQuestionOnly(text)) questionOnlyCount++;
     if (isListOnly(text)) listOnlyCount++;
   }
@@ -105,7 +106,7 @@ export function detectCircle(messages: ChatMessage[], windowSize = 4): CircleVer
   if (listOnlyCount >= 2) signals.push(`list-only-answers(${listOnlyCount})`);
 
   // 4. near-duplicate fingerprints
-  const shingles = recent.map((m) => shingleSet(m.content ?? ''));
+  const shingles = recent.map((m) => shingleSet(contentText(m)));
   for (let i = 0; i < shingles.length; i++) {
     const a = shingles[i];
     if (!a) continue;
