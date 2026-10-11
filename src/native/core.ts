@@ -129,6 +129,10 @@ function initNativeCore() {
           args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
           returns: FFIType.i32,
         },
+        mochi_command_available: {
+          args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
+          returns: FFIType.i32,
+        },
       });
       if (bunLib) {
         ffiAvailable = true;
@@ -717,6 +721,67 @@ export function nativeFoldOutput(
   if (!jsonOut) return null;
   try {
     const parsed = JSON.parse(jsonOut) as NativeFoldResult;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Result of `nativeCommandAvailable`. */
+export interface CommandAvailableResult {
+  available: boolean;
+  /** The resolved program name (e.g. `npm` for `npx X`, `cargo` for `cargo build`). */
+  bin: string;
+}
+
+/**
+ * Fast in-process Rust `which`-style probe. Mirrors `commandAvailable()` in
+ * `src/agent/loop.ts` — extracts the leading program name (handles `npx X`
+ * and `cd X && Y` shapes) and resolves it against `cwd` + `pathEnv`. Used
+ * by the loop to skip optional repo checks (lint/typecheck/build) when
+ * the tool isn't installed.
+ */
+export function nativeCommandAvailable(
+  command: string,
+  cwd: string,
+  pathEnv: string,
+): CommandAvailableResult | null {
+  initNativeCore();
+  if (!ffiAvailable) return null;
+
+  const input = JSON.stringify({ command, cwd, pathEnv });
+  let jsonOut: string | null = null;
+
+  if (napiModule && typeof napiModule.commandAvailable === 'function') {
+    try {
+      const out = napiModule.commandAvailable(input);
+      if (typeof out === 'string') jsonOut = out;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut && bunLib) {
+    try {
+      const buf = Buffer.alloc(256);
+      const { ptr } = (globalThis as any).Bun;
+      const written = bunLib.symbols.mochi_command_available(
+        Buffer.from(input + '\0'),
+        ptr(buf),
+        buf.length,
+      );
+      if (written < 0) return null;
+      let end = buf.indexOf(0);
+      if (end < 0) end = Math.min(written, buf.length);
+      jsonOut = buf.toString('utf8', 0, end);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!jsonOut) return null;
+  try {
+    const parsed = JSON.parse(jsonOut) as CommandAvailableResult;
     return parsed;
   } catch {
     return null;

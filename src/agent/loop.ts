@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import {sortableId} from '../util.js';
 import type { Attempt, ChatMessage, MochiConfig, ModelProfile, Task, ToolDefinition, ToolCall, ToolResult } from '../types.js';
+import { contentText } from '../types.js';
 import type { EventBus } from '../events.js';
 import type { Workspace } from '../workspace.js';
 import { ContextEngine } from '../context.js';
@@ -92,6 +93,8 @@ export function stripThinkTags(text: string): string {
     .trim();
 }
 
+import { nativeCommandAvailable } from '../native/core.js';
+
 /** True if the leading binary of a shell command exists on PATH (or as a
  *  relative ./ wrapper). Used to skip optional repo checks (lint/typecheck/
  *  build) whose tool isn't installed, rather than failing a run for reasons
@@ -99,6 +102,9 @@ export function stripThinkTags(text: string): string {
 function commandAvailable(command: string, cwd: string): boolean {
   const trimmed = command.trim();
   if (!trimmed) return false;
+  // Native fast path: a single FFI call extracts the bin and scans PATH.
+  const nat = nativeCommandAvailable(trimmed, cwd, process.env.PATH ?? '');
+  if (nat !== null) return nat.available;
   // "npx X", "python3 -m Y", "./gradlew", "cd /x && cmd" — extract the actual
   // program name to probe for.
   const first = trimmed.split(/\s+/)[0] ?? '';
@@ -793,7 +799,7 @@ Continue from 'Next:', do not redo completed progress.`,
         const touched = this.context.getMessages()
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .slice(-20)
-          .flatMap((m) => (m.content?.match(/[\w./-]+\.(?:ts|js|py|go|rs)/g) ?? []));
+          .flatMap((m) => (contentText(m).match(/[\w./-]+\.(?:ts|js|py|go|rs)/g) ?? []));
         const uniqueTouched = [...new Set(touched)].slice(0, 10);
         if (uniqueTouched.length > 0) {
           const predicted = predictNextFiles(this.workspace.dir, uniqueTouched, 5);
@@ -2524,7 +2530,7 @@ Continue from 'Next:', do not redo completed progress.`,
       const touched = this.context.getMessages()
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .slice(-20)
-        .flatMap((m) => (m.content?.match(/[\w./-]+\.(?:ts|js|py|go|rs)/g) ?? []));
+        .flatMap((m) => (contentText(m).match(/[\w./-]+\.(?:ts|js|py|go|rs)/g) ?? []));
       const uniqueTouched = [...new Set(touched)].slice(0, 10);
       if (uniqueTouched.length === 0) return;
       const predicted = predictNextFiles(this.workspace.dir, uniqueTouched, 5);

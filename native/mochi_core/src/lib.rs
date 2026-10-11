@@ -6,6 +6,7 @@ pub mod agent_loop;
 pub mod autopsy;
 pub mod budget;
 pub mod codegraph;
+pub mod cmdprobe;
 pub mod context;
 pub mod daemon;
 pub mod diff;
@@ -44,6 +45,7 @@ pub use agent_loop::*;
 pub use autopsy::*;
 pub use budget::*;
 pub use codegraph::*;
+pub use cmdprobe::*;
 pub use context::*;
 pub use daemon::*;
 pub use diff::*;
@@ -331,6 +333,44 @@ pub unsafe extern "C" fn mochi_classify_command(cmd_ptr: *const c_char) -> c_int
         return 0;
     };
     risk::classify_command(cmd) as c_int
+}
+
+/// JSON in:  `{"command":"...","cwd":"...","pathEnv":"..."}`
+/// JSON out: `{"available":true,"bin":"..."}` — bin is the resolved program name
+/// (e.g. `npm` for `npx X`, `cargo` for `cargo build`).
+#[no_mangle]
+pub unsafe extern "C" fn mochi_command_available(
+    input_ptr: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> c_int {
+    if input_ptr.is_null() || out_buf.is_null() || out_cap == 0 {
+        return -1;
+    }
+    let Ok(input) = (unsafe { CStr::from_ptr(input_ptr) }).to_str() else {
+        return -1;
+    };
+    let command = fold::json_string_field(input, "command").unwrap_or_default();
+    let cwd = fold::json_string_field(input, "cwd").unwrap_or_default();
+    let path_env = fold::json_string_field(input, "pathEnv").unwrap_or_default();
+    let (available, bin) = cmdprobe::command_available(&command, &cwd, &path_env);
+    let payload = format!(
+        r#"{{"available":{},"bin":{}}}"#,
+        if available { "true" } else { "false" },
+        cmdprobe::json_escape_string(&bin)
+    );
+    let c_res = match CString::new(payload) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let bytes = c_res.as_bytes_with_nul();
+    let copy_len = bytes.len().min(out_cap);
+    let dst = unsafe { slice::from_raw_parts_mut(out_buf as *mut u8, copy_len) };
+    dst.copy_from_slice(&bytes[..copy_len]);
+    if copy_len > 0 {
+        dst[copy_len - 1] = 0;
+    }
+    (c_res.as_bytes().len()) as c_int
 }
 
 /// Head+tail fold for tool output. JSON in: `{"text":"...","maxLines":N,"maxBytes":N}`.

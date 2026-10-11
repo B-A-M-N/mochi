@@ -95,8 +95,8 @@ pub fn fold_output(text: &str, max_lines: usize, max_bytes: usize) -> (Vec<Strin
 pub fn fold_output_json(text: &str, max_lines: usize, max_bytes: usize) -> String {
     let (head, tail, omitted, truncated, truncated_by, total_lines, total_bytes) =
         fold_output(text, max_lines, max_bytes);
-    let head_json = head.iter().map(|s| json_string(s)).collect::<Vec<_>>().join(",");
-    let tail_json = tail.iter().map(|s| json_string(s)).collect::<Vec<_>>().join(",");
+    let head_json = head.iter().map(|s| json_escape_string(s)).collect::<Vec<_>>().join(",");
+    let tail_json = tail.iter().map(|s| json_escape_string(s)).collect::<Vec<_>>().join(",");
     format!(
         r#"{{"head":[{}],"tail":[{}],"omitted":{},"truncated":{},"truncatedBy":"{}","totalLines":{},"totalBytes":{}}}"#,
         head_json, tail_json, omitted,
@@ -108,7 +108,7 @@ pub fn fold_output_json(text: &str, max_lines: usize, max_bytes: usize) -> Strin
 /// JSON-encode a string with proper escaping (handles control chars, quotes,
 /// backslashes, and the common 2-byte UTF-8 sequences the tool output is
 /// likely to contain).
-fn json_string(s: &str) -> String {
+pub fn json_escape_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for b in s.as_bytes() {
@@ -278,9 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn json_string_escapes_specials() {
-        assert_eq!(json_string("a\nb\"c"), "\"a\\nb\\\"c\"");
-        assert_eq!(json_string("\t\rc"), "\"\\t\\rc\"");
+    fn json_escape_string_escapes_specials() {
+        assert_eq!(json_escape_string("a\nb\"c"), "\"a\\nb\\\"c\"");
+        assert_eq!(json_escape_string("\t\rc"), "\"\\t\\rc\"");
     }
 
     #[test]

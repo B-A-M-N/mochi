@@ -572,6 +572,44 @@ unsafe extern "C" fn js_fold_output(env: NapiEnv, info: NapiCallbackInfo) -> Nap
     str_val
 }
 
+unsafe extern "C" fn js_command_available(env: NapiEnv, info: NapiCallbackInfo) -> NapiValue {
+    let mut argc = 1;
+    let mut argv = [std::ptr::null_mut(); 1];
+    napi_get_cb_info(env, info, &mut argc, argv.as_mut_ptr(), std::ptr::null_mut(), std::ptr::null_mut());
+
+    let mut null_val = std::ptr::null_mut();
+    napi_get_null(env, &mut null_val);
+
+    if argc < 1 {
+        return null_val;
+    }
+
+    let Some(input) = get_string_arg(env, argv[0]) else {
+        return null_val;
+    };
+
+    // 256B is plenty for {"available":true|false,"bin":"..."}.
+    let mut out = [0u8; 256];
+    let c_input = match CString::new(input) {
+        Ok(s) => s,
+        Err(_) => return null_val,
+    };
+    let written = crate::mochi_command_available(
+        c_input.as_ptr(),
+        out.as_mut_ptr() as *mut c_char,
+        out.len(),
+    );
+    if written < 0 {
+        return null_val;
+    }
+    let end = out.iter().position(|&b| b == 0).unwrap_or(out.len());
+    let s = String::from_utf8_lossy(&out[..end]).into_owned();
+    let c_str = CString::new(s).unwrap();
+    let mut str_val = std::ptr::null_mut();
+    napi_create_string_utf8(env, c_str.as_ptr(), c_str.as_bytes().len(), &mut str_val);
+    str_val
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn napi_register_module_v1(env: NapiEnv, exports: NapiValue) -> NapiValue {
     let funcs: &[(&str, NapiCallback)] = &[
@@ -593,6 +631,7 @@ pub unsafe extern "C" fn napi_register_module_v1(env: NapiEnv, exports: NapiValu
         ("budgetDecide", js_budget_decide),
         ("classifyCommand", js_classify_command),
         ("foldOutput", js_fold_output),
+        ("commandAvailable", js_command_available),
     ];
 
     for &(name, cb) in funcs {
