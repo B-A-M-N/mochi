@@ -7,12 +7,12 @@
 .film-grain {
   position: fixed; inset: -100%;
   z-index: 9999; pointer-events: none;
-  opacity: .3;
+  opacity: .55;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='3' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='4' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.85 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='3' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0 0.15 0 0 0 0.7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E");
   animation:
-    grainJitter 0.24s steps(2) infinite,
+    grainJitter 0.18s steps(2) infinite,
     grainDrift 4.5s ease-in-out infinite,
     grainExposure 6s ease-in-out infinite;
   will-change: transform, opacity;
@@ -40,17 +40,18 @@
 }
 /* exposure breathing: grain density swells/fades like lamp brightness */
 @keyframes grainExposure {
-  0%, 100% { opacity: .3; }
-  25% { opacity: .36; }
-  52% { opacity: .25; }
-  74% { opacity: .34; }
+  0%, 100% { opacity: .55; }
+  22% { opacity: .62; }
+  48% { opacity: .42; }
+  70% { opacity: .6; }
+  86% { opacity: .35; }
 }
 
 /* Layer 2: VIGNETTE — soft anamorphic falloff */
 .film-vignette {
   position: fixed; inset: 0;
   z-index: 9998; pointer-events: none;
-  background: radial-gradient(ellipse 125% 110% at 50% 46%, transparent 56%, rgba(18,14,38,.3) 100%);
+  background: radial-gradient(ellipse 120% 110% at 50% 46%, transparent 44%, rgba(10,7,24,.55) 100%);
 }
 
 /* Layer 3: EXPOSURE FLICKER — the projector lamp, restrained */
@@ -123,3 +124,51 @@
   .film-grain { opacity: .22; }
   .film-leak { display: none; }
 }
+
+/* Layer 6: TRACKING WOBBLE — the frame slowly rolls & shifts like a worn
+   tape being tracked. Pure transform; the actual content stays put. */
+.film-track {
+  position: fixed; inset: -2%;
+  z-index: 9993; pointer-events: none;
+  animation: trackRoll 9s ease-in-out infinite;
+}
+@keyframes trackRoll {
+  0%, 100% { transform: translate3d(0, 0, 0) skewX(0deg); }
+  14% { transform: translate3d(0.45%, -0.3%, 0) skewX(0.09deg); }
+  33% { transform: translate3d(-0.55%, 0.4%, 0) skewX(-0.11deg); }
+  52% { transform: translate3d(0.35%, -0.2%, 0) skewX(0.06deg); }
+  71% { transform: translate3d(-0.4%, 0.25%, 0) skewX(-0.07deg); }
+  88% { transform: translate3d(0.25%, 0.3%, 0) skewX(0.05deg); }
+}
+
+/* Layer 7: CHROMATIC FRINGE — faint RGB split at screen edges,
+   the color-bleed of cheap tape/CRT signal */
+.film-fringe {
+  position: fixed; inset: 0;
+  z-index: 9992; pointer-events: none;
+  box-shadow:
+    inset 6px 0 22px -6px rgba(255, 45, 45, 0.16),
+    inset -6px 0 22px -6px rgba(45, 95, 255, 0.16),
+    inset 0 6px 22px -8px rgba(45, 255, 130, 0.08);
+  animation: fringePulse 7s ease-in-out infinite;
+}
+@keyframes fringePulse {
+  0%, 100% { opacity: .6; }
+  40% { opacity: 1; }
+  68% { opacity: .4; }
+}
+
+/* reduced-motion additions */
+@media (prefers-reduced-motion: reduce) {
+  .film-track, .film-fringe { animation: none !important; }
+}
+
+/* Layer 8: ANALOG GRADE — teal shadows / warm highlights, the
+   split-tone that reads instantly as film, not CSS */
+.film-grade {
+  position: fixed; inset: 0;
+  z-index: 9991; pointer-events: none;
+  background: linear-gradient(160deg, rgba(15,60,80,.10) 0%, transparent 42%, rgba(255,130,45,.10) 78%, rgba(20,40,80,.08) 100%);
+  opacity: .8;
+}
+@media (prefers-reduced-motion: reduce) { .film-grade { animation: none !important; } }

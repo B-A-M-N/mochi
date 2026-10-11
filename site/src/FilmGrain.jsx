@@ -15,6 +15,9 @@ export default function FilmGrain() {
       <div className="film-flicker" aria-hidden="true" />
       <div className="film-dust" aria-hidden="true" />
       <div className="film-leak" aria-hidden="true" />
+      <div className="film-track" aria-hidden="true" />
+      <div className="film-fringe" aria-hidden="true" />
+      <div className="film-grade" aria-hidden="true" />
     </>
   );
 }
