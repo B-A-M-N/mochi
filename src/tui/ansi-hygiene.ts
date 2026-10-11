@@ -9,6 +9,8 @@
 //     "\x1b[38;2;1", the next starts "38;43;226m". The leading ESC+CSI never
 //     reassembles, so every "strip ANSI" regex misses the orphan tail.
 
+import { nativeStripAnsi } from '../native/core.js';
+
 /** Complete ANSI/CSI sequences (cursor moves, colors, etc.). */
 export const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 
@@ -28,8 +30,12 @@ export const ORPHAN_SGR_RE =
 /** A dangling "\x1b[..." with no terminator at the end of a string. */
 export const PARTIAL_CSI_TAIL_RE = /\x1b\[[0-9;]*$/;
 
-/** Strip every escape sequence — for text entering the model context. */
+/** Strip every escape sequence — for text entering the model context.
+ *  Native-first: the Rust `mochi_strip_ansi` op replaces the JS regex pass. */
 export function stripAllAnsi(s: string): string {
+  if (!s) return s;
+  const nat = nativeStripAnsi(s);
+  if (nat !== null) return nat;
   return s.replace(ANSI_RE, '');
 }
 

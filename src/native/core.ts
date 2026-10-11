@@ -133,6 +133,10 @@ function initNativeCore() {
           args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
           returns: FFIType.i32,
         },
+        mochi_strip_ansi: {
+          args: [FFIType.cstring, FFIType.ptr, FFIType.usize],
+          returns: FFIType.i32,
+        },
       });
       if (bunLib) {
         ffiAvailable = true;
@@ -786,4 +790,45 @@ export function nativeCommandAvailable(
   } catch {
     return null;
   }
+}
+
+/**
+ * Fast in-process Rust ANSI escape stripper. Mirrors the JS regex pass in
+ * `src/tui/ansi-hygiene.ts` `stripAnsi()` byte-for-byte (single regex,
+ * 256-state DFA, no allocations per match). On hot TUI render paths that
+ * call `stripAnsi` once per line, this saves microseconds-per-line.
+ */
+export function nativeStripAnsi(text: string): string | null {
+  initNativeCore();
+  if (!ffiAvailable || !text) return text ? null : '';
+
+  if (napiModule && typeof napiModule.stripAnsi === 'function') {
+    try {
+      const out = napiModule.stripAnsi(text);
+      return typeof out === 'string' ? out : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (bunLib) {
+    try {
+      const cap = Math.max(64, text.length + 32);
+      const buf = Buffer.alloc(cap);
+      const { ptr } = (globalThis as any).Bun;
+      const written = bunLib.symbols.mochi_strip_ansi(
+        Buffer.from(text + '\0'),
+        ptr(buf),
+        buf.length,
+      );
+      if (written < 0) return null;
+      let end = buf.indexOf(0);
+      if (end < 0) end = Math.min(written, buf.length);
+      return buf.toString('utf8', 0, end);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }

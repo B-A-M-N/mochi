@@ -15,6 +15,7 @@ import {
   nativeBudgetDecide,
   nativeFoldOutput,
   nativeCommandAvailable,
+  nativeStripAnsi,
 } from './core.js';
 import { fuzzyFindUnique } from '../tools/fuzzy-match.js';
 
@@ -205,6 +206,21 @@ describe('slices 2-5 native ops (smoke presence + shape)', () => {
     const npx = nativeCommandAvailable('npx vitest run', '/', process.env.PATH ?? '/usr/bin:/bin');
     if (npx !== null) {
       expect(npx.bin).toBe('npm');
+    }
+  });
+
+  it('nativeStripAnsi matches TS regex on full CSI (SGR + cursor moves)', () => {
+    if (!isNativeCoreAvailable()) return;
+    const cases = [
+      ['\x1b[31mred\x1b[0m', 'red'],
+      ['a\x1b[2Kb\x1b[1;32mgreen\x1b[0m', 'abgreen'],
+      ['\x1b[?25lhidden', 'hidden'],
+      ['plain\x1b[2J', 'plain'],
+      ['no ansi', 'no ansi'],
+    ];
+    for (const [input, expected] of cases) {
+      const out = nativeStripAnsi(input);
+      expect(out).toBe(expected);
     }
   });
 });
