@@ -26,7 +26,7 @@ function hasProjectMarker(dir: string): boolean {
   return PROJECT_MARKERS.some((m) => {
     if (m.includes('*')) {
       try {
-        return readdirSync(dir).some((e) => new RegExp('^' + m.replace(/\*/g, '.*') + '$').test(e));
+        return readdirSync(dir).some((e) => new RegExp('^' + m.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$').test(e));
       } catch {
         return false;
       }

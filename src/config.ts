@@ -20,13 +20,13 @@ const defaultConfig = (): MochiConfig => ({
     mode: 'ask',
     commandTimeoutSeconds: 120,
     // Long-run defaults: hours-long tasks are the norm (user mandate).
-    // 40 iterations ≈ a real multi-file feature; 240 min ≈ one working
+    // 80 iterations ≈ a full multi-feature session; 240 min ≈ one working
     // session. Runtime guards + compaction make both ceilings safe, and the
     // validation range (1-100 / 0.5-720) already admits them.
-    maxIterations: 40,
+    maxIterations: 80,
     maxRuntimeMinutes: 240,
     maxConcurrentAgents: 3,
-    contextBudgetTokens: 200_000,
+    contextBudgetTokens: 400_000,
   },
   permissions: {
     read: true,
