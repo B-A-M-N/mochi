@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import FilmGrain from '../FilmGrain.jsx';
+import Noise from '../Noise.jsx';
 import { AnimatedContent, SplitText, ScrollFloat } from '../anim.jsx';
 
 const RELEASES = [
@@ -58,7 +58,7 @@ function Changelog() {
   const [open, setOpen] = useState('0.20.0');
   return (
     <>
-      <FilmGrain />
+      <Noise opacity={0.09} size={1} fps={30} blendMode="overlay" contrast={0.6} dust={0.2} scratches={0.15} flicker={0.1} fixed zIndex={9999} />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">

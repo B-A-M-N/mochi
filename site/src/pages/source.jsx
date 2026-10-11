@@ -2,13 +2,13 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import RepoBrowser from '../RepoBrowser.jsx';
 import Footer from '../Footer.jsx';
-import FilmGrain from '../FilmGrain.jsx';
+import Noise from '../Noise.jsx';
 import { AnimatedContent, ScrollFloat } from '../anim.jsx';
 
 function Source() {
   return (
     <>
-      <FilmGrain />
+      <Noise opacity={0.09} size={1} fps={30} blendMode="overlay" contrast={0.6} dust={0.2} scratches={0.15} flicker={0.1} fixed zIndex={9999} />
       <div className="pagehead">
         <div className="wrap">
           <AnimatedContent direction="bottom" delay={0.1}>
