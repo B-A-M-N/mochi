@@ -1419,3 +1419,117 @@ describe('isComplexRewritingTask (large-rewrite protocol gate)', () => {
     expect(isComplexRewritingTask('Summarize the last 10 commits')).toBe(false);
   });
 });
+
+describe('injectStruggleState (quality slice — agent must surface its struggles to the model)', () => {
+  /** Build a minimal agent with empty state for the injectStruggleState test. */
+  function makeBareAgent() {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-struggle-'));
+    const config = makeConfig(dir, 'http://localhost:0'); // never called
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const context = new ContextEngine(config, dir);
+    const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+    return { agent, dir };
+  }
+
+  /** Read all messages from the context (public getter). */
+  function messagesOf(agent: unknown) {
+    return (agent as any).context.messages as Array<{ role: string; content: string }>;
+  }
+
+  it('is a no-op on a healthy run (no signals)', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      // Fresh agent: empty consecutiveToolErrors, emptyResponseCount = 0,
+      // verifyCount = 0, no lastToolError, no known errors.
+      const before = messagesOf(agent).length;
+      (agent as any).injectStruggleState(0);
+      (agent as any).injectStruggleState(1);
+      const after = messagesOf(agent).length;
+      expect(after).toBe(before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects a system message when a tool has failed 2+ times in a row', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      // Simulate 3 consecutive failures of the same tool.
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'oldText not found', count: 3 });
+      (agent as any).injectStruggleState(0);
+      const msgs = messagesOf(agent);
+      const struggleMsgs = msgs.filter((m) =>
+        m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggleMsgs.length).toBe(1);
+      expect(struggleMsgs[0].content).toContain('edit: failed 3 times in a row');
+      expect(struggleMsgs[0].content).toContain('oldText not found');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects empty-response count when the provider drops requests', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).emptyResponseCount = 3;
+      (agent as any).injectStruggleState(0);
+      const msgs = messagesOf(agent);
+      const struggleMsgs = msgs.filter((m) =>
+        m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggleMsgs.length).toBe(1);
+      expect(struggleMsgs[0].content).toContain('Empty model responses: 3 in a row');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rate-limits to once per 2 iterations', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).emptyResponseCount = 3;
+      (agent as any).injectStruggleState(0);
+      (agent as any).injectStruggleState(1); // rate-limited: should be no-op
+      const msgs = messagesOf(agent);
+      const struggleMsgs = msgs.filter((m) =>
+        m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggleMsgs.length).toBe(1);
+      (agent as any).injectStruggleState(2); // 2 iterations later: ok
+      const struggleMsgs2 = msgs.filter((m) =>
+        m.role === 'system' && m.content.includes('STRUGGLE STATE'));
+      expect(struggleMsgs2.length).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('combines all signals into one summary when multiple are present', () => {
+    const { agent, dir } = makeBareAgent();
+    try {
+      (agent as any).consecutiveToolErrors.set('edit', { error: 'oldText not found', count: 2 });
+      (agent as any).consecutiveToolErrors.set('write', { error: 'permission denied', count: 2 });
+      (agent as any).emptyResponseCount = 2;
+      (agent as any).lastToolError = 'oldText not found in foo.ts';
+      (agent as any).verifyCount = 2;
+      (agent as any).lastVerifyPassed = false;
+      (agent as any).toolCallsTotal = 25;
+      (agent as any).context.addKnownError('verification failed: test_x broke');
+      (agent as any).injectStruggleState(0);
+      const msg = messagesOf(agent)
+        .filter((m) => m.role === 'system' && m.content.includes('STRUGGLE STATE'))
+        .pop();
+      expect(msg).toBeDefined();
+      const c = msg!.content;
+      expect(c).toContain('STRUGGLE STATE');
+      expect(c).toContain('edit: failed 2 times');
+      expect(c).toContain('write: failed 2 times');
+      expect(c).toContain('Empty model responses: 2 in a row');
+      expect(c).toContain('Last tool error: oldText not found in foo.ts');
+      expect(c).toContain('Verify attempts so far: 2 (last failed)');
+      expect(c).toContain('Tool calls so far: 25');
+      expect(c).toContain('change strategy');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

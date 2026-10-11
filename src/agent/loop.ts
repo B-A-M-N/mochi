@@ -856,6 +856,14 @@ Continue from 'Next:', do not redo completed progress.`,
       void this.prefetchForNextTurn();
       // MCH-74: mid-run steer — inject any queued user guidance before the turn.
       this.drainSteerQueue();
+      // Quality slice: surface the agent's struggle state (consecutive tool
+      // errors, empty-response retries, recent known errors) to the model on
+      // every turn. Without this, a model in trouble starts each turn fresh —
+      // it doesn't know it has failed 3 tool calls in a row or that 2 verify
+      // attempts have already passed. The injection is rate-limited to once
+      // per 2 iterations and a no-op when no struggle signals exist, so the
+      // cost is zero on healthy runs.
+      this.injectStruggleState(i);
       sm.beginIteration(i);
       // Deliver completed background tasks as events into the transcript.
       try {
@@ -3689,6 +3697,98 @@ Continue from 'Next:', do not redo completed progress.`,
    *  after verification failure so the next attempt is a conscious
    *  repair with an explicit causal theory. Once per task, never blocks. */
   private selfCritiqued = false;
+  private lastStruggleInjectIter = -10;
+
+  /**
+   * Quality slice: build a one-shot struggle summary and inject it as a
+   * system message so the model knows it has been struggling. Cheap
+   * computation; no I/O. The summary covers:
+   *  - consecutive tool errors (per-tool) — signals "don't retry the same call"
+   *  - cross-tool errors with the same signature — "root cause is shared"
+   *  - empty-response count — "your provider is dropping requests"
+   *  - last tool error — the most recent failure the model has not seen
+   *  - recent known errors — the persisted addKnownError log
+   *  - verify count + pass state — how many verify cycles have run
+   *  - turn count — how deep in the loop we are
+   *
+   * Rate-limited to once per 2 iterations (lastStruggleInjectIter); no-op
+   * when there are no signals. Result: a struggling model is reminded
+   * of its situation; a healthy model pays no cost (the message is
+   * dropped before it reaches the system role).
+   */
+  private injectStruggleState(iter: number): void {
+    if (iter - this.lastStruggleInjectIter < 2) return;
+    const parts: string[] = [];
+
+    // 1) Consecutive tool errors (top 3 by count, name + count + error sig)
+    const toolErrs: Array<[string, { error: string; count: number }]> = [];
+    for (const [name, e] of this.consecutiveToolErrors) {
+      if (e.count >= 2) toolErrs.push([name, e]);
+    }
+    if (toolErrs.length) {
+      toolErrs.sort((a, b) => b[1].count - a[1].count);
+      const lines = toolErrs.slice(0, 3).map(([name, e]) =>
+        `  - ${name}: failed ${e.count} times in a row (${e.error.slice(0, 80)})`);
+      parts.push(`Consecutive tool failures (${toolErrs.length} tool(s)):\n${lines.join('\n')}`);
+    }
+
+    // 2) Cross-tool same-signature errors (root cause is shared)
+    if (this.crossToolErrorSig.size) {
+      const cross: string[] = [];
+      for (const [sig, v] of this.crossToolErrorSig) {
+        if (v.count >= 2) cross.push(`  - ${v.tool} (count ${v.count}): ${sig.slice(0, 80)}`);
+      }
+      if (cross.length) {
+        parts.push(`Cross-tool same-signature failures (shared root cause):\n${cross.join('\n')}`);
+      }
+    }
+
+    // 3) Empty-response retries (provider instability)
+    if (this.emptyResponseCount >= 2) {
+      parts.push(`Empty model responses: ${this.emptyResponseCount} in a row (provider may be overloaded or rate-limited). Consider waiting, switching model, or simplifying the next request.`);
+    }
+
+    // 4) Last tool error (single-line, regardless of how many tools failed)
+    if (this.lastToolError) {
+      parts.push(`Last tool error: ${String(this.lastToolError).slice(0, 240)}`);
+    }
+
+    // 5) Recent known errors (the addKnownError log — capped to 3 most recent)
+    const known = this.context['state']?.knownErrors as string[] | undefined;
+    if (known && known.length) {
+      const recent = known.slice(-3);
+      parts.push(`Recent known errors (${known.length} total):\n${recent.map((e) => `  - ${e.slice(0, 120)}`).join('\n')}`);
+    }
+
+    // 6) Verify state
+    if (this.verifyCount > 0) {
+      parts.push(`Verify attempts so far: ${this.verifyCount} (last ${this.lastVerifyPassed ? 'passed' : 'failed'}).`);
+    }
+
+    // 7) Turn count
+    if (this.toolCallsTotal > 20) {
+      parts.push(`Tool calls so far: ${this.toolCallsTotal}.`);
+    }
+
+    if (parts.length === 0) return; // healthy run, no signal
+
+    const summary =
+      `STRUGGLE STATE (turn ${iter + 1}) — read this BEFORE your next action:\n` +
+      parts.join('\n') +
+      `\nIf the same approach has failed 2+ times, change strategy: ` +
+      `(1) re-read the relevant files, (2) try a different tool, ` +
+      `(3) reduce scope or report a concrete blocker.`;
+
+    try {
+      this.context.addMessage({ role: 'system', content: summary });
+      this.lastStruggleInjectIter = iter;
+      this.events.emit({
+        type: 'agent:log' as any,
+        agentId: this.id,
+        message: `[struggle] injected state summary (${parts.length} signal(s))`,
+      });
+    } catch { /* never block the loop on injection */ }
+  }
   private maybeSelfCritique(task: Task, failureText: string): void {
     if (this.selfCritiqued || this.planMode) return;
     const reasoning = this.resolveReasoning(task);
