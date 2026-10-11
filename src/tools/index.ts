@@ -126,6 +126,32 @@ export function trimHeavyTools(map: Map<string, Tool>, taskText: string): number
   return trimmed;
 }
 
+/** MCH-110: LEAN tier — minimal core advertised for simple, focused coding
+ *  tasks (create/edit/run/verify a few files). Everything outside this set
+ *  (including most always-include auxiliary tools) is deferred to `load_tools`.
+ *  Cuts first-call schema from ~7-11K to ~2.5K tokens, directly shrinking TTFC
+ *  and per-call burn on the dominant task shapes. */
+export const LEAN_TOOL_NAMES = new Set([
+  'read', 'write', 'edit', 'patch', 'search', 'glob', 'shell', 'git', 'think',
+  'todo', 'load_tools', 'verify', 'lint', 'format', 'find_definitions',
+  'replace_symbol', 'move_file', 'create_directory', 'outline', 'delete',
+]);
+
+/** Task text regexes that justify the full (non-lean) toolset up front. */
+const LEAN_SIGNAL_RE =
+  /\b(memory|recall|skill|subagent|browser|web|screenshot|database|sql|pull request|github|deepwiki|wiki|performance|profile|benchmark|analyze|audit|security|map the codebase|architecture|clipboard|repl|note)\b/i;
+
+/** MCH-110: defer all non-LEAN tools to `load_tools` for simple focused tasks.
+ *  Returns the number of tools deferred (0 = task looks complex, keep full set). */
+export function trimToLeanTier(map: Map<string, Tool>, taskText: string): number {
+  if (LEAN_SIGNAL_RE.test(taskText)) return 0;
+  let trimmed = 0;
+  for (const name of [...map.keys()]) {
+    if (!LEAN_TOOL_NAMES.has(name) && ALL_TOOLS_MAP.has(name)) { map.delete(name); trimmed++; }
+  }
+  return trimmed;
+}
+
 /** MCH-91: deferred tool discovery — the model calls this when it needs a tool
  *  that was trimmed from its advertised schema. Loads the named heavy/auxiliary
  *  tool(s) into the live toolset; the loop re-advertises defs on change. */

@@ -76,26 +76,64 @@ const LINTER_CANDIDATES = [
   { name: 'biome', flag: '--version' },
 ];
 
-/** Probe and return the host environment profile (cached per session) */
+/** Binaries whose version probe is slow (300ms+ cold spawn) — availability via
+ *  the batched `command -v` scan is enough; skip the version spawn. */
+const HEAVY_PROBE_NAMES = new Set(['pnpm', 'npm', 'yarn', 'gradle', 'mvn', 'tsc']);
+
+/** Probe and return the host environment profile (cached per session).
+ *  MCH-112: a naive per-binary spawnSync scan costs ~2s on cold start (each
+ *  MISSING binary burns ~300ms in a full PATH walk). Resolve availability with
+ *  ONE `command -v` batch first, then version-probe only the binaries that
+ *  actually exist. Cuts first-prompt latency by ~2s. */
 export function getHostEnvironmentProfile(forceRefresh = false): HostEnvironmentProfile {
   if (cachedProfile && !forceRefresh) return cachedProfile;
 
+  const all = [
+    ...RUNTIME_CANDIDATES,
+    ...BUILD_CANDIDATES,
+    ...LINTER_CANDIDATES,
+  ].map((c) => c.name);
+  let present = new Set<string>();
+  try {
+    const res = spawnSync(
+      'bash',
+      ['-c', `for n in ${all.join(' ')}; do command -v "$n" >/dev/null 2>&1 && echo "$n"; done`],
+      { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    if (res.status === 0 && res.stdout) {
+      present = new Set(res.stdout.trim().split('\n').filter(Boolean));
+    }
+  } catch { /* fall through to per-binary probes */ }
+
   const runtimes: Record<string, ToolchainBinary> = {};
   for (const c of RUNTIME_CANDIDATES) {
-    const probe = probeBinary(c.name, c.flag);
-    if (probe.available) runtimes[c.name] = probe;
+    if (!present.size || present.has(c.name)) {
+      const probe = probeBinary(c.name, c.flag);
+      if (probe.available) runtimes[c.name] = probe;
+    }
   }
 
   const buildTools: Record<string, ToolchainBinary> = {};
   for (const c of BUILD_CANDIDATES) {
+    // MCH-112: even PRESENT heavy JVM/npm-ecosystem binaries cost 300-400ms per
+    // spawnSync (-v cold). Version detail is nice-to-have; availability is what
+    // the prompt needs. Mark present-but-unprobed binaries as available without
+    // a version string to keep cold-start fast.
+    if (present.size && !present.has(c.name)) continue;
+    if (HEAVY_PROBE_NAMES.has(c.name)) {
+      buildTools[c.name] = { name: c.name, available: true };
+      continue;
+    }
     const probe = probeBinary(c.name, c.flag);
     if (probe.available) buildTools[c.name] = probe;
   }
 
   const linters: Record<string, ToolchainBinary> = {};
   for (const c of LINTER_CANDIDATES) {
-    const probe = probeBinary(c.name, c.flag);
-    if (probe.available) linters[c.name] = probe;
+    if (!present.size || present.has(c.name)) {
+      const probe = probeBinary(c.name, c.flag);
+      if (probe.available) linters[c.name] = probe;
+    }
   }
 
   cachedProfile = {
