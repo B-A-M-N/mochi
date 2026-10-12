@@ -59,10 +59,10 @@ const pack = run('npm pack --dry-run');
 if (pack === null) fail('npm pack --dry-run failed');
 else {
   const checks = [
-    ['package/dist/cli.js', true],
-    ['package/dist/index.js', true],
-    ['package/native/bin/mochi_core.node', true],
-    ['package/src/', false],
+    ['dist/cli.js', true],
+    ['dist/index.js', true],
+    ['native/bin/mochi_core.node', true],
+    ['src/', false],
     ['.test.ts', false],
     ['.env', false],
   ];

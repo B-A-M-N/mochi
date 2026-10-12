@@ -17,7 +17,8 @@ run('npm run build');
 
 // Natives are best-effort (parity features degrade gracefully without them),
 // but the release gate asserts they ship — build when missing, don't rebuild
-// an already-present binary.
+// an already-present binary. Strip either way: pre-strip binaries were 30x
+// heavier than necessary and shipped for months.
 if (!existsSync(resolve(root, 'native/bin/mochi_core.node'))) {
   mkdirSync(resolve(root, 'native/bin'), { recursive: true });
   try {
@@ -26,5 +27,8 @@ if (!existsSync(resolve(root, 'native/bin/mochi_core.node'))) {
     console.warn('prepack: native build failed — parity features will be absent');
   }
 }
+try {
+  execSync('strip native/bin/fuzzy_rust native/bin/search_rust native/bin/mochi-agent native/bin/mochi_core.node native/bin/libmochi_core.so', { cwd: root, stdio: 'ignore' });
+} catch { /* strip unavailable on some platforms — harmless */ }
 
 run('npm run build:bin');
