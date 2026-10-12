@@ -1482,8 +1482,20 @@ async function main() {
     const extRoot = resolve(cliDirname(), '..', 'editors');
     if (target === 'vscode' || target === 'editors' || target === 'editor') {
       const pkg = resolve(extRoot, 'vscode', 'package.json');
-      if (!existsSync(pkg)) {
-        console.error('editors/vscode not found in this install (npm tarball excludes it). Clone https://github.com/mochi-agent/mochi → editors/vscode/README.md');
+      // Compiled binaries bake the BUILD machine's paths into import.meta.url,
+      // so existsSync can lie on the build host. Detect a compiled binary by
+      // its own executable name (node/bun/tsx runs show the runtime instead).
+      const { basename } = await import('node:path');
+      const isCompiledBin = basename(process.execPath).startsWith('mochi');
+      if (!existsSync(pkg) || isCompiledBin) {
+        // Standalone binary install (no editors/ tree shipped): grab the
+        // prebuilt .vsix from the release page instead of cloning + building.
+        console.log('');
+        console.log('VS Code (binary install):');
+        console.log('  1. Download mochi-vscode-<version>.vsix from https://github.com/xanstomper/mochi/releases');
+        console.log('  2. code --install-extension mochi-vscode-<version>.vsix');
+        console.log('     (or Extensions view → … → Install from VSIX)');
+        console.log('  3. Open a trusted folder → Mochi icon → "Mochi: New Session".');
       } else {
         console.log('');
         console.log('VS Code:');

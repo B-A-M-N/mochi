@@ -27,14 +27,35 @@ if (os !== 'windows') {
   try { accessSync(bin, constants.X_OK); } catch { fail(`--bin not executable: ${bin} (chmod +x?)`); }
 }
 
-// Binary must run and report a version.
-let printed;
+// Binary identity: host-runnable targets must execute and report a version;
+// cross-targets can't execute here, so verify magic bytes instead (the
+// native smoke legs in release.yml execute them on real hardware).
+const hostOs = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux';
+const hostArch = process.arch === 'arm64' ? 'arm64' : 'x64';
+const MAGIC = {
+  linux: ['7f454c46'], // ELF
+  windows: ['4d5a'], // MZ
+  darwin: ['cffaedfe', 'cefaedfe', 'cafebabe', 'cafebabf', 'feedface', 'feedfacf'],
+};
 try {
-  printed = execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 30_000 }).trim();
-} catch (e) { fail(`"${bin} --version" failed: ${e.message}`); }
-const m = printed.match(/\d+\.\d+\.\d+/);
-if (!m) fail(`"${bin} --version" printed no semver: ${JSON.stringify(printed)}`);
-if (!printed.includes(version)) warn(`binary reports ${m[0]} but --version ${version} was requested`);
+  const head = readFileSync(bin).subarray(0, 4).toString('hex');
+  const want = MAGIC[os] ?? [];
+  if (!want.some((sig) => head.startsWith(sig))) fail(`--bin magic mismatch for ${os}: got ${head} (not a ${os} executable?)`);
+} catch (e) {
+  if (e instanceof Error && e.message.startsWith('--bin magic')) throw e;
+  fail(`could not read --bin magic: ${(e instanceof Error ? e.message : e)}`);
+}
+if (os === hostOs && arch === hostArch) {
+  let printed;
+  try {
+    printed = execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 30_000 }).trim();
+  } catch (e) { fail(`"${bin} --version" failed: ${e.message}`); }
+  const m = printed.match(/\d+\.\d+\.\d+/);
+  if (!m) fail(`"${bin} --version" printed no semver: ${JSON.stringify(printed)}`);
+  if (!printed.includes(version)) warn(`binary reports ${m[0]} but --version ${version} was requested`);
+} else {
+  warn(`cross-target ${os}-${arch}: skipping execution check (native smoke legs verify on hardware)`);
+}
 
 // Stage: binary + docs. install scripts are best-effort (absent in npm-era trees).
 const stage = mkdtempSync(join(tmpdir(), 'mochi-release-'));
