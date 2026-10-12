@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
 import EngineeringGridBackground from '../EngineeringGridBackground.jsx';
+import MochiTerminalDemo from '../MochiTerminalDemo.jsx';
 import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, TiltCard, GooeyBorder, BenchChart,
@@ -274,13 +275,45 @@ function StatsTicker() {
   );
 }
 
+function LiveTerminalSection() {
+  return (
+    <section className="section" id="live-demo" style={{ maxWidth: 1400, margin: '0 auto', padding: '60px 4vw 20px', scrollMarginTop: 100 }}>
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
+        <div className="section-tag-pill" style={{ justifyContent: 'center', margin: '0 auto 16px', display: 'flex' }}>
+          <span className="tag-sparkle">✦</span>
+          <span className="tag-part-dark">INTERACTIVE RUNTIME /</span>
+          <span className="tag-part-purple">LIVE TERMINAL EXPERIENCE</span>
+        </div>
+      </AnimatedContent>
+
+      <EditorialReveal delay={0.1}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <h2 className="section-title-huge" style={{ fontSize: 'clamp(28px, 4vw, 48px)', margin: 0, letterSpacing: '-0.03em' }}>
+            WATCH MOCHI IN <span className="accent-title">ACTION</span>
+          </h2>
+        </div>
+      </EditorialReveal>
+
+      <AnimatedContent direction="bottom" delay={0.15} distance={20} blur={10}>
+        <p style={{ textAlign: 'center', fontSize: 16.5, color: 'var(--ink-soft)', maxWidth: 680, margin: '0 auto 28px', lineHeight: 1.6 }}>
+          A truecolor terminal environment running Mochi's real TypeScript UI. Watch it launch in seconds, plan an architecture change, patch the code, and pass verification tests.
+        </p>
+      </AnimatedContent>
+
+      <AnimatedContent direction="bottom" delay={0.2} distance={30} blur={14}>
+        <MochiTerminalDemo />
+      </AnimatedContent>
+    </section>
+  );
+}
+
 function CapabilitiesSection() {
   return (
     <section className="section" id="capabilities" style={{ maxWidth: 1560, margin: '0 auto', padding: '80px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
-          <span className="tag-part-dark">SECTION 02 /</span>
+          <span className="tag-part-dark">SECTION 03 /</span>
           <span className="tag-part-purple">WHY MOCHI?</span>
         </div>
       </AnimatedContent>
@@ -1622,6 +1655,7 @@ export default function Home() {
       <EngineeringGridBackground />
       <HeroSection />
       <StatsTicker />
+      <LiveTerminalSection />
       <CapabilitiesSection />
       <SpecialistRolesSection />
       <ArchitectureSection />
