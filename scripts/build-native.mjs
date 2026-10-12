@@ -37,9 +37,13 @@ best('cargo (mochi_core)', () => {
   // Windows emits .dll, macOS .dylib, Linux .so; node loads a Rust cdylib of
   // any of those just fine renamed as .node.
   const libName = isWin ? 'mochi_core.dll' : process.platform === 'darwin' ? 'libmochi_core.dylib' : 'libmochi_core.so';
-  return copy(resolve(out, exe('mochi-agent')), exe('mochi-agent')) &&
-         copy(resolve(out, libName), 'mochi_core.node') &&
-         copy(resolve(out, libName), libName);
+  // Copies are independent on purpose: a running mochi-agent makes Linux
+  // copyFileSync fail with ETXTBSY, and an && chain would then skip the
+  // .node copy too — one busy file used to disable the whole native core.
+  const agent = copy(resolve(out, exe('mochi-agent')), exe('mochi-agent'));
+  const nodeLib = copy(resolve(out, libName), 'mochi_core.node');
+  const lib = copy(resolve(out, libName), libName);
+  return agent && nodeLib && lib;
 });
 
 // 2. Single-file rust accelerators.
