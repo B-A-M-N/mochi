@@ -185,16 +185,20 @@ describe('slices 2-5 native ops (smoke presence + shape)', () => {
 
   it('nativeCommandAvailable resolves /bin/sh (or sh on PATH)', () => {
     if (!isNativeCoreAvailable()) return;
-    // First try absolute path (portable across distros).
-    const abs = nativeCommandAvailable('/bin/sh -c echo', '/', '');
-    if (abs !== null) {
-      expect(abs.available).toBe(true);
-      expect(abs.bin).toBe('/bin/sh');
-    }
-    // Then try PATH-resolved `sh` (always present on Unix).
-    const pathd = nativeCommandAvailable('sh -c echo', '/', process.env.PATH ?? '/usr/bin:/bin');
-    if (pathd !== null) {
-      expect(pathd.bin).toBe('sh');
+    // /bin/sh does not exist on Windows: nativeCommandAvailable reports it
+    // present-but-unavailable there, so this assertion is unix-only.
+    if (process.platform !== 'win32') {
+      // First try absolute path (portable across distros).
+      const abs = nativeCommandAvailable('/bin/sh -c echo', '/', '');
+      if (abs !== null) {
+        expect(abs.available).toBe(true);
+        expect(abs.bin).toBe('/bin/sh');
+      }
+      // Then try PATH-resolved `sh` (always present on Unix).
+      const pathd = nativeCommandAvailable('sh -c echo', '/', process.env.PATH ?? '/usr/bin:/bin');
+      if (pathd !== null) {
+        expect(pathd.bin).toBe('sh');
+      }
     }
     // Unknown binary must report unavailable, not throw.
     const none = nativeCommandAvailable('mochi-xyz-pretend-binary', '/', process.env.PATH ?? '/usr/bin:/bin');
