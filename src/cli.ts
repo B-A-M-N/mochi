@@ -237,13 +237,11 @@ Usage:
   mochi daemon cron add|list|remove # scheduled agent jobs
   mochi daemon restart              # stop + start on the same port
   mochi daemon stop
-  mochi enhance "<task>" [--mode <mode>]
   mochi termix ["<task>"] [--coms|--sep] [--sessions N]
   mochi reasoning [low|med|high|max] # view or set reasoning depth
   mochi tui
   mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
   mochi completion <bash|zsh|fish>   # print shell completion script
-  mochi perf
   mochi "<prompt>" --plan            # plan-then-act: research + return a plan, no edits
 
 Options:
@@ -267,7 +265,6 @@ Options:
   -q, --quiet             Less output
   -v, --verbose           More output
   --debug                 Debug output
-  --chunks <n>            Chunk count for mochi perf
   -h, --help              Show help
   --version               Show version
 
@@ -1242,66 +1239,11 @@ async function main() {
     }
     return;
   }
-  if (first === 'ask') {
-    // Interactive clarification (spec 12-B): mochi ask "<title>" --choices "a;b;c" [--default a] [--recommended c]
-    const {askUserChoice} = await import('./clarify.js');
-    const title = positional.slice(1).join(' ');
-    const choicesRaw = String(flags.choices ?? flags.options ?? '');
-    if (!title || !choicesRaw) {
-      console.log('Usage: mochi ask "<title>" --choices "pick A|pick B|pick C" [--default "<idx-or-id>"]');
-      return;
-    }
-    const opts = choicesRaw.split('|').map((x) => x.trim()).filter(Boolean);
-    const choices = opts.map((label, i) => ({ id: String(i + 1), label }));
-    const dv = typeof flags['default'] === 'string' && flags['default'] ? flags['default'] : undefined;
-    const q = { title, choices: choices.length ? choices : [{ id: '1', label: opts[0] ?? '' }], ...(dv ? { defaultValue: dv } : {}) };
-    const out = await askUserChoice(q);
-    console.log('→ ' + (out.choice?.label ?? '(none)') + (out.usedDefault ? ' (default)' : ''));
-    return;
-  }
-  if (first === 'docs') {
-    const { queryDocs, generateAdr } = await import('./dox.js');
-    const sub = positional[1];
-    const docsDir = resolve(cwd, 'docs');
-    if (sub === 'query') {
-      const q = positional.slice(2).join(' ');
-      if (!q) { console.log('Usage: mochi docs query "<text>"'); return; }
-      const hits = queryDocs(docsDir, q);
-      if (!hits.length) { console.log('No doc matches.'); return; }
-      for (const h of hits.slice(0, 5)) {
-        console.log(`[${h.file}] ${h.title}`);
-        console.log('  ' + h.text.slice(0, 180).replace(/\n/g, ' '));
-      }
-      return;
-    }
-    if (sub === 'adr') {
-      // mochi docs adr "<title>" --context "..." --decision "..." [--tradeoffs "a;b"]
-      const title = positional.slice(2).join(' ');
-      const context = String(flags.context ?? '');
-      const decision = String(flags.decision ?? '');
-      if (!title || !context || !decision) {
-        console.log('Usage: mochi docs adr "<title>" --context "..." --decision "..." [--tradeoffs "a;b"]');
-        return;
-      }
-      const tradeoffs = typeof flags.tradeoffs === 'string' && flags.tradeoffs ? flags.tradeoffs.split(';').map((x) => x.trim()).filter(Boolean) : undefined;
-      const rel = generateAdr(cwd, { title, context, decision, tradeoffs });
-      console.log(`ADR written: ${rel}`);
-      return;
-    }
-    console.log('Usage: mochi docs query "<text>" | mochi docs adr "<title>" --context "..." --decision "..."');
-    return;
-  }
   if (first === 'acp') {
     // Editor-native stdio server (Agent Client Protocol). Runs until the
     // editor closes stdin. Never falls through to the prompt path.
     const { serverLoop } = await import('./acp.js');
     await serverLoop(cwd);
-    return;
-  }
-  if (first === 'perf') {
-    const { benchmarkStream, formatPerfReport } = await import('./observability/perf.js');
-    const count = flags.chunks ? Number(flags.chunks) : 10000;
-    console.log(formatPerfReport(benchmarkStream(count)));
     return;
   }
   if (first === 'config') {
@@ -1429,37 +1371,12 @@ async function main() {
     console.log(formatDoctor(report));
     return;
   }
-  if (first === 'run' || first === 'shell') {
-    const cmd = positional.slice(1).join(' ');
-    const { execFile } = await import('node:child_process');
-    execFile('sh', ['-c', cmd], { cwd }, (e, o, er) => {
-      console.log(String(o ?? ''));
-      if (er) { console.error(String(er)); process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1; }
-    });
-    return;
-  }
-  if (first === 'test') {
-    const { detectRepo } = await import('./repo/repo.js');
-    const repo = detectRepo(cwd);
-    const cmd = repo.testCommand ?? 'no test command detected';
-    const { execFile } = await import('node:child_process');
-    execFile('sh', ['-c', cmd], { cwd }, (e, _stdout, stderr) => {
-      if (stderr) console.error(String(stderr));
-      if (e) process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1;
-    });
-    return;
-  }
   if (first === 'init') {
     const { existsSync, writeFileSync } = await import('node:fs');
     const p = resolve(cwd, 'MOCHI.md');
     if (existsSync(p)) { console.log('MOCHI.md already exists.'); return; }
     writeFileSync(p, '# MOCHI.md\n\nProject instructions for the Mochi coding agent.\n');
     console.log('Created MOCHI.md');
-    return;
-  }
-  if (first === 'branch') {
-    const { execFile } = await import('node:child_process');
-    execFile('git', ['branch', '--show-current'], { cwd }, (_e, out) => console.log(String(out ?? '').trim() || 'no branch'));
     return;
   }
   if (first === 'commit') {
@@ -1471,30 +1388,6 @@ async function main() {
   if (first === 'usage') { console.log(runtime.usage.summary()); return; }
   if (first === 'known-good') { console.log(await runtime.recordGood()); return; }
   if (first === 'check') { console.log(await runtime.knownGood()); return; }
-  if (first === 'enhance' || first === 'chameleon') {
-    const question = positional.slice(1).join(' ');
-    if (!question) { console.error('Usage: mochi chameleon "<task>" [--mode <mode>] [--strategy <strategy>]'); process.exit(1); }
-    const modeFlag = flags.mode ? String(flags.mode).toLowerCase() : 'auto';
-    const strategyFlag = flags.strategy ? String(flags.strategy).toLowerCase() : 'hybrid';
-    // Validate CLI strings against the engine unions (invalid → default with
-    // a warning) instead of casting arbitrary input loosely.
-    const { CHAMELEON_MODES, STALL_STRATEGIES } = await import('./cognitive/chameleon.js');
-    const mode = (CHAMELEON_MODES as readonly string[]).includes(modeFlag) ? modeFlag : 'auto';
-    const strategy = (STALL_STRATEGIES as readonly string[]).includes(strategyFlag) ? strategyFlag : 'hybrid';
-    if (mode !== modeFlag) console.error(`Unknown chameleon mode "${modeFlag}" — using auto.`);
-    if (strategy !== strategyFlag) console.error(`Unknown chameleon strategy "${strategyFlag}" — using hybrid.`);
-    try {
-      const { ChameleonEngine } = await import('./chameleon.js');
-      const engine = new ChameleonEngine(runtime.config);
-      const r = await engine.enhance({ task: question, mode: mode as import('./cognitive/chameleon.js').ChameleonMode, strategy: strategy as import('./cognitive/chameleon.js').StallStrategy, cwd: runtime.cwd });
-      console.log(`[Lazy Chameleon v2.4 — Mode: ${r.mode}, Strategy: ${r.strategy}, ${r.strategies.length} passes, ${r.tokensUsed} tokens, ${r.durationMs}ms]\n`);
-      console.log(r.context);
-    } catch (e) {
-      console.error('Chameleon enhancement failed:', e instanceof Error ? e.message : e);
-      process.exit(1);
-    }
-    return;
-  }
   if (first === 'termix') {
     // "Split this session into N split windows." No external app, no extra
     // process, no auto-launch: all panes are in-process agent sessions on the
