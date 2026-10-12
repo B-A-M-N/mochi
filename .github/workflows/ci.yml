@@ -31,6 +31,10 @@ jobs:
         # git-bash on Windows so `command -v` + POSIX paths work unchanged.
         shell: bash
         run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # MSVC links N-API symbols against node.lib at build time (see build.rs).
+            export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$(command -v node)")")"
+          fi
           if command -v rustc >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
             npm run build:native
             # Fail loudly if the build silently no-op'd: build:native uses
