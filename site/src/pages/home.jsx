@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
+import CRTWarpBackground from '../CRTWarpBackground.jsx';
 import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, TiltCard, GooeyBorder, BenchChart,
@@ -1144,6 +1145,7 @@ function CodaSection() {
 export default function Home() {
   return (
     <>
+      <CRTWarpBackground />
       <HeroSection />
       <StatsTicker />
       <CapabilitiesSection />

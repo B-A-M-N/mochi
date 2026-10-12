@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
+import CRTWarpBackground from '../CRTWarpBackground.jsx';
 import { AnimatedContent } from '../anim.jsx';
 import {
   IconRocket, IconTerminal, IconUsers, IconWrench,
@@ -118,6 +119,7 @@ export default function Docs() {
 
   return (
     <>
+      <CRTWarpBackground />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">

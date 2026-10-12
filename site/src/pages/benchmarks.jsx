@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
+import CRTWarpBackground from '../CRTWarpBackground.jsx';
 import { AnimatedContent, BenchChart } from '../anim.jsx';
 import {
   IconBolt, IconCpu, IconShield, IconLayers,
@@ -127,6 +128,7 @@ export default function Benchmarks() {
 
   return (
     <>
+      <CRTWarpBackground />
       <div className="pagehead">
         <div className="wrap">
           <div className="pagehead-row">
