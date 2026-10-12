@@ -1,6 +1,14 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Reproducible cross-harness benchmark** — `bench/cli-matrix.mjs`: cold-start wall time + kernel peak RSS for every installed coding-agent CLI (`--version`, N runs, p50/mean). First honest slice: claude/codex/jcode lead startup (~20ms/22-36MB), mochi node entry mid-field (77ms/48MB, half of opencode's 91MB), pi pathological (2.1s). `docs/BENCHMARKS.md` leads with these re-measured numbers and demotes the unreproducible August matrix to history.
+
+- **Loop-guard correctness** — failure-cluster compared against the just-assigned signature (always true); now compares against the previous turn. `lastToolError` gate covers verify/subagent tools and only a successful work tool clears it (a trailing `read` no longer masks a failed shell). Same-answer stagnation applies post-verify-failure. Removed dead `pulse` empty-response abort. Abort-listener wiring cleaned up per model call. Cooldown/429/transient retries no longer burn `maxIterations`.
+- **Verification honesty** — strict `^exit_code:` parsing in both verifiers; explicit-task 127 (missing runner) fails, harness-added 127 still skips; mutation gated on the test command itself; judge falls back to rule-based on garbage JSON and a PASS contradicting failed evidence is vetoed to PARTIAL; rule-based BLOCKs on unverified changes instead of PASSing. Greenfield veto + `cd`-prefix-tolerant baseline matching in both verifiers; shared heuristics in `core/greenfield.ts`.
+- **Scope + routing** — `autoTestCommand` bails on multi-dir scopes, matches `_test.go`/`test_*.py`/`*Test.java`, falls through to parent runners; compiler/linter commands count as strong verification. Question-titles route to chat. `create` no longer matches `creative`. Goal `needsVerification` includes edited files; self-review skips `BLOCKED`; `before_task` veto precedes `scheduler.start`; `<path> exists` requires path-like non-empty files.
+- **Budgets + config** — `canExecuteTool` allows the verify phase; `autoImprove`/`selfTrain` report per-run deltas and no longer mutate shared `maxIterations`; `MOCHI_SAFETY`/`MOCHI_SANDBOX`/`MOCHI_REASONING` warn on unknown values (`off`/`auto` reasoning now respected); `applyMode` deep-clones; `.gitignore` covers `.mcp.json`/`mcp-oauth.json`; OAuth warns on empty `${VAR}` expansion; daemon rotate no longer prints tokens.
+- **Exec policy** — `verify` tool runs through `exec.ts` (timeout/cap/redaction); authored-tool, perf-measure, and curator-doctor outputs redacted; perf `measure` is async. Rate-limit sleeps/throttle abort-aware; token wait precedes semaphore take.
+- **CI + docs** — `release-check --skip-tests` wired into CI; competitor matrix synced with closed gaps; duplicate changelog H1 removed.
 
 ## 0.23.0 — 2026-10-12 (the everything sweep)
 
@@ -427,8 +435,6 @@
 - **Docs.** README now covers the daemon surface, `/api/resume`
   restart-survival semantics, run traces (`mochi trace [<goalId>]`), and
   refreshed cold-start/memory numbers (node ~84ms/~47MB, bun ~78ms/~42MB).
-
-# Mochi Changelog
 
 ## 0.9.6
 

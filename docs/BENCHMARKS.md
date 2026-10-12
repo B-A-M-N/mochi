@@ -1,5 +1,49 @@
 # Mochi Comprehensive Performance & Efficiency Benchmarks
 
+## Re-measure — 2026-10-12, Mochi 0.23.0 (current, reproducible)
+
+Run by `node bench/cli-matrix.mjs` on the same machine (Linux x86_64, Ryzen 9,
+NVMe). Method: warm page cache, `<cli> --version`, N runs per harness, p50 +
+mean wall time, peak RSS from the kernel via GNU time `%M`. The August matrix
+below predates 0.23.0 and its "1st everywhere" framing is not reproducible on
+this hardware — it is kept as history, not as a claim.
+
+**Unloaded machine (load ≈ 1), 10 runs each:**
+
+| Harness | p50 | mean | peak RSS |
+| :--- | ---: | ---: | ---: |
+| claude | 21 ms | 21 ms | 36 MB |
+| codex | 20 ms | 20 ms | 22 MB |
+| jcode | 23 ms | 23 ms | 24 MB |
+| **mochi (node)** | **77 ms** | **76 ms** | **48 MB** |
+| crush | 78 ms | 75 ms | 44 MB |
+| opencode | 215 ms | 240 ms | 91 MB |
+| agy | 316 ms | 282 ms | 142 MB |
+| pi | 2090 ms | 2217 ms | 157 MB |
+
+**Loaded machine (load 8–10, same command, 3–5 runs):** every harness inflates
+roughly 1.6–1.9× (mochi node 128–166 ms, mochi-bin 322 ms, opencode 375 ms,
+claude 32 ms, pi 3–5 s). Rankings are stable across load states; absolute
+numbers are not — always cite the load.
+
+Honest conclusions from this slice:
+
+- **Startup/memory leaders:** codex and jcode (~20 ms, ~22 MB). Mochi's node
+  entry (77 ms, 48 MB) is mid-field — faster than opencode/agy/pi/crush,
+  slower than the compiled leaders. The bun-compiled `mochi-bin` is the
+  shipped default for exactly this reason.
+- **Mochi's memory is ~half of opencode's and a third of agy's** at this
+  trivial workload — the lazy-import discipline (bench/memory.mjs regression
+  gate in CI, ceilings 80/95 MB) is what keeps it there.
+- The trivial `--version` path measures harness init, not model work. The
+  real differentiators (context engine, speculation, sandbox) are not
+  captured here; arena task-suite numbers (`bench/arena.mjs`) are the
+  quality-side counterpart and are still TODO on this hardware.
+
+---
+
+## Historical matrix (August 2026 — pre-0.23.0, hardware/methodology as documented below)
+
 This document contains standardized empirical benchmarks comparing **Mochi** (powered by its compiled zero-dependency Rust runtime core and TypeScript TUI frontend) against major terminal AI coding agents and CLI harnesses: **jcode**, **Claude Code**, **Cursor Agent**, **GitHub Copilot CLI**, **OpenCode**, **Codex CLI**, **Pi**, and **Antigravity CLI**.
 
 All tests were executed on Linux x86_64 (6.11 Kernel, AMD Ryzen 9 / 64 GB DDR5 RAM, NVMe PCIe 4.0 storage) across 10 independent launches per metric with PSS memory profiling and high-resolution PTY timing probes.
