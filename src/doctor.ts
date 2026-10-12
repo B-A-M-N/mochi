@@ -69,7 +69,11 @@ export async function doctorReport(opts: {
     bubblewrap = detectBubblewrap() !== null;
   } catch { /* exec module unavailable: report unavailable */ }
   // Browser driver probe: playwright present + downloaded browser binaries.
-  // Runs the driver's no-launch `probe` (never opens a window).
+  // Runs the driver's no-launch `probe` (never opens a window). The driver is
+  // a plain node script: run it with node from PATH when available, else fall
+  // back to the current executable (works for node dist/cli.js and for the
+  // bun-compiled binary, which also runs plain JS — but NEVER assume
+  // process.execPath is node, or doctor spawns a second agent instead!).
   let browserDriver = false;
   let browsers: string[] = [];
   try {
@@ -77,11 +81,20 @@ export async function doctorReport(opts: {
     const { resolve: rp, dirname: dn } = await import('node:path');
     const { fileURLToPath: ffp } = await import('node:url');
     const driver = rp(dn(ffp(import.meta.url)), '..', 'scripts', 'browser-driver.mjs');
-    const out: string = await new Promise((resolve2) => {
-      ef(process.execPath, [driver, 'probe'], { timeout: 20_000 }, (err, stdout) => {
-        resolve2(err ? '' : String(stdout ?? ''));
-      });
-    });
+    const runners = ['node', process.execPath];
+    let out = '';
+    for (const runner of runners) {
+      try {
+        out = await new Promise<string>((resolve2, reject2) => {
+          ef(runner, [driver, 'probe'], { timeout: 20_000 }, (err, stdout) => {
+            if (err) reject2(err);
+            else resolve2(String(stdout ?? ''));
+          });
+        });
+        if (out.includes('{')) break;
+        out = '';
+      } catch { /* try the next runner */ }
+    }
     const parsed = JSON.parse(out.slice(out.indexOf('{'))) as { ok?: boolean; browsers?: string[] };
     if (parsed && parsed.ok) {
       browserDriver = true;
@@ -238,7 +251,7 @@ export function formatDoctor(r: DoctorReport): string {
     `  daemon        ${ok(r.daemon.running)} ${r.daemon.running ? `running on :${r.daemon.port}` : 'not running'}`,
     `  diagnostics   TS:${r.diagnostics.typescript ? 'yes' : 'no'} Python:${r.diagnostics.python ? 'yes' : 'no'}`,
     `  sandbox       ${r.sandbox.bubblewrap ? 'ok    bubblewrap available (safety.sandbox / shell sandbox:true)' : 'MISS  no bwrap (sandbox unavailable)'}`,
-    `  browser       ${r.browser.driver && r.browser.browsers.length > 0 ? `ok    playwright + ${r.browser.browsers.join(', ')}` : r.browser.driver ? 'MISS  playwright present but no browser binaries (npx playwright install)' : 'MISS  browser driver unavailable (npm i -g playwright)'}'`,
+    `  browser       ${r.browser.driver && r.browser.browsers.length > 0 ? `ok    playwright + ${r.browser.browsers.join(', ')}` : r.browser.driver ? 'MISS  playwright present but no browser binaries (npx playwright install)' : 'MISS  browser driver unavailable (npm i -g playwright)'}`,
     `  skills        ${ok(r.skills.degraded.length === 0)} ${skillLine}`,
     `  theme         ${r.theme.id} (${r.theme.name})${r.theme.stuck ? '  STUCK — relaunch the TUI to pick up theming fixes' : ''}`,
     '',
