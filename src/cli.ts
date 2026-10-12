@@ -949,6 +949,44 @@ async function main() {
       else if (!rep.skills.length) process.exit(1);
       return;
     }
+    if (sub === 'search') {
+      // mochi skills search <query> — search all registered sources' packs
+      // (and the bundled catalog) by name/description token overlap.
+      const q = positional.slice(2).join(' ').toLowerCase();
+      if (!q) { console.log('Usage: mochi skills search <query>'); return; }
+      const terms = q.split(/\s+/).filter(Boolean);
+      const { loadRegistry, getSource, discoverPacks } = await import('./features/skill-registry.js');
+      const { resolveSourceDir } = await import('./features/skill-importer.js');
+      const { bundledSkillsDir, discoverSkills } = await import('./skills/skills.js');
+      const hits: Array<{ where: string; name: string; description: string }> = [];
+      // Bundled catalog first.
+      const bdir = bundledSkillsDir();
+      if (bdir) for (const s of discoverSkills(bdir).skills) {
+        const hay = `${s.name} ${s.description || ''}`.toLowerCase();
+        const score = terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
+        if (score > 0) hits.push({ where: 'bundled', name: s.name, description: (s.description || '').slice(0, 72) });
+      }
+      // Registered sources.
+      const reg = loadRegistry();
+      for (const n of Object.keys(reg.sources)) {
+        const src = getSource(n);
+        if (!src) continue;
+        const res = await resolveSourceDir(src.source, { update: !!flags.update });
+        if (!res.dir) continue;
+        for (const p of discoverPacks(res.dir, src.catalogFile)) {
+          const hay = `${p.name} ${p.description || ''}`.toLowerCase();
+          const score = terms.reduce((acc, t) => acc + (hay.includes(t) ? 1 : 0), 0);
+          if (score > 0) hits.push({ where: src.name, name: p.name, description: (p.description || '').slice(0, 72) });
+        }
+      }
+      if (!hits.length) { console.log(`No skills/packs matching '${q}'. Register a source: mochi skills repo add <name> <source>`); return; }
+      console.log(`Found ${hits.length} match(es) for '${q}':`);
+      for (const h of hits.sort((a, b) => a.where.localeCompare(b.where))) {
+        console.log(`  ${h.where.padEnd(16)} ${h.name.padEnd(28)} ${h.description}`);
+      }
+      console.log('\nInstall: mochi skills install <pack>@<repo>');
+      return;
+    }
     if (sub === 'unpack') {
       // mochi skills unpack <pack-dir> [--force] — install a pack created by
       // `mochi skills pack` (same engine as `skills import`, surfaced for
