@@ -15,13 +15,25 @@ import type { Tool } from './types.js';
 // first positional (navigate) or via `url:` for extract/act calls so a single
 // invocation does "open X, then click/type/read".
 
-const HERE = resolve(dirname(fileURLToPath(import.meta.url)));
-export const DRIVER = resolve(HERE, '../../scripts/browser-driver.mjs');
 const DEFAULT_TIMEOUT_MS = 45_000;
+
+// Module dir, resolved LAZILY: bun-compiled Windows binaries report a
+// non-file import.meta.url, and fileURLToPath throws at import time — which
+// used to kill every command (even `acp --check`) on Windows before any tool
+// ran. Unresolvable → cwd, and runDriver reports driver-unavailable.
+let cachedHere: string | undefined;
+function hereDir(): string {
+  if (cachedHere === undefined) {
+    try { cachedHere = resolve(dirname(fileURLToPath(import.meta.url))); }
+    catch { cachedHere = process.cwd(); }
+  }
+  return cachedHere;
+}
+const driverScript = (): string => resolve(hereDir(), '../../scripts/browser-driver.mjs');
 
 function runDriver(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [DRIVER, ...args], {
+    const child = spawn(process.execPath, [driverScript(), ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';

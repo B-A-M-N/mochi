@@ -13,7 +13,9 @@ import { fuzzyFindUnique, type FuzzyMatch } from './fuzzy-match.js';
 import { nativeFuzzyMatch } from '../native/core.js';
 
 function nativeBin(): string | undefined {
-  const here = dirname(fileURLToPath(import.meta.url));
+  let here: string;
+  try { here = dirname(fileURLToPath(import.meta.url)); }
+  catch { return undefined; }
   const dir = resolve(here, '..', '..', 'native', 'bin');
   for (const name of ['fuzzy_rust', 'fuzzy_cpp']) {
     const p = resolve(dir, name);

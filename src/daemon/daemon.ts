@@ -50,8 +50,6 @@ export function rotateAuth(auth: DaemonAuth, now = Date.now()): { token: string;
   return { token: auth.token, expiresAt: auth.expiresAt };
 }
 
-const here = dirname(fileURLToPath(import.meta.url));
-
 export function daemonInfoPath(workspaceDir: string): string {
   return resolve(workspaceDir, 'daemon', 'info.json');
 }
@@ -125,7 +123,14 @@ export async function startDaemon(opts: {
   const token = opts.token ?? randomBytes(24).toString('hex');
   const wsDir = resolve(opts.cwd, '.mochi');
   const { spawn } = await import('node:child_process');
-  const serverModule = resolve(here, '..', '..', 'dist', 'daemon', 'daemon-server.js');
+  // Module dir resolved HERE (not at module top): fileURLToPath throws inside
+  // bun-compiled Windows binaries, which must not break unrelated commands at
+  // import time. Fall back to cwd — startDaemon then fails with a clear
+  // spawn error instead of a cryptic URL crash.
+  let daemonHere: string;
+  try { daemonHere = dirname(fileURLToPath(import.meta.url)); }
+  catch { daemonHere = process.cwd(); }
+  const serverModule = resolve(daemonHere, '..', '..', 'dist', 'daemon', 'daemon-server.js');
   const child = spawn(process.execPath, [serverModule, String(port), token, opts.cwd, host], {
     detached: true,
     stdio: 'ignore',
