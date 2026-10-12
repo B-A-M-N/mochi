@@ -66,12 +66,17 @@ else {
     ['.test.ts', false],
     ['.env', false],
   ];
+  // npm's notice lines list tarball paths either bare (`dist/cli.js`) or
+  // prefixed (`package/dist/cli.js`) depending on npm version — match both
+  // as whole tokens so `dist/cli.js` can't be satisfied by `dist/cli.js.map`.
+  const tokenHit = (needle) =>
+    new RegExp(`(?:^|\\s)(?:package/)?${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`, 'm').test(pack);
   let bad = false;
   for (const [needle, want] of checks) {
-    const has = pack.includes(needle);
+    const has = needle === '.env'
+      ? /(?:^|\s)(?:package\/)?[^ ]*\.env(?:\s|$)/m.test(pack) // real file, not 'dotenv' docs
+      : tokenHit(needle);
     if (has !== want) {
-      // .env matches many legit names (dotenv docs); only fail on real leaks.
-      if (needle === '.env' && !/package\/[^ ]*\.env(\s|$)/.test(pack)) continue;
       fail(`tarball ${want ? 'missing' : 'leaks'}: ${needle}`);
       bad = true;
     }

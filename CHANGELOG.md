@@ -4,6 +4,8 @@
 
 ## 0.23.0 — 2026-10-12 (the everything sweep)
 
+- **Publish pipeline hardened** — `prepack` now builds dist + natives + standalone binary (a clean-tree publish previously shipped a 4-file tarball with no agent in it); release gate's tarball check understands both bare and `package/`-prefixed npm notice formats; native binaries are stripped (26.6MB → 800KB, tarball 44.8MB → ~8MB).
+
 - **Source reorganization** — `src/` sorted from 88 flat root modules into topical dirs (`model/`, `stream/`, `memory/`, `skills/`, `state/`, `security/`, `daemon/`, `repo/`, `observability/`, plus `core/` and friends); 99 files moved with every relative import rewritten mechanically, verified by `tsc` + full suite. Root now holds entrypoints only.
 - **Dead code removal** — deleted 5 unreferenced modules + tests (`core/context-budget`, `core/git-plumbing`, `model/dual-dispatch`, `prompt/prompt-expander`, `stream-degen`), proven unimported via compiler move-away trial before removal.
 - **docgen now covers the whole tree** — scan cap 100→500 files, test files excluded from the architecture graph, recursive walk catches every subdir (ARCHITECTURE.md: 78→298 modules, 778→3105 symbols).
