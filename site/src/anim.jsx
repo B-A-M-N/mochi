@@ -111,6 +111,10 @@ export function AnimatedContent({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -118,10 +122,14 @@ export function AnimatedContent({
           if (once) io.disconnect();
         } else if (!once) setInView(false);
       },
-      { threshold: 0.08 }
+      { threshold: 0.01, rootMargin: '250px' }
     );
     io.observe(el);
-    return () => io.disconnect();
+    const fallback = setTimeout(() => setInView(true), 600);
+    return () => {
+      io.disconnect();
+      clearTimeout(fallback);
+    };
   }, [once]);
 
   return (

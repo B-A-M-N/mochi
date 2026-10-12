@@ -38,6 +38,7 @@
         '<span>xanstomper/mochi</span>' +
         '<span style="font-size:11px;opacity:0.7">↗</span>' +
       '</a>' +
+      '<div class="nav-attribution">website designed by xanstomper</div>' +
     '</div>';
 
   document.body.insertBefore(header, document.body.firstChild);

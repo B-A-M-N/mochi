@@ -29,7 +29,7 @@ const FEATURES = [
 
 const TELEMETRY_BLOCKS = [
   { val: '727', label: 'SOURCE FILES AUDITED', desc: 'Zero dead code or dangling unused dependencies' },
-  { val: '1,200', label: 'TESTS PASSING', desc: 'Vitest, unit, and headless integration tests passing (100%)' },
+  { val: '1,459', label: 'TESTS PASSING', desc: 'Vitest, unit, and headless integration tests passing (100%)' },
   { val: '0', label: 'RUNTIME DEPENDENCIES', desc: 'Single self-contained Bun executable with Rust core' },
   { val: 'MIT', label: 'OPEN SOURCE LICENSE', desc: 'Free for personal, academic, and commercial use' },
 ];
@@ -40,7 +40,7 @@ export default function Source() {
   return (
     <>
       <div className="pagehead">
-        <div className="wrap">
+        <div className="wrap" style={{ maxWidth: 1560, width: '100%' }}>
           <div className="pagehead-row">
             <div className="pagehead-col">
               <AnimatedContent direction="bottom" delay={0.1}>
