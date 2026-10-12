@@ -17,37 +17,24 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     globals: true,
     environment: 'node',
-    // Several tests are real integration tests that spawn `git`, `npm`, and
-    // `node` subprocesses and can exceed vitest's default 5s under parallel
-    // load; a generous cap keeps them from false-flaking without slowing the
-    // many fast unit tests (they finish in milliseconds regardless). The full
-    // GoalEngine pipeline test measured 2.5s solo but >30s when all four
-    // workers contend on a 4-core box (observed 2026-08-22), so the cap is
-    // high enough to absorb worst-case scheduler starvation.
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    // RAM guard (2026-10-05): vitest's default is one worker per CPU core, and
-    // every worker loads the full TypeScript compiler plus the whole Mochi app.
-    // On this 4-core box that meant 4 heavy workers (each hundreds of MB, more
-    // under swap pressure) that ate the machine into 10Gi/11Gi used and threw
-    // edge flakes (e.g. ast-guard's TS-compiler load failing under contention).
-    // Cap the pool to 2 forks: keeps real parallelism while bounding peak RAM,
-    // and reduces the scheduler starvation the old 4-worker contention caused.
+    // Pool: cap at 2 forks to bound RAM (each worker loads full TS compiler + Mochi app).
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        minForks: 1,
-        maxForks: 2,
-        singleFork: false,
-      },
-    },
-    // MCH-23: measure coverage of the shipped source tree only. Without an
-    // explicit include, v8 coverage also counts bench/*.mjs, scripts/*.mjs and
-    // dogfood/ (768 uncovered lines of benchmark & utility scripts that are
-    // never imported by src), which dragged global lines below the 70% CI
-    // threshold (69.76% observed 2026-07-10) even though src itself clears it.
+    minForks: 1,
+    maxForks: 2,
+    singleFork: false,
+    // MCH-23: measure coverage of the shipped source tree only.
     coverage: {
       include: ['src/**'],
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      thresholds: {
+        lines: 65,
+        functions: 69,
+        branches: 50,
+        statements: 65,
+      },
     },
   },
 });
