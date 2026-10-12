@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      # GH runner images do NOT ship bun (prepack's build:bin needs it —
+      # ubuntu died at "sh: 1: bun: not found" during the tarball verify).
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
       - run: npm ci
 
       - name: Build native accelerators (Rust + C++) so parity tests run

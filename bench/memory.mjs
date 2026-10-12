@@ -20,7 +20,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const GATES = [
   // [label, module to import, ceiling MB]
-  ['codegraph import', './dist/codegraph.js', 80],
+  ['codegraph import', './dist/repo/codegraph.js', 80],
   ['runtime chain', './dist/runtime.js', 95],
 ];
 

@@ -43,15 +43,28 @@ fn main() {
     }
 }
 
-/// Fallback: scan EVERY directory on PATH for node.lib. The first `where node`
-/// hit isn't necessarily the install that ships the import library (runners can
-/// have a shim node earlier in PATH than the real SDK dir).
+/// Fallbacks when MOCHI_NODE_LIB_DIR is unset/invalid: scan EVERY directory on
+/// PATH for node.lib (the first `where node` hit isn't necessarily the install
+/// that ships the import library), then the standard install locations.
 #[cfg(target_os = "windows")]
 fn find_node_lib_dir() -> Option<String> {
-    let path = std::env::var("PATH").ok()?;
-    for dir in std::env::split_paths(&path) {
-        if dir.join("node.lib").exists() {
-            return Some(dir.to_string_lossy().into_owned());
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            if dir.join("node.lib").exists() {
+                return Some(dir.to_string_lossy().into_owned());
+            }
+        }
+    }
+    // GitHub's toolcache node (C:\hostedtoolcache\...) ships NO node.lib,
+    // but the runner image's Program Files install does — as do standard
+    // Node.msi installs on user machines. N-API is ABI-stable, so ANY
+    // node.lib links an addon that loads into every later node version.
+    for key in ["ProgramFiles", "ProgramFiles(x86)"].iter() {
+        if let Ok(base) = std::env::var(key) {
+            let dir = std::path::Path::new(&base).join("nodejs");
+            if dir.join("node.lib").exists() {
+                return Some(dir.to_string_lossy().into_owned());
+            }
         }
     }
     None
