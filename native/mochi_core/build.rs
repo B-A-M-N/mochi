@@ -47,7 +47,7 @@ fn main() {
 #[cfg(target_os = "windows")]
 fn find_node_lib_dir() -> Option<String> {
     let out = std::process::Command::new("where").arg("node").output().ok()?;
-    let first = String::from_utf8_lossy(out.stdout).lines().next()?.to_string();
+    let first = String::from_utf8_lossy(&out.stdout).lines().next()?.to_string();
     let node_exe = std::path::PathBuf::from(first.trim());
     let dir = node_exe.parent()?;
     if dir.join("node.lib").exists() {

@@ -34,8 +34,9 @@ const copy = (from, to) => {
 best('cargo (mochi_core)', () => {
   if (!sh('cargo', ['build', '--release', '--manifest-path', 'native/mochi_core/Cargo.toml'])) return false;
   const out = resolve(root, 'native', 'mochi_core', 'target', 'release');
-  // Windows emits .dll / .exe; node loads a Rust cdylib .dll just fine as .node.
-  const libName = isWin ? 'mochi_core.dll' : 'libmochi_core.so';
+  // Windows emits .dll, macOS .dylib, Linux .so; node loads a Rust cdylib of
+  // any of those just fine renamed as .node.
+  const libName = isWin ? 'mochi_core.dll' : process.platform === 'darwin' ? 'libmochi_core.dylib' : 'libmochi_core.so';
   return copy(resolve(out, exe('mochi-agent')), exe('mochi-agent')) &&
          copy(resolve(out, libName), 'mochi_core.node') &&
          copy(resolve(out, libName), libName);
@@ -49,7 +50,7 @@ best('rustc search', () => sh('rustc', ['-O', '-o', resolve(bin, exe('search_rus
 best('g++ fuzzy_cpp', () => sh('g++', ['-O2', '-std=c++17', '-o', resolve(bin, exe('fuzzy_cpp')), resolve(root, 'native', 'cpp', 'fuzzy.cpp')]));
 
 // 4. Strip release symbols (unstripped: 26.6MB, stripped: 800KB). Optional.
-const stripTargets = ['fuzzy_rust', 'search_rust', 'mochi-agent', 'mochi_core.node', 'libmochi_core.so']
+const stripTargets = ['fuzzy_rust', 'search_rust', 'mochi-agent', 'mochi_core.node', 'libmochi_core.so', 'libmochi_core.dylib']
   .flatMap((n) => [resolve(bin, n), resolve(bin, `${n}.exe`)])
   .filter((p) => existsSync(p));
 if (stripTargets.length) sh('strip', stripTargets);

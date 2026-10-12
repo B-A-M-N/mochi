@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import {
   validateJSON,
   validateBalancedStructure,
@@ -85,12 +86,15 @@ def calculate_metrics(items)
   });
 
   it('validates relative imports and flags non-existent relative files', () => {
+    // Resolve against THIS file's real location — a hard-coded dev-machine
+    // path made the relative import resolve to nothing on CI runners.
+    const here = fileURLToPath(new URL('ast-guard.test.ts', import.meta.url));
     const valid = 'import { validateJSON } from "./ast-guard.js";\nconst a = 1;';
-    const resValid = validateRelativeImports('/home/jewboy420/mochi/src/core/ast-guard.test.ts', valid);
+    const resValid = validateRelativeImports(here, valid);
     expect(resValid.valid).toBe(true);
 
     const invalid = 'import { ghost } from "./non_existent_module_xyz123.js";';
-    const resInvalid = validateRelativeImports('/home/jewboy420/mochi/src/core/ast-guard.test.ts', invalid);
+    const resInvalid = validateRelativeImports(here, invalid);
     expect(resInvalid.valid).toBe(false);
     expect(resInvalid.summary).toContain("Cannot find module './non_existent_module_xyz123.js'");
   });

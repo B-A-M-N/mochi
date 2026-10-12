@@ -28,7 +28,7 @@ if (!existsSync(resolve(root, 'native/bin/mochi_core.node'))) {
   }
 }
 try {
-  execSync('strip native/bin/fuzzy_rust native/bin/search_rust native/bin/mochi-agent native/bin/mochi_core.node native/bin/libmochi_core.so', { cwd: root, stdio: 'ignore' });
+  execSync('strip native/bin/fuzzy_rust native/bin/search_rust native/bin/mochi-agent native/bin/mochi_core.node native/bin/libmochi_core.so native/bin/libmochi_core.dylib', { cwd: root, stdio: 'ignore' });
 } catch { /* strip unavailable on some platforms — harmless */ }
 
 // Standalone binary. --minify --bytecode are NOT cosmetic: without them bun
