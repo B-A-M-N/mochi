@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
-import CRTWarpBackground from '../CRTWarpBackground.jsx';
+import EngineeringGridBackground from '../EngineeringGridBackground.jsx';
 import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, TiltCard, GooeyBorder, BenchChart,
@@ -633,7 +633,7 @@ function MascotFamilySection() {
       role: 'Documentation & Guides',
       badge: '02 / Docs',
       href: base + '/docs.html',
-      img: base + '/assets/docs-mascot.png',
+      img: base + '/assets/docs-mascot.gif',
       desc: 'Wearing tiny round glasses and holding an open purple guidebook. Master of flags, CLI commands, and setup.',
     },
     {
@@ -641,7 +641,7 @@ function MascotFamilySection() {
       role: 'Benchmarks & Telemetry',
       badge: '03 / Benchmarks',
       href: base + '/benchmarks.html',
-      img: base + '/assets/benchmarks-mascot.png',
+      img: base + '/assets/benchmarks-mascot.gif',
       desc: 'Holding a glowing lightning bolt with pure kinetic energy. 18.2 MB resident RSS and 38.2 ms cold-start TTFI.',
     },
     {
@@ -649,7 +649,7 @@ function MascotFamilySection() {
       role: 'Changelog & Releases',
       badge: '04 / Changelog',
       href: base + '/changelog.html',
-      img: base + '/assets/changelog-mascot.png',
+      img: base + '/assets/changelog-mascot.gif',
       desc: 'Wearing a purple builder hardhat celebrating 35 releases shipped, from v0.1.0 bootstrap to v0.22.0 swarms.',
     },
     {
@@ -657,7 +657,7 @@ function MascotFamilySection() {
       role: 'Repository & AST Engine',
       badge: '05 / Source',
       href: base + '/source.html',
-      img: base + '/assets/source-mascot.png',
+      img: base + '/assets/source-mascot.gif',
       desc: 'Holding an open-source heart with git branch sparkles. 1,600+ authentic files browseable directly in the web UI.',
     },
   ];
@@ -1145,7 +1145,7 @@ function CodaSection() {
 export default function Home() {
   return (
     <>
-      <CRTWarpBackground />
+      <EngineeringGridBackground />
       <HeroSection />
       <StatsTicker />
       <CapabilitiesSection />
