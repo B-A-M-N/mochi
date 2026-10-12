@@ -128,6 +128,18 @@ Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a sta
 </tr>
 </table>
 
+## The TUI
+
+<table>
+<tr>
+<td align="center" colspan="2"><b>Launch — royal-orchid terminal</b><br><img src="docs/assets/demo/tui_launch.gif" alt="mochi tui launch" width="640"></td>
+</tr>
+<tr>
+<td align="center"><b>Live chat — thinking bar, MCH-111 tier stats</b><br><img src="docs/assets/demo/tui_chat.gif" alt="mochi tui chat" width="360"></td>
+<td align="center"><b>295-skill browser</b><br><img src="docs/assets/demo/tui_skills.gif" alt="mochi tui skills" width="360"></td>
+</tr>
+</table>
+
 ## Why Mochi
 
 Most terminal agents are either thin wrappers around one model call, or heavyweight platforms that need a cloud account. Mochi takes a third path: a **complete harness** — every loop, guard, budget, and recovery path owned in-repo — that is deliberately *minimal* in surface and *maximal* in verified behavior.
