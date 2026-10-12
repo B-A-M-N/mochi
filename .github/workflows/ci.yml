@@ -37,8 +37,9 @@ jobs:
             # `|| true` per-tool, so a broken accelerator used to pass CI
             # with parity tests self-skipping. Any missing binary is a bug.
             missing=0
+            # Windows emits `.exe` variants of the same names.
             for bin in native/bin/mochi-agent native/bin/mochi_core.node native/bin/fuzzy_rust native/bin/search_rust native/bin/fuzzy_cpp; do
-              if [ ! -f "$bin" ]; then echo "native binary missing after build: $bin"; missing=1; fi
+              if [ ! -f "$bin" ] && [ ! -f "$bin.exe" ]; then echo "native binary missing after build: $bin"; missing=1; fi
             done
             [ "$missing" -eq 0 ] || exit 1
             echo "native binaries OK"

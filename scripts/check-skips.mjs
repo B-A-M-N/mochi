@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = resolve(root, 'scripts', 'skip-baseline.txt');
 
-const files = execSync('git ls-files "src/**/*.test.ts"', { cwd: root, encoding: 'utf8' })
+// `src/**/*.test.ts` alone never matches ROOT-level test files (git glob),
+// which silently blindfolded the baseline: the source reorg moving files into
+// subdirs then looked like "+2 skips". Track both depths explicitly.
+const files = execSync('git ls-files "src/*.test.ts" "src/**/*.test.ts"', { cwd: root, encoding: 'utf8' })
   .split('\n').filter(Boolean);
 
 const patterns = [
