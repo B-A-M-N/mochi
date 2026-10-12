@@ -52,3 +52,73 @@ describe('exec policy', () => {
     expect(calls).toBe(1);
   });
 });
+
+describe('bubblewrap sandbox', () => {
+  it('builds a least-privilege argv (ro root, rw cwd/tmp/caches, dev+proc)', async () => {
+    const { buildBubblewrapArgs } = await import('./exec.js');
+    const argv = buildBubblewrapArgs('/usr/bin/bwrap', 'npm', ['test'], { cwd: '/work/proj' });
+    expect(argv[0]).toBe('/usr/bin/bwrap');
+    expect(argv).toContain('/');
+    const roIdx = argv.indexOf('--ro-bind');
+    expect(argv[roIdx + 1]).toBe('/');
+    expect(argv).toContain('/work/proj');
+    const bindIdx = argv.indexOf('--bind');
+    expect(argv[bindIdx + 1]).toBe('/work/proj');
+    expect(argv).toContain('--dev');
+    expect(argv).toContain('--proc');
+    expect(argv).toContain('--tmpfs');
+    expect(argv.slice(-2)).toEqual(['npm', 'test']);
+    expect(argv).not.toContain('--unshare-net'); // network shared by default
+  });
+
+  it('unshares network only when asked', async () => {
+    const { buildBubblewrapArgs } = await import('./exec.js');
+    expect(buildBubblewrapArgs('/usr/bin/bwrap', 'x', [], { network: false })).toContain('--unshare-net');
+  });
+
+  it('maybeSandbox passes through when off; forced mode needs bwrap', async () => {
+    const { maybeSandbox, detectBubblewrap } = await import('./exec.js');
+    expect(maybeSandbox('echo', ['hi'], {})).toEqual({ cmd: 'echo', args: ['hi'] });
+    expect(maybeSandbox('echo', ['hi'], { sandbox: { mode: 'off' } })).toEqual({ cmd: 'echo', args: ['hi'] });
+    if (detectBubblewrap()) {
+      // Forced mode wraps through the real binary on this box.
+      const w = maybeSandbox('echo', ['hi'], { sandbox: { mode: 'bubblewrap' } });
+      expect(w.cmd).toContain('bwrap');
+      expect(w.args.slice(-2)).toEqual(['echo', 'hi']);
+    } else {
+      // No bwrap: explicit request fails loudly, never silently unsandboxed.
+      expect(() => maybeSandbox('echo', ['hi'], { sandbox: { mode: 'bubblewrap' } })).toThrow(/bwrap.*not found/);
+    }
+  });
+
+  it('detectBubblewrap finds bwrap on PATH (or skips live tests)', async () => {
+    const { detectBubblewrap } = await import('./exec.js');
+    const found = detectBubblewrap('/nonexistent-dir-xyz');
+    expect(found).toBeNull();
+  });
+
+  it('runs a real command inside bwrap when available', async () => {
+    const { detectBubblewrap, runArgv } = await import('./exec.js');
+    if (!detectBubblewrap()) return; // no bwrap on this box: unit coverage above suffices
+    const r = await runArgv('echo', ['sandboxed-ok'], { sandbox: { mode: 'bubblewrap' }, timeoutMs: 20_000 });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('sandboxed-ok');
+  }, 30_000);
+
+  it('sandbox cannot see the real home dotfiles (ro-root proof)', async () => {
+    const { detectBubblewrap, runArgv } = await import('./exec.js');
+    if (!detectBubblewrap()) return;
+    // $HOME itself is read-only inside: creating a file there must fail.
+    const unique = `.mochi-sandbox-probe-${Date.now()}`;
+    const r = await runArgv('sh', ['-c', `touch "$HOME/${unique}" 2>&1; echo "exit=$?"`], {
+      sandbox: { mode: 'bubblewrap' },
+      timeoutMs: 20_000,
+    });
+    expect(r.stdout).toContain('exit=1');
+    // ...and the probe file must not exist outside either.
+    const { existsSync } = await import('node:fs');
+    const { homedir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    expect(existsSync(resolve(homedir(), unique))).toBe(false);
+  }, 30_000);
+});

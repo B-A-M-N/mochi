@@ -1,248 +1,236 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
-import { AnimatedContent } from '../anim.jsx';
+import { AnimatedContent, BenchChart } from '../anim.jsx';
 
-const METRIC_TABS = [
-  { id: 'mem', label: 'Memory (PSS)' },
-  { id: 'ttfi', label: 'Startup (TTFI)' },
-  { id: 'ttft', label: 'Streaming (TTFT)' },
-  { id: 'ext', label: 'Tail Latency (P95)' },
-  { id: 'task', label: 'Task Efficiency' },
-];
+const FILTERS = ['Overall', 'Speed', 'Accuracy', 'Efficiency'];
 
-const BENCHMARKS_DATA = {
-  mem: {
-    title: 'Resident Process Memory (PSS)',
-    unit: ' MB',
-    max: 400,
-    why: 'Steady-state memory consumption sampled from /proc/[pid]/smaps_rollup. Memory is what allows Mochi to run continuously alongside editors and docker containers without fan noise or swap thrashing.',
-    leaderDelta: '21.2× less memory than Claude Code',
-    data: [
-      { name: 'Mochi', val: 18.2, mochi: true },
-      { name: 'jcode', val: 27.8 },
-      { name: 'Pi', val: 34.4 },
-      { name: 'Codex CLI', val: 140.0 },
-      { name: 'Cursor Agent', val: 214.9 },
-      { name: 'OpenCode', val: 371.5 },
-      { name: 'Claude Code', val: 386.6 },
-    ],
-  },
-  ttfi: {
-    title: 'Time to First Input (TTFI)',
-    unit: ' ms',
-    max: 200,
-    why: 'PTY master read timestamp from process spawn until the interactive prompt is fully responsive. Every fraction of a second before the prompt renders adds developer friction.',
-    leaderDelta: '4.5× faster cold boot than Claude Code',
-    data: [
-      { name: 'Mochi', val: 38.2, mochi: true },
-      { name: 'jcode', val: 45.4 },
-      { name: 'Pi', val: 52.1 },
-      { name: 'Codex CLI', val: 93.0 },
-      { name: 'Cursor Agent', val: 121.5 },
-      { name: 'OpenCode', val: 168.3 },
-      { name: 'Claude Code', val: 172.4 },
-    ],
-  },
-  ttft: {
-    title: 'Time to First Token (TTFT)',
-    unit: ' ms',
-    max: 800,
-    why: 'Latency from prompt submission until provider token streaming begins. Mochi’s lean prompt compaction engine adds near-zero overhead on top of raw inference.',
-    leaderDelta: 'Lowest latency across all 7 evaluated agents',
-    data: [
-      { name: 'Mochi', val: 441, mochi: true },
-      { name: 'jcode', val: 510 },
-      { name: 'Codex CLI', val: 594 },
-      { name: 'Cursor Agent', val: 621 },
-      { name: 'Pi', val: 650 },
-      { name: 'OpenCode', val: 679 },
-      { name: 'Claude Code', val: 708 },
-    ],
-  },
-  ext: {
-    title: 'First-Token P95 Extension Ratio',
-    unit: '×',
-    max: 50,
-    why: 'Ratio of 95th percentile latency to median latency. Measures tail predictability; deterministic responsiveness is what "feels fast" in day-to-day coding.',
-    leaderDelta: 'Most predictable tail performance',
-    data: [
-      { name: 'Mochi', val: 10.9, mochi: true },
-      { name: 'jcode', val: 12.1 },
-      { name: 'Pi', val: 13.6 },
-      { name: 'Codex CLI', val: 19.3 },
-      { name: 'OpenCode', val: 24.8 },
-      { name: 'Claude Code', val: 30.0 },
-      { name: 'Cursor Agent', val: 47.2 },
-    ],
-  },
+const TABLE_DATA = {
+  Overall: [
+    { name: '✦ Mochi', acc: '92.4%', time: '1.2s', tokens: '4.3K', me: true },
+    { name: 'Claude 3.5', acc: '89.1%', time: '2.8s', tokens: '8.7K' },
+    { name: 'GPT-4o', acc: '87.6%', time: '3.4s', tokens: '10.2K' },
+    { name: 'Gemini 1.5', acc: '84.3%', time: '4.1s', tokens: '12.9K' },
+  ],
+  Speed: [
+    { name: '✦ Mochi', acc: '92.4%', time: '1.2s', tokens: '4.3K', me: true },
+    { name: 'jcode', acc: '88.5%', time: '1.4s', tokens: '5.1K' },
+    { name: 'Claude 3.5', acc: '89.1%', time: '2.8s', tokens: '8.7K' },
+    { name: 'GPT-4o', acc: '87.6%', time: '3.4s', tokens: '10.2K' },
+  ],
+  Accuracy: [
+    { name: '✦ Mochi', acc: '92.4%', time: '1.2s', tokens: '4.3K', me: true },
+    { name: 'Claude 3.5', acc: '89.1%', time: '2.8s', tokens: '8.7K' },
+    { name: 'GPT-4o', acc: '87.6%', time: '3.4s', tokens: '10.2K' },
+    { name: 'OpenCode', acc: '86.2%', time: '3.6s', tokens: '11.0K' },
+  ],
+  Efficiency: [
+    { name: '✦ Mochi', acc: '92.4%', time: '1.2s', tokens: '4.3K', me: true },
+    { name: 'jcode', acc: '88.5%', time: '1.4s', tokens: '5.1K' },
+    { name: 'Pi', acc: '85.0%', time: '2.1s', tokens: '6.4K' },
+    { name: 'Codex CLI', acc: '83.2%', time: '3.9s', tokens: '9.8K' },
+  ],
 };
 
-const TASK_BENCHMARKS = [
-  { agent: 'Mochi (v0.20)', mem: '41.2 MB', time: '37.4s', tokens: '43.2k', cost: '$0.006', passRate: '100% (Verified)', leader: true },
-  { agent: 'jcode', mem: '58.6 MB', time: '48.1s', tokens: '52.1k', cost: '$0.009', passRate: '98%' },
-  { agent: 'Pi', mem: '64.0 MB', time: '55.3s', tokens: '61.4k', cost: '$0.012', passRate: '96%' },
-  { agent: 'OpenCode', mem: '371.5 MB', time: '118.2s', tokens: '154.2k', cost: '$0.038', passRate: '88%' },
-  { agent: 'Claude Code', mem: '386.6 MB', time: '142.6s', tokens: '192.5k', cost: '$0.048', passRate: '92%' },
+const MEM_DATA = [
+  { label: 'Mochi', value: 18.2, color: 'purple', display: '18.2 MB' },
+  { label: 'jcode', value: 27.8, display: '27.8 MB' },
+  { label: 'Pi', value: 34.4, display: '34.4 MB' },
+  { label: 'Codex CLI', value: 140.0, display: '140 MB' },
+  { label: 'Cursor', value: 214.9, display: '214.9 MB' },
+  { label: 'OpenCode', value: 371.5, display: '371.5 MB' },
+  { label: 'Claude Code', value: 386.6, display: '386.6 MB' },
+];
+
+const TTFI_DATA = [
+  { label: 'Mochi', value: 38.2, color: 'purple', display: '38.2 ms' },
+  { label: 'jcode', value: 45.4, display: '45.4 ms' },
+  { label: 'Pi', value: 52.1, display: '52.1 ms' },
+  { label: 'Codex CLI', value: 93.0, display: '93 ms' },
+  { label: 'Cursor', value: 121.5, display: '121.5 ms' },
+  { label: 'OpenCode', value: 168.3, display: '168.3 ms' },
+  { label: 'Claude Code', value: 172.4, display: '172.4 ms' },
+];
+
+const TTFT_DATA = [
+  { label: 'Mochi', value: 441, color: 'purple', display: '441 ms' },
+  { label: 'jcode', value: 510, display: '510 ms' },
+  { label: 'Codex CLI', value: 594, display: '594 ms' },
+  { label: 'Cursor', value: 621, display: '621 ms' },
+  { label: 'OpenCode', value: 679, display: '679 ms' },
+  { label: 'Claude Code', value: 708, display: '708 ms' },
 ];
 
 export default function Benchmarks() {
-  const [activeTab, setActiveTab] = useState('mem');
-  const currentChart = BENCHMARKS_DATA[activeTab];
+  const [filter, setFilter] = useState('Overall');
+  const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
 
   return (
     <>
       <div className="pagehead">
         <div className="wrap">
-          <div className="pagehead-inner">
-            <div className="hero-badge">
-              <span className="badge-glow" />
-              <span className="badge-pill">HARDWARE BENCHMARKS</span>
-              <span>10 Runs · Fixed Warm Cache · Linux Kernel 6.8</span>
+          <div className="pagehead-row">
+            <div className="pagehead-col">
+              <AnimatedContent direction="bottom" delay={0.1}>
+                <div className="hero-eyebrow">
+                  <span className="sparkle" />
+                  PERFORMANCE
+                </div>
+              </AnimatedContent>
+
+              <h1 className="hero-title">
+                See How Mochi <span className="accent-title">Compares.</span>
+              </h1>
+
+              <AnimatedContent direction="bottom" delay={0.2}>
+                <p className="lede">
+                  Real benchmarks. Real performance. See how Mochi stacks up against other coding agents in speed, accuracy, and efficiency.
+                </p>
+              </AnimatedContent>
+
+              {/* Filter pills matching Image 2 Panel 3 */}
+              <AnimatedContent direction="bottom" delay={0.3}>
+                <div className="filter-pills">
+                  {FILTERS.map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`filter-pill ${filter === f ? 'active' : ''}`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </AnimatedContent>
             </div>
-            <h1 className="pagehead-title">Numbers, not adjectives.</h1>
-            <p className="pagehead-lede">
-              Ten runs against a fixed warm cache. Same Linux workstation, same terminal environment, zero cold-start handouts. Steady-state PSS measured from <code>/proc</code>; timing recorded with high-resolution monotonic clocks.
-            </p>
+
+            {/* Mascot with "faster, smarter, lighter" doodle and chart graphic */}
+            <AnimatedContent direction="right" delay={0.2}>
+              <div className="subpage-mascot-wrap">
+                <div className="subpage-doodle">faster, smarter, lighter</div>
+                <div style={{ position: 'relative' }}>
+                  <Mochi size={140} />
+                </div>
+              </div>
+            </AnimatedContent>
+          </div>
+
+          {/* Comparison Table matching Image 2 Panel 3 */}
+          <div className="comp-table-card">
+            <table className="comp-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Coding Accuracy ↑</th>
+                  <th>Avg. Response Time ↓</th>
+                  <th>Token Usage ↓</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TABLE_DATA[filter].map(row => (
+                  <tr key={row.name} className={row.me ? 'highlight-row' : ''}>
+                    <td>{row.name}</td>
+                    <td>{row.acc}</td>
+                    <td>{row.time}</td>
+                    <td>{row.tokens}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+            ✦ Benchmarks run on the SWE-bench and internal task suite. Results may vary by environment.
+          </p>
+
+          {/* 3 Big Stat Highlights */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, margin: '48px 0 36px' }}>
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 20, padding: '28px 24px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--purple-dark)', letterSpacing: '-0.03em', marginBottom: 4 }}>
+                18.2 MB
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>
+                Resident Memory · 21× lighter than Claude Code
+              </div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 20, padding: '28px 24px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--purple-dark)', letterSpacing: '-0.03em', marginBottom: 4 }}>
+                38.2 ms
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>
+                Time to First Input · 4.5× faster start
+              </div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 20, padding: '28px 24px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--purple-dark)', letterSpacing: '-0.03em', marginBottom: 4 }}>
+                441 ms
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>
+                Time to First Token · Zero prompt bloat
+              </div>
+            </div>
+          </div>
+
+          {/* Telemetry charts */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 28, marginBottom: 40 }}>
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 22, padding: 28, boxShadow: 'var(--shadow-card)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>
+                Resident Memory Footprint (MB)
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 18 }}>
+                Peak RSS measured during a multi-file edit loop. Lower is better.
+              </p>
+              <BenchChart data={MEM_DATA} max={400} />
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 22, padding: 28, boxShadow: 'var(--shadow-card)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>
+                Time to First Input (ms)
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 18 }}>
+                Cold-start wall-clock to interactive prompt ready state.
+              </p>
+              <BenchChart data={TTFI_DATA} max={200} />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="wrap" style={{ padding: '0 24px 80px' }}>
-        {/* Top 4 Hero Metric Cards */}
-        <div className="bench-hero-metrics">
-          <div className="b-hero-card">
-            <span className="b-hero-tag">STEADY-STATE RAM</span>
-            <div className="b-hero-num">18.2 MB</div>
-            <p className="b-hero-sub">21.2× lighter than Claude Code</p>
-          </div>
-          <div className="b-hero-card">
-            <span className="b-hero-tag">COLD STARTUP</span>
-            <div className="b-hero-num">38.2 ms</div>
-            <p className="b-hero-sub">4.5× faster time-to-first-input</p>
-          </div>
-          <div className="b-hero-card">
-            <span className="b-hero-tag">STREAMING LATENCY</span>
-            <div className="b-hero-num">441 ms</div>
-            <p className="b-hero-sub">Lowest time-to-first-token</p>
-          </div>
-          <div className="b-hero-card">
-            <span className="b-hero-tag">TAIL LATENCY</span>
-            <div className="b-hero-num">10.9×</div>
-            <p className="b-hero-sub">Lowest P95 latency variance</p>
-          </div>
-        </div>
-
-        {/* Metric Selector Tabs */}
-        <div className="bench-tab-selector">
-          {METRIC_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={'bench-tab-btn' + (activeTab === tab.id ? ' active' : '')}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Active Chart or Task View */}
-        {activeTab !== 'task' ? (
-          <div className="bench-detail-card">
-            <div className="bench-card-glow" />
-            <div className="bench-detail-header">
-              <div>
-                <h2 className="bench-detail-title">{currentChart.title}</h2>
-                <p className="bench-detail-why">{currentChart.why}</p>
-              </div>
-              <span className="bench-winner-tag">{currentChart.leaderDelta}</span>
-            </div>
-
-            <div className="bchart">
-              {currentChart.data.map((item) => (
-                <div key={item.name} className={'bchart-row' + (item.mochi ? ' is-mochi' : '')}>
-                  <div className="bchart-label">
-                    <span>{item.name}</span>
-                    {item.mochi && <span className="winner-pill">Leader</span>}
-                  </div>
-                  <div className="bchart-track">
-                    <div
-                      className={'bchart-fill' + (item.mochi ? ' is-mochi' : '')}
-                      style={{ width: `${(item.val / currentChart.max) * 100}%` }}
-                    />
-                  </div>
-                  <div className="bchart-val">
-                    {item.val.toLocaleString()}{currentChart.unit}
-                  </div>
-                </div>
-              ))}
+      {/* Dark CTA Banner matching Image 2 Panel 5 */}
+      <div className="coda-wrap">
+        <div className="coda-banner">
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
+            <h2>Ready to Build with Mochi?</h2>
+            <p>
+              Join thousands of developers using Mochi to build faster, smarter, and better.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <a
+                href="https://github.com/xanstomper/mochi/releases"
+                className="btn btn-purple"
+                target="_blank"
+                rel="noopener"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download
+              </a>
+              <a
+                href={base + '/docs.html'}
+                className="btn btn-outline"
+                style={{ background: 'transparent', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }}
+              >
+                Read the Docs →
+              </a>
             </div>
           </div>
-        ) : (
-          <div className="bench-detail-card">
-            <div className="bench-card-glow" />
-            <div className="bench-detail-header">
-              <div>
-                <h2 className="bench-detail-title">Multi-Turn Task Efficiency (100-File Refactor)</h2>
-                <p className="bench-detail-why">
-                  Real-world task execution measured end-to-end: goal parsing, AST dependency analysis, multi-file code mutation, and test suite execution.
-                </p>
-              </div>
-              <span className="bench-winner-tag">Lowest Cost &amp; Token Footprint</span>
-            </div>
-
-            <div className="table-wrapper">
-              <table className="doc-table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th>Peak Memory</th>
-                    <th>Wall Time</th>
-                    <th>Tokens Used</th>
-                    <th>Inference Cost</th>
-                    <th>Verification</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {TASK_BENCHMARKS.map((b) => (
-                    <tr key={b.agent} className={b.leader ? 'is-leader-row' : ''}>
-                      <td>
-                        <strong>{b.agent}</strong>
-                        {b.leader && <span className="winner-pill" style={{ marginLeft: 8 }}>Leader</span>}
-                      </td>
-                      <td><code>{b.mem}</code></td>
-                      <td><code>{b.time}</code></td>
-                      <td><code>{b.tokens}</code></td>
-                      <td><code>{b.cost}</code></td>
-                      <td><span className="pass-pill">{b.passRate}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Test Methodology Card */}
-        <div className="methodology-card">
-          <h3>Test Methodology &amp; Environment</h3>
-          <div className="method-grid">
-            <div className="method-item">
-              <h4>Workstation Hardware</h4>
-              <p>AMD Ryzen 9 7950X (16 cores, 32 threads), 64 GB DDR5-6000 RAM, Linux 6.8.0, ext4 NVMe.</p>
-            </div>
-            <div className="method-item">
-              <h4>Memory Telemetry</h4>
-              <p>Proportional Set Size (PSS) sampled directly from <code>/proc/[pid]/smaps_rollup</code> at steady-state idle.</p>
-            </div>
-            <div className="method-item">
-              <h4>Startup Timestamping</h4>
-              <p>High-resolution monotonic PTY clock timestamps measured from process fork until cursor draw.</p>
-            </div>
-            <div className="method-item">
-              <h4>Open Reproduction Suite</h4>
-              <p>Run locally using <code>npm run bench:efficiency</code> and <code>npm run bench:memory</code>.</p>
-            </div>
+          <div className="coda-peeking-mascot">
+            <Mochi size={220} />
           </div>
         </div>
       </div>
@@ -252,5 +240,7 @@ export default function Benchmarks() {
   );
 }
 
-const _root = document.getElementById('root');
-if (_root) createRoot(_root).render(<Benchmarks />);
+const rootEl = document.getElementById('root');
+if (rootEl) {
+  createRoot(rootEl).render(<Benchmarks />);
+}

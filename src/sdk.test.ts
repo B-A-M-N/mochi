@@ -47,3 +47,29 @@ describe('Mochi SDK (in-process mode)', () => {
     expect(p.length).toBeGreaterThan(0);
   });
 });
+
+describe('Mochi SDK streaming + discovery', () => {
+  it('promptStream yields live events then returns the result', async () => {
+    const mochi = await setup([{ content: 'streamed work done', finishReason: 'stop' }]);
+    const gen = mochi.promptStream('Do the thing');
+    const seen: string[] = [];
+    let result;
+    for (;;) {
+      const n = await gen.next();
+      if (n.done) { result = n.value; break; }
+      seen.push(n.value.type);
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    expect(result?.success).toBe(true);
+    expect(result?.summary).toContain('streamed work done');
+  });
+
+  it('searchSkills finds bundled skills and addMcpServer validates', async () => {
+    const mochi = await setup([{ content: 'x', finishReason: 'stop' }]);
+    const hits = mochi.searchSkills('test', 5);
+    expect(Array.isArray(hits)).toBe(true);
+    const bad = mochi.addMcpServer('no-such-server-xyz');
+    expect(bad.ok).toBe(false);
+    expect(bad.message).toContain('Unknown MCP server');
+  });
+});

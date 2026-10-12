@@ -45,6 +45,8 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'audit', description: 'Skill health report' },
       { name: 'repo', description: 'Shared skill registry' },
       { name: 'import', description: 'Import skills' },
+      { name: 'pack', description: 'Bundle skills into a portable pack' },
+      { name: 'unpack', description: 'Install a skill pack' },
     ],
   },
   { name: 'session', description: 'Session history (list|search)' },

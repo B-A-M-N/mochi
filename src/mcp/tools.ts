@@ -21,8 +21,11 @@ type McpServerSpec = Record<string, McpServerConfig>;
 function normalizeServerConfig(servers: Record<string, Partial<McpServerConfig>>): McpServerSpec {
   const out: McpServerSpec = {};
   for (const [name, cfg] of Object.entries(servers ?? {})) {
-    if (cfg && typeof cfg === 'object' && typeof cfg.command === 'string') {
+    if (!cfg || typeof cfg !== 'object') continue;
+    if (typeof cfg.command === 'string') {
       out[name] = { command: cfg.command, args: cfg.args, env: cfg.env, version: cfg.version };
+    } else if (typeof cfg.url === 'string') {
+      out[name] = { url: cfg.url, headers: cfg.headers, version: cfg.version };
     }
   }
   return out;
@@ -41,8 +44,8 @@ export async function buildMcpTools(
 
   const normalized = normalizeServerConfig(servers);
   for (const [name, cfg] of Object.entries(normalized)) {
-    if (!cfg?.command) continue;
-    const client = new McpClient(cfg, name);
+    if (!cfg?.command && !cfg?.url) continue;
+    const client = McpClient.forConfig(cfg, name);
     clients.set(name, client);
     try {
       const remoteTools = await client.listTools();

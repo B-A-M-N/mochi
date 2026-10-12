@@ -1,5 +1,5 @@
 import type { ChatMessage, ModelResponse, StreamChunk, ToolDefinition } from '../types.js';
-import { contentText } from '../types.js';
+import { contentText, splitContent } from '../types.js';
 import type { ProviderConfig } from './router.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
@@ -75,7 +75,20 @@ export function createGeminiProvider(config: ProviderConfig) {
             ],
           };
         }
-        return { role: 'user', parts: [{ text: contentText(m) }] };
+        // Multimodal user turn: data-URI images become inlineData parts.
+        // Remote http(s) URLs have no Gemini-native inline form (fileData
+        // needs Files-API URIs), so they ride along as text — the URL itself
+        // is preserved, never dropped or stringified as [object Object].
+        const { text: gtext, images: gimages } = splitContent(m.content);
+        const inline = gimages.filter((g): g is { mime: string; data: string } => 'data' in g);
+        if (inline.length > 0) {
+          const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          if (gtext) parts.push({ text: gtext });
+          for (const img of inline) parts.push({ inlineData: { mimeType: img.mime, data: img.data } });
+          return { role: 'user', parts };
+        }
+        const remote = gimages.filter((g): g is { url: string } => 'url' in g).map((g) => g.url);
+        return { role: 'user', parts: [{ text: [gtext, ...remote].filter(Boolean).join('\n') }] };
       });
 
   const system = (msgs: ChatMessage[]) => msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');

@@ -13,11 +13,17 @@ import { createInterface, type Interface as ReadlineInterface } from 'node:readl
 // inline so the whole flow is verified without any external dependency.
 
 export interface McpServerConfig {
-  command: string;
+  /** Subprocess to spawn for stdio transport. Required unless `url` is set. */
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
   /** Lowercase protocol version accepted; default "2024-11-05". */
   version?: string;
+  /** Streamable-HTTP endpoint. When set, the client uses HTTP POST (with SSE
+   *  response parsing) instead of spawning a stdio subprocess. */
+  url?: string;
+  /** Extra headers for HTTP transport (e.g. Authorization). */
+  headers?: Record<string, string>;
 }
 
 export interface McpToolInput {
@@ -51,34 +57,176 @@ interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
-export class McpClient {
+/** Transport seam: newline-delimited JSON-RPC frames out, parsed lines back.
+ *  stdio (subprocess) and Streamable-HTTP share the exact framing contract,
+ *  so McpClient never knows which one it talks to. */
+export interface McpTransport {
+  /** Send one JSON-RPC frame (request with id, or id-less notification). */
+  send(frame: string): void;
+  onMessage(cb: (line: string) => void): void;
+  onFatal(cb: (err: Error) => void): void;
+  close(): void;
+}
+
+/** Subprocess transport: `command args…` speaking JSON-RPC over stdio. */
+export class StdioTransport implements McpTransport {
   private child: ChildProcessWithoutNullStreams;
   private rl: ReadlineInterface;
-  private requests = new Map<number, { resolve: (r: unknown) => void; reject: (e: Error) => void }>();
-  private nextId = 1;
-  private initialized = false;
+  private msgCb: (line: string) => void = () => {};
+  private fatalCb: (err: Error) => void = () => {};
 
-  constructor(
-    private config: McpServerConfig,
-    private label: string = 'mcp',
-  ) {
+  constructor(config: McpServerConfig, label = 'mcp') {
+    if (!config.command) {
+      throw new Error(`mcp:${label} stdio transport needs config.command (or use url for HTTP)`);
+    }
     this.child = spawn(config.command, config.args ?? [], {
       env: { ...process.env, ...config.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.rl = createInterface({ input: this.child.stdout });
-    this.rl.on('line', (line: string) => this.handleLine(line));
+    this.rl.on('line', (line: string) => this.msgCb(line));
     // Drain + surface server stderr without breaking the request/reply framing.
     this.child.stderr.on('data', (d: Buffer) => {
       const s = String(d).trim();
-      if (s) console.warn(`[mcp:${this.label}] ${s.slice(0, 200)}`);
+      if (s) console.warn(`[mcp:${label}] ${s.slice(0, 200)}`);
     });
-    this.child.on('error', (err) => this.rejectAll(new Error(`mcp:${this.label} spawn failed: ${err.message}`)));
+    this.child.on('error', (err) => this.fatalCb(new Error(`mcp:${label} spawn failed: ${err.message}`)));
     // A server that starts and then dies (bad script, crash) never emits
     // 'error'; without this hook its pending requests would hang forever.
     this.child.on('exit', (code, signal) => {
-      this.rejectAll(new Error(`mcp:${this.label} server exited (code=${code ?? 'null'} signal=${signal ?? 'none'}) before responding`));
+      this.fatalCb(new Error(`mcp:${label} server exited (code=${code ?? 'null'} signal=${signal ?? 'none'}) before responding`));
     });
+  }
+
+  send(frame: string): void {
+    this.child.stdin.write(frame + '\n');
+  }
+
+  onMessage(cb: (line: string) => void): void {
+    this.msgCb = cb;
+  }
+
+  onFatal(cb: (err: Error) => void): void {
+    this.fatalCb = cb;
+  }
+
+  close(): void {
+    try {
+      this.child.kill();
+    } catch {
+      /* already closed */
+    }
+  }
+}
+
+/** Streamable-HTTP transport: stateless JSON-RPC POSTs (mirrors the proven
+ *  httpChannel semantics in tools/mcp.ts: plain-JSON or SSE responses,
+ *  per-request timeouts, best-effort notifications). */
+export class HttpTransport implements McpTransport {
+  private msgCb: (line: string) => void = () => {};
+  private closed = false;
+
+  constructor(
+    private url: string,
+    private headers: Record<string, string> = {},
+    private label: string = 'mcp',
+  ) {}
+
+  send(frame: string): void {
+    if (this.closed) throw new Error(`mcp:${this.label} transport is closed`);
+    let body: { jsonrpc: string; id?: number; method?: string; params?: unknown };
+    try {
+      body = JSON.parse(frame);
+    } catch {
+      return; // malformed frame: never send garbage at a server
+    }
+    const isNotification = body.id === undefined;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15_000);
+    void fetch(this.url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2025-03-26',
+        ...this.headers,
+      },
+      body: frame,
+      signal: ctl.signal,
+    }).then(async (res) => {
+      clearTimeout(timer);
+      if (!res.ok) {
+        if (!isNotification) this.msgCb(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: `HTTP ${res.status}` } }));
+        return;
+      }
+      const ctype = res.headers.get('content-type') ?? '';
+      if (ctype.includes('text/event-stream')) {
+        const text = await res.text();
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
+          try {
+            const msg = JSON.parse(payload) as { id?: number };
+            if (isNotification || msg.id === body.id) this.msgCb(JSON.stringify(msg));
+          } catch { /* skip undecodable events */ }
+        }
+        return;
+      }
+      const msg = (await res.json()) as { id?: number };
+      if (isNotification || msg.id === body.id) this.msgCb(JSON.stringify(msg));
+    }).catch((err) => {
+      clearTimeout(timer);
+      if (isNotification) return; // notifications are best-effort by contract
+      // Stateless transport: a failed POST poisons only its own request, so
+      // answer it as a JSON-RPC error frame (never fatalCb — there is no
+      // persistent connection whose death should fail every pending call).
+      const message = err instanceof Error && err.name === 'AbortError'
+        ? 'HTTP request timed out after 15s'
+        : err instanceof Error ? err.message : String(err);
+      this.msgCb(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message } }));
+    });
+  }
+
+  onMessage(cb: (line: string) => void): void {
+    this.msgCb = cb;
+  }
+
+  onFatal(_cb: (err: Error) => void): void {
+    // Stateless POSTs have no persistent connection to die; every failure
+    // answers its own request as a JSON-RPC error frame (see send/catch).
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
+export class McpClient {
+  private transport: McpTransport;
+  private requests = new Map<number, { resolve: (r: unknown) => void; reject: (e: Error) => void }>();
+  private nextId = 1;
+  private initialized = false;
+  private label: string;
+  private version: string;
+
+  constructor(
+    config: McpServerConfig,
+    label: string = 'mcp',
+    transport?: McpTransport,
+  ) {
+    this.label = label;
+    this.version = config.version ?? '2024-11-05';
+    this.transport = transport ?? new StdioTransport(config, label);
+    this.transport.onMessage((line) => this.handleLine(line));
+    this.transport.onFatal((err) => this.rejectAll(err));
+  }
+
+  /** Build a client for either transport: `url` selects Streamable-HTTP,
+   *  otherwise a stdio subprocess is spawned. */
+  static forConfig(config: McpServerConfig, label: string = 'mcp'): McpClient {
+    if (config.url) return new McpClient(config, label, new HttpTransport(config.url, config.headers ?? {}, label));
+    return new McpClient(config, label);
   }
 
   private handleLine(line: string): void {
@@ -113,7 +261,7 @@ export class McpClient {
       // only tools may hit this; the caller treats it as "absent".
       const timer = setTimeout(() => {
         this.requests.delete(id);
-        reject(new Error(`'${method}' timed out after 10s (server may not implement it)`));
+        reject(new Error(`mcp:${this.label}: '${method}' timed out after 10s (server may not implement it)`));
       }, 10_000);
       this.requests.set(id, {
         resolve: (r) => { clearTimeout(timer); resolve(r); },
@@ -121,7 +269,7 @@ export class McpClient {
       });
       const body = JSON.stringify({ jsonrpc: '2.0', id, method, params });
       try {
-        this.child.stdin.write(body + '\n');
+        this.transport.send(body);
       } catch (err) {
         clearTimeout(timer);
         this.requests.delete(id);
@@ -132,7 +280,7 @@ export class McpClient {
 
   private notify(method: string, params: unknown): void {
     try {
-      this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n');
+      this.transport.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
     } catch {
       /* ignore notification failures after close */
     }
@@ -141,7 +289,7 @@ export class McpClient {
   async initialize(): Promise<void> {
     // Server info + capabilities negotiation.
     await this.request('initialize', {
-      protocolVersion: this.config.version ?? '2024-11-05',
+      protocolVersion: this.version,
       capabilities: { tools: {} },
       clientInfo: { name: 'mochi', version: '0.1' },
     });
@@ -207,7 +355,7 @@ export class McpClient {
 
   close(): void {
     try {
-      this.child.kill();
+      this.transport.close();
     } catch {
       /* already closed */
     }

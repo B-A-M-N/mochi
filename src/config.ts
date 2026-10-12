@@ -216,6 +216,9 @@ if (!cfg.model.failover || cfg.model.failover.length === 0) {
     };
   }
   if (process.env.MOCHI_SAFETY) cfg.safety.mode = process.env.MOCHI_SAFETY as MochiConfig['safety']['mode'];
+  if (process.env.MOCHI_SANDBOX === 'off' || process.env.MOCHI_SANDBOX === 'auto' || process.env.MOCHI_SANDBOX === 'bubblewrap') {
+    cfg.safety.sandbox = process.env.MOCHI_SANDBOX;
+  }
   if (process.env.MOCHI_PERMISSION_READ) cfg.permissions.read = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_READ);
   if (process.env.MOCHI_PERMISSION_WRITE) cfg.permissions.write = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_WRITE);
   if (process.env.MOCHI_PERMISSION_SHELL) cfg.permissions.shell = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_SHELL);
@@ -302,6 +305,9 @@ export function validateConfig(config: MochiConfig): string[] {
   }
   if (s.commandTimeoutSeconds < 5 || s.commandTimeoutSeconds > 600) {
     problems.push(`safety.commandTimeoutSeconds (${s.commandTimeoutSeconds}) is out of range 5–600`);
+  }
+  if (s.sandbox !== undefined && s.sandbox !== 'off' && s.sandbox !== 'auto' && s.sandbox !== 'bubblewrap') {
+    problems.push(`safety.sandbox ("${s.sandbox}") is invalid — must be "off", "auto", or "bubblewrap"`);
   }
   if (s.maxConcurrentAgents < 1 || s.maxConcurrentAgents > 32) {
     problems.push(`safety.maxConcurrentAgents (${s.maxConcurrentAgents}) is out of range 1–32`);

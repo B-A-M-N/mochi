@@ -42,6 +42,18 @@ describe('anthropic prompt-cache breakpoints', () => {
     expect((captured.body as { system?: unknown }).system).toBeUndefined();
   });
 
+  it('sends data-URI images as native base64 blocks', async () => {
+    const captured: { body?: unknown } = {};
+    stubFetch(captured);
+    const p = createAnthropicProvider({ baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'k' });
+    const png = 'iVBORw0KGgo=';
+    await p.chat([{ role: 'user', content: [{ type: 'text', text: 'see this' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } }] }], []);
+    const body = captured.body as { messages: Array<{ content: Array<{ type: string; text?: string; source?: { type: string; media_type?: string; data?: string } }> }> };
+    const blocks = body.messages[0].content;
+    expect(blocks[0]).toMatchObject({ type: 'text', text: 'see this' });
+    expect(blocks[1]).toMatchObject({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } });
+  });
+
   it('flattens multimodal content to text (no [object Object])', async () => {
     const captured: { body?: unknown } = {};
     stubFetch(captured);

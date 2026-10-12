@@ -42,6 +42,7 @@ export const shellTool: Tool = {
       { name: 'timeout', type: 'integer', description: 'Timeout in seconds', required: false },
       { name: 'description', type: 'string', description: 'Short description of what this command does', required: false },
       { name: 'background', type: 'boolean', description: 'Run in the background: returns a task id immediately; check with command "bg status <id>"', required: false },
+      { name: 'sandbox', type: 'boolean', description: 'Run inside a bubblewrap sandbox (read-only root, writable cwd/tmp/caches). Default follows safety.sandbox config.', required: false },
     ],
     permission: 'shell',
     dangerous: true,
@@ -134,6 +135,10 @@ export const shellTool: Tool = {
     // abort handling) via exec.ts. The exit_code/stdout/stderr envelope below
     // is byte-identical to the old inline spawner.
     const { runShellString } = await import('../exec.js');
+    // Sandbox: per-call flag wins, else the safety.sandbox config. `true`
+    // means "sandbox if possible" (auto); omitting means config default.
+    const cfgSandbox = ctx.config.safety.sandbox ?? 'off';
+    const sandboxMode = args.sandbox === true ? 'auto' : args.sandbox === false ? 'off' : cfgSandbox;
     let r: { stdout: string; stderr: string; code: number | null; timedOut: boolean; cancelled: boolean };
     try {
       r = await runShellString(command, {
@@ -142,6 +147,7 @@ export const shellTool: Tool = {
         timeoutMs,
         maxOutput: MAX_OUTPUT,
         signal: ctx.abortSignal,
+        sandbox: { mode: sandboxMode },
         onAudit: (info) => {
           if (risk !== 'low' && ctx.events) {
             ctx.events.emit({ type: 'agent:log', agentId: ctx.agentId, message: `[shell:${risk}] ${command.slice(0, 160)} (${info.durationMs}ms)` });

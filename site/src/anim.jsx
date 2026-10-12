@@ -462,7 +462,7 @@ export function BenchChart({ data, max, unit = '', rows }) {
   // support both signatures: { data, max } and { rows: [[label, value, isMochi]], unit }
   const chartData = rows
     ? rows.map(r => ({ label: r[0], value: r[1], isMochi: !!r[2], display: r[1] + (unit ? ' ' + unit : '') }))
-    : data.map(d => ({ ...d, isMochi: d.color === 'pink' }));
+    : data.map(d => ({ ...d, isMochi: d.color === 'pink' || d.color === 'purple' || d.label === 'Mochi' || !!d.isMochi }));
   const chartMax = max || Math.max(...chartData.map(x => x.value));
   return (
     <div className="bench-chart">

@@ -161,3 +161,43 @@ function mkdtempUnder(): string {
   mkdirSync(base, { recursive: true });
   return base;
 }
+describe('skill pack/unpack round-trip', () => {
+  it('packs installed skills and unpacks them elsewhere identically', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { packSkills, importSkills } = await import('./skill-importer.js');
+    const src = mkdtempSync(join(tmpdir(), 'mochi-pack-src-'));
+    const packDir = mkdtempSync(join(tmpdir(), 'mochi-pack-'));
+    const dest = mkdtempSync(join(tmpdir(), 'mochi-pack-dest-'));
+    try {
+      mkdirSync(join(src, 'alpha-skill'), { recursive: true });
+      writeFileSync(join(src, 'alpha-skill', 'SKILL.md'),
+        '---\nname: alpha-skill\ndescription: First packed skill.\n---\n\n# Alpha\n\nDo the thing.\n');
+      mkdirSync(join(src, 'alpha-skill', 'references'), { recursive: true });
+      writeFileSync(join(src, 'alpha-skill', 'references', 'notes.md'), '# notes\n');
+      const packed = packSkills(['alpha-skill', 'ghost-skill'], [src], packDir, 'test-origin');
+      expect(packed.skills).toEqual(['alpha-skill']);
+      expect(packed.skipped.map((s) => s.name)).toEqual(['ghost-skill']);
+      expect(packed.errors).toEqual([]);
+      expect(existsSync(join(packDir, 'manifest.json'))).toBe(true);
+      expect(existsSync(join(packDir, 'alpha-skill', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(packDir, 'alpha-skill', 'references', 'notes.md'))).toBe(true);
+      // Unpack is the existing import path pointed at the pack directory.
+      const rep = await importSkills({ source: packDir, targetRoot: dest });
+      expect(rep.errors).toEqual([]);
+      expect(rep.imported.map((i) => i.name)).toContain('alpha-skill');
+      expect(readFileSync(join(dest, 'alpha-skill', 'SKILL.md'), 'utf8')).toContain('# Alpha');
+      expect(existsSync(join(dest, 'alpha-skill', 'references', 'notes.md'))).toBe(true);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+      rmSync(packDir, { recursive: true, force: true });
+      rmSync(dest, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses empty packs without writing', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { packSkills } = await import('./skill-importer.js');
+    const r = packSkills([], [tmpdir()], join(tmpdir(), 'mochi-pack-empty'));
+    expect(r.ok).toBe(false);
+  });
+});

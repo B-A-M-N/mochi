@@ -317,3 +317,91 @@ export async function importSkills(opts: {
   }
   return report;
 }
+export interface SkillPackManifest {
+  mochi_skill_pack: 1;
+  origin: string;
+  createdAt: string;
+  skills: Array<{ name: string; dir: string; description?: string }>;
+}
+
+export interface SkillPackResult {
+  ok: boolean;
+  packDir?: string;
+  skills: string[];
+  skipped: Array<{ name: string; reason: string }>;
+  errors: string[];
+}
+
+/** Pack installed skills into a portable directory (<slug>/SKILL.md + assets
+ *  + manifest.json) for sharing. The pack layout is itself a valid import
+ *  source: `unpack` is just importSkills({ source: packDir }). Whole skill
+ *  directories copy over (body + references/), never bare files, so packed
+ *  skills behave identically on the receiving end. */
+export function packSkills(names: string[], searchDirs: string[], outDir: string, origin = 'pack'): SkillPackResult {
+  const result: SkillPackResult = { ok: true, skills: [], skipped: [], errors: [] };
+  // Index every discoverable skill once (first dir wins on name clashes).
+  const index = new Map<string, { name: string; dir: string; description?: string }>();
+  for (const dir of searchDirs) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const skillFile = join(dir, e.name, 'SKILL.md');
+      if (!existsSync(skillFile)) continue;
+      let name = e.name;
+      let description: string | undefined;
+      try {
+        const fm = parseFrontmatter(readFileSync(skillFile, 'utf8'));
+        if (fm && typeof fm.meta.name === 'string' && fm.meta.name.trim()) name = fm.meta.name.trim();
+        if (fm && typeof fm.meta.description === 'string') description = fm.meta.description.trim();
+      } catch { /* keep folder name */ }
+      const key = name.toLowerCase();
+      if (!index.has(key)) index.set(key, { name, dir: join(dir, e.name), description });
+    }
+  }
+  const wanted = names.map((n) => n.trim()).filter(Boolean);
+  if (wanted.length === 0) {
+    return { ok: false, skills: [], skipped: [], errors: ['no skill names given'] };
+  }
+  try {
+    mkdirSync(outDir, { recursive: true });
+  } catch (e) {
+    return { ok: false, skills: [], skipped: [], errors: [`cannot create ${outDir}: ${(e as Error).message}`] };
+  }
+  const manifestSkills: SkillPackManifest['skills'] = [];
+  for (const want of wanted) {
+    const hit = index.get(want.toLowerCase()) ?? index.get(safeSlug(want));
+    if (!hit) {
+      result.skipped.push({ name: want, reason: 'not installed in search dirs' });
+      continue;
+    }
+    const slug = safeSlug(hit.name);
+    try {
+      cpSync(hit.dir, join(outDir, slug), { recursive: true, force: true });
+      manifestSkills.push({ name: hit.name, dir: slug, description: hit.description });
+      result.skills.push(hit.name);
+    } catch (e) {
+      result.errors.push(`failed to pack ${hit.name}: ${(e as Error).message}`);
+    }
+  }
+  if (manifestSkills.length > 0) {
+    const manifest: SkillPackManifest = {
+      mochi_skill_pack: 1,
+      origin,
+      createdAt: new Date().toISOString(),
+      skills: manifestSkills,
+    };
+    try {
+      writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+    } catch (e) {
+      result.errors.push(`failed to write manifest: ${(e as Error).message}`);
+    }
+  }
+  result.packDir = outDir;
+  result.ok = result.errors.length === 0 && result.skills.length > 0;
+  return result;
+}

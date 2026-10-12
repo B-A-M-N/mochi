@@ -87,6 +87,17 @@ const HELPERS = `globalThis.__mkCss=function(el){if(!el)return'';if(el.id)return
 const fn = (body) => `${HELPERS}\n(${body})();`;
 
 async function main() {
+  // probe: report driver readiness WITHOUT launching a browser (used by
+  // `mochi doctor` and tests). Exits before any browser code runs.
+  if (cmd === 'probe') {
+    const cache = path.join(os.homedir(), '.cache', 'ms-playwright');
+    let browsers = [];
+    try {
+      if (fs.existsSync(cache)) browsers = fs.readdirSync(cache).filter((n) => /^(chromium|firefox|webkit)/.test(n));
+    } catch {}
+    console.log(JSON.stringify({ ok: true, playwright: true, browsers, command: 'probe' }));
+    return;
+  }
   const name = pickBrowser();
   const type = pw[name] || pw.firefox;
   let browser;

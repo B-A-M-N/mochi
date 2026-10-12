@@ -6,6 +6,19 @@
 // Long-lived processes (background tasks, daemons, PTY) keep their own
 // lifecycle owners and are intentionally OUT of scope.
 import { spawn, execFile } from 'node:child_process';
+import { homedir, tmpdir } from 'node:os';
+import { resolve, delimiter } from 'node:path';
+import { accessSync, constants } from 'node:fs';
+
+export interface SandboxOptions {
+  /** 'off' (default) runs directly; 'bubblewrap' forces bwrap (fails if
+   *  missing); 'auto' uses bwrap when available, else runs directly. */
+  mode: 'off' | 'auto' | 'bubblewrap';
+  /** Allow network inside the sandbox. Default true (npm/tests need it). */
+  network?: boolean;
+  /** Extra read-write paths beyond cwd + tmpdir + devtool caches. */
+  writablePaths?: string[];
+}
 
 export interface ExecOptions {
   cwd?: string;
@@ -20,6 +33,9 @@ export interface ExecOptions {
   killGraceMs?: number;
   /** Called once with the outcome for audit/risk logging. Never throws. */
   onAudit?: (info: { cmd: string; code: number | null; timedOut: boolean; durationMs: number }) => void;
+  /** OS-level sandbox (bubblewrap). Default off — opt in per call or via
+   *  `safety.sandbox` for the shell tool. */
+  sandbox?: SandboxOptions;
 }
 
 export interface ExecResult {
@@ -124,7 +140,8 @@ function finishSpawn(
  *  Prefer this for every harness-internal invocation (git, probes, notify). */
 export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions = {}): Promise<ExecResult> {
   const startedAt = Date.now();
-  const child = spawn(cmd, [...args], {
+  const wrapped = maybeSandbox(cmd, args, opts);
+  const child = spawn(wrapped.cmd, wrapped.args, {
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     stdio: 'pipe',
@@ -140,7 +157,8 @@ export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions 
 export function runShellString(command: string, opts: ExecOptions & { shellBin?: string } = {}): Promise<ExecResult> {
   const startedAt = Date.now();
   const shellBin = opts.shellBin ?? (process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : (process.env.SHELL || '/bin/bash'));
-  const child = spawn(shellBin, ['-c', command], {
+  const wrapped = maybeSandbox(shellBin, ['-c', command], opts);
+  const child = spawn(wrapped.cmd, wrapped.args, {
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     stdio: 'pipe',
@@ -162,4 +180,90 @@ export function execArgvText(cmd: string, args: readonly string[], opts: { cwd?:
       else resolve(String(stdout));
     });
   });
+}
+
+/** Default writable locations inside a bubblewrap sandbox: the task cwd, the
+ *  OS tmpdir, and the dev-tool caches npm/cargo/pip need to function. The
+ *  rest of the filesystem (including $HOME dotfiles and SSH keys) is
+ *  read-only; /tmp and /dev+/proc are fresh private mounts. */
+function defaultSandboxWritable(cwd?: string): string[] {
+  const home = homedir();
+  const out = [cwd ?? process.cwd(), tmpdir()];
+  for (const d of ['.npm', '.cache', '.cargo']) {
+    const p = resolve(home, d);
+    try {
+      accessSync(p, constants.R_OK);
+      out.push(p);
+    } catch { /* cache dir absent: skip rather than create it inside the sandbox */ }
+  }
+  return [...new Set(out)];
+}
+
+let cachedBwrap: string | null | undefined;
+
+/** Absolute path to `bwrap`, or null when unavailable. Cached. Testable via
+ *  explicit pathEnv (production callers omit it). */
+export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string | null {
+  if (cachedBwrap !== undefined && pathEnv === (process.env.PATH ?? '')) return cachedBwrap;
+  let found: string | null = null;
+  for (const dir of pathEnv.split(delimiter).filter(Boolean)) {
+    const full = resolve(dir, 'bwrap');
+    try {
+      accessSync(full, constants.X_OK);
+      found = full;
+      break;
+    } catch { /* not here */ }
+  }
+  if (pathEnv === (process.env.PATH ?? '')) cachedBwrap = found;
+  return found;
+}
+
+/** Pure argv builder: wrap [cmd, ...args] in a bubblewrap invocation.
+ *  Exported for tests; runArgv/runShellString call it via maybeSandbox. */
+export function buildBubblewrapArgs(
+  bwrapBin: string,
+  cmd: string,
+  args: readonly string[],
+  opts: { cwd?: string; network?: boolean; writablePaths?: string[] } = {},
+): string[] {
+  const cwd = opts.cwd ?? process.cwd();
+  const argv: string[] = [
+    '--ro-bind', '/', '/',
+    '--dev', '/dev',
+    '--proc', '/proc',
+    '--tmpfs', '/tmp',
+  ];
+  const writable = [...defaultSandboxWritable(cwd), ...(opts.writablePaths ?? [])];
+  for (const p of new Set(writable)) {
+    argv.push('--bind', p, p);
+  }
+  if (opts.network === false) argv.push('--unshare-net');
+  argv.push('--chdir', cwd, '--', cmd, ...args);
+  return [bwrapBin, ...argv];
+}
+
+/** Wrap [cmd, args] per opts.sandbox. Returns the command unchanged when the
+ *  sandbox is off, unavailable in auto mode — or throws in `bubblewrap` mode
+ *  when bwrap is missing (explicit request, fail loudly, never silently run
+ *  unsandboxed). */
+export function maybeSandbox(
+  cmd: string,
+  args: readonly string[],
+  opts: ExecOptions,
+): { cmd: string; args: string[] } {
+  const sb = opts.sandbox;
+  if (!sb || sb.mode === 'off' || process.platform === 'win32') return { cmd, args: [...args] };
+  const bwrap = detectBubblewrap();
+  if (!bwrap) {
+    if (sb.mode === 'bubblewrap') {
+      throw new Error('Sandbox requested (bubblewrap) but `bwrap` was not found on PATH. Install bubblewrap or use sandbox mode "off".');
+    }
+    return { cmd, args: [...args] };
+  }
+  const full = buildBubblewrapArgs(bwrap, cmd, args, {
+    cwd: opts.cwd,
+    network: sb.network,
+    writablePaths: sb.writablePaths,
+  });
+  return { cmd: full[0], args: full.slice(1) };
 }

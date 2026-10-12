@@ -17,6 +17,8 @@
 import { Runtime } from './runtime.js';
 import { SessionStore } from './session-store.js';
 import { addFact, recallFacts } from './memory-store.js';
+import { loadAllSkills, searchSkills } from './skills.js';
+import { addMcpServerConfig } from './tools/mcp-manage.js';
 import type { MochiConfig, MochiEvent } from './types.js';
 
 export interface RunResult {
@@ -62,6 +64,65 @@ export class Mochi {
   /** Alias of prompt() — reads as an instruction. */
   async run(task: string): Promise<RunResult> { return this.prompt(task); }
 
+  /** Streaming prompt: yields every runtime event live, then RETURNS the
+   *  final RunResult (use `for await` for progress + capture the return for
+   *  the outcome). Subscription is eager (no lost early events) and bounded
+   *  (500-event backlog cap); the subscription always closes on settle.
+   *  Example:
+   *  ```
+   *  const gen = mochi.promptStream('fix the bug');
+   *  let result: RunResult | undefined;
+   *  while (true) {
+   *    const n = await gen.next();
+   *    if (n.done) { result = n.value; break; }
+   *    console.log(n.value.type);
+   *  }
+   *  ``` */
+  async *promptStream(task: string): AsyncGenerator<MochiEvent, RunResult, void> {
+    const SENTINEL = Symbol('mochi-prompt-settled');
+    type Item = MochiEvent | typeof SENTINEL;
+    const backlog: Item[] = [];
+    const waiters: Array<(item: Item) => void> = [];
+    const push = (item: Item) => {
+      const w = waiters.shift();
+      if (w) w(item);
+      else {
+        backlog.push(item);
+        if (backlog.length > 500) backlog.shift();
+      }
+    };
+    const off = this.onAny((e) => push(e));
+    const doneP = this.prompt(task).then(
+      (r) => { push(SENTINEL); return r; },
+      (e) => { push(SENTINEL); throw e; },
+    );
+    void doneP.catch(() => { /* surfaced via return-await below */ });
+    try {
+      for (;;) {
+        while (backlog.length > 0) {
+          const item = backlog.shift() as Item;
+          if (item === SENTINEL) {
+            return await doneP;
+          }
+          yield item as MochiEvent;
+        }
+        const item = await new Promise<Item>((resolve) => waiters.push(resolve));
+        if (item === SENTINEL) {
+          // Drain stragglers that arrived with the settle signal, then return.
+          while (backlog.length > 0) {
+            const tail = backlog.shift() as Item;
+            if (tail === SENTINEL) break;
+            yield tail as MochiEvent;
+          }
+          return await doneP;
+        }
+        yield item as MochiEvent;
+      }
+    } finally {
+      off();
+    }
+  }
+
   /** Structured multi-step objective (task DAG + verifier + self-review). */
   async goal(objective: string, constraints: string[] = []): Promise<GoalResultSdk> {
     const r = await this.rt.runGoal(objective, constraints);
@@ -92,6 +153,23 @@ export class Mochi {
   /** Session recall: recent past sessions (titles + objectives). */
   sessions(limit = 10): Array<{ id: string; objective: string; updated: number }> {
     return new SessionStore(this.rt.cwd).list(limit).map((s) => ({ id: s.id, objective: s.objective, updated: s.updatedAt }));
+  }
+
+  /** Skill discovery over every loaded skill (local + user + bundled). */
+  searchSkills(query: string, limit = 8): Array<{ name: string; description: string; score: number }> {
+    const { skills } = loadAllSkills(this.rt.cwd);
+    return searchSkills(skills, query, { limit }).map((h) => ({
+      name: h.skill.name,
+      description: h.skill.description,
+      score: Math.round(h.score * 100) / 100,
+    }));
+  }
+
+  /** One-command MCP install into <cwd>/.mcp.json (merge-only, never
+   *  clobbers; restart the session so the client picks it up). */
+  addMcpServer(serverId: string): { ok: boolean; message: string } {
+    const r = addMcpServerConfig(this.rt.cwd, serverId);
+    return { ok: r.ok, message: r.message };
   }
 
   /** Persist a durable memory fact (MCH-42 store: dedup + scoring). */

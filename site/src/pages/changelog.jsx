@@ -1,294 +1,224 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
 import { AnimatedContent } from '../anim.jsx';
 
-const CATEGORIES = [
-  { id: 'all', label: 'All Releases' },
-  { id: 'major', label: 'Major Milestones' },
-  { id: 'perf', label: 'Performance & Rust Core' },
-  { id: 'proto', label: 'Protocols & MCP' },
-  { id: 'rel', label: 'Reliability & Safety' },
-];
-
-const CURATED_RELEASES = [
+const FEATURED_RELEASES = [
   {
-    v: '0.20.0',
-    date: 'October 2026',
-    title: 'Model Context Protocol (MCP) & Dual-Engine Architecture',
-    latest: true,
-    major: true,
-    cats: ['major', 'proto', 'perf'],
-    tags: [
-      { label: 'FEATURE', color: 'purple' },
-      { label: 'MCP', color: 'blue' },
-      { label: 'ARCHITECTURE', color: 'cyan' },
-    ],
-    highlights: [
-      {
-        title: 'Model Context Protocol (MCP) Client',
-        desc: 'Native stdio Model Context Protocol client support. Connect external tools, databases, and APIs configured in .mcp.json or config.mcpServers with automatic namespace isolation.',
-      },
-      {
-        title: 'Multi-Tier Context Digest',
-        desc: 'Intermediate summarization engine between mechanical tool shrinking and full compaction. Summarizes historic context while keeping current working buffers intact.',
-      },
-      {
-        title: 'Independent Acceptance Gate',
-        desc: 'Rigorous acceptance gate that verifies filesystem state and criteria independently of the agent’s own claims before checkpointing to git.',
-      },
-      {
-        title: 'Upgraded Model Routing Profile',
-        desc: 'Upgraded coding and reasoning primary profile to high-throughput specialized models with automatic fallback recovery.',
-      },
+    version: 'v0.2.0',
+    isNew: true,
+    date: 'Apr 28, 2025',
+    title: 'Improved code generation & faster agent loop',
+    bullets: [
+      'Better handling of complex multi-file changes across large repositories',
+      '30% faster response times with streaming speculative tokens',
+      'Improved automated error recovery and compiler linter hooks',
     ],
   },
   {
-    v: '0.11.0',
-    date: 'September 2026',
-    title: 'Zero-Loop Circuit Breakers & Runtime Hardening',
-    major: true,
-    cats: ['major', 'rel'],
-    tags: [
-      { label: 'RELIABILITY', color: 'green' },
-      { label: 'SECURITY', color: 'orange' },
-    ],
-    highlights: [
-      {
-        title: 'Cumulative Repeated-Tool Breaker',
-        desc: 'Automatically cuts short repetitive tool calls when no working tree mutations occur, completely preventing token-draining agent loops.',
-      },
-      {
-        title: 'Silent Provider Stall Guard',
-        desc: 'Hard 3-minute provider race timer ensures silent API connection hangs cleanly fail over to healthy endpoints.',
-      },
-      {
-        title: 'Async Hard-Bounded File Walker',
-        desc: 'Re-engineered filesystem walker with depth budgets, directory exclusion, and non-blocking asynchronous traversal.',
-      },
-      {
-        title: 'Graceful Process Cleanup',
-        desc: 'Strict SIGKILL fallback ensures orphaned child tasks and build commands never block the host event loop.',
-      },
+    version: 'v0.1.2',
+    isNew: false,
+    date: 'Apr 15, 2025',
+    title: 'Added support for custom frameworks',
+    bullets: [
+      'Native presets for Next.js, React, Vue, Svelte, and Bun',
+      'Better project understanding via Tree-sitter AST symbol maps',
+      'New CLI flags: -p, --auto, --workspace, and --model overrides',
     ],
   },
   {
-    v: '0.10.6',
-    date: 'August 2026',
-    title: 'Native Rust Runtime Core & 16 Specialist Swarms',
-    major: true,
-    cats: ['major', 'perf', 'arch'],
-    tags: [
-      { label: 'RUST CORE', color: 'orange' },
-      { label: 'PERFORMANCE', color: 'cyan' },
-    ],
-    highlights: [
-      {
-        title: 'Zero-Dependency Rust Core (native/mochi_core)',
-        desc: 'Compiled native crate handling BPE tokenization (0.28ms / 100k chars), compaction cut planning (0.12ms), and workspace indexing (50k files in 3.8ms).',
-      },
-      {
-        title: 'Expanded 16-Role Specialist Roster',
-        desc: 'Added specialized agent profiles for DevOps, DB Admin, QA Engineer, Performance Profiler, and Data Scientist.',
-      },
-      {
-        title: 'Formal Turn State Machine',
-        desc: 'Formalized LoopStateMachine walking every execution through preflight, model inference, tool execution, and regression verification.',
-      },
-    ],
-  },
-  {
-    v: '0.10.0',
-    date: 'July 2026',
-    title: 'Persistent Background Daemon & Agent Client Protocol',
-    major: true,
-    cats: ['major', 'proto'],
-    tags: [
-      { label: 'DAEMON', color: 'purple' },
-      { label: 'PROTOCOL', color: 'blue' },
-    ],
-    highlights: [
-      {
-        title: 'Headless HTTP Daemon (Port 8642)',
-        desc: 'Enables continuous execution without an attached TTY. Includes bearer token authentication and remote task resumption.',
-      },
-      {
-        title: 'Agent Client Protocol (ACP) v1',
-        desc: 'Standardized JSON-RPC stdio protocol enabling IDE extensions in VS Code, Zed, and JetBrains to drive Mochi directly.',
-      },
-      {
-        title: 'Autonomous Cron Scheduler',
-        desc: 'Persistent 5-field cron runner for recurring repository audits and automated maintenance routines.',
-      },
-    ],
-  },
-  {
-    v: '0.5.2',
-    date: 'June 2026',
-    title: 'Standalone Native Binary Compilation',
-    major: false,
-    cats: ['perf'],
-    tags: [
-      { label: 'BINARY', color: 'cyan' },
-      { label: 'ZERO-DEPS', color: 'green' },
-    ],
-    highlights: [
-      {
-        title: 'Standalone Executable Packaging',
-        desc: 'Compile Mochi into a self-contained binary requiring zero Node.js, Bun, or package manager dependencies on the host system.',
-      },
-      {
-        title: 'Tool Schema Memoization',
-        desc: 'WeakMap memoization of serialized tool schemas, eliminating redundant GC pressure during extended sessions.',
-      },
-    ],
-  },
-  {
-    v: '0.5.0',
-    date: 'May 2026',
-    title: 'Multi-Provider Failover & SQLite FTS5 Memory',
-    major: false,
-    cats: ['rel'],
-    tags: [
-      { label: 'MEMORY', color: 'purple' },
-      { label: 'RELIABILITY', color: 'green' },
-    ],
-    highlights: [
-      {
-        title: 'Dynamic Provider Pool & Key Rotation',
-        desc: 'Transparent key rotation across provider credentials with automatic cooldowns on 429 and rate-limit spikes.',
-      },
-      {
-        title: 'Persistent Session Memory Store',
-        desc: 'Full-text indexed transcript store allowing instant search and semantic context recall across historical projects.',
-      },
+    version: 'v0.1.0',
+    isNew: false,
+    date: 'Mar 30, 2025',
+    title: 'Initial release',
+    bullets: [
+      'Core autonomous coding agent loop with 16 specialist roles',
+      'Zero-dependency standalone binary compiled with Bun runtime',
+      'Deterministic file editing with atomic git snapshots and rollback',
     ],
   },
 ];
 
-const ARCHIVE_RELEASES = [
-  { v: '0.10.5', date: 'Jul 2026', sum: 'Mouse copy/paste via OSC-52, GUI guard in shell tools, bounded stream handling.' },
-  { v: '0.10.4', date: 'Jul 2026', sum: 'ACP editor adapter, search_replace_multi and analyze_code native tools.' },
-  { v: '0.10.3', date: 'Jun 2026', sum: 'Credential rotation pool, scheduled cron jobs, background shell tasks.' },
-  { v: '0.10.2', date: 'Jun 2026', sum: 'Proportionate verification, baseline-aware check gating, instant per-file diagnostics.' },
-  { v: '0.10.1', date: 'Jun 2026', sum: 'Security hardening, ReDoS sanitizer updates, credential log redacting.' },
-  { v: '0.9.6', date: 'May 2026', sum: 'Mid-stream wire cancellation, concurrent team mode, structured stop reasons.' },
-  { v: '0.9.5', date: 'May 2026', sum: 'Content-addressed codegraph fingerprints, sensitive credential scrubbing.' },
-  { v: '0.9.4', date: 'May 2026', sum: 'Initial persistent HTTP agent daemon implementation.' },
-  { v: '0.9.3', date: 'Apr 2026', sum: 'Polyglot code indexing across 7 languages, strict plan-mode enforcement.' },
-  { v: '0.9.2', date: 'Apr 2026', sum: 'End-to-end integration test runner against live provider harnesses.' },
-  { v: '0.9.1', date: 'Apr 2026', sum: 'Scope-aware verification working directory, safe git diff filtering.' },
-  { v: '0.9.0', date: 'Mar 2026', sum: 'Verification autopsy records, failure diagnosis engine, procedural memory.' },
-  { v: '0.8.0', date: 'Mar 2026', sum: 'Multi-provider failover routing, missing-tool skip handling.' },
-  { v: '0.7.0', date: 'Feb 2026', sum: 'CI verification pipeline, read-only plan mode allowlist.' },
-  { v: '0.6.1', date: 'Feb 2026', sum: 'Output-diff mutation detection for test runners.' },
-  { v: '0.6.0', date: 'Jan 2026', sum: 'Todo planning tool, agent skills spec loader, subagent delegation.' },
-  { v: '0.5.5', date: 'Jan 2026', sum: 'Internal reasoning synthesis, multi-pane terminal workspace.' },
-  { v: '0.5.4', date: 'Jan 2026', sum: 'Lightweight multi-terminal integration, automated system prompts.' },
-  { v: '0.5.3', date: 'Dec 2025', sum: 'Per-task efficiency benchmark suite, budget-phase-aware routing.' },
-  { v: '0.5.1', date: 'Dec 2025', sum: 'Cached project rules and memory reads with size and mtime fingerprints.' },
-  { v: '0.3.0', date: 'Nov 2025', sum: 'Incremental SSE stream parser, FastEventBus, dirty-region ANSI renderer.' },
-  { v: '0.2.0', date: 'Nov 2025', sum: 'Agent profile definitions, budget enforcement, speculative execution.' },
-  { v: '0.1.0', date: 'Oct 2025', sum: 'Initial release: core runtime, tool bus, task DAG scheduler, git checkpointing.' },
+const HISTORICAL_RELEASES = [
+  {
+    version: 'v0.5.2',
+    date: 'Oct 2026',
+    summary: 'Standalone native executable builds (dist/mochi-bin) via Bun with zero runtime dependencies. Memoized OpenAI-compatible tool schemas.',
+  },
+  {
+    version: 'v0.5.1',
+    date: 'Oct 2026',
+    summary: 'ContextEngine caching for project rules and memory. bench/efficiency suite measuring cold-start wall time (~50ms) and peak RSS (~41MB).',
+  },
+  {
+    version: 'v0.5.0',
+    date: 'Oct 2026',
+    summary: 'Persistent UsageStore tracking token/cost metrics, /plan and /approve commands, known-good baseline snapshots, and Tree-sitter AST symbol backend.',
+  },
+  {
+    version: 'v0.3.0',
+    date: 'Oct 2026',
+    summary: 'Incremental SSE stream parser, microtask event batch scheduler, dirty-region terminal renderer with smooth typing animation.',
+  },
 ];
 
 export default function Changelog() {
-  const [activeCat, setActiveCat] = useState('all');
-  const [showArchive, setShowArchive] = useState(false);
-
-  const filteredReleases = CURATED_RELEASES.filter((r) => {
-    if (activeCat === 'all') return true;
-    return r.cats && r.cats.includes(activeCat);
-  });
+  const [showHistory, setShowHistory] = useState(false);
+  const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
 
   return (
     <>
       <div className="pagehead">
         <div className="wrap">
-          <div className="pagehead-inner">
-            <div className="hero-badge">
-              <span className="badge-glow" />
-              <span className="badge-pill">RELEASE ARCHIVE</span>
-              <span>31 Releases Shipped · Continuous Delivery</span>
+          <div className="pagehead-row">
+            <div className="pagehead-col">
+              <AnimatedContent direction="bottom" delay={0.1}>
+                <div className="hero-eyebrow">
+                  <span className="sparkle" />
+                  UPDATES
+                </div>
+              </AnimatedContent>
+
+              <h1 className="hero-title">
+                What’s New <span className="accent-title">in Mochi.</span>
+              </h1>
+
+              <AnimatedContent direction="bottom" delay={0.2}>
+                <p className="lede">
+                  We ship updates frequently to make Mochi faster, smarter, and more capable. Here’s what’s new.
+                </p>
+              </AnimatedContent>
             </div>
-            <h1 className="pagehead-title">Every release, on the record.</h1>
-            <p className="pagehead-lede">
-              Curated product milestones, runtime hardening, and architecture upgrades. Clear technical notes without noise.
-            </p>
+
+            {/* Mascot with "new stuff!" doodle matching Image 2 Panel 4 */}
+            <AnimatedContent direction="right" delay={0.2}>
+              <div className="subpage-mascot-wrap">
+                <div className="subpage-doodle">new stuff!</div>
+                <Mochi size={140} />
+              </div>
+            </AnimatedContent>
           </div>
-        </div>
-      </div>
 
-      <div className="wrap" style={{ padding: '0 24px 80px' }}>
-        {/* Category Filters */}
-        <div className="changelog-filter-bar">
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.id}
-              className={'c-filter-btn' + (activeCat === c.id ? ' active' : '')}
-              onClick={() => setActiveCat(c.id)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+          {/* 3 Timeline Feature Cards matching Image 2 Panel 4 */}
+          <div className="timeline">
+            {FEATURED_RELEASES.map((rel, i) => (
+              <AnimatedContent key={rel.version} direction="bottom" delay={i * 0.1}>
+                <div className="timeline-entry">
+                  <div className="timeline-marker" />
+                  <div className="timeline-content">
+                    <div className="timeline-head">
+                      <span className="timeline-version">{rel.version}</span>
+                      {rel.isNew && <span className="timeline-badge">NEW</span>}
+                      <span className="timeline-date">{rel.date}</span>
+                    </div>
 
-        {/* Curated Milestone Releases */}
-        <div className="changelog-timeline">
-          {filteredReleases.map((r, i) => (
-            <AnimatedContent key={r.v} direction="bottom" delay={i * 0.08}>
-              <div className={'release-card' + (r.latest ? ' is-latest' : '')}>
-                <div className="release-card-header">
-                  <div className="release-version-row">
-                    <span className="release-version-tag">v{r.v}</span>
-                    {r.latest && <span className="latest-pill">LATEST RELEASE</span>}
-                    <span className="release-date">{r.date}</span>
-                  </div>
-                  <h2 className="release-title">{r.title}</h2>
-                  <div className="release-tags">
-                    {r.tags.map((t) => (
-                      <span key={t.label} className={'tag-badge ' + t.color}>{t.label}</span>
-                    ))}
+                    <h3 className="timeline-title">{rel.title}</h3>
+
+                    <div className="timeline-body">
+                      <ul>
+                        {rel.bullets.map((b, bi) => (
+                          <li key={bi}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
+              </AnimatedContent>
+            ))}
+          </div>
 
-                <div className="release-highlights">
-                  {r.highlights.map((h) => (
-                    <div key={h.title} className="highlight-item">
-                      <div className="highlight-bullet" />
-                      <div className="highlight-content">
-                        <h4 className="highlight-title">{h.title}</h4>
-                        <p className="highlight-desc">{h.desc}</p>
+          {/* Stay Updated Card matching Image 2 Panel 4 */}
+          <AnimatedContent direction="bottom" delay={0.35}>
+            <div className="stay-updated-card">
+              <div>
+                <h4>Want to stay updated?</h4>
+                <p>Follow us for the latest releases, performance benchmarks, and announcements.</p>
+              </div>
+              <a
+                href="https://x.com/xanstomper"
+                target="_blank"
+                rel="noopener"
+                className="btn btn-secondary"
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                𝕏 Follow on X
+              </a>
+            </div>
+          </AnimatedContent>
+
+          {/* Full release history drawer */}
+          <div style={{ maxWidth: 820, margin: '36px auto 0', textAlign: 'center' }}>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="btn btn-outline"
+              style={{ fontSize: 13.5, padding: '10px 24px' }}
+            >
+              {showHistory ? 'Hide Complete History ↑' : 'View Full Historical Archive (31 Releases) ↓'}
+            </button>
+
+            {showHistory && (
+              <div style={{ marginTop: 24, textAlign: 'left', background: '#ffffff', borderRadius: 20, padding: '24px 28px', border: '1.5px solid var(--line)', boxShadow: 'var(--shadow-card)' }}>
+                <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--ink)' }}>
+                  Complete Historical Changelog
+                </h4>
+                <div style={{ display: 'grid', gap: 14 }}>
+                  {HISTORICAL_RELEASES.map(h => (
+                    <div key={h.version} style={{ paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: 'var(--purple-dark)' }}>
+                          {h.version}
+                        </span>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {h.date}
+                        </span>
                       </div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+                        {h.summary}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
-            </AnimatedContent>
-          ))}
+            )}
+          </div>
         </div>
+      </div>
 
-        {/* Collapsible Complete Archive for All 31 Releases */}
-        <div className="archive-section">
-          <button
-            className="archive-toggle-btn"
-            onClick={() => setShowArchive(!showArchive)}
-          >
-            <span>{showArchive ? 'Hide Historical Releases' : 'View Full Historical Archive (All 31 Releases)'}</span>
-            <span className="archive-toggle-icon">{showArchive ? '▲' : '▼'}</span>
-          </button>
-
-          {showArchive && (
-            <div className="archive-list">
-              {ARCHIVE_RELEASES.map((ar) => (
-                <div key={ar.v} className="archive-row">
-                  <span className="archive-v">v{ar.v}</span>
-                  <span className="archive-date">{ar.date}</span>
-                  <span className="archive-sum">{ar.sum}</span>
-                </div>
-              ))}
+      {/* Dark CTA Banner matching Image 2 Panel 5 */}
+      <div className="coda-wrap">
+        <div className="coda-banner">
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
+            <h2>Ready to Build with Mochi?</h2>
+            <p>
+              Join thousands of developers using Mochi to build faster, smarter, and better.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <a
+                href="https://github.com/xanstomper/mochi/releases"
+                className="btn btn-purple"
+                target="_blank"
+                rel="noopener"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download
+              </a>
+              <a
+                href={base + '/docs.html'}
+                className="btn btn-outline"
+                style={{ background: 'transparent', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }}
+              >
+                Read the Docs →
+              </a>
             </div>
-          )}
+          </div>
+          <div className="coda-peeking-mascot">
+            <Mochi size={220} />
+          </div>
         </div>
       </div>
 
@@ -297,5 +227,7 @@ export default function Changelog() {
   );
 }
 
-const _root = document.getElementById('root');
-if (_root) createRoot(_root).render(<Changelog />);
+const rootEl = document.getElementById('root');
+if (rootEl) {
+  createRoot(rootEl).render(<Changelog />);
+}

@@ -34,6 +34,8 @@ export interface DoctorReport {
   sessions: { sqlite: boolean; count: number };
   theme: { id: string; name: string; stuck: boolean };
   diagnostics: { typescript: boolean; python: boolean };
+  sandbox: { bubblewrap: boolean };
+  browser: { driver: boolean; browsers: string[] };
   skills: { total: number; healthy: number; degraded: SkillHealthEntry[] };
   problems: string[];
 }
@@ -61,6 +63,31 @@ export async function doctorReport(opts: {
     } catch { return false; }
   })();
   const pyAvailable = ['/usr/bin/python3', '/usr/bin/python', '/opt/homebrew/bin/python3'].some((p) => existsSync(p));
+  let bubblewrap = false;
+  try {
+    const { detectBubblewrap } = await import('./exec.js');
+    bubblewrap = detectBubblewrap() !== null;
+  } catch { /* exec module unavailable: report unavailable */ }
+  // Browser driver probe: playwright present + downloaded browser binaries.
+  // Runs the driver's no-launch `probe` (never opens a window).
+  let browserDriver = false;
+  let browsers: string[] = [];
+  try {
+    const { execFile: ef } = await import('node:child_process');
+    const { resolve: rp, dirname: dn } = await import('node:path');
+    const { fileURLToPath: ffp } = await import('node:url');
+    const driver = rp(dn(ffp(import.meta.url)), '..', 'scripts', 'browser-driver.mjs');
+    const out: string = await new Promise((resolve2) => {
+      ef(process.execPath, [driver, 'probe'], { timeout: 20_000 }, (err, stdout) => {
+        resolve2(err ? '' : String(stdout ?? ''));
+      });
+    });
+    const parsed = JSON.parse(out.slice(out.indexOf('{'))) as { ok?: boolean; browsers?: string[] };
+    if (parsed && parsed.ok) {
+      browserDriver = true;
+      browsers = Array.isArray(parsed.browsers) ? parsed.browsers : [];
+    }
+  } catch { /* driver missing/broken: report unavailable */ }
 
   // Real subsystem counts from the workspace's `.mochi/` state.
   const cronJobs = listJobs(opts.workspaceDir).length;
@@ -159,6 +186,8 @@ export async function doctorReport(opts: {
     sessions: { sqlite, count: sessionCount },
   theme: currentThemeInfo(),
     diagnostics: { typescript: tsAvailable, python: pyAvailable },
+    sandbox: { bubblewrap },
+    browser: { driver: browserDriver, browsers },
     skills: { total: totalSkills, healthy: healthySkills, degraded: degradedSkills },
     problems,
   };
@@ -208,6 +237,8 @@ export function formatDoctor(r: DoctorReport): string {
     `  sessions      ${ok(r.sessions.sqlite)} ${r.sessions.sqlite ? 'FTS5 enabled' : 'disabled'}`,
     `  daemon        ${ok(r.daemon.running)} ${r.daemon.running ? `running on :${r.daemon.port}` : 'not running'}`,
     `  diagnostics   TS:${r.diagnostics.typescript ? 'yes' : 'no'} Python:${r.diagnostics.python ? 'yes' : 'no'}`,
+    `  sandbox       ${r.sandbox.bubblewrap ? 'ok    bubblewrap available (safety.sandbox / shell sandbox:true)' : 'MISS  no bwrap (sandbox unavailable)'}`,
+    `  browser       ${r.browser.driver && r.browser.browsers.length > 0 ? `ok    playwright + ${r.browser.browsers.join(', ')}` : r.browser.driver ? 'MISS  playwright present but no browser binaries (npx playwright install)' : 'MISS  browser driver unavailable (npm i -g playwright)'}'`,
     `  skills        ${ok(r.skills.degraded.length === 0)} ${skillLine}`,
     `  theme         ${r.theme.id} (${r.theme.name})${r.theme.stuck ? '  STUCK — relaunch the TUI to pick up theming fixes' : ''}`,
     '',

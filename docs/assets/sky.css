@@ -1,64 +1,168 @@
 /* ═══════════════════════════════════════════════════════════════
-   MOCHI — MODERN AMBIENT BACKGROUND SYSTEM
-   Subtle radial aurora glow, technical precision grid, non-interfering
+   MOCHI — PASTEL LAVENDER BACKGROUND DECOR
+   Soft blobs, dots, sparkles, and gentle waves behind content
    ═══════════════════════════════════════════════════════════════ */
 
-.bg-ambient {
+.bg-decor {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  background: #08080c;
 }
 
-/* Primary aurora illumination from top */
-.bg-glow-top {
+.bg-blob {
   position: absolute;
-  top: -240px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1100px;
-  height: 650px;
   border-radius: 50%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(147, 51, 234, 0.16) 0%,
-    rgba(99, 102, 241, 0.10) 35%,
-    rgba(14, 165, 233, 0.04) 60%,
-    transparent 75%
-  );
   filter: blur(80px);
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
-/* Secondary subtle accent glow */
-.bg-glow-secondary {
-  position: absolute;
-  bottom: 10%;
+.bg-blob-1 {
+  width: 650px;
+  height: 650px;
+  top: -200px;
   right: -100px;
-  width: 600px;
-  height: 600px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(168, 85, 247, 0.08) 0%,
-    rgba(79, 70, 229, 0.04) 50%,
-    transparent 70%
-  );
-  filter: blur(100px);
-  opacity: 0.7;
+  background: radial-gradient(circle, #E8E3FD 0%, rgba(232, 227, 253, 0) 70%);
 }
 
-/* Subtle engineering dot matrix / grid overlay */
-.bg-grid-mesh {
+.bg-blob-2 {
+  width: 550px;
+  height: 550px;
+  top: 35%;
+  left: -150px;
+  background: radial-gradient(circle, #FCE7F3 0%, rgba(252, 231, 243, 0) 70%);
+  opacity: 0.45;
+}
+
+.bg-blob-3 {
+  width: 480px;
+  height: 480px;
+  bottom: -100px;
+  right: 15%;
+  background: radial-gradient(circle, #F0EDFE 0%, rgba(240, 237, 254, 0) 70%);
+  opacity: 0.65;
+}
+
+.bg-dot {
   position: absolute;
-  inset: 0;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 15%, black 40%, transparent 95%);
-  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 15%, black 40%, transparent 95%);
-  opacity: 0.8;
+  border-radius: 50%;
+  background: #8B75F6;
+  opacity: 0.22;
+}
+
+.bg-dot-1 { width: 14px; height: 14px; top: 18%; right: 15%; }
+.bg-dot-2 { width: 9px; height: 9px; top: 58%; left: 8%; }
+.bg-dot-3 { width: 16px; height: 16px; top: 28%; left: 5%; opacity: 0.18; }
+.bg-dot-4 { width: 12px; height: 12px; bottom: 28%; right: 9%; }
+
+/* ── FLOATING SPARKLES ──────────────────────────────────────── */
+.bg-sparkle {
+  position: absolute;
+  animation: bgSparkleTwinkle 4s ease-in-out infinite;
+}
+
+.bg-sparkle-1 {
+  width: 22px;
+  height: 22px;
+  top: 14%;
+  left: 7%;
+  background: #8B75F6;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+}
+
+.bg-sparkle-2 {
+  width: 16px;
+  height: 16px;
+  top: 24%;
+  right: 11%;
+  background: #C4B5FD;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  animation-delay: 1s;
+}
+
+.bg-sparkle-3 {
+  width: 18px;
+  height: 18px;
+  top: 66%;
+  left: 4%;
+  background: #8B75F6;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  animation-delay: 2s;
+}
+
+.bg-sparkle-4 {
+  width: 14px;
+  height: 14px;
+  top: 44%;
+  right: 5%;
+  background: #E8E3FD;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  animation-delay: 0.5s;
+}
+
+.bg-sparkle-5 {
+  width: 16px;
+  height: 16px;
+  bottom: 22%;
+  left: 11%;
+  background: #C4B5FD;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  animation-delay: 1.5s;
+}
+
+.bg-sparkle-6 {
+  width: 12px;
+  height: 12px;
+  bottom: 36%;
+  right: 16%;
+  background: #8B75F6;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  animation-delay: 2.5s;
+}
+
+@keyframes bgSparkleTwinkle {
+  0%, 100% { opacity: 0.7; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.25; transform: scale(0.8) rotate(15deg); }
+}
+
+/* ── SOFT WAVE SHAPES ───────────────────────────────────────── */
+.bg-wave {
+  position: absolute;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E8E3FD 0%, #F0EDFE 100%);
+  opacity: 0.35;
+}
+
+.bg-wave-1 {
+  width: 520px;
+  height: 320px;
+  top: 8%;
+  right: -50px;
+  border-radius: 60% 40% 50% 50% / 50% 60% 40% 50%;
+  animation: waveMorph 12s ease-in-out infinite;
+}
+
+.bg-wave-2 {
+  width: 420px;
+  height: 360px;
+  top: 48%;
+  left: -80px;
+  border-radius: 40% 60% 50% 50% / 60% 40% 60% 40%;
+  animation: waveMorph 15s ease-in-out infinite reverse;
+}
+
+.bg-wave-3 {
+  width: 380px;
+  height: 290px;
+  bottom: 4%;
+  right: 8%;
+  border-radius: 50% 50% 60% 40% / 40% 50% 50% 60%;
+  animation: waveMorph 10s ease-in-out infinite 2s;
+}
+
+@keyframes waveMorph {
+  0%, 100% { border-radius: 60% 40% 50% 50% / 50% 60% 40% 50%; }
+  33% { border-radius: 50% 60% 40% 60% / 60% 50% 60% 40%; }
+  66% { border-radius: 40% 50% 60% 50% / 50% 40% 50% 60%; }
 }

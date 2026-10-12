@@ -51,6 +51,10 @@ export interface SafetyConfig {
   maxCostUsd?: number;
   maxToolCalls?: number;
   maxModelCalls?: number;
+  /** OS-level sandbox for spawned commands: 'off' (default, direct exec),
+   *  'auto' (bubblewrap when available, else direct), 'bubblewrap' (fail
+   *  loudly if bwrap is missing). Env: MOCHI_SANDBOX. */
+  sandbox?: 'off' | 'auto' | 'bubblewrap';
   maxVerifyRetries?: number;
 }
 
@@ -196,6 +200,38 @@ export function contentText(m: { content?: string | ContentPart[] }): string {
   if (!m.content) return '';
   return typeof m.content === 'string' ? m.content
     : m.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('\n');
+}
+
+export interface SplitContent {
+  /** All text parts joined (images excluded). */
+  text: string;
+  /** Image parts in order: inline base64 data or remote URLs. */
+  images: Array<{ mime: string; data: string } | { url: string }>;
+}
+
+/** Split message content into text + images for providers with native vision
+ *  parts (Anthropic image blocks, Gemini inlineData). Data URIs become inline
+ *  base64 payloads; remote http(s) URLs stay URLs for providers that accept
+ *  them (OpenAI/Anthropic) — callers decide the fallback. Pure. */
+export function splitContent(content?: string | ContentPart[]): SplitContent {
+  if (!content) return { text: '', images: [] };
+  if (typeof content === 'string') return { text: content, images: [] };
+  const texts: string[] = [];
+  const images: SplitContent['images'] = [];
+  for (const p of content) {
+    if (p.type === 'text') {
+      texts.push(p.text);
+    } else if (p.type === 'image_url') {
+      const url = p.image_url.url;
+      const m = url.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+      if (m && m[3]) {
+        images.push({ mime: m[1] || 'image/jpeg', data: m[3] });
+      } else if (/^https?:\/\//i.test(url)) {
+        images.push({ url });
+      }
+    }
+  }
+  return { text: texts.join('\n'), images };
 }
 
 export interface StreamToolCall {

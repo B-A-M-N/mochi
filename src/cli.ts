@@ -918,6 +918,40 @@ async function main() {
       }
       return;
     }
+    if (sub === 'pack') {
+      // mochi skills pack <name...> [--out <dir>] [--from <dirs...>] — bundle
+      // installed skills into a portable pack directory (manifest + bodies).
+      // Share the directory; recipients unpack with `mochi skills unpack`.
+      const { packSkills } = await import('./features/skill-importer.js');
+      const { homedir } = await import('node:os');
+      const names = positional.slice(2);
+      if (!names.length) { console.log('Usage: mochi skills pack <name...> [--out <dir>]'); return; }
+      const outDir = typeof flags.out === 'string' && flags.out ? flags.out : pathJoin(cwd, 'mochi-skills-pack');
+      const from = typeof flags.from === 'string' && flags.from
+        ? flags.from.split(',').map((d) => d.trim()).filter(Boolean)
+        : [pathJoin(cwd, '.mochi', 'skills'), pathJoin(homedir(), '.mochi', 'skills')];
+      const rep = packSkills(names, from, outDir);
+      for (const n of rep.skills) console.log(`packed    ${n}`);
+      for (const sk of rep.skipped) console.log(`skipped   ${sk.name} (${sk.reason})`);
+      for (const e of rep.errors) console.error(`error     ${e}`);
+      if (rep.ok) console.log(`\nPack ready: ${outDir} — share it; recipients run: mochi skills unpack ${outDir}`);
+      else if (!rep.skills.length) process.exit(1);
+      return;
+    }
+    if (sub === 'unpack') {
+      // mochi skills unpack <pack-dir> [--force] — install a pack created by
+      // `mochi skills pack` (same engine as `skills import`, surfaced for
+      // discoverability next to pack).
+      const { importSkills } = await import('./features/skill-importer.js');
+      const packDir = positional[2];
+      if (!packDir) { console.log('Usage: mochi skills unpack <pack-dir> [--force]'); return; }
+      const rep = await importSkills({ source: packDir, force: !!flags.force });
+      for (const it of rep.imported) console.log(`imported  ${it.name}  -> ${it.to}`);
+      for (const sk of rep.skipped) console.log(`skipped   ${sk.name} (${sk.reason})`);
+      for (const e of rep.errors) console.error(`error     ${e}`);
+      console.log(`\n${rep.imported.length} imported, ${rep.skipped.length} skipped, ${rep.errors.length} errors.`);
+      return;
+    }
     if (sub === 'install') {
       // mochi skills install <pack>[@<repo>] [--category <cat>] [--force]
       // Installs a named pack (pack@repo) OR the whole source (bare repo). With

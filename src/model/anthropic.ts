@@ -1,5 +1,5 @@
 import type { ChatMessage, ModelResponse, StreamChunk, ToolDefinition } from '../types.js';
-import { contentText } from '../types.js';
+import { contentText, splitContent } from '../types.js';
 import type { ProviderConfig } from './router.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
@@ -56,7 +56,22 @@ export function createAnthropicProvider(config: ProviderConfig) {
       }
       return { role: 'assistant', content: contentBlocks };
     }
-    return { role: m.role, content: contentText(m) };
+    // Multimodal user turn: text + native image blocks. Data URIs become
+    // base64 image sources; remote URLs use Anthropic's url source.
+    const { text, images } = splitContent(m.content);
+    if (images.length > 0) {
+      const parts: Array<{ type: string; text?: string; source?: unknown }> = [];
+      if (text) parts.push({ type: 'text', text });
+      for (const img of images) {
+        if ('data' in img) {
+          parts.push({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.data } });
+        } else {
+          parts.push({ type: 'image', source: { type: 'url', url: img.url } });
+        }
+      }
+      return { role: m.role, content: parts };
+    }
+    return { role: m.role, content: text };
   };
 
   async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { reasoningEffort?: string }): Promise<ModelResponse> {

@@ -71,3 +71,83 @@ describe('McpClient (stdio, real subprocess)', () => {
     expect(params[1].type).toBe('integer');
   });
 });
+describe('McpClient (HTTP, mock server)', () => {
+  let server: import('node:http').Server;
+  let url: string;
+
+  beforeAll(async () => {
+    const http = await import('node:http');
+    server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        let msg: { id?: number; method?: string; params?: { arguments?: { text?: string } } };
+        try {
+          msg = JSON.parse(body);
+        } catch {
+          res.writeHead(400);
+          res.end();
+          return;
+        }
+        if (msg.method === 'notifications/initialized') {
+          res.writeHead(202);
+          res.end();
+          return;
+        }
+        const reply = (result: unknown) => {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
+        };
+        if (msg.method === 'initialize') {
+          reply({ protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'mini-http', version: '1' } });
+        } else if (msg.method === 'tools/list') {
+          reply({ tools: [{ name: 'uppercase', description: 'Uppercase a string', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] });
+        } else if (msg.method === 'tools/call') {
+          const text = String(msg.params?.arguments?.text ?? '').toUpperCase();
+          reply({ content: [{ type: 'text', text }] });
+        } else {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } }));
+        }
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const addr = server.address() as { port: number };
+    url = `http://127.0.0.1:${addr.port}/mcp`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((r) => server.close(() => r()));
+  });
+
+  it('handshakes, lists tools, and calls a tool over HTTP', async () => {
+    const client = McpClient.forConfig({ url }, 'mini-http');
+    try {
+      await client.initialize();
+      const tools = await client.listTools();
+      expect(tools).toHaveLength(1);
+      expect(tools[0].name).toBe('uppercase');
+      expect(await client.callTool('uppercase', { text: 'hello world' })).toBe('HELLO WORLD');
+    } finally {
+      client.close();
+    }
+  });
+
+  it('forConfig picks stdio when no url is set', () => {
+    const client = McpClient.forConfig({ command: 'true' }, 'x');
+    try {
+      expect(client).toBeInstanceOf(McpClient);
+    } finally {
+      client.close();
+    }
+  });
+
+  it('surfaces HTTP errors instead of hanging', async () => {
+    const client = McpClient.forConfig({ url: 'http://127.0.0.1:1/nope' }, 'dead');
+    try {
+      await expect(client.listTools()).rejects.toThrow();
+    } finally {
+      client.close();
+    }
+  }, 30_000);
+});
