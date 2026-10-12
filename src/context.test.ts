@@ -82,7 +82,7 @@ describe('ContextEngine project-rule + memory caching', () => {
 
     // Task relevant to git-wizard -> git-wizard advertised.
     const gitPacket = engine.buildPacket(NO_TOOLS, task('resolve the merge conflict', 'rebase branch and restructure commits'));
-    expect(gitPacket.systemPrompt).toContain('git-wizard');
+    expect(gitPacket.systemPrompt).toContain('git-workflow');
 
     // Unrelated task -> no skills advertised (the IPv4-derailment regression).
     const ipv4Packet = engine.buildPacket(NO_TOOLS, task('write isValidIpv4 function', 'dotted quad validation, pure, no deps'));

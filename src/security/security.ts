@@ -71,13 +71,13 @@ export type CommandRisk = 'low' | 'network' | 'destructive';
 // Danger patterns — destructive, irreversible, or external side-effectful.
 const DESTRUCTIVE = [
   /\brm\s+(-[a-z]*r[a-z]*)?\s+/i, /\brmdir\b/i, /\brm\s+-rf\b/i,
-  /\bgit\s+(push|reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s+\.|rebase|cherry-pick)\b/i,
+  /\bgit\s+(push|reset\s+--hard|clean\s+-[a-z]*f[a-z]*|checkout\s+--\s+\.|rebase|cherry-pick)(?![\w.])/i,
   /\bforce[- ]?(push)?\b/i, /\bterraform\s+(apply|destroy|force)\b/i,
   /\bkubectl\s+(delete|drain|replace|apply)\b/i,
   /\bdrop\s+(database|table|schema)\b/i, /\btruncate\b/i,
   /\bdd\s+of=/, /\bmkfs\b/, /\bformat\s+[a-z]:/i,
   /\bshutdown\b|\breboot\b|\bpoweroff\b/i,
-  /\bkill\s+-9\b/, /\secho\s+[^|]*>\s*\/dev\/(sd|nvme|disk)/i,
+  /\bkill\s+-9\b/, /(^|\s)echo\s+[^|]*>\s*\/dev\/(sd|nvme|disk)/i,
   /\bsudo\b/i,
 ];
 // Patterns that touch the network or fetch remote state/install deps.

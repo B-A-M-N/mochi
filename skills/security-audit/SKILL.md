@@ -1,23 +1,45 @@
 ---
 name: security-audit
-description: Security audit workflow covering OWASP Top 10, static analysis, secret-leakage prevention, injection/SSRF/XSS checks, and dependency CVE review. Use when the task involves reviewing or hardening code security.
-tools: [read, glob, search, grep, shell, sql_codebase_query]
+description: Defensive security audit procedure for codebases — dependency risk, secrets, auth patterns, injection surfaces, and hardening review. Use when auditing a repo before release, reviewing a PR with security-sensitive changes, or hardening an existing service.
 ---
 
-# Security Audit Skill
+# Security Audit Procedure
 
-## Scope
-- Run a static pass for injection (SQL/command/deserialization), broken access control, XSS/CSRF, SSRF, and insecure defaults.
-- Check for hardcoded secrets: API keys, tokens, passwords, AWS keys (scan for `sk-`, `AKIA`, `ghp_`, `Bearer `, private key blocks). Never echo a found secret — report the file/line and advise rotation.
-- Dependency hygiene: look for known-vulnerable packages in manifests (package.json, requirements.txt, Cargo.toml, go.mod) and suggest `audit`/`pip-audit`/`cargo audit` runs.
+Audit like an attacker with the source code. Work top-down: secrets and deps first (cheapest, most common), then auth design, then injection surfaces, then hardening.
 
-## Checks to perform
-1. AuthN/AuthZ: are admin operations guarded by middleware? Is authorization verified on the resource, not just the route?
-2. Input: is every external value validated/escaped at the boundary (schema or parameterized query)?
-3. Output: is user input escaped in HTML/JS contexts (no raw `dangerouslySetInnerHTML` unless necessary)?
-4. Errors: do error paths leak stack traces, SQL, or internal paths? Use generic messages + server-side logs.
-5. Rate limiting & abuse: are mutating endpoints throttled; is file upload size/type constrained?
+## 1. Secrets and credentials (always first)
+- Grep the tree and git history: `git log -p | grep -iE "(api[_-]?key|secret|token|password)"` — history leaks survive file deletion.
+- Check `.env*` files are gitignored, CI logs don't echo secrets, and test fixtures use only throwaway values.
+- Any real credential found: rotate FIRST, clean history second. Rotation order matters.
 
-## Deliverable
-- Produce a prioritized list: `[HIGH] file:line — issue — remediation`. Order by exploitability, not alphabetical.
-- If a fix is requested, make the minimal change and re-check adjacent call sites for the same pattern.
+## 2. Dependencies
+- `npm audit` / `pip-audit` / `cargo audit`; triage by reachable code path, not CVSS alone — a prototype-pollution lib you never call with user input is a low finding.
+- Check for typosquatting on direct deps (name diffs by one character) and install scripts (`postinstall`) in newly added packages.
+- Lockfiles committed; ranges pinned; a dependency abandoned >2 years with a known CVE gets a replacement plan, not a waiver.
+
+## 3. Auth and access design
+- Passwords: argon2id/bcrypt, never md5/sha. Reset tokens: single-use, short TTL, hashed at rest.
+- Session cookies: Secure, HttpOnly, SameSite. JWTs: algorithm pinned (no `none`), short-lived, refresh rotation.
+- Every endpoint: who can call it? Walk the role matrix — authorization checks must be server-side per-resource, not UI-gated.
+
+## 4. Injection surfaces
+- SQL: parameterized only. String-built queries fail the audit even behind an ORM.
+- Command exec: any `exec`/`system`/`spawn` with interpolated input. Shell-free APIs (`execFile`, arrays) or bust.
+- XSS: `innerHTML`/`dangerouslySetInnerHTML`/`v-html` usage — each needs sanitization justification. Template auto-escaping is the default; every bypass documented.
+- Path traversal: `join(base, userPath)` is not safe — resolve and prefix-check.
+- Deserialization of untrusted data (yaml.load, pickle, php unserial) — safe loaders only.
+
+## 5. Hardening review
+- Security headers: CSP, HSTS, X-Content-Type-Options, frame-ancestors. CORS: explicit origins, never `*` with credentials.
+- Rate limiting on auth and expensive endpoints; input size caps everywhere.
+- Error responses leak stack traces or schema internals? Fix. Logs contain tokens/PII? Fix.
+- CSRF protection on state-changing routes; audit signed URLs for TTL and scope.
+
+## 6. Report format
+- Findings ranked: Critical (exploitable now) / High / Medium / Low / Info. Each: location (file:line), exploit scenario, fix with a diff, and effort estimate.
+- Explicitly list what was checked and found CLEAN — a negative result is a result.
+
+## Pitfalls
+- Scanner-only audits: tools cover ~20% of real findings; design flaws (authz, trust boundaries) need reading the code.
+- Auditing the new feature while the skeleton (auth, session, deploy config) predates everyone's memory.
+- Trusting client-side validation as a security control. It is UX, not security.

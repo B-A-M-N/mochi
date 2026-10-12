@@ -2113,9 +2113,17 @@ header.site:hover .nav-right {
 
 /* ── RESPONSIVE ─────────────────────────────────────────────── */
 @media (max-width: 968px) {
-  html, body {
+  html, body, #root {
     overflow-x: hidden !important;
     max-width: 100vw !important;
+    width: 100% !important;
+  }
+  .wrap, .section {
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+  .coda-banner {
+    padding: 28px 20px !important;
   }
 
   header.site {

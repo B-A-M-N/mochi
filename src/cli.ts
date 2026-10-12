@@ -36,7 +36,7 @@ import type { MochiConfig } from './types.js';
 // Resolve the version from package.json when running from source; when Mochi is
 // compiled to a standalone binary there is no package.json next to it, so fall
 // back to the constant (kept in sync with package.json at build time).
-let VERSION = '0.23.1';
+let VERSION = '0.23.0';
 try {
   const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../package.json');
   VERSION = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
@@ -88,7 +88,6 @@ process.on('uncaughtException', (err: unknown) => {
   // The TUI's process.on('exit') listener still runs and restores the tty.
   logCrash('uncaughtException', err);
   try { console.error(`[fatal] ${msg}`); } catch { /* ignore stdout/stderr errors */ }
-  try { console.error(`Report it: mochi feedback --crash "what you were doing" (attaches the crash tail, no tracking)`); } catch { /* ignore */ }
   process.exit(1);
 });
 
@@ -98,10 +97,6 @@ const BOOLEAN_FLAGS = new Set([
   'y', 'yolo', 'dangerously-skip-permissions', 'force', 'user',
   'u', 'uncensored', 'admin',
   'strict', 'json', 'diff-only', 'auto-commit', 'repair',
-  // Value-less flags that used to swallow their next argument: `skills import
-  // --list hermes:` ate the source as the flag value (→ usage error), and
-  // `termix --coms "fix the bug"` assigned the task text to flags.coms.
-  'list', 'update', 'coms', 'sep',
 ]);
 
 function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; positional: string[] } {
@@ -141,6 +136,9 @@ function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; p
 export interface FlagOverrides extends Partial<MochiConfig> {
   __yolo?: boolean;
   __uncensored?: boolean;
+  /** Set only when --uncensored/-u was explicitly passed THIS invocation,
+   *  not when inherited from config/env — controls the one-time banner. */
+  __uncensoredExplicit?: boolean;
 }
 
 function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides {
@@ -176,7 +174,8 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
   // return a plan instead of editing files.
   if (flags.plan) overrides.planMode = true;
   // --uncensored / -u / --yolo / -y / --dangerously-skip-permissions: bypass all permission gates
-  const isUncensored = flags.uncensored === true || flags.u === true || process.env.MOCHI_UNCENSORED === '1';
+  const explicitUncensored = flags.uncensored === true || flags.u === true;
+  const isUncensored = explicitUncensored || process.env.MOCHI_UNCENSORED === '1';
   if (isUncensored) {
     overrides.safety = { ...(overrides.safety ?? {} as MochiConfig['safety']), mode: 'uncensored' as const };
     overrides.permissions = {
@@ -188,6 +187,7 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
       admin: true,
     };
     overrides.__uncensored = true;
+    if (explicitUncensored) overrides.__uncensoredExplicit = true;
     overrides.__yolo = true;
     process.env.MOCHI_UNCENSORED = '1';
   } else if (flags.yolo || flags.y || flags['dangerously-skip-permissions'] ||
@@ -213,7 +213,7 @@ Usage:
   mochi resume
   mochi checkpoint [save <name>|list|restore <name>]  # named snapshots & rollback
   mochi docgen [--write]             # generate architecture diagram & API reference
-  mochi rollback [<name>]          # last checkpoint, or a named one
+  mochi rollback
   mochi workspace create|list|switch <name>
   mochi profiles
   mochi memory
@@ -231,9 +231,7 @@ Usage:
   mochi security | mochi audit       # static security and credential audit
   mochi review [--strict] [--json] [--diff-only]   # git diff | mochi review
   mochi fix [--auto-commit]                        # cat crash.log | mochi fix
-  mochi acp [--check]                # editor-native stdio server (Agent Client Protocol)
-  mochi setup vscode|jetbrains|editors # install editor extensions (verifies ACP first)
-  mochi onboard | mochi setup        # cozy first-run wizard: import keys, models, skills, MCPs, editors
+  mochi acp                          # editor-native stdio server (Agent Client Protocol)
   mochi daemon start [--port <n>] [--token <t>]
   mochi daemon status
   mochi daemon rotate               # issue a fresh bearer token (old one dies immediately)
@@ -249,8 +247,6 @@ Usage:
   mochi tui
   mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
   mochi completion <bash|zsh|fish>   # print shell completion script
-  mochi feedback good|bad [--note T] [--crash]  # rate mochi (feeds next-turn self-correction)
-  mochi perf
   mochi "<prompt>" --plan            # plan-then-act: research + return a plan, no edits
 
 Options:
@@ -274,7 +270,6 @@ Options:
   -q, --quiet             Less output
   -v, --verbose           More output
   --debug                 Debug output
-  --chunks <n>            Chunk count for mochi perf
   -h, --help              Show help
   --version               Show version
 
@@ -313,10 +308,6 @@ async function main() {
   // Ultra-fast path for info queries (version, help): exit immediately in <3ms
   if (flags.h || flags.help) { printHelp(); return; }
   if (flags.version || positional[0] === 'version') { console.log(VERSION); return; }
-
-  // Daily update nudge (warn-only, cached, opt-out via MOCHI_NO_UPDATE_CHECK).
-  // Fire-and-forget so startup never waits on the registry.
-  void import('./ops/update-check.js').then((m) => m.maybeCheckUpdate()).catch(() => {});
 
   // Dist freshness guard: when running the compiled dist/ tree (the global
   // `mochi` shim) and src/*.ts is newer than the last build, rebuild once so
@@ -392,9 +383,12 @@ async function main() {
   // Announce elevated mode ONLY when explicitly requested on THIS command
   // line. Reading it from config/env printed the banner on every run — noise,
   // not an announcement (the TUI badge still reflects the active policy).
-  if (configOverrides.__uncensored === true) {
+  if (configOverrides.__uncensoredExplicit === true) {
     console.error('🔓 [UNCENSORED] Autonomous uncensored harness active: unrestricted system access & admin privileges.');
-  } else if (configOverrides.__yolo === true) {
+  } else if (configOverrides.__yolo === true &&
+      !(configOverrides.__uncensored === true ||
+        configOverrides.safety?.mode === 'uncensored' ||
+        process.env.MOCHI_UNCENSORED === '1')) {
     console.error('[YOLO] YOLO mode: all permission prompts bypassed. Proceeding autonomously.');
   }
 
@@ -547,7 +541,7 @@ async function main() {
       console.error('Usage: mochi daemon cron add <prompt> --schedule <every Xm|cron> | list | remove <id>');
       process.exit(1);
     }
-    console.error('Usage: mochi daemon start|status|jobs|send|approve|resume|rotate|cron|restart|stop');
+    console.error('Usage: mochi daemon start|status|jobs|send|approve|resume|cron|restart|stop');
     process.exit(1);
   }
 
@@ -655,9 +649,6 @@ async function main() {
       const name = positional[2];
       const desc = positional.slice(3).join(' ');
       if (!name) { console.log('Usage: mochi checkpoint save <name> ["description"]'); return; }
-      // Named snapshots are git snapshots (sha + `git diff HEAD` patch); outside
-      // a repo they saved a useless "uncommitted"/empty-patch record.
-      if (!(await isRepo(cwd))) { console.error('Not a git repository — checkpoints require git.'); process.exitCode = 1; return; }
       const { saveNamedCheckpoint } = await import('./state/checkpoint-manager.js');
       const cp = await saveNamedCheckpoint(cwd, name, desc);
       console.log(`Saved named checkpoint "${cp.name}" (SHA: ${cp.gitCommitSha.slice(0, 7)})`);
@@ -679,7 +670,6 @@ async function main() {
       const { restoreNamedCheckpoint } = await import('./state/checkpoint-manager.js');
       const res = await restoreNamedCheckpoint(cwd, name);
       console.log(res.message);
-      if (!res.success) process.exitCode = 1;
       return;
     }
     if (!(await isRepo(cwd))) { console.log('Not a git repository.'); return; }
@@ -687,7 +677,7 @@ async function main() {
     console.log(`Checkpoint created: ${cp.type} ${cp.ref}`);
     return;
   }
-  if (first === 'docgen') {
+  if (first === 'docgen' || first === 'docs') {
     const { generateProjectDocs } = await import('./docgen.js');
     const docs = generateProjectDocs(cwd);
     if (flags.write || flags.save) {
@@ -702,69 +692,28 @@ async function main() {
   }
   if (first === 'rollback') {
     if (!(await isRepo(cwd))) { console.log('Not a git repository.'); return; }
-    const cpName = positional[1];
-    if (cpName) {
-      // Named snapshots were unreachable from rollback (it only read
-      // checkpoints/latest.json, written by bare `mochi checkpoint`).
-      const { restoreNamedCheckpoint } = await import('./state/checkpoint-manager.js');
-      const res = await restoreNamedCheckpoint(cwd, cpName);
-      console.log(res.message);
-      if (!res.success) process.exitCode = 1;
-      return;
-    }
     console.log(await runtime.rollback());
     return;
   }
   if (first === 'workspace') {
     const sub = positional[1];
-    const { existsSync: ex, readdirSync: rd, statSync: st } = await import('node:fs');
     if (sub === 'list') {
-      // Real workspaces: direct subdirs of .mochi/ that Workspace.ensure()
-      // created (marker: a state/ child), with the active one flagged. The old
-      // version listed goal UUIDs under a "workspaces" heading.
-      const base = resolve(cwd, '.mochi');
-      const current = runtime.config.projectDir || '.mochi';
-      const rows: string[] = [`default${' '.padEnd(20)} .mochi${current === '.mochi' ? '  (current)' : ''}`];
-      if (ex(base)) {
-        for (const e of rd(base)) {
-          if (e.startsWith('.')) continue;
-          try { if (!st(resolve(base, e)).isDirectory()) continue; } catch { continue; }
-          if (!ex(resolve(base, e, 'state'))) continue; // not a workspace
-          const proj = `.mochi/${e}`;
-          rows.push(`${e}${' '.repeat(Math.max(1, 21 - e.length))} ${proj}${current === proj ? '  (current)' : ''}`);
-        }
-      }
-      console.log('Workspaces:');
-      console.log(rows.join('\n'));
-      console.log('\nSwitch: mochi workspace switch <name>   Create + switch: mochi workspace create <name>');
-      return;
-    }
-    if (sub === 'create' || sub === 'switch') {
+      const goals = runtime.workspace.listGoals();
+      console.log(goals.join('\n').replace(/\.json/g, '') || 'No workspaces/goals saved yet.');
+    } else if (sub === 'create' || sub === 'switch') {
       // `create` without a name gets a readable random slug (OpenFable Slug),
       // so concurrent agents don't collide on "default" and names stay
-      // memorable. `switch` requires an EXISTING workspace (it used to
-      // "succeed" on any string, fabricating a directory for a typo'd name).
+      // memorable. `switch` still requires an explicit existing name.
       let name = positional[2];
       if (!name && sub === 'create') name = randomSlug();
       if (!name) { console.error('Usage: mochi workspace create [<name>] | switch <name>'); process.exit(1); }
-      const proj = `.mochi/${name}`;
-      if (sub === 'switch' && !ex(resolve(cwd, proj, 'state'))) {
-        console.error(`No workspace "${name}" — create it first: mochi workspace create ${name}`);
-        process.exit(1);
-      }
-      // Persist the selection: the old version only mutated the in-process
-      // config, so a "switched" workspace was forgotten on the next run.
-      const { loadConfigFile, saveConfigFile } = await import('./model/providers.js');
-      const disk = loadConfigFile();
-      disk.projectDir = proj;
-      saveConfigFile(disk);
-      runtime.config.projectDir = proj;
-      const ws = new (await import('./workspace.js')).Workspace(cwd, proj);
+      runtime.config.projectDir = `.mochi/${name}`;
+      const ws = new (await import('./workspace.js')).Workspace(cwd, runtime.config.projectDir);
       ws.ensure();
-      console.log(`Workspace ready: ${ws.dir} (selection persisted to config.json)`);
-      return;
+      console.log(`Workspace ready: ${ws.dir}`);
+    } else {
+      console.error('Usage: mochi workspace create [<name>] | switch <name>');
     }
-    console.error('Usage: mochi workspace list | create [<name>] | switch <name>');
     return;
   }
   if (first === 'status' || first === 'changes') {
@@ -829,7 +778,7 @@ async function main() {
         break;
       } else fwd.push(a);
     }
-    const r = await launchInNewTerminal(fwd, { title, cols, rows, dryRun });
+    const r = await launchInNewTerminal(fwd, { title, cols, rows });
     if (dryRun || !r.ok) {
       if (r.command) console.log(['MOCHI-TERM:'].concat(r.command).join(' '));
       if (!r.ok) {
@@ -877,26 +826,19 @@ async function main() {
     return;
   }
   if (first === 'issue') {
-    // mochi issue <n> — fetch the issue and create a fix branch. Branch ONLY:
-    // no commit, no push, no PR. The agent fix is a normal `mochi` run in the
-    // created branch — the old path auto-committed a dirty tree with a canned
-    // "Fix implemented by agent." body, pushed, and told users to run a
-    // `mochi pr` command that doesn't exist (it fell through to a model run).
+    // mochi issue <n> — start an issue-to-PR flow: fetch, branch, and print how
+    // to implement + open the PR (the agent fix is a normal `mochi` run in the
+    // created branch; this keeps the plumbing honest without auto-pushing).
     const n = Number(positional[1]);
     if (!Number.isInteger(n) || n < 1) { console.log('Usage: mochi issue <number>'); return; }
-    const { runIssueToPr, defaultBranch } = await import('./pr.js');
+    const { runIssueToPr } = await import('./pr.js');
     try {
-      const res = await runIssueToPr({ cwd, issueNumber: n, stage: 'branch' });
-      const base = await defaultBranch(cwd);
+      const res = await runIssueToPr({ cwd, issueNumber: n });
       console.log(`Branch: ${res.branch}`);
-      console.log(`Next:`);
-      console.log(`  1. implement the fix here:  mochi "fix issue #${n}"`);
-      console.log(`  2. review + commit your changes:  git add -A && git commit`);
-      console.log(`  3. open the PR:  git push -u origin ${res.branch} && gh pr create --base ${base} --head ${res.branch} --title "Fix #${n}: …" --body "Fixes #${n}"`);
+      console.log(`Next: checkout ${res.branch}, run 'mochi goal "fix #${n} …"', then 'mochi pr ${n}' to open the PR.`);
       return;
     } catch (e) {
       console.error(`Issue pipeline failed: ${(e as Error).message}`);
-      process.exitCode = 1;
       return;
     }
   }
@@ -1018,6 +960,44 @@ async function main() {
       else if (!rep.skills.length) process.exit(1);
       return;
     }
+    if (sub === 'search') {
+      // mochi skills search <query> — search all registered sources' packs
+      // (and the bundled catalog) by name/description token overlap.
+      const q = positional.slice(2).join(' ').toLowerCase();
+      if (!q) { console.log('Usage: mochi skills search <query>'); return; }
+      const terms = q.split(/\s+/).filter(Boolean);
+      const { loadRegistry, getSource, discoverPacks } = await import('./features/skill-registry.js');
+      const { resolveSourceDir } = await import('./features/skill-importer.js');
+      const { bundledSkillsDir, discoverSkills } = await import('./skills/skills.js');
+      const hits: Array<{ where: string; name: string; description: string }> = [];
+      // Bundled catalog first.
+      const bdir = bundledSkillsDir();
+      if (bdir) for (const s of discoverSkills(bdir).skills) {
+        const hay = `${s.name} ${s.description || ''}`.toLowerCase();
+        const score = terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
+        if (score > 0) hits.push({ where: 'bundled', name: s.name, description: (s.description || '').slice(0, 72) });
+      }
+      // Registered sources.
+      const reg = loadRegistry();
+      for (const n of Object.keys(reg.sources)) {
+        const src = getSource(n);
+        if (!src) continue;
+        const res = await resolveSourceDir(src.source, { update: !!flags.update });
+        if (!res.dir) continue;
+        for (const p of discoverPacks(res.dir, src.catalogFile)) {
+          const hay = `${p.name} ${p.description || ''}`.toLowerCase();
+          const score = terms.reduce((acc, t) => acc + (hay.includes(t) ? 1 : 0), 0);
+          if (score > 0) hits.push({ where: src.name, name: p.name, description: (p.description || '').slice(0, 72) });
+        }
+      }
+      if (!hits.length) { console.log(`No skills/packs matching '${q}'. Register a source: mochi skills repo add <name> <source>`); return; }
+      console.log(`Found ${hits.length} match(es) for '${q}':`);
+      for (const h of hits.sort((a, b) => a.where.localeCompare(b.where))) {
+        console.log(`  ${h.where.padEnd(16)} ${h.name.padEnd(28)} ${h.description}`);
+      }
+      console.log('\nInstall: mochi skills install <pack>@<repo>');
+      return;
+    }
     if (sub === 'unpack') {
       // mochi skills unpack <pack-dir> [--force] — install a pack created by
       // `mochi skills pack` (same engine as `skills import`, surfaced for
@@ -1097,14 +1077,12 @@ async function main() {
     catch (e) { console.error(`Failed to read skill: ${(e as Error).message}`); }
     return;
   }
-  if (first === 'import-skills') {
+  if (first === 'import-skills' || (first === 'skills' && positional[1] === 'import')) {
     // mochi import-skills <source> [--force]      (alias: mochi skills import <source>)
     // Import an external skills tree (Hermes ~/.hermes/skills, a git checkout,
     // or any agentskills.io tree) into the global ~/.mochi/skills so the harness
     // gains the mature skill library without re-authoring. Cross-agent memory.
-    // NOTE: the `skills import` alias is served by the `skills` branch above;
-    // this branch only sees `import-skills <source>`.
-    const sourceName = positional[1];
+    const sourceName = positional[1] === 'import' ? positional[2] : positional[1];
     if (!sourceName) {
       console.log('Usage: mochi import-skills <source> [--force] [--update] [--list]');
       console.log('  source = "hermes:", an absolute/relative skills path, github:owner/repo, or a git URL.');
@@ -1129,7 +1107,7 @@ async function main() {
     return;
   }
   if (first === 'plugins' || first === 'plugin') {
-    // spec 12-E: mochi plugin add|remove|list|info|enable|disable|validate [--user|--force]
+    // spec 12-E: mochi plugin add|remove|list [--user|--force]
     const { PluginRegistry } = await import('./plugins.js');
     const projectPlugins = resolve(cwd, '.mochi', 'plugins');
     const reg = new PluginRegistry(projectPlugins);
@@ -1138,8 +1116,7 @@ async function main() {
       const records = reg.list();
       if (!records.length) { console.log('No plugins installed. Use: mochi plugin add <dir>'); return; }
       for (const p of records) {
-        const state = p.enabled ? '' : ' [disabled]';
-        console.log(`${p.name.padEnd(24)} v${p.version.padEnd(8)} ${p.scope === 'user' ? '[user] '.padEnd(8) : '[proj] '.padEnd(8)}${p.description}${p.hooks.length ? ` hooks:${p.hooks.join(',')}` : ''}${state}`);
+        console.log(`${p.name.padEnd(24)} v${p.version.padEnd(8)} ${p.scope === 'user' ? '[user] '.padEnd(8) : '[proj] '.padEnd(8)}${p.description}${p.hooks.length ? ` hooks:${p.hooks.join(',')}` : ''}`);
       }
       return;
     }
@@ -1147,12 +1124,6 @@ async function main() {
       const source = positional[2];
       if (!source) { console.log('Usage: mochi plugin add <dir> [--user] [--force]'); return; }
       try {
-        const { PluginRegistry: PR } = await import('./plugins.js');
-        const problems = PR.validateDir(resolve(source));
-        if (problems.length) {
-          console.error(`Plugin validation failed:\n  - ${problems.join('\n  - ')}`);
-          if (!flags.force) { console.error('Fix the manifest or re-run with --force.'); return; }
-        }
         const rec = reg.install(source, { scope: flags.user ? 'user' : 'project', overwrite: !!flags.force });
         const hooksFile = resolve(cwd, '.mochi', 'hooks.json');
         const { existsSync, readFileSync } = await import('node:fs');
@@ -1173,65 +1144,7 @@ async function main() {
       else { console.error(`No plugin "${name}" installed.`); }
       return;
     }
-    if (sub === 'info' || sub === 'show') {
-      const name = positional[2];
-      if (!name) { console.log('Usage: mochi plugin info <name>'); return; }
-      try {
-        console.log(reg.info(name));
-      } catch (e) {
-        console.error((e as Error).message);
-      }
-      return;
-    }
-    if (sub === 'enable' || sub === 'disable') {
-      const name = positional[2];
-      if (!name) { console.log(`Usage: mochi plugin ${sub} <name>`); return; }
-      const want = sub === 'enable';
-      if (reg.setEnabled(name, want)) {
-        const hooksFile = resolve(cwd, '.mochi', 'hooks.json');
-        const { existsSync, readFileSync } = await import('node:fs');
-        const existing = existsSync(hooksFile) ? JSON.parse(readFileSync(hooksFile, 'utf8')) : {};
-        reg.syncToHooksFile(hooksFile, existing);
-        console.log(`${want ? 'Enabled' : 'Disabled'} plugin "${name}". Hooks re-synced.`);
-      } else {
-        console.error(`No plugin "${name}" installed (or already ${want ? 'enabled' : 'disabled'}).`);
-      }
-      return;
-    }
-    if (sub === 'validate') {
-      const source = positional[2];
-      if (!source) { console.log('Usage: mochi plugin validate <dir>'); return; }
-      const { PluginRegistry: PR } = await import('./plugins.js');
-      const problems = PR.validateDir(resolve(source));
-      if (!problems.length) console.log(`Plugin at ${source} looks valid.`);
-      else console.log(`Problems:\n  - ${problems.join('\n  - ')}`);
-      const warnings = PR.lintSandbox(resolve(source));
-      if (warnings.length) console.log(`Sandbox warnings:\n  - ${warnings.join('\n  - ')}`);
-      return;
-    }
-    if (sub === 'search') {
-      const q = positional.slice(2).join(' ');
-      if (!q) { console.log('Usage: mochi plugin search <keywords>'); return; }
-      const hits = reg.search(q);
-      if (!hits.length) { console.log(`No plugins match "${q}".`); return; }
-      for (const p of hits) {
-        console.log(`${p.name.padEnd(24)} v${p.version.padEnd(8)} ${p.enabled ? '' : '[disabled] '}${p.description}`);
-      }
-      return;
-    }
-    if (sub === 'pack') {
-      const name = positional[2];
-      if (!name) { console.log('Usage: mochi plugin pack <name> [--out <dir>]'); return; }
-      const outDir = typeof flags.out === 'string' && flags.out ? String(flags.out) : resolve(cwd, 'mochi-plugins-pack');
-      try {
-        const dest = reg.pack(name, outDir);
-        console.log(`Packed "${name}" → ${dest} — share it; recipients run: mochi plugin add ${dest}`);
-      } catch (e) {
-        console.error((e as Error).message);
-      }
-      return;
-    }
-    console.log('Usage: mochi plugin <add <dir>|remove <name>|list|info <name>|enable <name>|disable <name>|validate <dir>|search <q>|pack <name>>');
+    console.log('Usage: mochi plugin <add <dir>|remove <name>|list>');
     return;
   }
   if (first === 'rules' || first === 'rule') {
@@ -1252,12 +1165,8 @@ async function main() {
     }
     if (sub === 'add') {
       const name = positional[2];
-      // Two forms: `add <name> "<title>" "<content…>"` and `add <name> "<content…>"`.
-      // The old fallback used the title AS the body when no content followed,
-      // silently writing a rule whose content was just its own title.
-      const hasContent = positional.length >= 5;
-      const title = hasContent ? positional[3] : name;
-      const content = hasContent ? positional.slice(4).join(' ') : positional[3] || '';
+      const title = positional[3] || name;
+      const content = positional.slice(4).join(' ') || positional[3] || '';
       if (!name || !content) { console.log('Usage: mochi rules add <name> "<title>" "<content>"'); return; }
       synthesizeRule(cwd, name, title, content);
       console.log(`Added rule "${name}" in .mochi/rules/${name}.md`);
@@ -1267,19 +1176,11 @@ async function main() {
     return;
   }
   if (first === 'bg') {
-    const { listTasks, getTask, describeTask, killTask, listPersistedTasks, getPersistedTask, killPersistedTask } = await import('./daemon/background-tasks.js');
+    const { listTasks, getTask, describeTask, killTask } = await import('./daemon/background-tasks.js');
     const sub = positional[1];
-    // Merge in-process truth (if any) with the on-disk ledger — a fresh CLI
-    // process used to read only the in-process Map, which is always empty, so
-    // `mochi bg` could never list, show, or kill anything.
-    const merged = (): ReturnType<typeof listPersistedTasks> => {
-      const byId = new Map(listPersistedTasks(cwd).map((t) => [t.id, t]));
-      for (const t of listTasks()) byId.set(t.id, t);
-      return [...byId.values()].sort((a, b) => b.startedAt - a.startedAt);
-    };
     if (sub === 'list' || !sub) {
-      const all = merged();
-      if (!all.length) { console.log('No background tasks. (They are started by the agent via the shell tool’s background flag.)'); return; }
+      const all = listTasks();
+      if (!all.length) { console.log('No background tasks.'); return; }
       for (const t of all) {
         console.log(describeTask(t, 200));
       }
@@ -1288,40 +1189,24 @@ async function main() {
     if (sub === 'status' || sub === 'logs' || sub === 'show') {
       const id = positional[2];
       if (!id) { console.log('Usage: mochi bg logs <task-id>'); return; }
-      const t = getTask(id) ?? getPersistedTask(id, cwd);
+      const t = getTask(id);
       if (!t) { console.log(`No background task "${id}".`); return; }
-      const exitLabel = t.exitCode !== undefined && t.exitCode !== null ? String(t.exitCode) : (t.status === 'running' ? 'running' : '?');
-      console.log(`[bg:${t.id} status=${t.status} exit=${exitLabel}]\n${t.output || '(no output)'}`);
+      console.log(`[bg:${t.id} status=${t.status} exit=${t.exitCode ?? 'running'}]\n${t.output || '(no output)'}`);
       return;
     }
     if (sub === 'kill' || sub === 'stop') {
       const id = positional[2];
       if (!id) { console.log('Usage: mochi bg kill <task-id>'); return; }
-      const ok = killTask(id) || killPersistedTask(id, cwd);
+      const ok = killTask(id);
       console.log(ok ? `Killed background task ${id}.` : `Could not kill task ${id}.`);
-      if (!ok) process.exitCode = 1;
       return;
     }
     console.log('Usage: mochi bg [list | logs <id> | kill <id>]');
     return;
   }
   if (first === 'discord') {
-    const sub = positional[1];
     const { loadDiscordConfig } = await import('./discord.js');
     const cfg = loadDiscordConfig(cwd);
-    if (sub === 'run') {
-      // Mochi ships no embedded Discord gateway (no discord.js runtime) —
-      // say so plainly instead of pretending to start one. The gateway runs
-      // under Hermes (`hermes gateway run`) with DISCORD_BOT_TOKEN set.
-      if (!cfg) {
-        console.error('No Discord bot configuration found. Set DISCORD_BOT_TOKEN in .env, ~/.mochi/.env, or ~/.hermes/.env.');
-        process.exit(1);
-      }
-      console.log(`Discord gateway config OK (prefix "${cfg.prefix || '!mochi'}"). Mochi has no embedded gateway runner;`);
-      console.log('start the gateway with Hermes: `hermes gateway run` (it consumes the same token + handlers).');
-      return;
-    }
-    // `discord` and `discord status`: report gateway readiness, no side effects.
     if (!cfg) {
       console.error('No Discord bot configuration found. Set DISCORD_BOT_TOKEN in .env, ~/.mochi/.env, or ~/.hermes/.env.');
       process.exit(1);
@@ -1403,68 +1288,54 @@ async function main() {
     }
     return;
   }
-  if (first === 'ask') {
-    // Interactive clarification (spec 12-B): mochi ask "<title>" --choices "a;b;c" [--default a] [--recommended c]
-    const {askUserChoice} = await import('./clarify.js');
-    const title = positional.slice(1).join(' ');
-    const choicesRaw = String(flags.choices ?? flags.options ?? '');
-    if (!title || !choicesRaw) {
-      console.log('Usage: mochi ask "<title>" --choices "pick A|pick B|pick C" [--default "<idx-or-id>"]');
-      return;
-    }
-    const opts = choicesRaw.split('|').map((x) => x.trim()).filter(Boolean);
-    const choices = opts.map((label, i) => ({ id: String(i + 1), label }));
-    const dv = typeof flags['default'] === 'string' && flags['default'] ? flags['default'] : undefined;
-    const q = { title, choices: choices.length ? choices : [{ id: '1', label: opts[0] ?? '' }], ...(dv ? { defaultValue: dv } : {}) };
-    const out = await askUserChoice(q);
-    console.log('→ ' + (out.choice?.label ?? '(none)') + (out.usedDefault ? ' (default)' : ''));
-    return;
-  }
-  if (first === 'docs') {
-    const { queryDocs, generateAdr } = await import('./dox.js');
-    const sub = positional[1];
-    const docsDir = resolve(cwd, 'docs');
-    if (sub === 'query') {
-      const q = positional.slice(2).join(' ');
-      if (!q) { console.log('Usage: mochi docs query "<text>"'); return; }
-      const hits = queryDocs(docsDir, q);
-      if (!hits.length) { console.log('No doc matches.'); return; }
-      for (const h of hits.slice(0, 5)) {
-        console.log(`[${h.file}] ${h.title}`);
-        console.log('  ' + h.text.slice(0, 180).replace(/\n/g, ' '));
-      }
-      return;
-    }
-    if (sub === 'adr') {
-      // mochi docs adr "<title>" --context "..." --decision "..." [--tradeoffs "a;b"]
-      const title = positional.slice(2).join(' ');
-      const context = String(flags.context ?? '');
-      const decision = String(flags.decision ?? '');
-      if (!title || !context || !decision) {
-        console.log('Usage: mochi docs adr "<title>" --context "..." --decision "..." [--tradeoffs "a;b"]');
-        return;
-      }
-      const tradeoffs = typeof flags.tradeoffs === 'string' && flags.tradeoffs ? flags.tradeoffs.split(';').map((x) => x.trim()).filter(Boolean) : undefined;
-      const rel = generateAdr(cwd, { title, context, decision, tradeoffs });
-      console.log(`ADR written: ${rel}`);
-      return;
-    }
-    console.log('Usage: mochi docs query "<text>" | mochi docs adr "<title>" --context "..." --decision "..."');
-    return;
-  }
   if (first === 'acp') {
     // Editor-native stdio server (Agent Client Protocol). Runs until the
     // editor closes stdin. Never falls through to the prompt path.
-    // `mochi acp --check` verifies the in-process lifecycle without spawning.
-    if (flags.check === true || positional[1] === '--check' || positional[1] === 'check') {
-      const { acpCheck } = await import('./acp.js');
-      const r = await acpCheck(cwd);
-      console.log(r.report);
-      if (!r.ok) process.exit(1);
-      return;
-    }
     const { serverLoop } = await import('./acp.js');
     await serverLoop(cwd);
+    return;
+  }
+  if (first === 'mcp-serve') {
+    // MCP stdio server for editor ubiquity: VS Code (Copilot MCP), Cursor,
+    // JetBrains, Neovim, Claude Desktop spawn this as a child process and
+    // drive Mochi's agent runtime as MCP tools. Never falls through.
+    const { mcpServerLoop } = await import('./mcp-server.js');
+    await mcpServerLoop(cwd);
+    return;
+  }
+  if (first === 'config') {
+    console.log(JSON.stringify(runtime.config, null, 2));
+    return;
+  }
+  if (first === 'hooks') {
+    // MCH-37: user-facing hooks management — init a hooks.json template,
+    // list discovered hooks, or test-fire one. Claude Code-hooks parity.
+    const { HookManager } = await import('./hooks.js');
+    const { existsSync, writeFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const { findProjectRoot } = await loadRepoModule();
+    const wsDir = resolve(findProjectRoot(runtime.cwd), '.mochi');
+    const sub = positional[1];
+    if (sub === 'init') {
+      const tpl = {
+        before_shell: 'echo "$MOCHI_ARGS" | grep -q "rm -rf" && { echo "blocked: rm -rf is not allowed"; exit 1; } || exit 0',
+        after_edit: 'echo "edit happened: $MOCHI_TOOL"',
+      };
+      const target = resolve(runtime.cwd, 'hooks.json');
+      if (existsSync(target)) { console.log('hooks.json already exists at ' + target); return; }
+      writeFileSync(target, JSON.stringify(tpl, null, 2) + '\n');
+      console.log('Wrote ' + target + ' with a starter template (before_shell blocks rm -rf). Edit to taste.');
+      return;
+    }
+    const mgr = new HookManager(wsDir);
+    const names = mgr.list();
+    if (names.length === 0) {
+      console.log('No hooks configured. Run `mochi hooks init` to create hooks.json, or see `mochi hooks --help`.');
+    } else {
+      console.log('Hooks configured:');
+      for (const n of names) console.log('  ' + n);
+      console.log('\nHook env vars: MOCHI_TOOL, MOCHI_ARGS (JSON), MOCHI_AGENT. Exit non-zero in a before_* hook to veto the action.');
+    }
     return;
   }
   if (first === 'setup' && (positional[1] === 'vscode' || positional[1] === 'jetbrains' || positional[1] === 'editors' || positional[1] === 'editor')) {
@@ -1600,42 +1471,33 @@ async function main() {
     console.log(formatPerfReport(benchmarkStream(count)));
     return;
   }
-  if (first === 'config') {
-    // Redact before printing: the raw config carries provider apiKey values
-    // (they route through redact() on the login path — this one didn't).
-    const { redactObject } = await import('./security/security.js');
-    console.log(JSON.stringify(redactObject(runtime.config, 8), null, 2));
-    return;
-  }
-  if (first === 'hooks') {
-    // MCH-37: user-facing hooks management — init a hooks.json template,
-    // list discovered hooks, or test-fire one. Claude Code-hooks parity.
-    const { HookManager } = await import('./hooks.js');
-    const { existsSync, writeFileSync } = await import('node:fs');
-    const { resolve } = await import('node:path');
-    const { findProjectRoot } = await loadRepoModule();
-    const wsDir = resolve(findProjectRoot(runtime.cwd), '.mochi');
-    const sub = positional[1];
-    if (sub === 'init') {
-      const tpl = {
-        before_shell: 'echo "$MOCHI_ARGS" | grep -q "rm -rf" && { echo "blocked: rm -rf is not allowed"; exit 1; } || exit 0',
-        after_edit: 'echo "edit happened: $MOCHI_TOOL"',
-      };
-      const target = resolve(runtime.cwd, 'hooks.json');
-      if (existsSync(target)) { console.log('hooks.json already exists at ' + target); return; }
-      writeFileSync(target, JSON.stringify(tpl, null, 2) + '\n');
-      console.log('Wrote ' + target + ' with a starter template (before_shell blocks rm -rf). Edit to taste.');
+  if (first === 'feedback') {
+    // Human feedback → ~/.mochi/feedback.jsonl (same file the TUI g/b keys
+    // write; the next turn reads it as a self-correction directive).
+    // `mochi feedback good|bad [--note "..."] [--crash]` — crash attaches the
+    // last 20 crash.log lines as the reason. No network, no tracking.
+    const verdict = positional[1];
+    if (verdict !== 'good' && verdict !== 'bad') {
+      console.log('Usage: mochi feedback good|bad [--note "..."] [--crash]');
       return;
     }
-    const mgr = new HookManager(wsDir);
-    const names = mgr.list();
-    if (names.length === 0) {
-      console.log('No hooks configured. Run `mochi hooks init` to create a starter hooks.json.');
-    } else {
-      console.log('Hooks configured:');
-      for (const n of names) console.log('  ' + n);
-      console.log('\nHook env vars: MOCHI_TOOL, MOCHI_ARGS (JSON), MOCHI_AGENT. Exit non-zero in a before_* hook to veto the action.');
+    const noteFlag = typeof flags.note === 'string' && flags.note ? flags.note : positional.slice(2).filter((a) => a !== '--crash').join(' ');
+    let reason = noteFlag.trim() || undefined;
+    if (flags.crash === true || positional.includes('--crash')) {
+      try {
+        const { readFileSync, existsSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const { homedir } = await import('node:os');
+        const crashFile = join(homedir(), '.mochi', 'logs', 'crash.log');
+        if (existsSync(crashFile)) {
+          const tail = readFileSync(crashFile, 'utf8').trim().split('\n').slice(-20).join('\n').slice(0, 2000);
+          reason = [`crash report${reason ? `: ${reason}` : ''}`, tail].join('\n');
+        }
+      } catch { /* crash attach is best-effort */ }
     }
+    const { recordFeedback } = await import('./observability/feedback.js');
+    recordFeedback({ ts: Date.now(), session: 'cli', turn: 0, verdict, reason, snippet: (reason ?? verdict).slice(0, 200) });
+    console.log(`Recorded ${verdict === 'good' ? '👍' : '👎'} feedback. Thank you — the next turn reads it as a correction signal.`);
     return;
   }
   if (first === 'providers') {
@@ -1644,54 +1506,25 @@ async function main() {
     return;
   }
   if (first === 'login' || first === 'use') {
-    const { providerById, providerByName } = await import('./model/providers.js');
+    const { providerById } = await import('./model/providers.js');
     const provider = positional[1];
+    const model = positional[2];
     if (!provider) {
-      console.log('Usage: mochi login <provider> [--key <apikey>] [model] | mochi login <provider> env:<VAR>');
+      console.log('Usage: mochi login <provider> [model]');
       const { PROVIDERS } = await import('./model/providers.js');
       for (const p of PROVIDERS) console.log('  ' + p.id.padEnd(14) + p.name);
       return;
     }
-    // Accept ids (`openai`), display names (`OpenAI`), any case — the old
-    // path matched ids only, so `mochi login OpenAI` errored.
-    const p = providerByName(provider) ?? providerById(provider.toLowerCase());
-    if (!p) { console.error('Unknown provider: ' + provider); process.exitCode = 1; return; }
-    const args = positional.slice(2);
-    // A key can come from --key <v>, `env:<VAR>`, a strongly key-shaped
-    // positional (sk-…/hf_…/AIza…), or the provider's env var. It must never
-    // occupy the model slot — the old code stored `env:sk-…` AS the model id
-    // and could not accept a key on the command line at all.
-    const envArg = args.find((x) => x.startsWith('env:'))?.slice(4);
-    const keyPos = args.find((x) => /^(sk-|pk-|key_|hf_|xai-|AIza)/i.test(x));
-    const keyFlag = typeof flags.key === 'string' ? flags.key : undefined;
-    const key = keyFlag || keyPos || envArg || process.env[p.envKey] || '';
-    const model = args.find((x) => x !== keyPos && !x.startsWith('env:'));
-    const info = key
-      ? await runtime.loginProvider(p.id, key, model || p.defaultModel)
-      : await runtime.useProvider(p.id, model || p.defaultModel);
-    const { redact } = await import('./security/security.js');
-    console.log(redact(info));
-    if (!key && p.envKey) console.log(`No API key found for ${p.name} — set ${p.envKey} or pass --key <apikey>.`);
-    return;
-  }
-  if (first === 'model') {
-    // Show/select the model. This branch did not exist, so `mochi model`
-    // (offered by shell completion as "Select model") fell through to the
-    // one-shot prompt path and fired a model run on the literal word "model".
-    const target = positional[1];
-    const { describeConfig } = await import('./model/model-manager.js');
-    if (!target) {
-      console.log(describeConfig(runtime.config));
-      const list = runtime.modelList();
-      if (list.length) console.log(`\nModels for this provider:\n  ${list.join('\n  ')}`);
-      console.log('\nUsage: mochi model <model-id>   (validates against the list, persists)');
+    const p = providerById(provider);
+    if (!p) { console.error('Unknown provider: ' + provider); return; }
+    const key = process.env[p.envKey] || positional.find((x) => x.startsWith('env:'))?.slice(4);
+    if (!key && p.envKey) {
+      console.log(`Set ${p.envKey} or run 'mochi tui' and use /login to input an API key interactively.`);
       return;
     }
-    const list = runtime.modelList();
-    if (list.length && !list.includes(target)) {
-      console.error(`Note: "${target}" is not in this provider's known model list — setting it anyway.`);
-    }
-    console.log(await runtime.useProvider(runtime.config.model.provider, target));
+    const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel) : await runtime.useProvider(p.id, model || p.defaultModel);
+    const { redact } = await import('./security/security.js');
+    console.log(redact(info));
     return;
   }
   if (first === 'models') {
@@ -1757,37 +1590,12 @@ async function main() {
     console.log(formatDoctor(report));
     return;
   }
-  if (first === 'run' || first === 'shell') {
-    const cmd = positional.slice(1).join(' ');
-    const { execFile } = await import('node:child_process');
-    execFile('sh', ['-c', cmd], { cwd }, (e, o, er) => {
-      console.log(String(o ?? ''));
-      if (er) { console.error(String(er)); process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1; }
-    });
-    return;
-  }
-  if (first === 'test') {
-    const { detectRepo } = await import('./repo/repo.js');
-    const repo = detectRepo(cwd);
-    const cmd = repo.testCommand ?? 'no test command detected';
-    const { execFile } = await import('node:child_process');
-    execFile('sh', ['-c', cmd], { cwd }, (e, _stdout, stderr) => {
-      if (stderr) console.error(String(stderr));
-      if (e) process.exitCode = typeof (e as { code?: unknown } | null)?.code === 'number' ? (e as { code: number }).code : 1;
-    });
-    return;
-  }
   if (first === 'init') {
     const { existsSync, writeFileSync } = await import('node:fs');
     const p = resolve(cwd, 'MOCHI.md');
     if (existsSync(p)) { console.log('MOCHI.md already exists.'); return; }
     writeFileSync(p, '# MOCHI.md\n\nProject instructions for the Mochi coding agent.\n');
     console.log('Created MOCHI.md');
-    return;
-  }
-  if (first === 'branch') {
-    const { execFile } = await import('node:child_process');
-    execFile('git', ['branch', '--show-current'], { cwd }, (_e, out) => console.log(String(out ?? '').trim() || 'no branch'));
     return;
   }
   if (first === 'commit') {
@@ -1797,50 +1605,8 @@ async function main() {
     return;
   }
   if (first === 'usage') { console.log(runtime.usage.summary()); return; }
-  if (first === 'feedback') {
-    // Human feedback → ~/.mochi/feedback.jsonl (same file the TUI g/b keys
-    // write; the next turn reads it as a self-correction directive).
-    // `mochi feedback good|bad [--note "..."] [--crash]` — crash attaches the
-    // last 20 crash.log lines as the reason. No network, no tracking.
-    const verdict = positional[1];
-    if (verdict !== 'good' && verdict !== 'bad') {
-      console.log('Usage: mochi feedback good|bad [--note "..."] [--crash]');
-      return;
-    }
-    const noteFlag = typeof flags.note === 'string' && flags.note ? flags.note : positional.slice(2).filter((a) => a !== '--crash').join(' ');
-    let reason = noteFlag.trim() || undefined;
-    if (flags.crash === true || positional.includes('--crash')) {
-      try {
-        const { readFileSync, existsSync } = await import('node:fs');
-        const { join } = await import('node:path');
-        const { homedir } = await import('node:os');
-        const crashFile = join(homedir(), '.mochi', 'logs', 'crash.log');
-        if (existsSync(crashFile)) {
-          const tail = readFileSync(crashFile, 'utf8').trim().split('\n').slice(-20).join('\n').slice(0, 2000);
-          reason = [`crash report${reason ? `: ${reason}` : ''}`, tail].join('\n');
-        }
-      } catch { /* crash attach is best-effort */ }
-    }
-    const { recordFeedback } = await import('./observability/feedback.js');
-    recordFeedback({ ts: Date.now(), session: 'cli', turn: 0, verdict, reason, snippet: (reason ?? verdict).slice(0, 200) });
-    console.log(`Recorded ${verdict === 'good' ? '👍' : '👎'} feedback. Thank you — the next turn reads it as a correction signal.`);
-    return;
-  }
   if (first === 'known-good') { console.log(await runtime.recordGood()); return; }
   if (first === 'check') { console.log(await runtime.knownGood()); return; }
-  if (first === 'enhance' || first === 'chameleon') {
-    // Removed as a standalone command: it printed reasoning guidance to
-    // stdout where the agent never saw it (dead-end output; /plan already
-    // covers structured pre-work the agent actually executes). The engine
-    // itself is still wired where output is consumed — keep this branch so
-    // the args don't fall through to the one-shot prompt path below.
-    console.error('`mochi chameleon` / `mochi enhance` was removed as a standalone command (its output never reached the agent).');
-    console.error('The engine still runs where it counts:');
-    console.error('  • automatically: its scaffold is primed every run and injected into implement/fix/refactor/plan context');
-    console.error('  • explicitly:    mochi goal "<objective>" --enhance [--mode flash|medium|hard|...] (same for `mochi team`)');
-    console.error('  • in-session:    the `chameleon` tool returns guidance straight into the agent\'s context');
-    process.exit(1);
-  }
   if (first === 'termix') {
     // "Split this session into N split windows." No external app, no extra
     // process, no auto-launch: all panes are in-process agent sessions on the

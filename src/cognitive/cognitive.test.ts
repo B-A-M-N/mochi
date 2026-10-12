@@ -63,7 +63,10 @@ describe('Lazy Chameleon (In-Harness Baked MoE Engine)', () => {
   // timeout even though the assertions are instant — generous budget pins the
   // behavior, not the stopwatch.
   it('synthesizes dense real datasets in 0ms without API calls', async () => {
-    const context = await primeScaffold('Implement an atomic token bucket rate limiter');
+    // Use an empty scratch cwd: priming warms the codegraph over process.cwd(),
+    // and over a large repo that is a 50s+ crawl (unrelated to the synthesis
+    // under test, which is local and deterministic).
+    const context = await primeScaffold('Implement an atomic token bucket rate limiter', '/tmp/empty-scaffold');
     expect(context).toContain('LAZY CHAMELEON DENSE SYNTHETIC DATASET');
     expect(context).toContain('System Invariants');
     expect(context).toContain('Cellular Execution DAG');

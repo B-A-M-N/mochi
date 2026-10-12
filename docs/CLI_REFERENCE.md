@@ -44,11 +44,21 @@ mochi import-skills <src> --list     # Dry-run: list discoverable skills without
 mochi import-skills <src> --force    # Overwrite any destination that already exists
 mochi import-skills <src> --update   # Refresh a cached git clone before importing
 mochi trace <goalId>                 # Replay and inspect execution trace of a goal
+
+# Skill Marketplace (community)
+mochi skills search <query>          # Search bundled catalog + registered community repos
+mochi skills repo add <name> <src>   # Register a skill source (local path, hermes:, github:owner/repo, https URL)
+mochi skills repo list               # List registered sources
+mochi skills repo <name> --list      # Show discoverable packs in a source
+mochi skills install <pack>@<repo>   # Install a pack from a registered source
+mochi skills pack <name...>          # Bundle installed skills into a portable pack
+mochi skills unpack <pack-dir>       # Install a pack directory
+mochi skills repo publish            # Generate packs.json catalog from installed skills
 ```
 
 `import-skills` sources may be a local/absolute skills path, a known-agent alias
 (`hermes:` maps to `~/.hermes/skills`), or a remote git source (`github:owner/repo`,
-`git+<url>`, or any URL ending in `.git` — shallow-cloned into a cache). Imports are
+`git+<url>`, `https://github.com/owner/repo`, or any URL ending in `.git` — shallow-cloned into a cache). Imports are
 origin-namespaced and non-destructive: existing skill names are skipped unless
 `--force`, and each imported skill carries a `.origin` provenance marker.
 

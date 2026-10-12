@@ -746,7 +746,7 @@ function ArchitectureSection() {
               </span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 20 }}>
               <div style={{ background: '#110F1D', borderRadius: 16, padding: 20, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#EDE9FE', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <div style={{ color: '#F87171', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>✕ Conventional AI Coding Agents</span>
@@ -1501,7 +1501,7 @@ function CodaSection() {
           boxShadow: '0 12px 48px rgba(138, 103, 246, 0.14)',
           padding: '48px 44px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
           alignItems: 'center',
           gap: 36,
         }}
