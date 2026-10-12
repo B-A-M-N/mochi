@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Safe git procedures - checkpoints, inspecting history, branches, and what never to do without approval. Use for any git operation beyond plain status/diff.
+description: Safe git procedures - checkpoints, inspecting history, branches, rebases, merge conflicts, and what never to do without approval. Use for any git operation beyond plain status/diff, including resolving conflicts and restructuring commits.
 ---
 
 # Git Workflow
@@ -28,3 +28,11 @@ description: Safe git procedures - checkpoints, inspecting history, branches, an
 - Accidental commit: `git reset --soft HEAD~1` (keeps changes).
 - Wrong branch: `git stash`, switch, `git stash pop`.
 - Conflicted rebase/merge: read `git status`, resolve each file with `edit`, `git add` it, continue. Never resolve by deleting the other side blindly.
+
+## Merge Conflict Resolution
+
+1. `git status` to list conflicted files; `git diff` to see markers.
+2. For each file: resolve `<<<<<<< ======= >>>>>>>` blocks — keep both sides when they serve different purposes, prefer upstream intent otherwise.
+3. `git add <file>` per resolved file; never `git add .` blind during a conflict.
+4. When history restructuring is involved (`rebase`), verify with `git log --oneline` that the intended shape survived before continuing.
+5. Aborted conflicts: `git rebase --abort` / `git merge --abort` restores the pre-operation checkpoint state.

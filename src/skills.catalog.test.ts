@@ -26,17 +26,16 @@ describe('bundled skills catalog', () => {
     const dir2 = bundledSkillsDir();
     expect(dir2).toBeTruthy();
     const files = discoverSkills(dir2 as string).skills;
-    expect(files.some((s) => s.name === 'fullstack-dev')).toBe(true);
-    expect(files.some((s) => s.name === 'security-audit')).toBe(true);
+    expect(files.some((s) => s.name === 'native-core-port')).toBe(true);
+    expect(files.some((s) => s.name === 'exec-policy')).toBe(true);
     expect(files.some((s) => s.name === 'database-optimizer')).toBe(true);
-    expect(files.some((s) => s.name === 'devops-ci')).toBe(true);
-    expect(files.some((s) => s.name === 'reverse-engineering')).toBe(true);
+    expect(files.some((s) => s.name === 'tdd-workflow')).toBe(true);
   });
 
   it('loadAllSkills includes both bundle and project skills', () => {
     const { skills } = loadAllSkills(dir);
     expect(skills.some((s) => s.name === 'project-skill')).toBe(true);
-    expect(skills.some((s) => s.name === 'fullstack-dev')).toBe(true);
+    expect(skills.some((s) => s.name === 'native-core-port')).toBe(true);
   });
 
   it('project skill shadows a bundled skill with the same name', () => {
