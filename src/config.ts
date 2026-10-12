@@ -128,6 +128,33 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
     }
   }
 
+  // Provider switch consistency: when the user config selects a provider but
+  // carries no baseUrl of its own, the defaultConfig()'s opencode-zen baseUrl
+  // (and its opencode/* model IDs) would silently survive the merge — sending
+  // requests to opencode.ai with the OTHER provider's API key. Every request
+  // 401s and the agent burns its retry/failover budget before failing with 0
+  // tokens (measured: ~50-100s stall per task = "mochi got slower than jcode").
+  // Derive baseUrl/model/profiles from the PROVIDERS table for the chosen
+  // provider whenever the merged config doesn't explicitly set them.
+  if (cfg.model.provider) {
+    const prov = PROVIDERS.find((pr) => pr.id === cfg.model.provider.toLowerCase());
+    const userModel = (user as { model?: { baseUrl?: string; model?: string; profiles?: Record<string, string> } } | undefined)?.model;
+    const envMc = envModelConfig();
+    if (prov && cfg.model.baseUrl && !userModel?.baseUrl && !envMc.baseUrl) {
+      cfg.model.baseUrl = prov.baseUrl;
+      if (!userModel?.model) cfg.model.model = prov.defaultModel;
+      const ownedProfiles = userModel?.profiles ?? cfg.model.profiles;
+      if (!ownedProfiles || Object.values(ownedProfiles).every((m) => typeof m === 'string' && m.includes('/'))) {
+        cfg.model.profiles = {
+          fast: prov.defaultModel,
+          coding: prov.defaultModel,
+          reasoning: prov.defaultModel,
+          review: prov.defaultModel,
+        };
+      }
+    }
+  }
+
   function isPlaceholderKey(key: string | undefined): boolean {
     if (!key) return true;
     const k = key.trim().toLowerCase();
