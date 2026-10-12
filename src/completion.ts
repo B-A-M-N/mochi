@@ -77,7 +77,14 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'profiles', description: 'List agent profiles' },
   { name: 'plugins', description: 'List plugins', aliases: ['plugin'] },
   { name: 'hooks', description: 'List hooks' },
-  { name: 'mcp', description: 'Manage MCP servers' },
+  {
+    name: 'mcp', description: 'Search, add & manage MCP servers',
+    subcommands: [
+      { name: 'list', description: 'List built-in MCP servers' },
+      { name: 'search', description: 'Search servers by keyword' },
+      { name: 'add', description: 'Install a server into .mcp.json' },
+    ],
+  },
   { name: 'acp', description: 'Agent Client Protocol server' },
   { name: 'chameleon', description: 'Synthetic reasoning parameters' },
   { name: 'self-train', description: 'Self-review loop', aliases: ['selftrain', 'train'] },

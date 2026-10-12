@@ -19,7 +19,7 @@ import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo.js';
 import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../taskkind.js';
 import { trimToLeanTier } from '../tools/index.js';
-import { classifyTaskTier } from '../model-router.js';
+import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../diagnostics.js';
 import type { AgentProfile } from '../types.js';
@@ -341,6 +341,8 @@ export class Agent {
   private triedFallbackProviders = new Set<string>();
   private consecutiveToolErrorsCount = 0;
   private verifyCount = 0;
+  private consecutiveVerifyFailures = 0;
+  private escalatedThisTask = false;
   private autopsy: Autopsy | undefined;
   private hypotheses: Hypothesis[] = [];
   private diagnosis: DiagnosisResult | undefined;
@@ -532,6 +534,8 @@ export class Agent {
   async run(task: Task): Promise<AgentResult> {
     this.startTime = performance.now();
     this.activeTask = task;
+    this.consecutiveVerifyFailures = 0;
+    this.escalatedThisTask = false;
     this.events.emit({ type: 'task:started', task, agentId: this.id });
     // Harness-v2 Phase 1: deterministic iteration lifecycle. Every loop turn
     // flows preflight → model-call → stream-guard → tool-exec → verify →
@@ -2110,6 +2114,7 @@ Continue from 'Next:', do not redo completed progress.`,
       this.verifyCount++;
       if (verification.passed) {
         this.lastVerifyPassed = true;
+        this.consecutiveVerifyFailures = 0;
         this.consecutiveToolErrorsCount = 0;
         this.cycleNudges = 0;
         this.nudgeInjections = 0;
@@ -2203,6 +2208,34 @@ Continue from 'Next:', do not redo completed progress.`,
       // lessons from procedural memory, and append a structured attempt to
       // the autopsy record before nudging the model with the next hypothesis.
       await this.observeFailure(task, verification.summary, repo);
+      // Model auto-escalation: N consecutive verification failures means the
+      // current tier cannot crack this task — hand it ONE rung up (once per
+      // task, only to a different configured model). The stronger model gets
+      // a clean streak and an explicit handoff note instead of inheriting
+      // the weaker model's doomed trajectory mid-thought.
+      this.consecutiveVerifyFailures++;
+      const baseTier: TaskTier =
+        this.profile.defaultModel === 'fast' ? 'fast'
+        : this.profile.defaultModel === 'reasoning' ? 'reasoning'
+        : 'standard';
+      const escalation = nextEscalationTier(
+        baseTier,
+        this.consecutiveVerifyFailures,
+        this.escalatedThisTask,
+        this.config.model,
+        this.config.model.model,
+      );
+      if (escalation) {
+        this.escalatedThisTask = true;
+        this.consecutiveVerifyFailures = 0;
+        this.setActiveModel(escalation.modelId);
+        this.syncStallBudget();
+        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[escalate] sustained verification failures — escalated to ${escalation.tier} tier (${escalation.modelId})` });
+        this.context.addMessage({
+          role: 'system',
+          content: `A stronger model (${escalation.modelId}) is taking over after repeated verification failures. Re-read the failing checks with fresh eyes, change strategy — do NOT repeat the last approach verbatim.`,
+        });
+      }
     }
 
     this.addAttempt(task, 'exhausted', [], 'failure', `Reached maximum iterations (${maxIterations})`);

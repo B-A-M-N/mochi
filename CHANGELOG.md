@@ -13,6 +13,8 @@
 - **SDK streaming + discovery** — race-free `promptStream()` generator (eager subscription, bounded backlog, yields events then returns the result), `searchSkills()`, `addMcpServer()`.
 - **Skill packs** — `packSkills()` bundles installed skills (bodies + references + manifest) and `mochi skills pack/unpack` shares them; round-trip tested against the existing import engine.
 - **Browser readiness in doctor** — no-launch `probe` subcommand in the driver (playwright + cached browsers); doctor reports it instead of discovering breakage mid-task.
+- **Model auto-escalation** — 3 consecutive verification failures hand the task one tier up (fast→coding→reasoning) to a *different configured* model, once per task with an explicit handoff note. Pure decision helper + integration test on a scripted always-red task.
+- **MCP OAuth (pre-registered clients)** — client-credentials + refresh grants with 0600 token cache, `${ENV}` secret expansion, per-request header injection on both HTTP paths. Mock-server tests for mint/cache/refresh-fallback/authenticated calls.
 - **Shell completions** — `mochi completion bash|zsh|fish` with a self-checking command table (a test fails on any CLI command without completion coverage); bash output validated with `bash -n` + live eval.
 - **`as any`: 125 → 0** in shipped source (only comments mention it now); every removal either dropped a needless cast or fixed the underlying lie (dead `/circle` read, malformed browser events, `[object Object]` badge, capability/read-cache fork, untyped FFI boundary, mistyped exec errors).
 - **Multi-tab sessions (opencode-style)**

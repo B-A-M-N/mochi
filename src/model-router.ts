@@ -42,6 +42,37 @@ export function resolveModel(config: ModelConfig, tier: TaskTier): string {
   return profiles[profileMap[tier]] ?? config.model;
 }
 
+/** Consecutive verification failures before the harness escalates to a
+ *  stronger model tier (tried-and-failed work, not one flaky red). */
+export const ESCALATE_AFTER_FAILURES = 3;
+
+const ESCALATION_LADDER: TaskTier[] = ['fast', 'standard', 'reasoning'];
+
+export interface EscalationDecision {
+  tier: TaskTier;
+  modelId: string;
+}
+
+/** Pure escalation decision: one step up the capability ladder after
+ *  sustained verification failure — once per task, only to a *different*
+ *  configured model (no-op when the next tier is unconfigured or identical,
+ *  or already at the top). Callers reset the streak on any verify pass. */
+export function nextEscalationTier(
+  current: TaskTier,
+  consecutiveFailures: number,
+  alreadyEscalated: boolean,
+  config: ModelConfig,
+  currentModelId: string,
+): EscalationDecision | null {
+  if (alreadyEscalated || consecutiveFailures < ESCALATE_AFTER_FAILURES) return null;
+  const idx = ESCALATION_LADDER.indexOf(current);
+  if (idx < 0 || idx >= ESCALATION_LADDER.length - 1) return null;
+  const tier = ESCALATION_LADDER[idx + 1];
+  const modelId = resolveModel(config, tier);
+  if (!modelId || modelId === currentModelId) return null;
+  return { tier, modelId };
+}
+
 /** Exponential backoff helper. */
 async function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

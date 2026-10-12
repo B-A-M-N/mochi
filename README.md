@@ -123,6 +123,17 @@ mochi inspect "SessionManager"
 
 # Speculative reasoning
 mochi speculate "difficult TS2345 failure"
+
+# Own terminal window (black bg, monospace, 190x45)
+mochi term
+mochi term --geometry 100x30 -- goal "fix auth"
+
+# Shell completions (bash|zsh|fish)
+eval "$(mochi completion bash)"
+
+# Skill sharing
+mochi skills pack my-skill --out ./pack     # bundle installed skills
+mochi skills unpack ./pack --force          # install a pack
 ```
 
 > **Speculative preflight** (`model.speculative.preflight: true` in config): for hard
@@ -147,8 +158,8 @@ Project: `.mochi/config.json`
     "profiles": {
       "fast": "opencode/deepseek-v4-flash-free",
       "coding": "opencode/deepseek-v4-flash-free",
-      "reasoning": "opencode/deepseek-v4-flash-free",
-      "review": "opencode/deepseek-v4-flash-free"
+      "reasoning": "opencode/deepseek-v4-flash",
+      "review": "opencode/deepseek-v4-flash"
     },
     "speculative": {
       "preflight": true,
@@ -163,7 +174,8 @@ Project: `.mochi/config.json`
     "maxTokens": 150000,
     "maxCostUsd": 2,
     "maxModelCalls": 100,
-    "maxToolCalls": 200
+    "maxToolCalls": 200,
+    "sandbox": "off"
   },
   "permissions": {
     "read": true,
@@ -183,16 +195,38 @@ Project: `.mochi/config.json`
 }
 ```
 
+### Environment switches (no config file needed)
+
+```bash
+MOCHI_YOLO=1 mochi goal "..."        # auto-approve everything (same as --yolo)
+MOCHI_SANDBOX=auto mochi -p "..."    # bubblewrap isolation when available (off|auto|bubblewrap)
+MOCHI_SAFETY=auto mochi              # safety mode override (safe|ask|auto|uncensored)
+```
+
+Model auto-escalation: after 3 consecutive verification failures the harness
+hands the task one tier up (fast→coding→reasoning) to a *different configured*
+model, once per task — free models attempt first, stronger models rescue stuck
+work. Configure distinct models per tier under `model.profiles` for it to bite.
+
 ### MCP servers
 
-`mcpServers` entries are stdio MCP servers. Each is spawned once per agent run,
-handshakes over JSON-RPC, and its tools are registered natively as
+`mcpServers` entries are stdio MCP servers (spawned per run) or HTTP servers
+(`{ "url": "https://…", "headers": {...} }` for Streamable-HTTP endpoints).
+Each handshakes over JSON-RPC, and its tools are registered natively as
 `serverName__toolName` (e.g. `memory__create_entities`) with `network`
 permission, so the model calls them like any built-in tool. Failed servers are
 logged and skipped; a crashed server rejects its pending calls instead of
 hanging the run. Servers that expose MCP **resources** additionally get
 `serverName__resources_list` and `serverName__resources_read` tools (read
 permission) so the model can pull server-provided context on demand.
+Discover and install built-ins without hand-editing JSON:
+`mochi mcp search <keywords>` (also `/mcp search` in the TUI) and
+`mochi mcp add <server-id>` write `.mcp.json` for you. Servers needing
+bearer tokens use pre-registered OAuth client credentials (no browser flow):
+`{ "url": "https://…", "oauth": { "tokenUrl": "https://…", "clientId": "${CLIENT_ID}",
+"clientSecret": "${CLIENT_SECRET}", "scope": "…" } }` — `${ENV}` refs keep
+secrets out of the file; tokens cache under `~/.mochi/mcp-oauth.json` (0600)
+and refresh automatically.
 
 ### Plan-then-act mode
 
@@ -416,6 +450,7 @@ mochi daemon status                            # is it up? jobs running?
 mochi daemon jobs                             # list persisted goals + status
 mochi daemon send "finish the auth flow"      # enqueue a goal
 mochi daemon approve                         # approve queued shell commands (safe mode)
+mochi daemon rotate                          # issue a fresh token (old dies immediately)
 mochi daemon stop
 ```
 

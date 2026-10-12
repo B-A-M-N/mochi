@@ -124,12 +124,18 @@ function stdioConnect(name: string, command: string, args: string[], env?: Recor
 
 // ─── streamable HTTP transport (MCP 2025-03-26) ───────────────────────────
 
-function httpChannel(name: string, url: string, headers?: Record<string, string>): RpcChannel {
+function httpChannel(
+  name: string,
+  url: string,
+  headers?: Record<string, string>,
+  getAuthHeaders?: () => Promise<Record<string, string>>,
+): RpcChannel {
   let nextId = 0;
   const post = async (body: unknown, timeoutMs: number): Promise<Response> => {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
+      const auth = getAuthHeaders ? await getAuthHeaders().catch(() => ({})) : {};
       return await fetch(url, {
         method: 'POST',
         headers: {
@@ -137,6 +143,7 @@ function httpChannel(name: string, url: string, headers?: Record<string, string>
           Accept: 'application/json, text/event-stream',
           'MCP-Protocol-Version': '2025-03-26',
           ...(headers ?? {}),
+          ...auth,
         },
         body: JSON.stringify(body),
         signal: ctl.signal,
@@ -194,9 +201,15 @@ interface McpConnection {
   tools: Array<{ name: string; description?: string; inputSchema?: any; annotations?: { readOnlyHint?: boolean } }>;
 }
 
-async function connectServer(name: string, cfg: { command?: string; args?: string[]; url?: string; headers?: Record<string, string>; env?: Record<string, string> }): Promise<McpConnection> {
+async function connectServer(name: string, cfg: { command?: string; args?: string[]; url?: string; headers?: Record<string, string>; env?: Record<string, string>; oauth?: import('../mcp/oauth.js').McpOAuthConfig }): Promise<McpConnection> {
+  let getAuthHeaders: (() => Promise<Record<string, string>>) | undefined;
+  if (cfg.url && cfg.oauth) {
+    const { oauthHeaders } = await import('../mcp/oauth.js');
+    const oauthCfg = cfg.oauth;
+    getAuthHeaders = () => oauthHeaders(name, oauthCfg);
+  }
   const channel = cfg.url
-    ? httpChannel(name, cfg.url, cfg.headers)
+    ? httpChannel(name, cfg.url, cfg.headers, getAuthHeaders)
     : await stdioConnect(name, String(cfg.command), cfg.args ?? [], cfg.env);
   const initRes = await channel.call('tools/list', {});
   return {

@@ -1355,6 +1355,34 @@ async function main() {
     console.log(runtime.modelList().join('\n') || 'No models listed for ' + runtime.config.model.provider);
     return;
   }
+  if (first === 'mcp') {
+    // mochi mcp [list|search <q>|add <id>] — 1-command MCP discovery +
+    // install into .mcp.json (same engine as the /mcp TUI command).
+    const { searchMcpServers, addMcpServerConfig, BUILTIN_MCP_SERVERS } = await import('./tools/mcp-manage.js');
+    const sub = positional[1] ?? 'list';
+    const rest = positional.slice(2).join(' ');
+    if (sub === 'list' || !sub) {
+      for (const s of BUILTIN_MCP_SERVERS) console.log(`${s.id.padEnd(24)} ${s.description}`);
+      return;
+    }
+    if (sub === 'search') {
+      if (!rest) { console.error('Usage: mochi mcp search <keywords>'); process.exit(1); }
+      const hits = searchMcpServers(rest);
+      if (!hits.length) { console.log(`No MCP servers match "${rest}".`); return; }
+      for (const h of hits) console.log(`${h.server.id.padEnd(24)} ${h.snippet.slice(0, 80)}`);
+      console.log('\nInstall one with: mochi mcp add <server-id>');
+      return;
+    }
+    if (sub === 'add') {
+      if (!rest) { console.error('Usage: mochi mcp add <server-id>'); process.exit(1); }
+      const r = addMcpServerConfig(cwd, rest);
+      console.log(r.message);
+      if (!r.ok) process.exit(1);
+      return;
+    }
+    console.error(`Unknown mcp command "${sub}". Use: mochi mcp [list|search <q>|add <id>]`);
+    process.exit(1);
+  }
   if (first === 'doctor') {
     const { doctorReport, formatDoctor, repairDoctor } = await import('./doctor.js');
     const { daemonRunning, readDaemonInfo } = await import('./daemon.js');

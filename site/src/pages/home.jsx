@@ -6,6 +6,10 @@ import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, TiltCard, GooeyBorder, BenchChart,
 } from '../anim.jsx';
+import {
+  IconBolt, IconCode, IconShield, IconGitBranch,
+  IconCpu, IconUsers, IconCheck, IconTerminal, IconRocket,
+} from '../icons.jsx';
 
 const STATS = [
   ['18.2 MB', 'PEAK RESIDENT RSS', '21.2× lighter than Claude Code'],
@@ -22,32 +26,32 @@ const TICKER_ITEMS = [
 
 const CAPABILITIES = [
   {
-    icon: '⚡',
+    icon: IconBolt,
     title: '01 / DUAL-PHASE REASONING',
     desc: 'Separates planning from execution. Spec mode generates a formal task DAG before Act mode applies atomic file modifications, eliminating runaway hallucinated edits.'
   },
   {
-    icon: '✂️',
+    icon: IconCode,
     title: '02 / SURGICAL AST-DIFF EDITS',
     desc: 'Tree-sitter semantic symbol tracking and whitespace-tolerant unified patch applicator. Edits 20+ dependent files in a single pass without dropping import context.'
   },
   {
-    icon: '🔒',
+    icon: IconShield,
     title: '03 / BUBBLEWRAP SANDBOX',
     desc: 'Hardware-level unprivileged namespace containerization via bwrap. Masks ~/.ssh and ~/.aws, mounts system binaries read-only, and prevents prompt-injection breakouts.'
   },
   {
-    icon: '🔀',
+    icon: IconGitBranch,
     title: '04 / MULTI-MODEL ROUTER',
     desc: 'Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, OpenAI GPT-4o, DeepSeek, or local Ollama mid-session. Automatically backs off and fails over on 429 rate limits.'
   },
   {
-    icon: '🛠️',
+    icon: IconCpu,
     title: '05 / DETERMINISTIC TOOLS',
     desc: 'Ripgrep search, AST grep, Git checkpoint rollbacks, headless test runner, and native LSP. Fast, cache-friendly, and bounded by strict privilege boundaries.'
   },
   {
-    icon: '👥',
+    icon: IconUsers,
     title: '06 / 16 SPECIALIST SWARMS',
     desc: 'Lead, Coder, Reviewer, Tester, Architect, Security, and DevOps subagents spawned concurrently across directed acyclic graphs with dependency resolution.'
   },
@@ -69,7 +73,7 @@ function HeroSection() {
         <AnimatedContent direction="bottom" delay={0.1}>
           <div className="hero-eyebrow">
             <span className="sparkle" />
-            THE NEXT GENERATION AI CODING AGENT
+            AUTONOMOUS CODING AGENT & ARCHITECT
           </div>
         </AnimatedContent>
 
@@ -143,7 +147,7 @@ function CapabilitiesSection() {
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
-          SECTION 02 / WHY MOCHI?
+          SECTION 02 / ARCHITECTURE
         </div>
       </AnimatedContent>
 
@@ -155,19 +159,24 @@ function CapabilitiesSection() {
       </div>
 
       <p className="section-desc">
-        Six architectural principles that separate Mochi from conventional vibecoded wrappers.
+        Six architectural principles that separate Mochi from conventional wrappers.
       </p>
 
       <div className="caps-grid">
-        {CAPABILITIES.map((cap, i) => (
-          <AnimatedContent key={cap.title} direction="bottom" delay={i * 0.08}>
-            <div className="cap-card">
-              <div className="cap-icon">{cap.icon}</div>
-              <h3 className="cap-title">{cap.title}</h3>
-              <p className="cap-desc">{cap.desc}</p>
-            </div>
-          </AnimatedContent>
-        ))}
+        {CAPABILITIES.map((cap, i) => {
+          const IconComp = cap.icon;
+          return (
+            <AnimatedContent key={cap.title} direction="bottom" delay={i * 0.08}>
+              <div className="cap-card">
+                <div className="cap-icon-box">
+                  <IconComp size={22} />
+                </div>
+                <h3 className="cap-title">{cap.title}</h3>
+                <p className="cap-desc">{cap.desc}</p>
+              </div>
+            </AnimatedContent>
+          );
+        })}
       </div>
     </section>
   );
@@ -183,7 +192,7 @@ function StatsSection() {
               <div style={{
                 background: '#ffffff',
                 borderRadius: 24,
-                padding: '32px 24px',
+                padding: '34px 24px',
                 border: '1.5px solid var(--line)',
                 textAlign: 'center',
                 boxShadow: 'var(--shadow-card)',
@@ -194,7 +203,7 @@ function StatsSection() {
               }}>
                 <div style={{
                   fontFamily: 'var(--font-display)',
-                  fontSize: 42,
+                  fontSize: 44,
                   fontWeight: 800,
                   color: 'var(--purple-dark)',
                   letterSpacing: '-0.02em',
@@ -213,7 +222,7 @@ function StatsSection() {
                 }}>
                   {label}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                <div style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
                   {sub}
                 </div>
               </div>
@@ -227,11 +236,11 @@ function StatsSection() {
 
 function FlowSection() {
   return (
-    <section className="section" id="flow" style={{ maxWidth: 960 }}>
+    <section className="section" id="flow" style={{ maxWidth: 980, margin: '0 auto' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
-          HOW IT WORKS
+          EXECUTION LIFECYCLE
         </div>
       </AnimatedContent>
       <h2 className="section-title" style={{ fontSize: 38, marginBottom: 28 }}>
@@ -276,7 +285,7 @@ function FlowSection() {
 
 function TerminalSection() {
   return (
-    <section className="section" id="terminal" style={{ maxWidth: 1080 }}>
+    <section className="section" id="terminal" style={{ maxWidth: 1100, margin: '0 auto' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
@@ -358,7 +367,7 @@ function BenchmarksSection() {
   ];
 
   return (
-    <section className="section" id="benchmarks" style={{ maxWidth: 1200 }}>
+    <section className="section" id="benchmarks" style={{ maxWidth: 1240, margin: '0 auto' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
@@ -372,21 +381,38 @@ function BenchmarksSection() {
         <AnimatedContent direction="left" delay={0.2}>
           <div style={{
             background: '#ffffff',
-            padding: '32px 28px',
+            padding: '34px 30px',
             borderRadius: 24,
             border: '1.5px solid var(--line)',
             boxShadow: 'var(--shadow-card)',
           }}>
             <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12.5,
-              color: 'var(--purple-dark)',
-              marginBottom: 18,
-              textTransform: 'uppercase',
-              letterSpacing: '.08em',
-              fontWeight: 700,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 20,
             }}>
-              Peak Resident RSS (MB) — Lower is Better
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12.5,
+                color: 'var(--purple-dark)',
+                textTransform: 'uppercase',
+                letterSpacing: '.08em',
+                fontWeight: 700,
+              }}>
+                Peak Resident RSS (MB)
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                background: 'var(--purple-lighter)',
+                color: 'var(--purple-dark)',
+                padding: '3px 8px',
+                borderRadius: 6,
+                fontWeight: 700,
+              }}>
+                21.2× LIGHTER
+              </span>
             </div>
             <BenchChart data={memData} max={400} />
           </div>
@@ -395,21 +421,38 @@ function BenchmarksSection() {
         <AnimatedContent direction="right" delay={0.25}>
           <div style={{
             background: '#ffffff',
-            padding: '32px 28px',
+            padding: '34px 30px',
             borderRadius: 24,
             border: '1.5px solid var(--line)',
             boxShadow: 'var(--shadow-card)',
           }}>
             <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12.5,
-              color: 'var(--purple-dark)',
-              marginBottom: 18,
-              textTransform: 'uppercase',
-              letterSpacing: '.08em',
-              fontWeight: 700,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 20,
             }}>
-              Cold Start TTFI (ms) — Lower is Better
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12.5,
+                color: 'var(--purple-dark)',
+                textTransform: 'uppercase',
+                letterSpacing: '.08em',
+                fontWeight: 700,
+              }}>
+                Cold Start TTFI (ms)
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                background: 'var(--purple-lighter)',
+                color: 'var(--purple-dark)',
+                padding: '3px 8px',
+                borderRadius: 6,
+                fontWeight: 700,
+              }}>
+                4.5× FASTER
+              </span>
             </div>
             <BenchChart data={ttfiData} max={200} />
           </div>
@@ -427,7 +470,7 @@ function CodaSection() {
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
           <h2>Ready to Build with Mochi?</h2>
           <p>
-            Join thousands of developers using Mochi to build faster, smarter, and better.
+            Experience the lightest, fastest autonomous coding intelligence for your terminal.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <a

@@ -519,6 +519,49 @@ describe('Agent', () => {
     await fake.close();
   });
 
+  it('escalates to a stronger model tier after sustained verify failures', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-escalate-'));
+    execSync('git init -q', { cwd: dir });
+    execSync('git config user.email t@t && git config user.name t', { cwd: dir });
+    execSync('git commit --allow-empty -m init', { cwd: dir });
+    const writeCall = (id: string, path: string) => ({
+      id,
+      type: 'function' as const,
+      function: { name: 'write', arguments: JSON.stringify({ path, content: 'broken' }) },
+    });
+    // Model claims "done" forever; verification always fails. Same fake
+    // endpoint serves both tiers (model ids are routing labels here).
+    const fake = await startFakeOpenAI([
+      { content: 'Writing now.', toolCalls: [writeCall('1', resolve(dir, 'out.txt'))], finishReason: 'tool_calls' },
+      { content: 'Done, the change is complete.', finishReason: 'stop' },
+    ]);
+    const config = makeConfig(dir, fake.url);
+    config.model.model = 'fake-coding';
+    config.model.profiles = { fast: 'fake-fast', coding: 'fake-coding', reasoning: 'fake-reasoning', review: 'fake-review' };
+    const events = new EventBus();
+    const seen: string[] = [];
+    events.onAll((e) => { if (e.type === 'agent:log') seen.push((e as { message: string }).message); });
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const context = new ContextEngine(config, dir);
+    context.setGoal('escalation check');
+    const task = createTask('Break things', 'Write out.txt; verification always fails.', {
+      verificationCommand: 'false',
+    });
+    const agent = new Agent({ id: 'escalate-agent', role: 'coder', config, workspace, events, cwd: dir, context });
+    try {
+      const result = await agent.run(task);
+      expect(result.success).toBe(false);
+      // Exactly one escalation to the reasoning tier after the failure streak.
+      const escalations = seen.filter((m) => m.includes('[escalate]'));
+      expect(escalations).toHaveLength(1);
+      expect(escalations[0]).toContain('reasoning');
+      expect(escalations[0]).toContain('fake-reasoning');
+    } finally {
+      await fake.close();
+    }
+  });
+
   it('writes an autopsy record when verification fails repeatedly', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-autopsy-loop-'));
     // Script: the model claims "done" but verification always fails (exit 1),

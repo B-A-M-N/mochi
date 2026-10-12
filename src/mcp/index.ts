@@ -24,6 +24,8 @@ export interface McpServerConfig {
   url?: string;
   /** Extra headers for HTTP transport (e.g. Authorization). */
   headers?: Record<string, string>;
+  /** OAuth client configuration for HTTP servers needing bearer tokens. */
+  oauth?: import('./oauth.js').McpOAuthConfig;
 }
 
 export interface McpToolInput {
@@ -130,6 +132,7 @@ export class HttpTransport implements McpTransport {
     private url: string,
     private headers: Record<string, string> = {},
     private label: string = 'mcp',
+    private getAuthHeaders?: () => Promise<Record<string, string>>,
   ) {}
 
   send(frame: string): void {
@@ -143,17 +146,20 @@ export class HttpTransport implements McpTransport {
     const isNotification = body.id === undefined;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 15_000);
-    void fetch(this.url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        'mcp-protocol-version': '2025-03-26',
-        ...this.headers,
-      },
-      body: frame,
-      signal: ctl.signal,
-    }).then(async (res) => {
+    void (async () => {
+      const auth = this.getAuthHeaders ? await this.getAuthHeaders().catch(() => ({} as Record<string, string>)) : {};
+      await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'mcp-protocol-version': '2025-03-26',
+          ...this.headers,
+          ...auth,
+        },
+        body: frame,
+        signal: ctl.signal,
+      }).then(async (res) => {
       clearTimeout(timer);
       if (!res.ok) {
         if (!isNotification) this.msgCb(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: `HTTP ${res.status}` } }));
@@ -186,6 +192,7 @@ export class HttpTransport implements McpTransport {
         : err instanceof Error ? err.message : String(err);
       this.msgCb(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message } }));
     });
+    })();
   }
 
   onMessage(cb: (line: string) => void): void {

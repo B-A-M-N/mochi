@@ -1,6 +1,6 @@
 // model-router.ts: multi-tier model selection + rate-limit failover.
 import { describe, it, expect } from 'vitest';
-import { classifyTaskTier, resolveModel, withFailover } from './model-router.js';
+import { classifyTaskTier, resolveModel, withFailover, nextEscalationTier, ESCALATE_AFTER_FAILURES } from './model-router.js';
 import type { ModelConfig } from '../types.js';
 
 const base = (): ModelConfig => ({
@@ -34,6 +34,26 @@ describe('resolveModel', () => {
   it('falls back to the primary model without profiles', () => {
     const cfg: ModelConfig = { provider: 'openai', baseUrl: 'x', model: 'gpt-4o' };
     expect(resolveModel(cfg, 'reasoning')).toBe('gpt-4o');
+  });
+});
+
+describe('nextEscalationTier', () => {
+  it('stays put below the failure threshold or after escalating', () => {
+    const cfg = base();
+    expect(nextEscalationTier('standard', ESCALATE_AFTER_FAILURES - 1, false, cfg, 'coding-model')).toBeNull();
+    expect(nextEscalationTier('standard', 9, true, cfg, 'coding-model')).toBeNull();
+  });
+  it('climbs one rung to a different configured model', () => {
+    const cfg = base();
+    expect(nextEscalationTier('standard', 3, false, cfg, 'coding-model')).toEqual({ tier: 'reasoning', modelId: 'reasoning-model' });
+    expect(nextEscalationTier('fast', 5, false, cfg, 'fast-model')).toEqual({ tier: 'standard', modelId: 'coding-model' });
+  });
+  it('refuses the top rung, identical models, and missing profiles', () => {
+    const cfg = base();
+    expect(nextEscalationTier('reasoning', 9, false, cfg, 'reasoning-model')).toBeNull();
+    expect(nextEscalationTier('standard', 9, false, cfg, 'reasoning-model')).toBeNull();
+    const bare: ModelConfig = { provider: 'openai', baseUrl: 'x', model: 'gpt-4o' };
+    expect(nextEscalationTier('standard', 9, false, bare, 'gpt-4o')).toBeNull();
   });
 });
 
