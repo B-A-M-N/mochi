@@ -243,7 +243,7 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 ## Comprehensive Documentation
 
 - **[Technical Architecture Blueprint](docs/ARCHITECTURE.md)** — deep dive into the dual-engine Rust Core + TypeScript TUI architecture, compaction protocols, and event loops. Auto-generated coverage of 298 modules / 3105 symbols via `mochi docgen`.
-- **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 30+ native tools, 30+ skills, and MCP/ACP protocols.
+- **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 30+ native tools, 43 skills, and MCP/ACP protocols.
 - **[Empirical Benchmarks](docs/BENCHMARKS.md)** — standardized PSS memory, TTFF, TTFI, and compaction latency vs jcode, Claude Code, Cursor, Copilot, and OpenCode, with reproducible probe scripts.
 - **[CLI & Interface Reference](docs/CLI_REFERENCE.md)** — complete flags, daemon endpoints, slash commands, and keybindings.
 - **[Editor Integrations](docs/EDITORS.md)** — VS Code, Cursor, JetBrains, Zed, Neovim, Claude Desktop via MCP/ACP stdio servers.
@@ -674,7 +674,7 @@ Git-backed snapshots, so rollback composes with your normal workflow.
 
 ## Skills
 
-30+ built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
+43 built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
 
 ### Skill Marketplace
 
