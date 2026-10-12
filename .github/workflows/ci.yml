@@ -38,21 +38,27 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             # MSVC links N-API symbols against node.lib at build time (see
-            # build.rs). The toolcache node ships WITHOUT node.lib and there's
-            # no node.lib anywhere on PATH/Program Files on the runners — so
-            # fetch the official dist zip for the EXACT node version (same
-            # ABI) and point MOCHI_NODE_LIB_DIR at its extracted lib.
+            # build.rs). Toolcache node ships WITHOUT node.lib and none exists
+            # anywhere on PATH — fetch the official dist zip for the EXACT
+            # node version (same ABI) and point MOCHI_NODE_LIB_DIR at it.
+            # git-bash tar is GNU tar (no zip support) → PowerShell extracts.
             NODE_VERSION="$(node -v)"
-            mkdir -p "$RUNNER_TEMP/node-dist"
-            if curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip" -o "$RUNNER_TEMP/node-dist.zip" \
-               && tar -xf "$RUNNER_TEMP/node-dist.zip" -C "$RUNNER_TEMP/node-dist" 2>/dev/null; then
-              NODE_LIB="$(find "$RUNNER_TEMP/node-dist" -name node.lib | head -n 1)"
-              if [ -n "$NODE_LIB" ]; then
-                export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$NODE_LIB")")"
+            mkdir -p /tmp/node-dist
+            if curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip" -o /tmp/node-dist.zip; then
+              echo "win: zip downloaded ($(wc -c < /tmp/node-dist.zip) bytes)"
+              if powershell.exe -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w /tmp/node-dist.zip)' -DestinationPath '$(cygpath -w /tmp/node-dist)'" >/dev/null 2>&1; then
+                NODE_LIB="$(find /tmp/node-dist -name node.lib | head -n 1)"
+                if [ -n "$NODE_LIB" ]; then
+                  export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$NODE_LIB")")"
+                fi
+              else
+                echo "win: Expand-Archive failed"
               fi
+            else
+              echo "win: node dist download failed"
             fi
-            echo "win preflight: node=$(command -v node) MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
-            ls "${MOCHI_NODE_LIB_DIR:-/nonexistent}/node.lib" 2>&1 | head -n 1
+            echo "win preflight: MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
+            ls "${MOCHI_NODE_LIB_DIR:-/nonexistent}/node.lib" 2>&1 | head -n 1 || true
           fi
           if command -v rustc >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
             npm run build:native
