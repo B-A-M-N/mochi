@@ -45,7 +45,7 @@ const CAPABILITIES = [
   {
     icon: IconGitBranch,
     title: '04 / MULTI-MODEL ROUTER',
-    desc: 'Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation, automatic 429 backoff, and zero lost state.'
+    desc: 'Hot-swap any backup provider (Anthropic Claude Sonnet 5.5 & Claude Opus 5.5, OpenAI GPT-5.5 Astra, GPT-5 & o5, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation, automatic 429 backoff, and zero lost state.'
   },
   {
     icon: IconCpu,
@@ -118,6 +118,147 @@ const SPECIALIST_ROLES = [
   },
 ];
 
+function HeroInstallBar() {
+  const [copied, setCopied] = useState(false);
+  const command = 'git clone https://github.com/xanstomper/mochi.git && cd mochi && npm install && npm run build && ./dist/cli.js';
+
+  const handleCopy = (e) => {
+    e.preventDefault();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2400);
+      }).catch(() => {
+        fallbackCopy();
+      });
+    } else {
+      fallbackCopy();
+    }
+  };
+
+  const fallbackCopy = () => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = command;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2400);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 24, maxWidth: 660 }}>
+      <div
+        style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          border: '1.5px solid rgba(138, 103, 246, 0.22)',
+          borderRadius: 14,
+          padding: '8px 10px 8px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          boxShadow: '0 6px 24px rgba(138, 103, 246, 0.08)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            overflowX: 'auto',
+            flex: 1,
+            minWidth: 0,
+            scrollbarWidth: 'none',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              fontWeight: 800,
+              color: '#8A67F6',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            $
+          </span>
+          <code
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12.5,
+              color: '#111116',
+              fontWeight: 650,
+              whiteSpace: 'nowrap',
+              userSelect: 'all',
+            }}
+          >
+            {command}
+          </code>
+        </div>
+
+        <button
+          id="btn-copy-install"
+          onClick={handleCopy}
+          title="Copy 1-line install command to clipboard"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: copied
+              ? '#ECFDF5'
+              : 'linear-gradient(135deg, rgba(138, 103, 246, 0.12), rgba(167, 139, 250, 0.22))',
+            border: copied ? '1.5px solid #10B981' : '1.5px solid rgba(138, 103, 246, 0.35)',
+            borderRadius: 9,
+            padding: '7px 14px',
+            color: copied ? '#059669' : '#6D28D9',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            fontWeight: 750,
+            cursor: 'pointer',
+            flexShrink: 0,
+            transition: 'all 0.2s ease',
+            boxShadow: copied ? '0 0 12px rgba(16, 185, 129, 0.2)' : 'none',
+          }}
+        >
+          {copied ? (
+            <>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>Copied!</span>
+            </>
+          ) : (
+            <>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, paddingLeft: 4 }}>
+        <span style={{ fontSize: 11, color: '#8A67F6' }}>✦</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#69697A', fontWeight: 600 }}>
+          1-line git clone, compile, and launch directly in your terminal
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function HeroSection() {
   const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
   return (
@@ -164,6 +305,10 @@ function HeroSection() {
               Read the Docs →
             </a>
           </div>
+        </AnimatedContent>
+
+        <AnimatedContent direction="left" delay={0.42} distance={35} blur={14}>
+          <HeroInstallBar />
         </AnimatedContent>
       </div>
 
@@ -366,7 +511,7 @@ function CapabilitiesSection() {
                   Multi-Model Router
                 </h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
-                  Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation and zero lost state.
+                  Hot-swap any backup provider (Anthropic Claude Sonnet 5.5 & Claude Opus 5.5, OpenAI GPT-5.5 Astra, GPT-5 & o5, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation and zero lost state.
                 </p>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
@@ -1084,7 +1229,7 @@ function AutonomousEcosystemSection() {
                 </div>
                 <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-                  Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) with multi-key pool rotation and automatic 429 backoff.
+                  Hot-swap any backup provider (Anthropic Claude Sonnet 5.5 & Claude Opus 5.5, OpenAI GPT-5.5 Astra, GPT-5 & o5, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) with multi-key pool rotation and automatic 429 backoff.
                 </p>
               </div>
             </div>

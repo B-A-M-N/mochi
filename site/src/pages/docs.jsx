@@ -17,7 +17,7 @@ const DOC_CARDS = [
   { icon: IconWrench, title: '30+ Deterministic Tools', desc: 'AST editing, unified diff patch, Ripgrep, native LSP, AST skeletons, and Myers diff.', link: '#tools' },
   { icon: IconCpu, title: 'Rust Native Core', desc: 'Zero-dep native/mochi_core crate, 11 C-ABI ops, N-API & Bun FFI, and TS fallbacks.', link: '#rust-core' },
   { icon: IconShield, title: 'Bubblewrap Sandboxing', desc: 'Unprivileged Linux namespace containerization, ~/.ssh masking, and 10-pattern secret DFA.', link: '#sandbox' },
-  { icon: IconBox, title: 'Frontier Model Routing', desc: 'GPT-5.5 Astra, Claude 5 Sonnet & Opus 4.5, DeepSeek V4 Flash, Kimi k3, GLM-5.3, 429 auto-backoff, 90% prompt cache.', link: '#models' },
+  { icon: IconBox, title: 'Frontier Model Routing', desc: 'GPT-5.5 Astra, Claude Sonnet 5.5 & Opus 5.5, o5, DeepSeek V4 Flash, Kimi k3, GLM-5.3, 429 auto-backoff, 90% prompt cache.', link: '#models' },
   { icon: IconGlobe, title: 'Daemon API & Cron', desc: 'Port 8642 persistent HTTP daemon, cron scheduler, and ACP v1 JSON-RPC for VS Code/Zed.', link: '#daemon' },
   { icon: IconCode, title: 'Editor Integrations (ACP)', desc: 'Agent Client Protocol v1 over stdio for VS Code (Ctrl+Alt+M) and JetBrains tool windows.', link: '#editors' },
   { icon: IconBolt, title: 'Cozy Onboarding', desc: 'One-command autodiscovery of providers, keys, skills, and MCP servers from other installed agents.', link: '#onboarding' },
@@ -651,8 +651,8 @@ export default function Docs() {
                       <div>
                         <h4 style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, color: 'var(--ink)' }}>Top Frontier Providers</h4>
                         <ul style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.8, paddingLeft: 18 }}>
-                          <li><strong>Anthropic:</strong> Claude 5 Sonnet, Claude Opus 4.5, Claude 3.7 Sonnet, Claude 3.5 Haiku</li>
-                          <li><strong>OpenAI:</strong> GPT-5.5 Astra, GPT-5, o3, o4-mini</li>
+                          <li><strong>Anthropic:</strong> Claude Sonnet 5.5, Claude Opus 5.5, Claude 5 Sonnet, Claude 3.5 Haiku</li>
+                          <li><strong>OpenAI:</strong> GPT-5.5 Astra, GPT-5, o5, o5-mini</li>
                           <li><strong>Google Gemini:</strong> Gemini 3.0 Ultra, Gemini 2.5 Pro, Gemini 2.5 Flash</li>
                           <li><strong>DeepSeek:</strong> DeepSeek V4 Flash, DeepSeek V3, DeepSeek R1 Reasoning</li>
                           <li><strong>Moonshot & Zhipu:</strong> Kimi k3, Kimi k2.7 Code, GLM-5.3, GLM-5.2</li>
@@ -839,12 +839,12 @@ export default function Docs() {
                         &nbsp;&nbsp;"model": &#123;<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;"provider": "anthropic",<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;"apiKey": "sk-ant-...",<br />
-                        &nbsp;&nbsp;&nbsp;&nbsp;"model": "claude-3-5-sonnet",<br />
+                        &nbsp;&nbsp;&nbsp;&nbsp;"model": "claude-sonnet-5-5",<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;"profiles": &#123;<br />
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"fast": "claude-3-5-sonnet",<br />
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"coding": "claude-3-7-sonnet",<br />
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"reasoning": "o3",<br />
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"review": "claude-3-5-sonnet"<br />
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"fast": "claude-5-sonnet",<br />
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"coding": "claude-sonnet-5-5",<br />
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"reasoning": "o5",<br />
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"review": "claude-5-sonnet"<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;&#125;,<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;"speculative": &#123;<br />
                         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"preflight": true,<br />
