@@ -30,6 +30,42 @@
   --shadow-card: 0 4px 20px rgba(139, 117, 246, 0.06);
 }
 
+/* ── ENGINEERING GRID DOT MATRIX (Zero-Cost GPU Vector Pattern) ── */
+.engineering-grid-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--bg);
+  transform: translateZ(0);
+}
+
+.engineering-grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle, rgba(139, 103, 246, 0.30) 1.25px, transparent 1.25px),
+    linear-gradient(to right, rgba(139, 103, 246, 0.40) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(139, 103, 246, 0.40) 1px, transparent 1px);
+  background-size: 32px 32px, 128px 128px, 128px 128px;
+  background-position: 0 0, -0.5px -0.5px, -0.5px -0.5px;
+  mask-image: radial-gradient(circle at 50% 25%, black 65%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at 50% 25%, black 65%, transparent 100%);
+  transform: translateZ(0);
+}
+
+.engineering-grid-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle 340px at var(--mouse-x, -500px) var(--mouse-y, -500px),
+    rgba(148, 85, 255, 0.12),
+    transparent 70%
+  );
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;

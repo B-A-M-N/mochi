@@ -17,13 +17,13 @@ const STATS = [
   ['18.2 MB', 'PEAK RESIDENT RSS', '21.2× lighter than Claude Code'],
   ['38.2 ms', 'TIME TO FIRST INPUT', '4.5× faster cold-start'],
   ['16', 'SPECIALIST ROLES', 'Autonomous DAG swarms'],
-  ['35', 'RELEASES SHIPPED', '727 files & 1,459 tests passing'],
+  ['35', 'RELEASES SHIPPED', '727 files & 1,494 tests passing'],
 ];
 
 const TICKER_ITEMS = [
   '18.2 MB RESIDENT RSS', '38.2 MS TTFI', '21.2× LIGHTER',
   '4.5× FASTER START', 'BUBBLEWRAP SANDBOX', '16 SPECIALIST ROLES',
-  'ZERO DEPS RUNTIME', '727 FILES AUDITED', '1,459 TESTS PASSING',
+  'ZERO DEPS RUNTIME', '727 FILES AUDITED', '1,494 TESTS PASSING',
 ];
 
 const CAPABILITIES = [
@@ -45,7 +45,7 @@ const CAPABILITIES = [
   {
     icon: IconGitBranch,
     title: '04 / MULTI-MODEL ROUTER',
-    desc: 'Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, OpenAI GPT-4o, DeepSeek, or local Ollama mid-session. Automatically backs off and fails over on 429 rate limits.'
+    desc: 'Hot-swap OpenCode Zen (DeepSeek v4 Flash, Kimi k2.7, GPT-5.4 Nano, GLM-5.3), FreeInference Harvard SEAS, Anthropic Claude, OpenAI (GPT-5, o3), Gemini 2.5 Pro, or local Ollama mid-session. Multi-key pool rotation, leaky-bucket rate limiting, and zero lost state.'
   },
   {
     icon: IconCpu,
@@ -366,7 +366,7 @@ function CapabilitiesSection() {
                   Multi-Model Router
                 </h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
-                  Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session. Automatically detects 429 limits and backs off without lost state.
+                  Hot-swap OpenCode Zen (DeepSeek v4, Kimi k2.7, GPT-5.4 Nano), FreeInference, Anthropic, OpenAI (GPT-5, o3), and local Ollama mid-session with multi-key pool rotation and zero lost state.
                 </p>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
@@ -1084,7 +1084,7 @@ function AutonomousEcosystemSection() {
                 </div>
                 <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-                  Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
+                  Hot-swap OpenCode Zen (DeepSeek v4 Flash, Kimi k2.7, GPT-5.4 Nano), FreeInference, Anthropic Claude, OpenAI (GPT-5, o3), and local Ollama with multi-key pool rotation and automatic 429 backoff.
                 </p>
               </div>
             </div>

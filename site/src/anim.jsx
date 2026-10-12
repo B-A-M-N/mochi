@@ -104,7 +104,7 @@ export function BlurText({
 /* ── AnimatedContent & Directional Reveal Presets ──────────── */
 export function AnimatedContent({
   children, direction = 'bottom', distance = 48, delay = 0,
-  duration = 0.85, scale = 0.96, className = '', once = false,
+  duration = 0.85, scale = 0.96, className = '', once = true,
   blur = 14, preset,
 }) {
   const ref = useRef(null);
