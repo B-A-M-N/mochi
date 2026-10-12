@@ -17,6 +17,7 @@
   "files": [
     "dist",
     "!dist/**/*.map",
+    "!dist/mochi-bin",
     "native/bin",
     "README.md",
     "LICENSE"
