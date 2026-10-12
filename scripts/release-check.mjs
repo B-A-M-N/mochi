@@ -55,7 +55,10 @@ if (process.argv.includes('--skip-tests')) {
 }
 
 // 5. Tarball contents: runtime ships, source/tests/secrets stay out.
-const pack = run('npm pack --dry-run');
+// npm prints the file listing on STDERR and only lifecycle logs on STDOUT —
+// merge both (a stdout-only capture once "passed" the cli.js check because
+// the prepack log line contained `chmod +x dist/cli.js`).
+const pack = run('npm pack --dry-run 2>&1');
 if (pack === null) fail('npm pack --dry-run failed');
 else {
   const checks = [

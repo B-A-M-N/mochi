@@ -16,6 +16,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "native/bin",
     "README.md",
     "LICENSE"

@@ -4,7 +4,7 @@
 
 ## 0.23.0 — 2026-10-12 (the everything sweep)
 
-- **Publish pipeline hardened** — `prepack` now builds dist + natives + standalone binary (a clean-tree publish previously shipped a 4-file tarball with no agent in it); release gate's tarball check understands both bare and `package/`-prefixed npm notice formats; native binaries are stripped (26.6MB → 800KB, tarball 44.8MB → ~8MB).
+- **Publish pipeline hardened** — `prepack` now builds dist + natives + standalone binary (a clean-tree publish previously shipped a 4-file tarball with no agent in it); release gate's tarball check reads npm's stderr listing (its stdout-only capture once "passed" a needle from an unrelated prepack log line) and understands both bare and `package/`-prefixed paths; `Cargo.lock` stays in step with version bumps; native binaries are stripped and `.map` sourcemaps excluded from the package (dist is unminified, readable JS) — tarball 44.8MB → single-digit MB.
 
 - **Source reorganization** — `src/` sorted from 88 flat root modules into topical dirs (`model/`, `stream/`, `memory/`, `skills/`, `state/`, `security/`, `daemon/`, `repo/`, `observability/`, plus `core/` and friends); 99 files moved with every relative import rewritten mechanically, verified by `tsc` + full suite. Root now holds entrypoints only.
 - **Dead code removal** — deleted 5 unreferenced modules + tests (`core/context-budget`, `core/git-plumbing`, `model/dual-dispatch`, `prompt/prompt-expander`, `stream-degen`), proven unimported via compiler move-away trial before removal.
