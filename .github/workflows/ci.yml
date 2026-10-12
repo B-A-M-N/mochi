@@ -37,13 +37,22 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            # MSVC links N-API symbols against node.lib at build time (see build.rs).
-            NODE_DIR="$(cygpath -m "$(dirname "$(command -v node)")" 2>/dev/null || true)"
-            if [ -n "$NODE_DIR" ]; then export MOCHI_NODE_LIB_DIR="$NODE_DIR"; fi
-            # Preflight diagnostics: if the link fails again we need to see
-            # exactly where node resolved and whether node.lib is beside it.
+            # MSVC links N-API symbols against node.lib at build time (see
+            # build.rs). The toolcache node ships WITHOUT node.lib and there's
+            # no node.lib anywhere on PATH/Program Files on the runners — so
+            # fetch the official dist zip for the EXACT node version (same
+            # ABI) and point MOCHI_NODE_LIB_DIR at its extracted lib.
+            NODE_VERSION="$(node -v)"
+            mkdir -p "$RUNNER_TEMP/node-dist"
+            if curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip" -o "$RUNNER_TEMP/node-dist.zip" \
+               && tar -xf "$RUNNER_TEMP/node-dist.zip" -C "$RUNNER_TEMP/node-dist" 2>/dev/null; then
+              NODE_LIB="$(find "$RUNNER_TEMP/node-dist" -name node.lib | head -n 1)"
+              if [ -n "$NODE_LIB" ]; then
+                export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$NODE_LIB")")"
+              fi
+            fi
             echo "win preflight: node=$(command -v node) MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
-            ls "${MOCHI_NODE_LIB_DIR:-/nonexistent}" 2>/dev/null | grep -i '^node' || echo "win preflight: no node* files visible in MOCHI_NODE_LIB_DIR"
+            ls "${MOCHI_NODE_LIB_DIR:-/nonexistent}/node.lib" 2>&1 | head -n 1
           fi
           if command -v rustc >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
             npm run build:native
@@ -92,7 +101,13 @@ jobs:
         # and ship raw src/*.ts instead, breaking main/bin/exports on install.
         if: matrix.os == 'ubuntu-latest'
         run: |
-          tar=$(npm pack --silent --pack-destination "$RUNNER_TEMP")
+          # prepack's own logs (sync-version, bun compile) share stdout with
+          # npm's final filename line — extract the filename instead of
+          # capturing raw output (a bare capture made tar choke on the logs).
+          pack_out=$(npm pack --silent --pack-destination "$RUNNER_TEMP") || { echo "npm pack failed"; exit 1; }
+          echo "$pack_out"
+          tar=$(printf '%s\n' "$pack_out" | grep -oE '[A-Za-z0-9._-]+\.tgz' | tail -n 1)
+          [ -n "$tar" ] || { echo "no tarball filename in npm pack output"; exit 1; }
           echo "tarball: $tar"
           tar -tzf "$RUNNER_TEMP/$tar" > /tmp/tar-contents.txt
           grep -q 'package/dist/cli.js' /tmp/tar-contents.txt || { echo "dist/cli.js missing"; exit 1; }
