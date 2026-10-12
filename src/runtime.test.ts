@@ -68,6 +68,13 @@ describe('Runtime setMode', () => {
     expect((rt.goals as any).config.planMode).toBeUndefined();
     rmSync(rt.cwd, { recursive: true, force: true });
   });
+  it('keeps the goal engine on the merged config when project settings exist', () => {
+    const dir = makeRepo();
+    writeFileSync(resolve(dir, '.mochi', 'config.json'), JSON.stringify({ quiet: true }));
+    const rt = Runtime.create({ cwd: dir });
+    expect((rt.goals as any).config).toBe(rt.config);
+    rmSync(rt.cwd, { recursive: true, force: true });
+  });
 });
 
 describe('Runtime review/fix (pipe composability)', () => {
@@ -255,6 +262,39 @@ describe('Runtime abort + interrupt', () => {
 });
 
 describe('Runtime approvePlan', () => {
+  it('records whether a pending decomposition was made in plan mode', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-plan-pending-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    const fake = await startFakeOpenAI([{
+      content: JSON.stringify([{
+        title: 'Create approved file',
+        description: 'Create approved.txt containing approved.',
+        role: 'coder',
+        dependencies: [],
+        acceptanceCriteria: ['approved.txt exists'],
+        verificationCommand: '',
+      }]),
+      finishReason: 'stop',
+    }]);
+    const rt = new Runtime({
+      cwd: dir,
+      config: {
+        ...baseConfig(),
+        planMode: true,
+        model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' },
+      } as any,
+    });
+    try {
+      const plan = await rt.plan('Create approved.txt');
+      expect(plan).toContain('Run /approve');
+      expect(rt.workspace.readJson<{ id: string; objective: string; planMode?: boolean }>('state/pending-goal.json'))
+        .toMatchObject({ objective: 'Create approved.txt', planMode: true });
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('executes a pending plan in act mode even when the runtime is in plan mode', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-act-'));
     execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });

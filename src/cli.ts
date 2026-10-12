@@ -169,7 +169,7 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
     overrides.reasoning = (valid.includes(lvl) ? lvl : 'auto') as import('./types.js').ReasoningLevel;
     if (lvl !== overrides.reasoning) console.error(`Unknown reasoning level "${lvl}" — using auto.`);
   }
-  // Plan-then-act: `--plan` (a dashed boolean; the bare `plan` subcommand
+  // Plan mode: `--plan` (a dashed boolean; the bare `plan` subcommand
   // is positional and unaffected) makes every agent in the run research and
   // return a plan instead of editing files.
   if (flags.plan) overrides.planMode = true;
@@ -247,7 +247,7 @@ Usage:
   mochi tui
   mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
   mochi completion <bash|zsh|fish>   # print shell completion script
-  mochi "<prompt>" --plan            # plan-then-act: research + return a plan, no edits
+  mochi "<prompt>" --plan            # plan mode: research + return a plan, no edits
 
 Options:
   -p, --print             Print response and exit

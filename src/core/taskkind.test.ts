@@ -47,6 +47,7 @@ describe('classifyTaskKind', () => {
   it('prefers explicit execution verbs over design/planning vocabulary', () => {
     expect(classifyTaskKind({ title: 'Design and implement the new schema', description: 'Design and implement the new schema' })).toBe('implement');
     expect(classifyTaskKind({ title: 'Design and build the dashboard', description: 'Design and build the dashboard' })).toBe('implement');
+    expect(classifyTaskKind({ title: 'Execute the approved plan', description: 'Execute the approved plan now' })).toBe('implement');
     expect(classifyTaskKind({ title: 'Create a project plan', description: 'Write only a project plan, no code changes' })).toBe('plan');
     expect(classifyTaskKind({ title: 'Design the new schema', description: 'outline tables' })).toBe('plan');
   });

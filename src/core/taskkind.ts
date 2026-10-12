@@ -8,7 +8,7 @@ export type TaskKind = 'implement' | 'fix' | 'refactor' | 'test' | 'research' | 
 const CHAT_RE = /\b(hello|hi|hey|greetings|howdy|yo|sup|good\s+(morning|afternoon|evening)|who\s+are\s+you|what\s+can\s+you\s+do|whats?\s+can\s+(u|you)\s+do|help|tell\s+me\s+about\s+yourself|thanks|thank\s+you|explain|how\s+do\s+i|what\s+is|what\s+are|what\s+issues|what\s+problems|what\s+bugs|why\s+is|why\s+do|why\s+does|tell\s+me|compare|difference\s+between|can\s+(u|you)\s+explain|give\s+me\s+an\s+overview|write\s+a\s+(poem|story|haiku|joke)|tell\s+me\s+a\s+joke|hewwo|heyo|hiya|wass?up|hola|so\s+its?|so\s+is|so\s+are)\b/i;
 // Action verbs that signal an actual coding/engineering request. A short
 // casual message WITHOUT any of these is conversation, not a task.
-const ACTION_RE = /\b(build|make|create|write|code|implement|fix|add|remove|delete|refactor|test|deploy|set\s?up|setup|install|update|migrate|port|generate|scaffold|open|run|start|init|configure|optimize|debug|integrate|scrape|crawl|parse|convert|compile|package|publish|ship|patch|edit|modify|change|rename|move|extract|split|clean|improve)\b/i;
+const ACTION_RE = /\b(build|make|create|write|code|implement|execute|apply|perform|fix|add|remove|delete|refactor|test|deploy|set\s?up|setup|install|update|migrate|port|generate|scaffold|open|run|start|init|configure|optimize|debug|integrate|scrape|crawl|parse|convert|compile|package|publish|ship|patch|edit|modify|change|rename|move|extract|split|clean|improve)\b/i;
 const FIX_RE = /\b(fix|bug|broken|crash|hang|leak|stack\s*trace|regression|panic|null\s*pointer|segfault|fail|throws|exception)\b/i;
 const REFACTOR_RE = /\b(refactor|rename|move|extract|split|consolidate|simplify|clean\s*up|dedupe|reorganiz)/i;
 const TEST_RE = /\b(test|spec|coverage|assert|jest|vitest|pytest|unittest)\b/i;
@@ -19,7 +19,7 @@ const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*d
 // implementation task, while "create only a plan" remains planning. The
 // strong verb list intentionally omits create/write/make/generate, which can
 // take a plan as their object ("write the implementation plan").
-const STRONG_EXECUTION_RE = /\b(implement|build|code|add|remove|delete|deploy|set\s?up|setup|install|update|migrate|port|scaffold|open|run|start|init|configure|optimize|debug|integrate|scrape|crawl|parse|convert|compile|package|publish|ship|patch|edit|modify|change|rename|move|extract|split|clean|improve|develop|program)\b/i;
+const STRONG_EXECUTION_RE = /\b(implement|execute|apply|perform|build|code|add|remove|delete|deploy|set\s?up|setup|install|update|migrate|port|scaffold|open|run|start|init|configure|optimize|debug|integrate|scrape|crawl|parse|convert|compile|package|publish|ship|patch|edit|modify|change|rename|move|extract|split|clean|improve|develop|program)\b/i;
 const PLAN_ONLY_RE = /\b(plan only|planning only|no code|without coding|without implementing|without making changes|proposal only|design only|research only)\b/i;
 const PLAN_ARTIFACT_RE = /\b(create|write|make|draft|propose|outline|document)\b[^.\n]{0,80}\b(plan|proposal|outline|roadmap|design document|spec(?:ification)?)\b/i;
 
