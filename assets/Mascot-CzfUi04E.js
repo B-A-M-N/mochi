@@ -1,1 +1,0 @@
-import{j as a}from"./anim-DFsRXI6D.js";function e({className:o="",style:t={}}){const s=typeof window<"u"&&window.location.pathname.startsWith("/mochi")?"/mochi":"";return a.jsx("img",{src:s+"/assets/mochi-mascot.png",alt:"mochi mascot",className:o,style:{height:"auto",display:"block",...t},draggable:"false"})}export{e as M};
