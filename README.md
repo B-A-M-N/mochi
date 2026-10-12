@@ -95,6 +95,22 @@ Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a sta
 
 ---
 
+## 60-Second Demo
+
+<table>
+<tr>
+<td align="center"><b>One-shot speed</b><br><img src="docs/assets/demo/s1.gif" alt="mochi one-shot task in 1 second" width="360"></td>
+<td align="center"><b>Skills search (73 bundled)</b><br><img src="docs/assets/demo/s2.gif" alt="mochi skills search" width="360"></td>
+</tr>
+<tr>
+<td align="center"><b>Atomic apply</b><br><img src="docs/assets/demo/s3.gif" alt="mochi apply unified diff" width="360"></td>
+<td align="center"><b>Failed apply → tree untouched</b><br><img src="docs/assets/demo/s4.gif" alt="atomic rollback" width="360"></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><b>Checkpoints & rollback</b><br><img src="docs/assets/demo/s5.gif" alt="mochi checkpoint" width="360"></td>
+</tr>
+</table>
+
 ## Why Mochi
 
 Most terminal agents are either thin wrappers around one model call, or heavyweight platforms that need a cloud account. Mochi takes a third path: a **complete harness** — every loop, guard, budget, and recovery path owned in-repo — that is deliberately *minimal* in surface and *maximal* in verified behavior.
