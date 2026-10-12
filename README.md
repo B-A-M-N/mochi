@@ -180,6 +180,19 @@ mochi term --geometry 100x30 -- goal "fix auth"
 eval "$(mochi completion bash)"         # shell completions (bash|zsh|fish)
 ```
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/xanstomper/mochi/main/install.sh | bash
+# then: mochi onboard
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/xanstomper/mochi/main/install.ps1 | iex
+```
+
+No Node.js needed — the installer fetches a standalone binary for your OS from the [releases page](https://github.com/xanstomper/mochi/releases) and puts `mochi` on your PATH (with a from-source fallback when no binary matches). Details and uninstall: `docs/INSTALL.md`.
+
 ### Install via npm
 
 ```bash
