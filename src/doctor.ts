@@ -80,7 +80,15 @@ export async function doctorReport(opts: {
     const { execFile: ef } = await import('node:child_process');
     const { resolve: rp, dirname: dn } = await import('node:path');
     const { fileURLToPath: ffp } = await import('node:url');
-    const driver = rp(dn(ffp(import.meta.url)), '..', 'scripts', 'browser-driver.mjs');
+    // Candidate driver locations: under a bun-compiled binary import.meta
+    // does not point at the real dist tree, so also try the executable's
+    // directory (dist/mochi-bin -> <root>/scripts/...).
+    const candidates = [
+      rp(dn(ffp(import.meta.url)), '..', 'scripts', 'browser-driver.mjs'),
+      rp(dn(process.execPath), '..', 'scripts', 'browser-driver.mjs'),
+    ];
+    const driver = candidates.find((p) => { try { return existsSync(p); } catch { return false; } });
+    if (!driver) throw new Error('browser driver script not found');
     const runners = ['node', process.execPath];
     let out = '';
     for (const runner of runners) {

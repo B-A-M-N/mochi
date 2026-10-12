@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Patrick+Hand&display=swap');
+
 /* ═══════════════════════════════════════════════════════════════
    MOCHI — PASTEL LAVENDER DESIGN SYSTEM
    Soft off-white/lavender background, charcoal text, violet accents
@@ -310,22 +312,19 @@ header.site {
 
 .mascot-doodle {
   position: absolute;
-  top: 15px;
-  left: 20px;
-  font-family: 'Space Grotesk', var(--font-body);
-  font-size: 15px;
-  font-style: italic;
-  font-weight: 600;
-  color: var(--purple-dark);
-  letter-spacing: -0.01em;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1.5px solid var(--purple-light);
-  border-radius: 999px;
-  padding: 6px 18px;
-  box-shadow: 0 4px 16px rgba(139, 117, 246, 0.12);
+  top: -12px;
+  left: 30px;
+  font-family: 'Caveat', 'Patrick Hand', cursive;
+  font-size: 32px;
+  font-weight: 700;
+  color: #7965E8;
+  letter-spacing: 0.01em;
   pointer-events: none;
   animation: doodleFloat 3.5s ease-in-out infinite;
-  z-index: 2;
+  z-index: 5;
+  white-space: nowrap;
+  transform: rotate(-6deg);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9);
 }
 
 .subpage-mascot-wrap {
@@ -337,17 +336,16 @@ header.site {
 }
 
 .subpage-doodle {
-  font-family: 'Space Grotesk', var(--font-body);
-  font-size: 13.5px;
-  font-style: italic;
-  font-weight: 600;
-  color: var(--purple-dark);
-  margin-bottom: 8px;
-  background: var(--purple-lighter);
-  border: 1px solid var(--purple-light);
-  padding: 4px 14px;
-  border-radius: 999px;
+  font-family: 'Caveat', 'Patrick Hand', cursive;
+  font-size: 26px;
+  font-weight: 700;
+  color: #7965E8;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
   display: inline-block;
+  transform: rotate(-5deg);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .heart-doodle {

@@ -112,7 +112,7 @@ function HeroSection() {
         <AnimatedContent direction="right" delay={0.3} duration={0.8}>
           <div style={{ position: 'relative' }}>
             <div className="mascot-doodle">
-              "let's build something cool!"
+              let's build something cool!
             </div>
             <Mochi size={640} />
           </div>
