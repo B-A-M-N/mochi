@@ -1,17 +1,20 @@
 # Mochi Changelog
 
 ## Unreleased
+
+## 0.23.0 — 2026-10-12 (the everything sweep)
+
 - **Source reorganization** — `src/` sorted from 88 flat root modules into topical dirs (`model/`, `stream/`, `memory/`, `skills/`, `state/`, `security/`, `daemon/`, `repo/`, `observability/`, plus `core/` and friends); 99 files moved with every relative import rewritten mechanically, verified by `tsc` + full suite. Root now holds entrypoints only.
 - **Dead code removal** — deleted 5 unreferenced modules + tests (`core/context-budget`, `core/git-plumbing`, `model/dual-dispatch`, `prompt/prompt-expander`, `stream-degen`), proven unimported via compiler move-away trial before removal.
 - **docgen now covers the whole tree** — scan cap 100→500 files, test files excluded from the architecture graph, recursive walk catches every subdir (ARCHITECTURE.md: 78→298 modules, 778→3105 symbols).
 - **Theme test sandbox hole closed** — `stays transparent on light themes` sandboxed `HOME` but not cwd, so `applyTheme` wrote a real `<repo>/.mochi/theme.json` (dracula) on every test run, hijacking the next launch. Cwd now sandboxed; real files restored to `mochi-purple`.
-- **Repo hygiene** — MIT LICENSE added (was declared but missing; now ships in the tarball), stale Sep-14 coordination docs + `ok.txt` dogfood junk removed, 4x duplicated 1.3MB gif deduped to one, new `TECHMAP.md` maps every repo path so nothing is mystery meat. — 1–6 sweep: publish-ready, committed, faster, correct, audited, cross-platform
+- **Repo hygiene** — MIT LICENSE added (was declared but missing; now ships in the tarball), stale Sep-14 coordination docs + `ok.txt` dogfood junk removed, 4x duplicated 1.3MB gif deduped to one, new `TECHMAP.md` maps every repo path so nothing is mystery meat.
 
 - **Anthropic prompt-cache breakpoints (token efficiency)** — `src/model/anthropic.ts` mirrors the OpenAI MCH-38 pattern: the stable system prompt ships as one `cache_control: ephemeral` block instead of being rebilled every turn (~5KB × every iteration). Empty-system wire shape unchanged. Pinned by `src/model/anthropic.test.ts` (blocks, omission, multimodal flattening).
 - **GoalResult.filesModified plumbing (correctness)** — `GoalEngine` aggregates per-task `AgentResult.filesModified` (success + partial-failure work) into `GoalResult.filesModified`; SDK/daemon `runPromptDetailed` finally report real files instead of hardcoded `[]`. Proven end-to-end by a scripted write→ledger test.
 - **Hooks lifecycle audit closed** — all 17 `HookName` values pinned: every one fires through `runBefore`/`runAfter` with marker scripts, veto semantics verified, plus a static test failing on any future hook name without a lifecycle call site. Hook subprocesses moved onto the central exec policy (timeout→SIGKILL, output cap).
 - **Windows CI + vitest 5** — matrix adds `windows-latest` (bash shell for POSIX steps); toolchain bumped to vitest 5.0.3 + vite 7, full suite green (1494 passed), `npm audit` back to **0 vulnerabilities**.
-- **Token efficiency** — tool-schema diet on the heaviest defs (tool_factory/skill_manage/browser/subagent trimmed with semantics preserved); Anthropic prompt-cache breakpoints (above) attack the ~5KB/turn system-prompt rebill; lean/heavy tiers verified wired as the default path.
+- **Tool-schema diet (token efficiency)** — heaviest tool defs (tool_factory/skill_manage/browser/subagent) trimmed with semantics preserved; lean/heavy tiers verified wired as the default path.
 - **Sandboxed execution** — opt-in bubblewrap isolation in the central exec policy (`safety.sandbox: off|auto|bubblewrap`, `MOCHI_SANDBOX`, per-call `sandbox:true`): read-only root, writable cwd/tmp/dev-caches, optional `--unshare-net`. Live-proven (commands run, home dotfiles unwritable); surfaced in `doctor`.
 - **MCP transports** — the SDK path (`McpClient`) gains Streamable-HTTP alongside stdio via a transport seam (`forConfig` picks by shape); the loop path already had it. HTTP errors answer per-request, never kill siblings. Mock-server tests for handshake/list/call.
 - **Vision everywhere** — data-URI images map to native parts on Anthropic (base64 blocks) and Gemini (inlineData), not just OpenAI passthrough; remote URLs preserved per provider capability. Tested on all three mappers.
@@ -21,9 +24,6 @@
 - **Model auto-escalation** — 3 consecutive verification failures hand the task one tier up (fast→coding→reasoning) to a *different configured* model, once per task with an explicit handoff note. Pure decision helper + integration test on a scripted always-red task.
 - **MCP OAuth (pre-registered clients)** — client-credentials + refresh grants with 0600 token cache, `${ENV}` secret expansion, per-request header injection on both HTTP paths. Mock-server tests for mint/cache/refresh-fallback/authenticated calls.
 - **Shell completions** — `mochi completion bash|zsh|fish` with a self-checking command table (a test fails on any CLI command without completion coverage); bash output validated with `bash -n` + live eval.
-- **`as any`: 125 → 0** in shipped source (only comments mention it now); every removal either dropped a needless cast or fixed the underlying lie (dead `/circle` read, malformed browser events, `[object Object]` badge, capability/read-cache fork, untyped FFI boundary, mistyped exec errors).
-- **Multi-tab sessions (opencode-style)**
-
 - **Multi-tab sessions (opencode-style)** — `src/tui/tabs.ts` + pinned tab bar: pill tabs with filled active surface, `+ New session` button (mouse-clickable with exact cell-aware columns), sessions-only bar (no key-hint clutter), space-separated status dots, Alt+T new, Alt+W close, Alt+1-8 switch, `/tab` commands, clean boot (no transcript spam on tab create — new tabs open on the logo), silent drag-copy (no "Copied" spam, clicks never dismiss the splash), splash reappears on every new tab and dies only on send, auto-title from first prompt, per-tab isolated Runtime (own abort/session/budget), background runs continue and badge unread, origin-captured transcripts. Proven live over PTY (click `+ New session` opened tab 2; click tab 1 switched back; `/tab list`; exit 0).
 - **Mochi Purple default + forced-black canvas** — new signature theme (crisp white + violet on near-black purple surfaces), now the default; active tab pill uses its surface. Dark themes paint every row over pure black (opencode parity — terminal profile gray can never show through, SGR tint leaks killed by frame RESET + row trailing RESET); light themes + NO_COLOR stay transparent. `themeIsDark()` decides by luminance, no per-theme flag.
 - **SGR leak guard** — `terminateRow()` (ansi-hygiene): every written row ends terminated-or-empty, so model/tool prose ending in a live color can no longer tint the frame's EL clears and following rows (the gray-block root cause). Pinned by 3 tests; verified black-canvas + intact status text at 60/80/100/120 cols over PTY.
@@ -38,10 +38,6 @@
 - **Daemon rotation/expiry** — 30-day TTL, zero-downtime `/api/rotate`, `mochi daemon rotate`, expired-token 401s, URL-token scrub.
 - **TUI access** — NO_COLOR, reduced-motion, 22nd `paper-light` theme, WCAG AA contrast gate (all pass; floor 6.57).
 - **CI** — native-binary existence assertion, skip-budget guard, prod-audit gate (0 vulns shipped; dev-only vitest advisories documented, source-map-js fixed via lockfile).
-- **Green main** — full suite: **1459 passed / 4 skipped, 0 failed** (was 9 unloadable files + red hooks).
-
-## Unreleased — Reliability, security & TUI correctness sweep
-
 - **Cron notify hardening** — `src/cron.ts`: new `validateNotify()` (webhook scheme/length checks, 500-char shell cap, NUL guard) enforced at `addJob` time AND re-checked at execution; `loadJobs` schema-validates every entry so a hand-edited `cron.json` cannot inject malformed jobs; summary passed via `MOCHI_JOB_SUMMARY` env only (the old `"` rewrite corrupted text). 5 new tests.
 - **Multimodal mapper sweep** — `src/model/openai.ts`, `anthropic.ts`, `gemini.ts` now flatten `ContentPart[]` through `contentText()` instead of `m.content ?? ''` (which stringified `[object Object]` for image parts); killed 6 `as any`/`any[]` sites with real wire types.
 - **Cell-aware terminal widths** — `src/tui/wrap.ts` gains `stripAnsi` (full CSI+OSC), `cellWidth` (wcwidth-style: CJK/emoji 2, combining 0), `visibleCells`, and `sliceCells` (never splits surrogates/wide chars); `view.ts`, `cards.ts`, `selection.ts` unified on it (4 duplicated implementations → 1). Hard-split wrapping, truncation, and mouse selection are now CJK/emoji-correct.
