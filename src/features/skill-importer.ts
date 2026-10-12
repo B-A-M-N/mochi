@@ -83,6 +83,7 @@ export function isGitSourceSpec(spec: string): boolean {
   if (!s) return false;
   if (/^github:[\w.-]+\/[\w.-]+$/i.test(s)) return true;
   if (s.startsWith('git+') && s.includes('://')) return true; // git+https://…
+  if (/^https?:\/\/[^/]*github\.com\/[\w.-]+\/[\w.-]+/i.test(s)) return true; // https://github.com/owner/repo[/...]
   if (/\.git$/i.test(s)) return true;
   return /^[a-z0-9+._-]+@[a-z0-9.-]+:.+$/i.test(s);
 }
