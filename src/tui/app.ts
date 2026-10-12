@@ -86,6 +86,8 @@ interface TaskView {
 const COMMANDS = [
   { name: '/help', hint: 'Show commands' },
   { name: '/onboard', hint: 'Cozy setup: import keys, models, skills, MCPs, editors' },
+  { name: '/setup', hint: 'Interactive setup: import keys, models, skills, MCPs, editors' },
+  { name: '/welcome', hint: 'Show welcome screen and setup wizard' },
   { name: '/expand', hint: 'Inspect uncompressed code, hidden reasoning & tool output (or press Ctrl+O)' },
   { name: '/clear', hint: 'Clear transcript' },
   { name: '/copy', hint: 'Copy last assistant message to clipboard (works without mouse)' },
@@ -1796,19 +1798,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/providers') { await providerMenu(); return; }
     if (line === '/login' || line === '/provider') { await loginFlow(); return; }
     if (line === '/onboard' || line === '/setup' || line === '/welcome') {
-      await run(async () => {
-        const { scanForOnboarding } = await import('../onboarding/detect.js');
-        const { welcomeFrame, stepFrame } = await import('../onboarding/wizard.js');
-        const scan = scanForOnboarding(runtime.cwd);
-        const out: string[] = [];
-        for (const l of welcomeFrame(pkg.version)) out.push(l.replace(/\x1b\[[0-9;]*m/g, ''));
-        for (const step of ['providers', 'models', 'skills', 'mcp', 'editors', 'done'] as const) {
-          out.push('');
-          for (const l of stepFrame(step, scan)) out.push(l.replace(/\x1b\[[0-9;]*m/g, ''));
-        }
-        out.push('', 'Apply it headlessly: `mochi onboard --yes` (imports keys + skills + MCPs, marks this done).');
-        return out.join('\n');
-      });
+      const { runInteractiveOnboarding } = await import('./onboard-flow.js');
+      await runInteractiveOnboarding(runtime, openMenu, push, scheduleRender, pkg.version);
       return;
     }
     if (line === '/model' || line.startsWith('/model ')) {
@@ -3871,21 +3862,13 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     tabs.setStatus(activeTabId, 'idle');
     runtime.activeSessionId = undefined;
 
-    // Cozy one-time welcome: first launch ever shows the onboarding banner
-    // as transcript lines (one-time popup). Dismissed forever once the user
-    // runs `mochi onboard --yes` (marker file) or sends their first prompt.
+    // Cozy one-time welcome & setup menu: first launch ever shows the
+    // interactive onboarding wizard. Dismissed forever once completed.
     try {
       const { isOnboarded } = await import('../onboarding/import.js');
       if (!isOnboarded() && !initialPrompt) {
-        const { scanForOnboarding } = await import('../onboarding/detect.js');
-        const { welcomeFrame } = await import('../onboarding/wizard.js');
-        const scan = scanForOnboarding(runtime.cwd);
-        const keys = scan.providers.filter((p) => p.hasKey).length;
-        for (const row of welcomeFrame(pkg.version)) {
-          if (row.trim()) push('system', row);
-        }
-        push('system', `Found ${keys} provider key(s), ${scan.totalSkills} skill(s), ${scan.totalMcpServers} MCP server(s) from your other agents. Type /onboard to import them, or run \`mochi onboard --yes\`. This hello won't show again once onboarded.`);
-        scheduleRender();
+        const { runInteractiveOnboarding } = await import('./onboard-flow.js');
+        void runInteractiveOnboarding(runtime, openMenu, push, scheduleRender, pkg.version);
       }
     } catch { /* onboarding banner is best-effort */ }
     cleanupFns = [
