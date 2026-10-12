@@ -145,19 +145,28 @@ export function AnimatedContent({
       setInView(true);
       return;
     }
+
+    // Check if element is already within viewport on mount
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || 800;
+    if (rect.top < vh + 40 && rect.bottom > -40) {
+      setInView(true);
+      if (once) return;
+    }
+
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setInView(true);
           if (once) io.disconnect();
         } else if (!once) {
-          const vh = window.innerHeight || 800;
-          if (entry.boundingClientRect.top > (vh - 60)) {
+          const currentVh = window.innerHeight || 800;
+          if (entry.boundingClientRect.top > (currentVh - 30)) {
             setInView(false);
           }
         }
       },
-      { threshold: 0.1, rootMargin: '0px 0px -70px 0px' }
+      { threshold: 0.02, rootMargin: '0px 0px -20px 0px' }
     );
     io.observe(el);
     return () => {
@@ -197,17 +206,25 @@ export function EditorialReveal({
       setInView(true);
       return;
     }
+
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || 800;
+    if (rect.top < vh + 40 && rect.bottom > -40) {
+      setInView(true);
+      if (once) return;
+    }
+
     const io = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setInView(true);
         if (once) io.disconnect();
       } else if (!once) {
-        const vh = window.innerHeight || 800;
-        if (entry.boundingClientRect.top > (vh - 60)) {
+        const currentVh = window.innerHeight || 800;
+        if (entry.boundingClientRect.top > (currentVh - 30)) {
           setInView(false);
         }
       }
-    }, { threshold: 0.1, rootMargin: '0px 0px -70px 0px' });
+    }, { threshold: 0.02, rootMargin: '0px 0px -20px 0px' });
     io.observe(el);
     return () => io.disconnect();
   }, [once]);

@@ -209,7 +209,7 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 | `mochi plan "..."` | Plan-then-act: research and return a plan, no edits |
 | `mochi resume` | Warm-start resume of the last interrupted session |
 | `mochi checkpoint save/list/restore` | Named git snapshots and rollback |
-| `mochi rollback` | Roll back to the last checkpoint |
+| `mochi rollback [<name>]` | Roll back to the last or a named checkpoint |
 | `mochi trace [<goalId>]` | Replay any run end to end from its JSONL trace |
 | `mochi session list / search "..."` | Full-text search across past transcripts |
 | `mochi inspect "<query>"` | Symbol / subsystem inspection via the codegraph |
@@ -227,7 +227,7 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 | `mochi discord run` | Discord bot gateway |
 | `mochi dashboard` / `mochi web` | Web dashboard |
 | `mochi plugin add/remove/list` | Plugin registry |
-| `mochi enhance "<task>" [--mode <mode>]` | Synthetic-parameter reasoning enhancement |
+| `mochi goal "<objective>" --enhance [--mode <mode>]` | Inject Chameleon reasoning enhancement into a goal/team run |
 | `mochi termix ["<task>"] [--coms\|--sep] [--sessions N]` | Multi-session split panes |
 | `mochi term [--title T] [--geometry CxR]` | Dedicated native terminal window |
 | `mochi workspace create/list/switch` | Multiple workspaces |
@@ -599,8 +599,8 @@ A minimal, fast, keyboard-first interface built on a measured frame budget:
 Turns a flash-class model into a frontier-grade reasoner for hard goals by generating dense "synthetic parameter" reasoning context injected into the agent prompt. Built into Mochi — it uses the agent's **own** configured provider: no external CLI, no shell-out, no extra API key. A failed provider call is a graceful no-op.
 
 ```bash
-mochi enhance "Build a Redis rate limiter" --mode hard   # print enhancement context
-mochi goal --enhance "finish the auth flow" --mode auto  # auto-inject before solving
+mochi goal "Build a Redis rate limiter" --enhance --mode hard  # inject enhancement context before solving
+mochi team "ship the auth flow" --enhance --mode auto          # same engine for multi-agent team runs
 ```
 
 Modes map to how many reasoning strategies run: `flash < turbo < easy < medium < hard < deep < extreme/genius`. Opt in without flags via config: `{ "enhance": { "enabled": true, "mode": "auto" } }`.

@@ -1,6 +1,9 @@
 // Keep version constants in sync with package.json (the source of truth).
 // - src/cli.ts `let VERSION` fallback (used by the compiled standalone
 //   binary, which has no package.json next to it at runtime).
+// - src/acp.ts `ACP_AGENT_VERSION` fallback (same reason: ACP initialize
+//   reports the agent version to editors, and the binary has no package.json).
+// - editors/vscode/package.json `version` (marketplace requires it to match).
 // - native/mochi_core/Cargo.toml `version` (native helper --help banner).
 // Runs automatically as `prebuild:bin`; run manually any time:
 //   node scripts/sync-version.mjs
@@ -29,7 +32,34 @@ let changed = [];
   }
 }
 
-// 2. Rust crate version (first `version = "..."` under [package]).
+// 2. ACP fallback constant (same compiled-binary reason as the CLI).
+{
+  const p = resolve(root, 'src', 'acp.ts');
+  const src = readFileSync(p, 'utf8');
+  const next = src.replace(/^(let ACP_AGENT_VERSION = ')[\d.]+(';)$/m, `$1${version}$2`);
+  if (next !== src) {
+    writeFileSync(p, next);
+    changed.push('src/acp.ts');
+  }
+}
+
+// 3. VS Code extension version (marketplace requires lockstep with the agent).
+{
+  const p = resolve(root, 'editors', 'vscode', 'package.json');
+  try {
+    const raw = readFileSync(p, 'utf8');
+    const pkg = JSON.parse(raw);
+    if (pkg.version !== version) {
+      pkg.version = version;
+      writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+      changed.push('editors/vscode/package.json');
+    }
+  } catch {
+    console.error('sync-version: editors/vscode/package.json not found, skipped');
+  }
+}
+
+// 4. Rust crate version (first `version = "..."` under [package]).
 {
   const p = resolve(root, 'native', 'mochi_core', 'Cargo.toml');
   try {
@@ -44,7 +74,7 @@ let changed = [];
   }
 }
 
-// 3. Cargo.lock's copy of the crate version — otherwise any cargo build
+// 5. Cargo.lock's copy of the crate version — otherwise any cargo build
 // rewrites the lockfile and instantly dirties the tree after a bump.
 {
   const p = resolve(root, 'native', 'mochi_core', 'Cargo.lock');

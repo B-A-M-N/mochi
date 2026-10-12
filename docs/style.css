@@ -9,7 +9,7 @@
   --bg: #F9F8FC;
   --bg-soft: #F3F1FA;
   --ink: #111116;
-  --ink-soft: #6E6D7A;
+  --ink-soft: #383646;
   --purple: #8B75F6;
   --purple-light: #E8E3FD;
   --purple-lighter: #F0EDFE;
@@ -19,7 +19,7 @@
   --hairline: rgba(139, 117, 246, 0.15);
   --hairline-ink: rgba(17, 17, 22, 0.08);
   --line: #ECE9F6;
-  --muted: #6E6D7A;
+  --muted: #383646;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -293,7 +293,7 @@ header.site:hover .nav-right {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: #7E7E92;
+  color: #383646;
   margin-bottom: 24px;
   display: flex;
   align-items: center;
@@ -323,7 +323,7 @@ header.site:hover .nav-right {
 .hero-sub {
   font-size: 17px;
   line-height: 1.68;
-  color: #69697A;
+  color: #2D2B3A;
   margin-bottom: 34px;
   max-width: 540px;
 }
@@ -1088,6 +1088,67 @@ header.site:hover .nav-right {
 
 .card:hover .card-arrow {
   transform: translateX(4px);
+}
+
+/* ── BENCHMARK METRIC CARDS ────────────────────────────────── */
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+@media (max-width: 960px) {
+  .grid4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 540px) {
+  .grid4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.metric-highlight-card {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(138, 103, 246, 0.20);
+  border-radius: 18px;
+  padding: 24px 22px;
+  box-shadow: 0 8px 24px rgba(138, 103, 246, 0.08);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.metric-highlight-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(138, 103, 246, 0.16);
+  border-color: rgba(138, 103, 246, 0.42);
+}
+
+.metric-highlight-val {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.metric-highlight-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7965E8;
+  margin-bottom: 8px;
+}
+
+.metric-highlight-sub {
+  font-size: 13.5px;
+  color: #383646;
+  line-height: 1.45;
+  margin: 0;
+  font-weight: 500;
 }
 
 /* ── COMPARISON TABLE (Panel 3) ─────────────────────────────── */

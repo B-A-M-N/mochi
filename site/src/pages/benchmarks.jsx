@@ -197,20 +197,6 @@ export default function Benchmarks() {
                 </p>
               </AnimatedContent>
 
-              {/* Filter Pills */}
-              <AnimatedContent direction="left" delay={0.28} distance={38} blur={12}>
-                <div className="filter-pills" style={{ marginTop: 24, marginBottom: 12 }}>
-                  {TABS.map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setFilter(t)}
-                      className={`filter-pill ${filter === t ? 'active' : ''}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </AnimatedContent>
             </div>
 
             {/* Custom Benchmarks Mascot: Speedster Mochi */}
@@ -222,8 +208,8 @@ export default function Benchmarks() {
             </AnimatedContent>
           </div>
 
-          {/* 4 Metric Cards */}
-          <div className="grid4" style={{ marginTop: 36, marginBottom: 48 }}>
+          {/* 4 Metric Highlight Cards */}
+          <div className="grid4" style={{ marginTop: 36, marginBottom: 36 }}>
             <AnimatedContent direction="left" delay={0.05} distance={36} blur={10}>
               <div className="metric-highlight-card">
                 <div className="metric-highlight-val">18.2 MB</div>
@@ -256,6 +242,26 @@ export default function Benchmarks() {
               </div>
             </AnimatedContent>
           </div>
+
+          {/* 6 Category Benchmark Tabs */}
+          <AnimatedContent direction="bottom" delay={0.2} distance={32} blur={10}>
+            <div style={{ marginBottom: 36 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: '#7965E8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                SELECT BENCHMARK SUITE (6 EMPIRICAL CATEGORIES)
+              </div>
+              <div className="filter-pills" style={{ margin: 0, gap: 10 }}>
+                {TABS.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setFilter(t)}
+                    className={`filter-pill ${filter === t ? 'active' : ''}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </AnimatedContent>
 
           {/* Animated Benchmark Bar Charts */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, marginBottom: 54 }}>

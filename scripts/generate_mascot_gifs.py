@@ -81,7 +81,7 @@ def compile_gif(frame_dir, out_path):
         "ffmpeg", "-y",
         "-framerate", str(FPS),
         "-i", os.path.join(frame_dir, "frame_%03d.png"),
-        "-vf", "split[s0][s1];[s0]palettegen=reserve_transparent=on:stats_mode=full[p];[s1][p]paletteuse=dither=bayer:bayer_scale=2",
+        "-vf", "split[s0][s1];[s0]palettegen=reserve_transparent=on:stats_mode=full[p];[s1][p]paletteuse=dither=none:alpha_threshold=128",
         out_path
     ]
     subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
