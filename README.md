@@ -107,6 +107,14 @@ From your shell to a working answer in one command:
 
 The terminal types `mochi`, the TUI launches, `hello` goes in — spinner, thinking bar, response, token stats. All of it real.
 
+**And a full build, end to end** — `code me a snake game`: splash boot, agent plans, writes 4 files (snake-core.js, game.js, index.html, styles.css), and reports back with how to run it:
+
+<table>
+<tr>
+<td align="center"><img src="docs/assets/demo/tui_snake.gif" alt="mochi: code me a snake game — full agent build" width="720"></td>
+</tr>
+</table>
+
 
 ## Why Mochi
 
