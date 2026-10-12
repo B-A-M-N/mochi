@@ -89,8 +89,10 @@ export function stripThinkTags(text: string): string {
   if (nat !== null) return nat;
   return text
     .replace(/`think[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')   // plain closed think block (no backticks)
     .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
     .replace(/^\s*`\s*think[\s\S]*$/gi, '')
+    .replace(/^\s*<think>[\s\S]*$/gi, '')         // unclosed leading plain think block
     .replace(/^<thought>[\s\S]*$/gi, '')
     .trim();
 }
