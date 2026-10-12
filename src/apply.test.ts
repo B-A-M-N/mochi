@@ -1,0 +1,138 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parseUnifiedDiff, applyHunks, applyDiffAtomically } from './apply.js';
+
+describe('parseUnifiedDiff', () => {
+  it('parses create/update/delete ops', () => {
+    const diff = [
+      'diff --git a/new.ts b/new.ts',
+      '--- /dev/null',
+      '+++ b/new.ts',
+      '@@ -0,0 +1,2 @@',
+      '+export const a = 1;',
+      '+export const b = 2;',
+      'diff --git a/mod.ts b/mod.ts',
+      '--- a/mod.ts',
+      '+++ b/mod.ts',
+      '@@ -1,1 +1,1 @@',
+      '-old line',
+      '+new line',
+      'diff --git a/gone.ts b/gone.ts',
+      '--- a/gone.ts',
+      '+++ /dev/null',
+      '@@ -1,1 +0,0 @@',
+      '-bye',
+    ].join('\n');
+    const ops = parseUnifiedDiff(diff);
+    expect(ops.map((o) => [o.path, o.op])).toEqual([
+      ['new.ts', 'create'],
+      ['mod.ts', 'update'],
+      ['gone.ts', 'delete'],
+    ]);
+  });
+
+  it('rejects unsafe paths', () => {
+    const diff = [
+      'diff --git a/../evil b/../evil',
+      '--- a/../evil',
+      '+++ b/../evil',
+      '@@ -1,1 +1,1 @@',
+      '-x',
+      '+y',
+    ].join('\n');
+    expect(() => parseUnifiedDiff(diff)).toThrow(/Unsafe path/);
+  });
+});
+
+describe('applyHunks', () => {
+  it('applies a simple replacement', () => {
+    expect(applyHunks('a\nb\nc', ['@@ -2,1 +2,1 @@', '-b', '+B'])).toBe('a\nB\nc');
+  });
+  it('returns null on context mismatch', () => {
+    expect(applyHunks('x\ny', ['@@ -2,1 +2,1 @@', '-zzz', '+q'])).toBeNull();
+  });
+  it('inserts into empty file for create ops', () => {
+    expect(applyHunks('', ['@@ -0,0 +1,1 @@', '+hello'])).toBe('hello');
+  });
+});
+
+describe('applyDiffAtomically', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(join(tmpdir(), 'mochi-apply-')); });
+  afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  const diffFor = (updateFrom: string, updateTo: string, createTo = 'new file\n') => [
+    'diff --git a/mod.txt b/mod.txt',
+    '--- a/mod.txt',
+    '+++ b/mod.txt',
+    '@@ -1,1 +1,1 @@',
+    `-${updateFrom}`,
+    `+${updateTo}`,
+    'diff --git a/added.txt b/added.txt',
+    '--- /dev/null',
+    '+++ b/added.txt',
+    '@@ -0,0 +1,1 @@',
+    `+${createTo.trimEnd()}`,
+  ].join('\n');
+
+  it('applies all files', () => {
+    writeFileSync(join(dir, 'mod.txt'), 'old line\n');
+    const res = applyDiffAtomically(dir, diffFor('old line', 'new line'));
+    expect(res.applied).toEqual(['mod.txt', 'added.txt']);
+    expect(res.created).toEqual(['added.txt']);
+    expect(readFileSync(join(dir, 'mod.txt'), 'utf8')).toBe('new line\n');
+    expect(readFileSync(join(dir, 'added.txt'), 'utf8')).toBe('new file');
+  });
+
+  it('rolls back everything when a later hunk fails', () => {
+    writeFileSync(join(dir, 'mod.txt'), 'drifted content\n');
+    const diff = [
+      'diff --git a/mod.txt b/mod.txt',
+      '--- a/mod.txt',
+      '+++ b/mod.txt',
+      '@@ -1,1 +1,1 @@',
+      '-old line',   // no longer matches -> should abort
+      '+new line',
+    ].join('\n');
+    expect(() => applyDiffAtomically(dir, diff)).toThrow(/context mismatch/i);
+    // Untouched because nothing was written before the failure.
+    expect(readFileSync(join(dir, 'mod.txt'), 'utf8')).toBe('drifted content\n');
+  });
+
+  it('rolls back earlier successful writes when a later file fails', () => {
+    writeFileSync(join(dir, 'a.txt'), 'aaa\n');
+    const diff = [
+      'diff --git a/a.txt b/a.txt',
+      '--- a/a.txt',
+      '+++ b/a.txt',
+      '@@ -1,1 +1,1 @@',
+      '-aaa',
+      '+AAA',
+      'diff --git a/missing.txt b/missing.txt',
+      '--- a/missing.txt',
+      '+++ b/missing.txt',
+      '@@ -1,1 +1,1 @@',
+      '-zzz',
+      '+zzz!',
+    ].join('\n');
+    expect(() => applyDiffAtomically(dir, diff)).toThrow(/missing file/i);
+    expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('aaa\n'); // restored
+    expect(existsSync(join(dir, 'missing.txt'))).toBe(false);
+  });
+
+  it('deletes files', () => {
+    writeFileSync(join(dir, 'del.txt'), 'bye\n');
+    const diff = [
+      'diff --git a/del.txt b/del.txt',
+      '--- a/del.txt',
+      '+++ /dev/null',
+      '@@ -1,1 +0,0 @@',
+      '-bye',
+    ].join('\n');
+    const res = applyDiffAtomically(dir, diff);
+    expect(res.deleted).toEqual(['del.txt']);
+    expect(existsSync(join(dir, 'del.txt'))).toBe(false);
+  });
+});

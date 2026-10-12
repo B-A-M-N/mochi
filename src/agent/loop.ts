@@ -717,6 +717,21 @@ Continue from 'Next:', do not redo completed progress.`,
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
       }
       }
+    } else if (taskKind === 'chat') {
+      // MCH-111: chat tasks tell the model "do not call any tools", yet were
+      // still advertised ~62 tool schemas (~5K tokens) on every call — the
+      // single largest avoidable latency cost on a trivial question. Advertise
+      // only the read-only essentials (+ load_tools for escape hatch); any
+      // other tool stays restorable mid-run exactly like mch91/mch110.
+      const CHAT_TOOLS = new Set(['read', 'glob', 'grep', 'skill', 'load_tools']);
+      const kept = new Set<string>();
+      for (const [name] of this.tools) {
+        if (CHAT_TOOLS.has(name)) kept.add(name);
+      }
+      if (this.tools.size - kept.size > 0) {
+        this.toolDefs = [...kept].map((n) => this.tools.get(n)!.def);
+        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch111] chat tier: advertised ${kept.size} tools, deferred ${this.tools.size - kept.size} (load_tools restores them)` });
+      }
     }
     const repo = detectRepo(this.cwd);
     // Harness-v2 perf (FREEZE FIX 2026-08-22): warm codegraph grammars and the

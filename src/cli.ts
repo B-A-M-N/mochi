@@ -673,6 +673,35 @@ async function main() {
     console.log(result.summary);
     return;
   }
+  if (first === 'apply') {
+    // Atomic multi-file patch application. Diff from file arg or stdin.
+    const { applyDiffAtomically } = await import('./apply.js');
+    let diffText = '';
+    if (positional[1]) {
+      diffText = readFileSync(resolve(cwd, positional[1]), 'utf8');
+    } else if (!process.stdin.isTTY) {
+      diffText = await new Promise<string>((res, rej) => {
+        let buf = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', (c) => (buf += c));
+        process.stdin.on('end', () => res(buf));
+        process.stdin.on('error', rej);
+      });
+    }
+    if (!diffText.trim()) { console.error('Usage: mochi apply <diff-file>  (or pipe a unified diff via stdin)'); return; }
+    try {
+      const res = applyDiffAtomically(cwd, diffText);
+      for (const p of res.created) console.log(`created  ${p}`);
+      for (const p of res.applied.filter((x) => !res.created.includes(x) && !res.deleted.includes(x))) console.log(`updated  ${p}`);
+      for (const p of res.deleted) console.log(`deleted  ${p}`);
+      for (const p of res.skipped) console.log(`skipped  ${p} (already applied)`);
+      console.log(`\n${res.applied.length} file(s) applied atomically. Review with: git diff`);
+    } catch (err) {
+      console.error(`apply failed, working tree unchanged: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+    return;
+  }
   if (first === 'checkpoint') {
     const sub = positional[1];
     if (sub === 'save') {
