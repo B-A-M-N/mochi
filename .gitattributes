@@ -19,3 +19,6 @@ src/tui/**/*.ts linguist-generated=false
 native/** linguist-detectable=true
 native/mochi_core/** linguist-detectable=true
 native/rust/** linguist-detectable=true
+docs/assets/** linguist-vendored=true
+docs/**/*.js linguist-vendored=true
+docs/**/*.css linguist-vendored=true
