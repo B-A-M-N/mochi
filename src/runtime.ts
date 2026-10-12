@@ -25,6 +25,16 @@ export interface RuntimeOptions {
   config?: Partial<MochiConfig>;
 }
 
+/** A pending task explicitly asks for a written plan instead of changes. Such
+ *  a decomposition is valid for /plan, but approval must replace it: running
+ *  its instructions would only produce another plan. */
+function isPlanOnlyTask(task: { title: string; description?: string | null; role?: string }): boolean {
+  if (task.role === 'architect') return true;
+  return /produce .* written plan|detailed written plan|research\/planning steps|do NOT modify anything/i.test(
+    `${task.title} ${task.description ?? ''}`,
+  );
+}
+
 export class Runtime {
   config: MochiConfig;
   events: EventBus;
@@ -538,15 +548,19 @@ export class Runtime {
       lines.push(`    criteria: ${t.acceptanceCriteria.join('; ')}`);
     }
     lines.push('\nRun /approve to execute this plan.');
-    this.workspace.writeJson('state/pending-goal.json', { id: goal.id, objective: goal.objective });
+    // Record whether this decomposition was produced under plan mode. A
+    // plan-mode decomposition instructs tasks to write plans instead of
+    // changing files, so approval must replace it rather than execute it.
+    this.workspace.writeJson('state/pending-goal.json', { id: goal.id, objective: goal.objective, planMode: this.config.planMode ?? false });
     return lines.join('\n');
   }
 
   async approvePlan(): Promise<string> {
-    const pending = this.workspace.readJson<{ id: string; objective: string }>('state/pending-goal.json');
+    const pending = this.workspace.readJson<{ id: string; objective: string; planMode?: boolean }>('state/pending-goal.json');
     if (!pending) return 'No pending plan. Run /plan first.';
     const goal = this.workspace.loadGoal(pending.id) ?? await this.goals.createGoal(pending.objective);
-    let tasks = this.workspace.loadTasks(pending.id).length ? this.workspace.loadTasks(pending.id) : await this.goals.decompose(goal);
+    const savedTasks = this.workspace.loadTasks(pending.id);
+    let tasks = savedTasks.length ? savedTasks : await this.goals.decompose(goal);
     // Approval is an explicit execution transition. A runtime left in plan
     // mode (TUI Tab, --plan, ACP plan mode) would otherwise veto every
     // mutation and return another plan. Run this pending goal as act, then
@@ -554,11 +568,12 @@ export class Runtime {
     const previousPlanMode = this.config.planMode;
     this.setPlanMode(false);
     try {
-      if (previousPlanMode) {
+      if (previousPlanMode && (pending.planMode || (savedTasks.length > 0 && savedTasks.every(isPlanOnlyTask)))) {
         // A pending decomposition made while planning tells every task to
         // produce a written plan and not modify anything. Executing those
         // instructions would only produce another plan, so derive executable
         // tasks from the objective now that approval has switched to act.
+        // Explicitly executable saved tasks are preserved.
         goal.tasks = [];
         this.workspace.saveGoal(goal);
         tasks = await this.goals.decompose(goal);
