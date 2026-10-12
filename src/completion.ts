@@ -48,6 +48,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   },
   { name: 'session', description: 'Session history (list|search)' },
   { name: 'trace', description: 'Replay a run trace' },
+  { name: 'apply', description: 'Apply a unified diff atomically (all-or-nothing)' },
   { name: 'checkpoint', description: 'Named snapshots' },
   { name: 'rollback', description: 'Restore a checkpoint' },
   { name: 'resume', description: 'Resume a persisted goal' },
