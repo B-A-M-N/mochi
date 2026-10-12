@@ -109,6 +109,9 @@ The terminal types `mochi`, the TUI launches, `hello` goes in — spinner, think
 
 **And a full build, end to end** — `code me a snake game`: splash boot, agent plans, writes 4 files (snake-core.js, game.js, index.html, styles.css), and reports back with how to run it:
 
+
+*Note TUI may have issues in gif due to automated headless gif recording rendering issues, it will look normal when using*
+
 <table>
 <tr>
 <td align="center"><img src="docs/assets/demo/tui_snake.gif" alt="mochi: code me a snake game — full agent build" width="720"></td>
