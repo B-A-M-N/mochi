@@ -246,6 +246,7 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 - **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 30+ native tools, 30+ skills, and MCP/ACP protocols.
 - **[Empirical Benchmarks](docs/BENCHMARKS.md)** — standardized PSS memory, TTFF, TTFI, and compaction latency vs jcode, Claude Code, Cursor, Copilot, and OpenCode, with reproducible probe scripts.
 - **[CLI & Interface Reference](docs/CLI_REFERENCE.md)** — complete flags, daemon endpoints, slash commands, and keybindings.
+- **[Editor Integrations](docs/EDITORS.md)** — VS Code, Cursor, JetBrains, Zed, Neovim, Claude Desktop via MCP/ACP stdio servers.
 - **[TECHMAP.md](TECHMAP.md)** — every repo path mapped, nothing mystery-meat.
 - **[MOCHI.md](MOCHI.md)** — project conventions for agents working *in* this repo.
 

@@ -79,6 +79,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     ],
   },
   { name: 'acp', description: 'Agent Client Protocol server' },
+    { name: 'mcp-serve', description: 'MCP stdio server for editors' },
   { name: 'self-train', description: 'Self-review loop', aliases: ['selftrain', 'train'] },
   { name: 'speculate', description: 'Speculative execution' },
   { name: 'usage', description: 'Token usage and cost' },

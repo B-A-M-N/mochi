@@ -1284,6 +1284,14 @@ async function main() {
     await serverLoop(cwd);
     return;
   }
+  if (first === 'mcp-serve') {
+    // MCP stdio server for editor ubiquity: VS Code (Copilot MCP), Cursor,
+    // JetBrains, Neovim, Claude Desktop spawn this as a child process and
+    // drive Mochi's agent runtime as MCP tools. Never falls through.
+    const { mcpServerLoop } = await import('./mcp-server.js');
+    await mcpServerLoop(cwd);
+    return;
+  }
   if (first === 'config') {
     console.log(JSON.stringify(runtime.config, null, 2));
     return;
