@@ -32,9 +32,10 @@ fn main() {
                     println!("cargo:rustc-link-lib=dylib=node");
                 }
                 None => {
+                    let hint = std::env::var("MOCHI_NODE_LIB_DIR").unwrap_or_else(|_| "<unset>".into());
                     // Degrade exactly like before the fix: link will fail and
                     // build:native reports the accelerator as unavailable.
-                    println!("cargo:warning=node.lib not found (set MOCHI_NODE_LIB_DIR) — N-API addon will not link on Windows");
+                    println!("cargo:warning=node.lib not found (MOCHI_NODE_LIB_DIR={hint}; scanned every PATH dir) — N-API addon will not link on Windows");
                 }
             }
         }
@@ -42,19 +43,18 @@ fn main() {
     }
 }
 
-/// Fallback: ask PATH where node lives and look for node.lib beside it
-/// (standard Node installers and nvm-windows ship it next to node.exe).
+/// Fallback: scan EVERY directory on PATH for node.lib. The first `where node`
+/// hit isn't necessarily the install that ships the import library (runners can
+/// have a shim node earlier in PATH than the real SDK dir).
 #[cfg(target_os = "windows")]
 fn find_node_lib_dir() -> Option<String> {
-    let out = std::process::Command::new("where").arg("node").output().ok()?;
-    let first = String::from_utf8_lossy(&out.stdout).lines().next()?.to_string();
-    let node_exe = std::path::PathBuf::from(first.trim());
-    let dir = node_exe.parent()?;
-    if dir.join("node.lib").exists() {
-        Some(dir.to_string_lossy().into_owned())
-    } else {
-        None
+    let path = std::env::var("PATH").ok()?;
+    for dir in std::env::split_paths(&path) {
+        if dir.join("node.lib").exists() {
+            return Some(dir.to_string_lossy().into_owned());
+        }
     }
+    None
 }
 
 #[cfg(not(target_os = "windows"))]
