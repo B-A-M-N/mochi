@@ -101,7 +101,7 @@ From your shell to a working answer in one command:
 
 <table>
 <tr>
-<td align="center"><img src="docs/assets/demo/tui_type.gif" alt="mochi: shell -> TUI -> hello -> answer" width="720"></td>
+<td align="center"><img src="docs/assets/demo/tui_demo.gif" alt="mochi: shell -> TUI -> hello -> answer" width="720"></td>
 </tr>
 </table>
 
