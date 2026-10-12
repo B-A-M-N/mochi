@@ -95,53 +95,18 @@ Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a sta
 
 ---
 
-## 60-Second Demo
+## Demo
+
+From your shell to a working answer in one command:
 
 <table>
 <tr>
-<td align="center"><b>One-shot speed</b><br><img src="docs/assets/demo/s1.gif" alt="mochi one-shot task in 1 second" width="360"></td>
-<td align="center"><b>Skills search (73 bundled)</b><br><img src="docs/assets/demo/s2.gif" alt="mochi skills search" width="360"></td>
-</tr>
-<tr>
-<td align="center"><b>Atomic apply</b><br><img src="docs/assets/demo/s3.gif" alt="mochi apply unified diff" width="360"></td>
-<td align="center"><b>Failed apply → tree untouched</b><br><img src="docs/assets/demo/s4.gif" alt="atomic rollback" width="360"></td>
-</tr>
-<tr>
-<td align="center" colspan="2"><b>Checkpoints & rollback</b><br><img src="docs/assets/demo/s5.gif" alt="mochi checkpoint" width="360"></td>
+<td align="center"><img src="docs/assets/demo/tui_type.gif" alt="mochi: shell -> TUI -> hello -> answer" width="720"></td>
 </tr>
 </table>
 
-## More In Action
+The terminal types `mochi`, the TUI launches, `hello` goes in — spinner, thinking bar, response, token stats. All of it real.
 
-<table>
-<tr>
-<td align="center"><b>Session search (FTS over transcripts)</b><br><img src="docs/assets/demo/s6.gif" alt="mochi session search" width="360"></td>
-<td align="center"><b>Trace replay</b><br><img src="docs/assets/demo/s7.gif" alt="mochi trace" width="360"></td>
-</tr>
-<tr>
-<td align="center"><b>Agent profiles (26 providers)</b><br><img src="docs/assets/demo/s8.gif" alt="mochi profiles" width="360"></td>
-<td align="center"><b>Security audit</b><br><img src="docs/assets/demo/s9.gif" alt="mochi audit" width="360"></td>
-</tr>
-<tr>
-<td align="center"><b>Diff review</b><br><img src="docs/assets/demo/s10.gif" alt="mochi review" width="360"></td>
-<td align="center"><b>Auto docgen (334 modules, 6684 symbols)</b><br><img src="docs/assets/demo/s11.gif" alt="mochi docgen" width="360"></td>
-</tr>
-</table>
-
-## The TUI
-
-<table>
-<tr>
-<td align="center" colspan="2"><b>Launch — royal-orchid terminal</b><br><img src="docs/assets/demo/tui_launch.gif" alt="mochi tui launch" width="640"></td>
-</tr>
-<tr>
-<td align="center" colspan="2"><b>From shell to answer — <code>mochi</code> → TUI → "hello"</b><br><img src="docs/assets/demo/tui_type.gif" alt="mochi tui from terminal" width="640"></td>
-</tr>
-<tr>
-<td align="center"><b>Live chat — thinking bar, MCH-111 tier stats</b><br><img src="docs/assets/demo/tui_chat.gif" alt="mochi tui chat" width="360"></td>
-<td align="center"><b>295-skill browser</b><br><img src="docs/assets/demo/tui_skills.gif" alt="mochi tui skills" width="360"></td>
-</tr>
-</table>
 
 ## Why Mochi
 
