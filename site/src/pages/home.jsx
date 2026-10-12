@@ -192,7 +192,7 @@ function StatsTicker() {
 
 function CapabilitiesSection() {
   return (
-    <section className="section" id="capabilities" style={{ maxWidth: 1560, margin: '0 auto', padding: '80px 4vw' }}>
+    <section className="section" id="capabilities" style={{ maxWidth: 1560, margin: '0 auto', padding: '80px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
@@ -236,7 +236,7 @@ function SpecialistRolesSection() {
   const [selectedRole, setSelectedRole] = useState(SPECIALIST_ROLES[0]);
 
   return (
-    <section className="section" id="roles" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
+    <section className="section" id="roles" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
@@ -377,7 +377,7 @@ function ArchitectureSection() {
   ];
 
   return (
-    <section className="section" id="architecture" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
+    <section className="section" id="architecture" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
@@ -712,7 +712,7 @@ function AutonomousEcosystemSection() {
   const current = steps[activeStep];
 
   return (
-    <section className="section" id="pipeline" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
+    <section className="section" id="pipeline" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
@@ -913,7 +913,7 @@ function BenchmarksSection() {
   ];
 
   return (
-    <section className="section" id="benchmarks" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
+    <section className="section" id="benchmarks" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
