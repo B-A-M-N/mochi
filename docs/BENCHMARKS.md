@@ -8,7 +8,35 @@ mean wall time, peak RSS from the kernel via GNU time `%M`. The August matrix
 below predates 0.23.0 and its "1st everywhere" framing is not reproducible on
 this hardware — it is kept as history, not as a claim.
 
-**Unloaded machine (load ≈ 1), 10 runs each:**
+### Startup fix, same day (2026-10-12, post `--bytecode`)
+
+The first slice (below) showed the standalone binary as our SLOWEST path —
+bun re-parsed the whole flattened bundle on every spawn. Fix: `build:bin` now
+passes `--minify --bytecode --no-compile-autoload-dotenv
+--no-compile-autoload-bunfig` (bytecode precompiles the bundle at build time),
+and `src/cli.ts` lost its last top-level `await` to make the CJS conversion
+possible. The npm entry also got ~15% leaner (repo module lazy-loaded).
+
+Measured AFTER the fix, same machine, load ≈ 7, 5 runs each:
+
+| Harness | p50 | mean | peak RSS |
+| :--- | ---: | ---: | ---: |
+| claude | 22 ms | 23 ms | 36 MB |
+| codex | 21 ms | 22 ms | 22 MB |
+| jcode | 32 ms | 32 ms | 22 MB |
+| **mochi (npm/node)** | **69 ms** | **80 ms** | **47 MB** |
+| **mochi (bin)** | **76 ms** | **77 ms** | 51 MB |
+| mochi (bun-run) | 104 ms | 116 ms | 41 MB |
+| crush | 220 ms | 190 ms | 43 MB |
+| opencode | 281 ms | 279 ms | 90 MB |
+| agy | 740 ms | 765 ms | 143 MB |
+| pi | 1635 ms | 1944 ms | 156 MB |
+
+Binary `--version`: 464 ms wall / 248 ms CPU → **76 ms wall / 80 ms CPU
+(4.7× wall)**. npm entry: 96 → 82 ms CPU (node's own floor is 45 ms CPU; the
+entry's remaining overhead is ~37 ms of module init).
+
+### First slice (before the fix, unloaded machine, 10 runs)
 
 | Harness | p50 | mean | peak RSS |
 | :--- | ---: | ---: | ---: |
@@ -28,10 +56,12 @@ numbers are not — always cite the load.
 
 Honest conclusions from this slice:
 
-- **Startup/memory leaders:** codex and jcode (~20 ms, ~22 MB). Mochi's node
-  entry (77 ms, 48 MB) is mid-field — faster than opencode/agy/pi/crush,
-  slower than the compiled leaders. The bun-compiled `mochi-bin` is the
-  shipped default for exactly this reason.
+- **Startup/memory leaders:** codex and jcode (~20 ms, ~22 MB). After the
+  same-day `--bytecode` fix, mochi's two shipped paths sit in the fast pack:
+  npm/node p50 69 ms and the standalone binary 76 ms (from 464 ms) — still
+  behind the compiled leaders, ahead of crush/opencode/agy/pi. Node's own
+  floor (45 ms CPU before mochi loads one line) caps what the npm path can
+  ever reach; the binary path's remaining gap is bun runtime startup.
 - **Mochi's memory is ~half of opencode's and a third of agy's** at this
   trivial workload — the lazy-import discipline (bench/memory.mjs regression
   gate in CI, ceilings 80/95 MB) is what keeps it there.

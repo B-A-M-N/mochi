@@ -4,21 +4,33 @@ import { readFileSync, statSync, existsSync, readdirSync, mkdirSync, appendFileS
 import { dirname, resolve, join as pathJoin } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import * as nodeModule from 'node:module';
 // V8 compile cache: persist compiled module bytecode under ~/.cache/mochi so
 // subsequent invocations skip re-parsing (~16% faster cold start, 109ms ->
 // 91ms over 20 runs). NODE_COMPILE_CACHE must be set before node boots to
 // cover the entry module, so when it isn't set we call enableCompileCache()
 // in-process — it activates for all later-loaded modules even if the entry
 // module itself is compiled fresh on the very first run.
-if (!process.env.NODE_COMPILE_CACHE) {
+//
+// Namespace import (not `await import`) on purpose: this file must contain NO
+// top-level await — `bun build --compile --bytecode` converts the bundle to
+// CJS and any TLA in the shipped graph makes the whole standalone binary
+// unbuildable. `import * as` degrades safely on pre-22 node (the property is
+// simply undefined) instead of hard-failing at link time like a missing named
+// export would.
+if (!process.env.NODE_COMPILE_CACHE && nodeModule.enableCompileCache) {
   try {
-    const { enableCompileCache } = await import('node:module');
     const cacheDir = resolve(homedir(), '.cache', 'mochi', 'compile');
     mkdirSync(cacheDir, { recursive: true });
-    enableCompileCache(cacheDir);
+    nodeModule.enableCompileCache(cacheDir);
   } catch { /* read-only home or pre-22 node — run without cache */ }
 }
-import { findProjectRoot } from './repo/repo.js';
+// Repo module, lazy: `findProjectRoot` is only needed by specific commands
+// (hooks/doctor/sessions) — never by --version/--help or the initial TUI
+// frame. Loading it statically cost ~12ms CPU on EVERY invocation.
+type RepoModule = typeof import('./repo/repo.js');
+let repoModule: RepoModule | null = null;
+const loadRepoModule = async (): Promise<RepoModule> => (repoModule ??= await import('./repo/repo.js'));
 import type { MochiConfig } from './types.js';
 
 // Resolve the version from package.json when running from source; when Mochi is
@@ -423,7 +435,9 @@ async function main() {
       const data = (await res.json()) as { ok?: boolean; token?: string; expiresAt?: number; error?: string; hint?: string };
       if (!res.ok || !data.token) { console.error(data.hint ?? data.error ?? 'Rotate failed'); process.exit(1); }
       console.log(`Token rotated. New token expires ${new Date(data.expiresAt as number).toLocaleString()}.`);
-      console.log(`New token: ${data.token}`);
+      // Token is file-only (daemon/info.json, 0600): never print it — it lands
+      // in shell history, CI logs, and screenshots.
+      console.log('New token saved to daemon info file (not displayed for security).');
       return;
     }
     if (action === 'jobs') {
@@ -1174,7 +1188,7 @@ async function main() {
       info = readDaemonInfo(wsDir);
     }
     const url = `http://127.0.0.1:${info?.port}/dashboard?token=${info?.token}`;
-    console.log(`🍡 Mochi Web Dashboard running at:\n${url}\n`);
+    console.log(`🍡 Mochi Web Dashboard running at:\n${url}\n(contains a local auth token — do not share or paste into logs)\n`);
     return;
   }
   if (first === 'review') {
@@ -1300,6 +1314,7 @@ async function main() {
     const { HookManager } = await import('./hooks.js');
     const { existsSync, writeFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
+    const { findProjectRoot } = await loadRepoModule();
     const wsDir = resolve(findProjectRoot(runtime.cwd), '.mochi');
     const sub = positional[1];
     if (sub === 'init') {
@@ -1386,6 +1401,7 @@ async function main() {
   if (first === 'doctor') {
     const { doctorReport, formatDoctor, repairDoctor } = await import('./doctor.js');
     const { daemonRunning, readDaemonInfo } = await import('./daemon/daemon.js');
+    const { findProjectRoot } = await loadRepoModule();
     const wsDir = findProjectRoot(runtime.cwd);
     
     if (flags.repair || flags.fix || positional[1] === 'repair' || positional[1] === 'fix') {
@@ -1575,6 +1591,7 @@ async function main() {
     // GoalEngine persists sessions under the PROJECT ROOT (.mochi/sessions.sqlite);
     // workspace.dir is already that root's .mochi subdir. Use the same key the
     // engine does or the CLI reads an empty sibling DB and sessions never list.
+    const { findProjectRoot } = await loadRepoModule();
     const store = new SessionStore(findProjectRoot(runtime.cwd));
     try {
       const sub = positional[1];

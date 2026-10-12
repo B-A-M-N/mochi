@@ -19,7 +19,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = Number(process.env.RUNS ?? 10);
 
 const CANDIDATES = [
-  { label: 'mochi (node)', cmd: process.execPath, args: [resolve(root, 'dist/cli.js'), '--version'] },
+  { label: 'mochi (npm/node)', cmd: process.execPath, args: [resolve(root, 'dist/cli.js'), '--version'] },
+  { label: 'mochi (bun-run)', cmd: 'bun', args: [resolve(root, 'dist/cli.js'), '--version'] },
   { label: 'mochi (bin)', cmd: resolve(root, 'dist/mochi-bin'), args: ['--version'] },
   { label: 'opencode', cmd: 'opencode', args: ['--version'] },
   { label: 'claude', cmd: 'claude', args: ['--version'] },
@@ -89,8 +90,8 @@ for (const t of targets) {
 console.log(`cli cold-start matrix — ${RUNS} runs each, --version, cwd=repo\n`);
 console.log('harness        p50 ms    mean ms   peak RSS MB');
 for (const r of rows) {
-  if (r.err) { console.log(`${r.label.padEnd(14)}   (failed / unavailable)`); continue; }
+  if (r.err) { console.log(`${r.label.padEnd(17)}   (failed / unavailable)`); continue; }
   console.log(
-    `${r.label.padEnd(14)} ${r.p50.toFixed(0).padStart(7)} ${r.avg.toFixed(0).padStart(10)} ${r.rssMb ? r.rssMb.toFixed(0).padStart(11) : '        n/a'}`,
+    `${r.label.padEnd(17)} ${r.p50.toFixed(0).padStart(7)} ${r.avg.toFixed(0).padStart(10)} ${r.rssMb ? r.rssMb.toFixed(0).padStart(11) : '        n/a'}`,
   );
 }

@@ -1,7 +1,8 @@
 // Release readiness gate (`npm run release:check`): verifies everything that
 // must hold BEFORE `npm publish` — clean tree, version/changelog coherence,
-// typecheck, full test suite, tarball contents. Read-only except for running
-// checks; never publishes. Usage: node scripts/release-check.mjs [--skip-tests]
+// typecheck, full test suite, tarball contents (and that the standalone
+// binary exists, runs, and stays out of the tarball). Read-only except for
+// running checks; never publishes. Usage: node scripts/release-check.mjs [--skip-tests]
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -67,6 +68,7 @@ else {
     ['native/bin/mochi_core.node', true],
     ['src/', false],
     ['.test.ts', false],
+    ['testutil', false],
     ['.env', false],
   ];
   // npm's notice lines list tarball paths either bare (`dist/cli.js`) or
@@ -85,6 +87,34 @@ else {
     }
   }
   if (!bad) ok('tarball contents correct (runtime in, source/tests out)');
+}
+
+// 6. Standalone binary (dist/mochi-bin): prepack just built it — it must
+// exist, RUN, and print the right version. This gate previously never touched
+// the binary, so a broken build:bin would ship silently. Note the binary is
+// for standalone installs only; npm users get dist/cli.js under node.
+const binPath = resolve(root, process.platform === 'win32' ? 'dist/mochi-bin.exe' : 'dist/mochi-bin');
+if (!existsSync(binPath)) fail('dist/mochi-bin missing after prepack (build:bin broken)');
+else {
+  const binOut = run(`"${binPath}" --version 2>&1`);
+  if (binOut === null) fail('standalone binary exists but fails to run');
+  else if (binOut.trim() !== pkg.version) fail(`standalone binary --version = ${JSON.stringify(binOut.trim())}, expected ${pkg.version}`);
+  else ok(`standalone binary runs (v${pkg.version})`);
+}
+
+// 7. Tarball must NOT contain the standalone binary (~100MB bun runtime +
+// app; npm runs dist/cli.js under node). Checked via the JSON listing with
+// --ignore-scripts: prepack already ran in step 5 and must not run twice.
+const packJson = run('npm pack --dry-run --json --ignore-scripts 2>&1');
+if (packJson === null) fail('npm pack --dry-run --json failed');
+else {
+  try {
+    const files = JSON.parse(packJson.slice(packJson.indexOf('[')))[0].files.map((f) => f.path);
+    if (files.some((f) => /mochi-bin(\.exe)?$/.test(f))) fail(`tarball leaks standalone binary (${files.filter((f) => /mochi-bin/.test(f)).join(', ')})`);
+    else ok('tarball excludes the standalone binary');
+  } catch {
+    fail('could not parse npm pack --json output');
+  }
 }
 
 console.log(failures.length ? `\n${failures.length} release blocker(s).` : '\nRelease ready: npm login && npm publish');

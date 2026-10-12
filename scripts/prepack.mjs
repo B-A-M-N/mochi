@@ -31,4 +31,9 @@ try {
   execSync('strip native/bin/fuzzy_rust native/bin/search_rust native/bin/mochi-agent native/bin/mochi_core.node native/bin/libmochi_core.so', { cwd: root, stdio: 'ignore' });
 } catch { /* strip unavailable on some platforms — harmless */ }
 
+// Standalone binary. --minify --bytecode are NOT cosmetic: without them bun
+// parses the whole flattened bundle at startup (248ms CPU, 464ms wall for
+// --version); bytecode precompiles it at build time → 80ms CPU / 115ms wall
+// (4.3x; benchmarked via bench/cli-matrix.mjs). --bytecode forces CJS, which
+// is why src/cli.ts must contain no top-level await.
 run('npm run build:bin');
