@@ -133,25 +133,27 @@ export default function Benchmarks() {
         <div className="wrap">
           <div className="pagehead-row">
             <div className="pagehead-col">
-              <AnimatedContent direction="bottom" delay={0.1}>
+              <AnimatedContent direction="left" delay={0.05} distance={40} blur={14}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
                   PERFORMANCE & MECHANICAL VERIFICATION
                 </div>
               </AnimatedContent>
 
-              <h1 className="hero-title">
-                See How Mochi <span className="accent-title">Compares.</span>
-              </h1>
+              <AnimatedContent direction="left" delay={0.15} distance={48} blur={14}>
+                <h1 className="hero-title">
+                  See How Mochi <span className="accent-title">Compares.</span>
+                </h1>
+              </AnimatedContent>
 
-              <AnimatedContent direction="bottom" delay={0.2}>
+              <AnimatedContent direction="left" delay={0.22} distance={44} blur={14}>
                 <p className="hero-sub" style={{ maxWidth: 640 }}>
                   Real reproducible telemetry, not synthetic marketing claims. Head-to-head comparison against Claude Code, Codex, OpenCode, and Cursor measuring memory RSS, cold start, and mechanical task pass rates.
                 </p>
               </AnimatedContent>
 
               {/* Filter Tabs */}
-              <AnimatedContent direction="bottom" delay={0.3}>
+              <AnimatedContent direction="left" delay={0.28} distance={40} blur={14}>
                 <div className="filter-pills" style={{ marginTop: 24 }}>
                   {TABS.map(tab => (
                     <button
@@ -177,28 +179,28 @@ export default function Benchmarks() {
 
           {/* 4 Highlight Metric Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginTop: 44, marginBottom: 40 }}>
-            <AnimatedContent direction="bottom" delay={0.05}>
+            <AnimatedContent direction="left" delay={0.08} distance={45} blur={14}>
               <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                 <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>18.2 MB</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--ink)' }}>PEAK RESIDENT RSS</div>
                 <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>21.2× lighter than Claude Code</div>
               </div>
             </AnimatedContent>
-            <AnimatedContent direction="bottom" delay={0.1}>
+            <AnimatedContent direction="bottom" delay={0.12} distance={45} blur={14}>
               <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                 <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>38.2 ms</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--ink)' }}>COLD START TTFI</div>
                 <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>4.5× faster than OpenCode</div>
               </div>
             </AnimatedContent>
-            <AnimatedContent direction="bottom" delay={0.15}>
+            <AnimatedContent direction="bottom" delay={0.16} distance={45} blur={14}>
               <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                 <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>0 DEPS</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--ink)' }}>RUNTIME OVERHEAD</div>
                 <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>Single standalone Bun binary</div>
               </div>
             </AnimatedContent>
-            <AnimatedContent direction="bottom" delay={0.2}>
+            <AnimatedContent direction="right" delay={0.2} distance={45} blur={14}>
               <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                 <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>12.6s</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--ink)' }}>ARENA B1 BUGFIX</div>
@@ -212,7 +214,7 @@ export default function Benchmarks() {
             <div style={{ marginTop: 24 }}>
               {/* Dual Visual Bar Charts */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, marginBottom: 36 }}>
-                <AnimatedContent direction="left" delay={0.1}>
+                <AnimatedContent direction="left" delay={0.1} distance={48} blur={14}>
                   <div className="comp-table-card" style={{ padding: '28px 26px', margin: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
@@ -226,7 +228,7 @@ export default function Benchmarks() {
                   </div>
                 </AnimatedContent>
 
-                <AnimatedContent direction="right" delay={0.15}>
+                <AnimatedContent direction="right" delay={0.15} distance={48} blur={14}>
                   <div className="comp-table-card" style={{ padding: '28px 26px', margin: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
@@ -242,207 +244,217 @@ export default function Benchmarks() {
               </div>
 
               {/* Resource Table */}
-              <div className="comp-table-card">
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="comp-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '24%' }}>Agent Harness</th>
-                        <th>Peak Resident RSS ↓</th>
-                        <th>Time to First Input (TTFI) ↓</th>
-                        <th>Time to First Token (TTFT) ↓</th>
-                        <th>Runtime Dependencies ↓</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {RESOURCE_TABLE.map(row => (
-                        <tr key={row.agent} className={row.me ? 'highlight-row' : ''}>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: row.me ? 'var(--purple-dark)' : 'var(--ink)' }}>
-                            {row.agent}
-                          </td>
-                          <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.mem}</td>
-                          <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.startup}</td>
-                          <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.ttft}</td>
-                          <td>
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, padding: '2px 8px', borderRadius: 6, background: row.me ? 'var(--purple-lighter)' : 'var(--line)', color: row.me ? 'var(--purple-dark)' : 'var(--ink-soft)' }}>
-                              {row.deps}
-                            </span>
-                          </td>
+              <AnimatedContent direction="bottom" delay={0.18} distance={45} blur={14}>
+                <div className="comp-table-card">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="comp-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '24%' }}>Agent Harness</th>
+                          <th>Peak Resident RSS ↓</th>
+                          <th>Time to First Input (TTFI) ↓</th>
+                          <th>Time to First Token (TTFT) ↓</th>
+                          <th>Runtime Dependencies ↓</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {RESOURCE_TABLE.map(row => (
+                          <tr key={row.agent} className={row.me ? 'highlight-row' : ''}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: row.me ? 'var(--purple-dark)' : 'var(--ink)' }}>
+                              {row.agent}
+                            </td>
+                            <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.mem}</td>
+                            <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.startup}</td>
+                            <td style={{ fontWeight: row.me ? 800 : 500, color: row.me ? 'var(--purple-dark)' : 'inherit' }}>{row.ttft}</td>
+                            <td>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, padding: '2px 8px', borderRadius: 6, background: row.me ? 'var(--purple-lighter)' : 'var(--line)', color: row.me ? 'var(--purple-dark)' : 'var(--ink-soft)' }}>
+                                {row.deps}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              </AnimatedContent>
             </div>
           )}
 
           {filter === 'Harness Arena Tasks' && (
             <div style={{ marginTop: 24 }}>
-              <div className="comp-table-card">
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="comp-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '22%' }}>Arena Task</th>
-                        <th>Mochi (Spec/Act)</th>
-                        <th>jcode</th>
-                        <th>Codex CLI</th>
-                        <th>Claude Code</th>
-                        <th>OpenCode</th>
-                        <th>Crush</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ARENA_TASKS.map(task => (
-                        <tr key={task.id}>
-                          <td>
-                            <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--purple-dark)' }}>
-                              {task.id.toUpperCase()}: {task.name}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{task.detail}</div>
-                          </td>
-                          <td style={{ background: '#EDE9FE', fontWeight: 700, color: 'var(--purple-dark)' }}>
-                            ✓ {task.mochi.time}
-                            <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>{task.mochi.out}</div>
-                          </td>
-                          <td style={{ fontWeight: 600 }}>
-                            {task.jcode.ok ? `✓ ${task.jcode.time}` : '✗ Fail'}
-                            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{task.jcode.out}</div>
-                          </td>
-                          <td style={{ color: task.codex.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                            {task.codex.ok ? `✓ ${task.codex.time}` : `✗ ${task.codex.out}`}
-                          </td>
-                          <td style={{ color: task.claude.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                            {task.claude.ok ? `✓ ${task.claude.time}` : `✗ ${task.claude.out}`}
-                          </td>
-                          <td style={{ color: task.opencode.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                            {task.opencode.ok ? `✓ ${task.opencode.time}` : `✗ ${task.opencode.out}`}
-                          </td>
-                          <td style={{ color: task.crush.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                            {task.crush.ok ? `✓ ${task.crush.time}` : `✗ ${task.crush.out}`}
-                          </td>
+              <AnimatedContent direction="bottom" delay={0.1} distance={45} blur={14}>
+                <div className="comp-table-card">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="comp-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '22%' }}>Arena Task</th>
+                          <th>Mochi (Spec/Act)</th>
+                          <th>jcode</th>
+                          <th>Codex CLI</th>
+                          <th>Claude Code</th>
+                          <th>OpenCode</th>
+                          <th>Crush</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {ARENA_TASKS.map(task => (
+                          <tr key={task.id}>
+                            <td>
+                              <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--purple-dark)' }}>
+                                {task.id.toUpperCase()}: {task.name}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{task.detail}</div>
+                            </td>
+                            <td style={{ background: '#EDE9FE', fontWeight: 700, color: 'var(--purple-dark)' }}>
+                              ✓ {task.mochi.time}
+                              <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>{task.mochi.out}</div>
+                            </td>
+                            <td style={{ fontWeight: 600 }}>
+                              {task.jcode.ok ? `✓ ${task.jcode.time}` : '✗ Fail'}
+                              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{task.jcode.out}</div>
+                            </td>
+                            <td style={{ color: task.codex.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                              {task.codex.ok ? `✓ ${task.codex.time}` : `✗ ${task.codex.out}`}
+                            </td>
+                            <td style={{ color: task.claude.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                              {task.claude.ok ? `✓ ${task.claude.time}` : `✗ ${task.claude.out}`}
+                            </td>
+                            <td style={{ color: task.opencode.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                              {task.opencode.ok ? `✓ ${task.opencode.time}` : `✗ ${task.opencode.out}`}
+                            </td>
+                            <td style={{ color: task.crush.ok ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                              {task.crush.ok ? `✓ ${task.crush.time}` : `✗ ${task.crush.out}`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              </AnimatedContent>
             </div>
           )}
 
           {filter === 'Security & Sandbox' && (
             <div style={{ marginTop: 24 }}>
-              <div className="comp-table-card" style={{ padding: '32px 34px' }}>
-                <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>
-                  Bubblewrap Hardware Isolation vs Conventional Runtimes
-                </h3>
-                <p style={{ fontSize: 15, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 28 }}>
-                  Most CLI agents execute commands directly in the host shell with full permissions, leaving developer SSH keys, AWS credentials, and environment variables exposed. Mochi wraps all commands inside unprivileged hardware namespaces.
-                </p>
+              <AnimatedContent direction="bottom" delay={0.1} distance={45} blur={14}>
+                <div className="comp-table-card" style={{ padding: '32px 34px' }}>
+                  <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>
+                    Bubblewrap Hardware Isolation vs Conventional Runtimes
+                  </h3>
+                  <p style={{ fontSize: 15, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 28 }}>
+                    Most CLI agents execute commands directly in the host shell with full permissions, leaving developer SSH keys, AWS credentials, and environment variables exposed. Mochi wraps all commands inside unprivileged hardware namespaces.
+                  </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 32 }}>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      STARTUP LATENCY
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 32 }}>
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        STARTUP LATENCY
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>&lt; 1.8 ms</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        bwrap creates isolated user namespaces instantly without running background VM or Docker daemons.
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>&lt; 1.8 ms</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      bwrap creates isolated user namespaces instantly without running background VM or Docker daemons.
-                    </p>
-                  </div>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      CREDENTIAL ISOLATION
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        CREDENTIAL ISOLATION
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>100% Masked</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        ~/.ssh, ~/.aws, ~/.gnupg, and shell history files are unmounted and invisible inside the container.
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>100% Masked</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      ~/.ssh, ~/.aws, ~/.gnupg, and shell history files are unmounted and invisible inside the container.
-                    </p>
-                  </div>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      ROOTLESS ARCHITECTURE
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        ROOTLESS ARCHITECTURE
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>Zero Sudo</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        Uses unprivileged user namespaces available in modern Linux kernels without setuid vulnerabilities.
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>Zero Sudo</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      Uses unprivileged user namespaces available in modern Linux kernels without setuid vulnerabilities.
-                    </p>
                   </div>
                 </div>
-              </div>
+              </AnimatedContent>
             </div>
           )}
 
           {filter === 'Context & Tokens' && (
             <div style={{ marginTop: 24 }}>
-              <div className="comp-table-card" style={{ padding: '32px 34px' }}>
-                <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>
-                  Anthropic Prompt Cache Breakpoints & Token Optimization
-                </h3>
-                <p style={{ fontSize: 15, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 28 }}>
-                  Mochi dynamically injects Anthropic cache control breakpoints before static system instructions and tool definitions, dramatically reducing both generation latency and token billing.
-                </p>
+              <AnimatedContent direction="bottom" delay={0.1} distance={45} blur={14}>
+                <div className="comp-table-card" style={{ padding: '32px 34px' }}>
+                  <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>
+                    Anthropic Prompt Cache Breakpoints & Token Optimization
+                  </h3>
+                  <p style={{ fontSize: 15, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 28 }}>
+                    Mochi dynamically injects Anthropic cache control breakpoints before static system instructions and tool definitions, dramatically reducing both generation latency and token billing.
+                  </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      CACHE HIT DISCOUNT
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        CACHE HIT DISCOUNT
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>Up to 90%</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        Read-cost reduction on cached prompt prefixes during multi-turn agent conversations.
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>Up to 90%</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      Read-cost reduction on cached prompt prefixes during multi-turn agent conversations.
-                    </p>
-                  </div>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      DEFAULT CONTEXT
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        DEFAULT CONTEXT
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>400k Tokens</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        Full workspace indexing budget with 80 autonomous execution iterations.
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>400k Tokens</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      Full workspace indexing budget with 80 autonomous execution iterations.
-                    </p>
-                  </div>
-                  <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
-                      NATIVE RUST TOKEN OP
+                    <div style={{ background: '#FAF8FE', borderRadius: 18, padding: '24px 20px', border: '1.5px solid var(--purple-light)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                        NATIVE RUST TOKEN OP
+                      </div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>1.2 ms</div>
+                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
+                        Whole-history token count calculated in a single round-trip over stdio (1.4% parity).
+                      </p>
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 6 }}>1.2 ms</div>
-                    <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
-                      Whole-history token count calculated in a single round-trip over stdio (1.4% parity).
-                    </p>
                   </div>
                 </div>
-              </div>
+              </AnimatedContent>
             </div>
           )}
 
           {filter === 'Tool Latency' && (
             <div style={{ marginTop: 24 }}>
-              <div className="comp-table-card">
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="comp-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '32%' }}>Deterministic Tool</th>
-                        <th style={{ width: '22%' }}>Execution Latency</th>
-                        <th>Architecture & Implementation</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {TOOL_SPEEDS.map(t => (
-                        <tr key={t.tool}>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--purple-dark)' }}>
-                            {t.tool}
-                          </td>
-                          <td style={{ fontWeight: 800, color: 'var(--ink)' }}>{t.time}</td>
-                          <td style={{ fontSize: 14, color: 'var(--ink-soft)' }}>{t.comp}</td>
+              <AnimatedContent direction="bottom" delay={0.1} distance={45} blur={14}>
+                <div className="comp-table-card">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="comp-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '32%' }}>Deterministic Tool</th>
+                          <th style={{ width: '22%' }}>Execution Latency</th>
+                          <th>Architecture & Implementation</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {TOOL_SPEEDS.map(t => (
+                          <tr key={t.tool}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--purple-dark)' }}>
+                              {t.tool}
+                            </td>
+                            <td style={{ fontWeight: 800, color: 'var(--ink)' }}>{t.time}</td>
+                            <td style={{ fontSize: 14, color: 'var(--ink-soft)' }}>{t.comp}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              </AnimatedContent>
             </div>
           )}
 

@@ -566,27 +566,67 @@ export function DitherBlock({ width = 200, height = 100, color = '#f472b6', clas
 
 /* ── BenchChart ─────────────────────────────────────────────── */
 export function BenchChart({ data, max, unit = '', rows }) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+      } else {
+        const vh = window.innerHeight || 800;
+        if (entry.boundingClientRect.top > (vh - 60)) {
+          setInView(false);
+        }
+      }
+    }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   // support both signatures: { data, max } and { rows: [[label, value, isMochi]], unit }
   const chartData = rows
     ? rows.map(r => ({ label: r[0], value: r[1], isMochi: !!r[2], display: r[1] + (unit ? ' ' + unit : '') }))
     : data.map(d => ({ ...d, isMochi: d.color === 'pink' || d.color === 'purple' || d.label === 'Mochi' || !!d.isMochi }));
   const chartMax = max || Math.max(...chartData.map(x => x.value));
+
   return (
-    <div className="bench-chart">
-      {chartData.map((d, i) => (
-        <div key={i} className="bench-row">
-          <span className="bench-label">{d.label}</span>
-          <div className="bench-bar-wrap">
-            <div
-              className={'bench-bar ' + (d.isMochi ? 'pink' : 'gray')}
-              style={{ width: (d.value / chartMax * 100) + '%' }}
-            />
+    <div ref={ref} className={`bench-chart ${inView ? 'in' : ''}`}>
+      {chartData.map((d, i) => {
+        const pct = (d.value / chartMax * 100);
+        return (
+          <div key={i} className="bench-row">
+            <span className="bench-label">{d.label}</span>
+            <div className="bench-bar-wrap">
+              <div
+                className={'bench-bar ' + (d.isMochi ? 'pink' : 'gray')}
+                style={{
+                  width: inView ? `${pct}%` : '0%',
+                  transition: `width 1.1s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05}s`,
+                }}
+              />
+            </div>
+            <span
+              className="bench-val"
+              style={{
+                color: d.isMochi ? 'var(--purple-dark)' : '#111116',
+                fontWeight: 800,
+                opacity: inView ? 1 : 0,
+                transform: inView ? 'translateX(0)' : 'translateX(6px)',
+                transition: `opacity 0.5s ease-out ${i * 0.05 + 0.25}s, transform 0.5s ease-out ${i * 0.05 + 0.25}s`,
+              }}
+            >
+              {d.display}
+            </span>
           </div>
-          <span className="bench-val" style={{ color: d.isMochi ? 'var(--purple-dark)' : '#111116', fontWeight: 800 }}>
-            {d.display}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -548,6 +548,11 @@ header.site:hover .nav-right {
   -webkit-backdrop-filter: blur(16px);
   position: relative;
   z-index: 5;
+  opacity: calc(1 - var(--hero-scroll-p, 0) * 2.2);
+  transform: translateY(calc(var(--hero-scroll-p, 0) * -42px)) scale(calc(1 - var(--hero-scroll-p, 0) * 0.06));
+  filter: blur(calc(var(--hero-scroll-p, 0) * 16px));
+  will-change: opacity, transform, filter;
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out, filter 0.08s ease-out;
 }
 
 .ticker-track {

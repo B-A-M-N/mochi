@@ -109,91 +109,95 @@ export default function Changelog() {
         {/* Header Hero Row */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 40, alignItems: 'center', marginBottom: 40 }}>
           <div>
-            <AnimatedContent direction="bottom" delay={0.1}>
+            <AnimatedContent direction="left" delay={0.05} distance={40} blur={14}>
               <div className="hero-eyebrow-clean">
                 <span className="sparkle-star">✦</span>
                 COMPLETE PRODUCTION RELEASE HISTORY (35 RELEASES)
               </div>
             </AnimatedContent>
 
-            <h1 className="hero-title" style={{ marginBottom: 18 }}>
-              What’s New <span className="accent-title">in Mochi.</span>
-            </h1>
+            <AnimatedContent direction="left" delay={0.15} distance={48} blur={14}>
+              <h1 className="hero-title" style={{ marginBottom: 18 }}>
+                What’s New <span className="accent-title">in Mochi.</span>
+              </h1>
+            </AnimatedContent>
 
-            <AnimatedContent direction="bottom" delay={0.2}>
+            <AnimatedContent direction="left" delay={0.22} distance={44} blur={14}>
               <p className="hero-sub" style={{ maxWidth: 760, marginBottom: 28, fontSize: 17, color: '#69697A' }}>
                 Complete technical changelog documenting all 35 releases from v0.22 down to v0.1.0. Every architectural change, native Rust N-API commit, Bubblewrap namespace isolation, and memory reduction shipped in source.
               </p>
             </AnimatedContent>
 
-            {/* Filter Pills & Expand Actions */}
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 20 }}>
-              <div className="filter-pills" style={{ margin: 0 }}>
-                {FILTER_TAGS.map((tag) => (
+            {/* Filter Pills, Expand Actions & Search Bar */}
+            <AnimatedContent direction="left" delay={0.28} distance={36} blur={10}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 20 }}>
+                <div className="filter-pills" style={{ margin: 0 }}>
+                  {FILTER_TAGS.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setActiveTag(tag)}
+                      className={`filter-pill ${activeTag === tag ? 'active' : ''}`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                   <button
-                    key={tag}
-                    onClick={() => setActiveTag(tag)}
-                    className={`filter-pill ${activeTag === tag ? 'active' : ''}`}
+                    onClick={expandAll}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono)',
+                      background: '#ffffff',
+                      border: '1.5px solid rgba(138, 103, 246, 0.25)',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      color: '#8A67F6',
+                      fontWeight: 700,
+                    }}
                   >
-                    {tag}
+                    Expand All (35)
                   </button>
-                ))}
+                  <button
+                    onClick={collapseAll}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono)',
+                      background: '#ffffff',
+                      border: '1.5px solid var(--line)',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      color: '#69697A',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Collapse All
+                  </button>
+                </div>
               </div>
 
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <button
-                  onClick={expandAll}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                    background: '#ffffff',
-                    border: '1.5px solid rgba(138, 103, 246, 0.25)',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                    color: '#8A67F6',
-                    fontWeight: 700,
-                  }}
-                >
-                  Expand All (35)
-                </button>
-                <button
-                  onClick={collapseAll}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-mono)',
-                    background: '#ffffff',
-                    border: '1.5px solid var(--line)',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                    color: '#69697A',
-                    fontWeight: 600,
-                  }}
-                >
-                  Collapse All
-                </button>
+              {/* Live Search Bar */}
+              <div className="doc-search-bar" style={{ maxWidth: '100%', marginBottom: 10 }}>
+                <IconSearch size={18} className="text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search all 35 releases (e.g. bwrap, MCP, multi-tab, prompt cache, AST, PSS)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14 }}
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-            </div>
-
-            {/* Live Search Bar */}
-            <div className="doc-search-bar" style={{ maxWidth: '100%', marginBottom: 10 }}>
-              <IconSearch size={18} className="text-muted" />
-              <input
-                type="text"
-                placeholder="Search all 35 releases (e.g. bwrap, MCP, multi-tab, prompt cache, AST, PSS)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14 }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+            </AnimatedContent>
           </div>
 
           {/* Builder Mascot with hardhat */}
@@ -206,53 +210,55 @@ export default function Changelog() {
         </div>
 
         {/* Sticky Horizontal Version Quick-Jump Bar */}
-        <div
-          style={{
-            position: 'sticky',
-            top: 76,
-            zIndex: 30,
-            background: 'rgba(255, 255, 255, 0.92)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(138, 103, 246, 0.16)',
-            borderRadius: 16,
-            padding: '10px 14px',
-            marginBottom: 36,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            overflowX: 'auto',
-            boxShadow: '0 4px 20px rgba(138, 103, 246, 0.08)',
-          }}
-        >
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, color: '#8A67F6', textTransform: 'uppercase', whiteSpace: 'nowrap', paddingRight: 6 }}>
-            QUICK JUMP ({filteredReleases.length}):
-          </span>
-          {filteredReleases.map((rel) => {
-            const isActive = activeVersion === rel.version;
-            return (
-              <button
-                key={rel.version}
-                onClick={() => scrollToRelease(rel.version)}
-                style={{
-                  background: isActive ? '#8A67F6' : '#FAF8FC',
-                  color: isActive ? '#ffffff' : '#111116',
-                  border: isActive ? '1px solid #8A67F6' : '1px solid rgba(138, 103, 246, 0.14)',
-                  borderRadius: 8,
-                  padding: '5px 10px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {rel.version.split(' ')[0]}
-              </button>
-            );
-          })}
-        </div>
+        <AnimatedContent direction="bottom" delay={0.1} distance={30} blur={10}>
+          <div
+            style={{
+              position: 'sticky',
+              top: 76,
+              zIndex: 30,
+              background: 'rgba(255, 255, 255, 0.92)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(138, 103, 246, 0.16)',
+              borderRadius: 16,
+              padding: '10px 14px',
+              marginBottom: 36,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              overflowX: 'auto',
+              boxShadow: '0 4px 20px rgba(138, 103, 246, 0.08)',
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, color: '#8A67F6', textTransform: 'uppercase', whiteSpace: 'nowrap', paddingRight: 6 }}>
+              QUICK JUMP ({filteredReleases.length}):
+            </span>
+            {filteredReleases.map((rel) => {
+              const isActive = activeVersion === rel.version;
+              return (
+                <button
+                  key={rel.version}
+                  onClick={() => scrollToRelease(rel.version)}
+                  style={{
+                    background: isActive ? '#8A67F6' : '#FAF8FC',
+                    color: isActive ? '#ffffff' : '#111116',
+                    border: isActive ? '1px solid #8A67F6' : '1px solid rgba(138, 103, 246, 0.14)',
+                    borderRadius: 8,
+                    padding: '5px 10px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {rel.version.split(' ')[0]}
+                </button>
+              );
+            })}
+          </div>
+        </AnimatedContent>
 
         {/* Full-Width Left-Aligned Timeline Cards */}
         <div className="timeline-full">
@@ -262,16 +268,21 @@ export default function Changelog() {
               <p style={{ color: 'var(--muted)', fontSize: 15 }}>Try clearing your search query or switching to the 'All' tag.</p>
             </div>
           ) : (
-            filteredReleases.map((rel) => {
+            filteredReleases.map((rel, idx) => {
               const isExpanded = expandedVersions[rel.version] !== false;
               const anchorId = 'rel-' + rel.version.replace(/[^a-zA-Z0-9]/g, '-');
               return (
-                <div
-                  key={rel.version}
-                  id={anchorId}
-                  className="timeline-entry"
-                  style={{ marginBottom: 28, paddingLeft: 0, scrollMarginTop: 150 }}
-                >
+                <div key={rel.version} id={anchorId} style={{ scrollMarginTop: 150 }}>
+                  <AnimatedContent
+                    direction={idx % 2 === 0 ? 'left' : 'right'}
+                    delay={0.03}
+                    distance={44}
+                    blur={14}
+                  >
+                    <div
+                      className="timeline-entry"
+                      style={{ marginBottom: 28, paddingLeft: 0 }}
+                    >
                   <div
                     className="timeline-content"
                     style={{
@@ -389,7 +400,9 @@ export default function Changelog() {
                         ))}
                       </div>
                     )}
-                  </div>
+                      </div>
+                    </div>
+                  </AnimatedContent>
                 </div>
               );
             })

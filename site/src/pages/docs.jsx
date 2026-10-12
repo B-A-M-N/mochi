@@ -124,25 +124,27 @@ export default function Docs() {
         <div className="wrap">
           <div className="pagehead-row">
             <div className="pagehead-col">
-              <AnimatedContent direction="bottom" delay={0.1}>
+              <AnimatedContent direction="left" delay={0.05} distance={40} blur={14}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
                   DOCUMENTATION & REFERENCE
                 </div>
               </AnimatedContent>
 
-              <h1 className="hero-title">
-                Read the <span className="accent-title">Docs.</span>
-              </h1>
+              <AnimatedContent direction="left" delay={0.15} distance={48} blur={14}>
+                <h1 className="hero-title">
+                  Read the <span className="accent-title">Docs.</span>
+                </h1>
+              </AnimatedContent>
 
-              <AnimatedContent direction="bottom" delay={0.2}>
+              <AnimatedContent direction="left" delay={0.22} distance={44} blur={14}>
                 <p className="hero-sub" style={{ maxWidth: 640 }}>
                   Everything you need to master Mochi: zero-dependency binary installation, 16 specialist roles, 30+ native tools, Bubblewrap sandboxing, and autonomous swarm orchestration.
                 </p>
               </AnimatedContent>
 
               {/* Interactive Search bar */}
-              <AnimatedContent direction="bottom" delay={0.3}>
+              <AnimatedContent direction="left" delay={0.28} distance={40} blur={14}>
                 <div className="doc-search-bar">
                   <IconSearch size={18} className="text-muted" />
                   <input
@@ -170,7 +172,7 @@ export default function Docs() {
             {filteredCards.map((card, i) => {
               const IconComp = card.icon;
               return (
-                <AnimatedContent key={card.title} direction="bottom" delay={i * 0.06}>
+                <AnimatedContent key={card.title} direction={i % 2 === 0 ? "left" : "right"} delay={i * 0.05} distance={40} blur={12}>
                   <a href={card.link} className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div className="card-icon-box">
                       <IconComp size={22} />
@@ -193,27 +195,29 @@ export default function Docs() {
         <div className="wrap">
           <div className="doc-grid">
             {/* Sticky Sidebar */}
-            <aside className="doc-sidebar">
-              {SIDEBAR.map(([groupTitle, items]) => (
-                <div key={groupTitle} className="doc-sidebar-group">
-                  <div className="doc-sidebar-title">{groupTitle}</div>
-                  {items.map(([id, label]) => {
-                    const isExternal = id.startsWith('http');
-                    return (
-                      <a
-                        key={id}
-                        href={isExternal ? id : `#${id}`}
-                        target={isExternal ? '_blank' : undefined}
-                        rel={isExternal ? 'noopener' : undefined}
-                        className="doc-nav-item"
-                      >
-                        {label}
-                      </a>
-                    );
-                  })}
-                </div>
-              ))}
-            </aside>
+            <AnimatedContent direction="left" delay={0.1} distance={40} blur={12}>
+              <aside className="doc-sidebar">
+                {SIDEBAR.map(([groupTitle, items]) => (
+                  <div key={groupTitle} className="doc-sidebar-group">
+                    <div className="doc-sidebar-title">{groupTitle}</div>
+                    {items.map(([id, label]) => {
+                      const isExternal = id.startsWith('http');
+                      return (
+                        <a
+                          key={id}
+                          href={isExternal ? id : `#${id}`}
+                          target={isExternal ? '_blank' : undefined}
+                          rel={isExternal ? 'noopener' : undefined}
+                          className="doc-nav-item"
+                        >
+                          {label}
+                        </a>
+                      );
+                    })}
+                  </div>
+                ))}
+              </aside>
+            </AnimatedContent>
 
             {/* Documentation Content */}
             <main className="doc-content">

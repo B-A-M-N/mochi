@@ -45,24 +45,26 @@ export default function Source() {
         <div className="wrap" style={{ maxWidth: 1560, width: '100%' }}>
           <div className="pagehead-row">
             <div className="pagehead-col">
-              <AnimatedContent direction="bottom" delay={0.1}>
+              <AnimatedContent direction="left" delay={0.06} distance={40} blur={12}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
                   OPEN SOURCE & TRANSPARENT
                 </div>
               </AnimatedContent>
 
-              <h1 className="hero-title">
-                Open Source <span className="accent-title">and Always Free.</span>
-              </h1>
+              <AnimatedContent direction="left" delay={0.14} distance={48} blur={14}>
+                <h1 className="hero-title">
+                  Open Source <span className="accent-title">and Always Free.</span>
+                </h1>
+              </AnimatedContent>
 
-              <AnimatedContent direction="bottom" delay={0.2}>
+              <AnimatedContent direction="left" delay={0.22} distance={44} blur={12}>
                 <p className="hero-sub" style={{ maxWidth: 640 }}>
                   Mochi is 100% open source under the MIT license. Explore the live interactive repository tree, inspect our pure-Rust core tokenizer, or contribute pull requests to the project.
                 </p>
               </AnimatedContent>
 
-              <AnimatedContent direction="bottom" delay={0.3}>
+              <AnimatedContent direction="left" delay={0.3} distance={38} blur={10}>
                 <div className="hero-actions" style={{ marginTop: 24 }}>
                   <a
                     href="https://github.com/xanstomper/mochi"
@@ -88,7 +90,7 @@ export default function Source() {
             </div>
 
             {/* Custom Source Mascot: Community Builder Mochi with open-source heart & git node */}
-            <AnimatedContent direction="right" delay={0.2}>
+            <AnimatedContent direction="right" delay={0.2} distance={55} blur={14}>
               <div className="subpage-mascot-wrap">
                 <div className="subpage-doodle">built by the community ♡</div>
                 <div style={{ position: 'relative' }}>
@@ -104,7 +106,13 @@ export default function Source() {
             {FEATURES.map((f, i) => {
               const IconComp = f.icon;
               return (
-                <AnimatedContent key={f.title} direction="bottom" delay={i * 0.08}>
+                <AnimatedContent
+                  key={f.title}
+                  direction={i === 0 ? 'left' : i === 1 ? 'bottom' : 'right'}
+                  delay={i * 0.08}
+                  distance={44}
+                  blur={12}
+                >
                   <a
                     href={f.link}
                     target="_blank"
@@ -129,7 +137,7 @@ export default function Source() {
           {/* Repository Telemetry Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 52 }}>
             {TELEMETRY_BLOCKS.map((b, i) => (
-              <AnimatedContent key={b.label} direction="bottom" delay={i * 0.06}>
+              <AnimatedContent key={b.label} direction="bottom" delay={i * 0.06} distance={38} blur={10}>
                 <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                   <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>
                     {b.val}
@@ -146,7 +154,7 @@ export default function Source() {
           </div>
 
           {/* Live Interactive Repo Browser */}
-          <AnimatedContent direction="bottom" delay={0.2}>
+          <AnimatedContent direction="bottom" delay={0.15} distance={48} blur={14}>
             <div style={{ marginBottom: 80 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <div>
