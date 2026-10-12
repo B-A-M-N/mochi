@@ -53,10 +53,13 @@ export const perfTool: Tool = {
       case 'measure': {
         const cmd = args.command ? String(args.command) : 'echo "no command"';
         const start = performance.now();
-        const { execFileSync } = await import('node:child_process');
+        // Async central policy (timeout + output cap) instead of blocking
+        // execFileSync: the old sync call froze the event loop up to 60s.
+        const { runShellString } = await import('../exec.js');
         let output: string;
         try {
-          output = execFileSync('sh', ['-c', cmd], { cwd: ctx.cwd, maxBuffer: 4 * 1024 * 1024, timeout: 60_000 }).toString();
+          const r = await runShellString(cmd, { cwd: ctx.cwd, timeoutMs: 60_000, maxOutput: 256 * 1024 });
+          output = `${r.stdout}${r.stderr ? `\n${r.stderr}` : ''}`.slice(0, 4000) || `(exit ${r.code ?? 0}, no output)`;
         } catch (e) {
           output = e instanceof Error ? e.message : String(e);
         }

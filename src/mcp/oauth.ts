@@ -28,8 +28,20 @@ interface CachedToken {
   refreshToken?: string;
 }
 
+const warnedEmptyVars = new Set<string>();
+
 function expandEnv(s: string): string {
-  return s.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_m, name: string) => process.env[name] ?? '');
+  return s.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_m, name: string) => {
+    const v = process.env[name] ?? '';
+    // Warn once per missing variable: a typo'd ${MY_SECRET} silently became
+    // an empty client_secret/scope and failed at the token endpoint with a
+    // generic HTTP error that hid the misconfiguration.
+    if (!v && !warnedEmptyVars.has(name) && !process.env.VITEST) {
+      warnedEmptyVars.add(name);
+      console.error(`[mochi oauth] warning: environment variable ${name} is not set (used as \${${name}}); expanding to empty string.`);
+    }
+    return v;
+  });
 }
 
 function storePath(storeDir?: string): string {

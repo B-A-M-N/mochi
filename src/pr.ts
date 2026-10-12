@@ -20,6 +20,12 @@ export interface PrOptions {
   prTitle?: string;
   /** Called with (issue, cwd) to make the actual fix; return a summary. */
   implement?: (issue: Issue, cwd: string) => Promise<string>;
+  /** 'full' (default): branch + implement + commit + push + open PR.
+   *  'branch': fetch the issue and create the branch ONLY — no commit, no
+   *  push, no PR. This is what the CLI's `mochi issue` uses: the fix is a
+   *  normal agent run afterward, so committing here would snapshot a dirty
+   *  tree with a canned "Fix implemented by agent." message. */
+  stage?: 'full' | 'branch';
   /** Override the gh binary (tests use a fake). */
   ghBin?: string;
 }
@@ -83,8 +89,14 @@ export async function runIssueToPr(opts: PrOptions): Promise<PrResult> {
     await run('git', ['checkout', branch], opts.cwd);
   }
 
-  // Delegate the actual fix.
-  const summary = opts.implement ? await opts.implement(issue, opts.cwd) : 'Fix implemented by agent.';
+  // Branch-only stage: stop here. No fabricated summary, no commit, no push.
+  if (opts.stage === 'branch') {
+    return { branch, summary: '', commits: 0, pushed: false };
+  }
+
+  // Delegate the actual fix. No callback → empty summary (never claim agent
+  // work that didn't happen).
+  const summary = opts.implement ? await opts.implement(issue, opts.cwd) : '';
 
   // Commit, push, and open the PR only when there are real changes.
   let commits = 0;

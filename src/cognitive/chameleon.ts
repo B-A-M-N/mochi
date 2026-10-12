@@ -254,8 +254,8 @@ export class ChameleonEngine {
         const chunk = response.content ?? '';
         if (response.usage) {
           tokensUsed += response.usage.totalTokens;
-          budget.recordTokens(response.usage.totalTokens, this.config.model.model);
-          costUsd += estimateCostUsd(response.usage.totalTokens, this.config.model.model);
+          budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
+          costUsd += estimateCostUsd(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
         }
         runs.push(chunk);
         const bestSoFar = chunk.trim() ? chunk : (runs.length > 1 ? runs[runs.length - 2] : deterministicScaffold);

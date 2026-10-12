@@ -19,6 +19,13 @@ const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*d
 export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'role'>): TaskKind {
   const text = `${task.title} ${task.description}`.trim();
   if (!text) return 'unknown';
+  // Questions first: "How do I fix X?", "Explain how to test Y", "What is ...?"
+  // contain fix/test verbs but ask for an answer, not a build. Routing them to
+  // fix/test burned a full verify loop + max/medium reasoning on a Q&A.
+  const titleTrimmed = task.title.trim();
+  if (/^(how|what|why|who|which|where|when|can|could|would|should|is|are|do|does|did|has|have|explain|tell|describe|compare)\b/i.test(titleTrimmed) && /\?\s*$/.test(titleTrimmed)) {
+    return 'chat';
+  }
   if (ACTION_RE.test(text)) {
     if (FIX_RE.test(text) || task.role === 'debugger') return 'fix';
     if (TEST_RE.test(text) || task.role === 'tester') return 'test';
@@ -115,6 +122,6 @@ export function kindHint(kind: TaskKind): string {
       return '\n# Focus: documentation\nMatch the project\'s existing doc style. Cover the WHY before the HOW. Keep examples concrete and runnable.\n';
     case 'implement':
     default:
-      return '\n# Focus: implementation\nMatch the project\'s architecture, patterns, and type systems. Analyze boundary cases and invariants. Make clean, surgical changes, and verify with a real test runner or compiler before declaring done.\n';
+      return '\n# Focus: implementation\nMatch the project\'s architecture, patterns, and type systems. Analyze boundary cases and invariants. Make clean, surgical changes, and verify with a real test runner or compiler before declaring done. For greenfield builds (new game/app/website/file that did not exist): create the files FIRST with the write tool, then run only a cheap syntax check (`node --check`, `python3 -m py_compile`, `test -f`) — never the repo-wide suite. A prose description without files is not a deliverable.\n';
   }
 }

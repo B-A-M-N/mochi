@@ -14,12 +14,18 @@ export function currentConfig(): MochiConfig {
 
 export function setProvider(config: MochiConfig, selection: ProviderSelection): MochiConfig {
   const cfg = { ...config };
+  // Tolerate a missing/empty config file (fresh install): loadConfigFile()
+  // returns {} as MochiConfig, so cfg.model is undefined — the old code read
+  // `cfg.model.apiKey` while BUILDING the object literal and threw
+  // "Cannot read properties of undefined", making `mochi login/use/model`
+  // fatal before anything was saved.
+  const base = cfg.model ?? ({} as MochiConfig['model']);
   cfg.model = {
-    ...cfg.model,
+    ...base,
     provider: selection.provider,
     baseUrl: selection.baseUrl,
     model: selection.model,
-    apiKey: selection.apiKey || cfg.model.apiKey,
+    apiKey: selection.apiKey || base.apiKey,
   };
   if (!cfg.reasoning) {
     cfg.reasoning = 'max';

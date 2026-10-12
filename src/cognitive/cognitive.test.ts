@@ -58,13 +58,17 @@ describe('ANCHOR (Operational Persistence)', () => {
 });
 
 describe('Lazy Chameleon (In-Harness Baked MoE Engine)', () => {
+  // NOTE: primeScaffold warms codegraph grammars over process.cwd() (the whole
+  // repo here). Under full-suite load that warmup can exceed the 120s global
+  // timeout even though the assertions are instant — generous budget pins the
+  // behavior, not the stopwatch.
   it('synthesizes dense real datasets in 0ms without API calls', async () => {
     const context = await primeScaffold('Implement an atomic token bucket rate limiter');
     expect(context).toContain('LAZY CHAMELEON DENSE SYNTHETIC DATASET');
     expect(context).toContain('System Invariants');
     expect(context).toContain('Cellular Execution DAG');
     expect(context).toContain('SISPIS');
-  });
+  }, 240_000);
 
   it('flash mode executes with 0 tokens used and zero latency', async () => {
     const engine = new ChameleonEngine({

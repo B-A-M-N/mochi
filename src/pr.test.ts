@@ -65,4 +65,29 @@ describe('pr.ts', () => {
     const content = readFileSync(resolve(dir, 'a.txt'), 'utf8');
     expect(content).toContain('fixed for #42');
   }, 30_000);
+
+  it('stage:"branch" creates the branch WITHOUT committing, pushing, or fabricating a summary', async () => {
+    const { runIssueToPr } = await import('./pr.js');
+    const headBefore = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+    const statusBefore = execSync('git status --porcelain', { cwd: dir, encoding: 'utf-8' });
+    const res = await runIssueToPr({
+      cwd: dir,
+      issueNumber: 42,
+      ghBin: ghShim,
+      stage: 'branch',
+      branchName: 'fix-branch-only-test',
+    });
+    expect(res.branch).toBe('fix-branch-only-test');
+    expect(res.commits).toBe(0);
+    expect(res.pushed).toBe(false);
+    // No canned "Fix implemented by agent." — nothing was implemented here.
+    expect(res.summary).toBe('');
+    const headAfter = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+    const statusAfter = execSync('git status --porcelain', { cwd: dir, encoding: 'utf-8' });
+    expect(headAfter).toBe(headBefore);
+    expect(statusAfter).toBe(statusBefore);
+    // Branch exists and points where we left HEAD.
+    const branchHead = execSync('git rev-parse fix-branch-only-test', { cwd: dir, encoding: 'utf-8' }).trim();
+    expect(branchHead).toBe(headBefore);
+  }, 30_000);
 });

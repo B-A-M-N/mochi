@@ -1,5 +1,5 @@
 import { execArgvText, runShellString } from './exec.js';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { diff as gitDiff, status as gitStatus } from './repo/git.js';
 import { detectRepo } from './repo/repo.js';
@@ -11,6 +11,7 @@ import type { Workspace } from './workspace.js';
 import { BudgetEngine } from './budget.js';
 import { runMutationCheck, type MutationCheck } from './core/mutation.js';
 import { classifyContentOnly } from './core/one-shot.js';
+import { isGreenfieldTask } from './core/greenfield.js';
 
 function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string> {
   return execArgvText(cmd, args, { cwd, maxBuffer: 4 * 1024 * 1024 });
@@ -92,9 +93,15 @@ export class VerifierEngine {
       acceptanceCriteria: task.acceptanceCriteria,
       verificationCommand: task.verificationCommand,
     });
+    // Greenfield parity with Agent.verify: a brand-new build must not run the
+    // host repo's suite here either (scoped tasks that passed in-loop were
+    // failing in runOne's verifier — same task, double suite cost).
+    const greenfield = isGreenfieldTask(task.title, task.description ?? '', task.fileScope, (p) => {
+      try { return existsSync(resolve(this.cwd, p)); } catch { return false; }
+    });
     const commands = [
       task.verificationCommand,
-      ...(contentOnly ? [] : [repo.testCommand, repo.typecheckCommand, repo.lintCommand, repo.buildCommand]),
+      ...((contentOnly || greenfield) ? [] : [repo.testCommand, repo.typecheckCommand, repo.lintCommand, repo.buildCommand]),
     ].filter((c): c is string => Boolean(c));
 
     for (const command of commands) {
@@ -105,7 +112,8 @@ export class VerifierEngine {
       // freely invents verification commands (tsc, pytest, cargo...) that may
       // not exist on PATH in the user's repo; failing the task for that would
       // reject correct work. Mark such checks as passed-with-a-skip-note so the
-      // judge sees them as no-op rather than failure.
+      // judge sees them as no-op rather than failure. (Pinned by test:
+      // "skips a verification command that is not installed instead of failing".)
       const exitMatch = result.match(/^exit_code: (\d+)/);
       const exit127 = exitMatch ? Number(exitMatch[1]) === 127 : false;
       if (exit127) {
@@ -120,7 +128,10 @@ export class VerifierEngine {
       // Pre-existing failure: the check already failed the same way before the
       // agent touched anything. This is repo rot, not agent breakage — treat it
       // as a passed-with-note so good work is not failed by unrelated debt.
-      const passedNow = result.includes('exit_code: 0');
+      // Strict exit-code parse (same fix as Agent.verify): substring matching
+      // false-PASSes when "exit_code: 0" is echoed in command output.
+      const exitLine = result.match(/^exit_code: (\d+)/);
+      const passedNow = exitLine ? Number(exitLine[1]) === 0 : false;
       if (!passedNow && matchesBaseline(resolvedBaseline, command, result)) {
         evidence.push({
           source: `command:${command}`,
@@ -147,7 +158,9 @@ export class VerifierEngine {
     const testCommand = task.verificationCommand ?? repo.testCommand;
     const testCmdEvidence = testCommand ? evidence.find((e) => e.source === `command:${testCommand}`) : undefined;
     const testCommandRuns = Boolean(testCommand) && testCmdEvidence?.passed === true && testCmdEvidence?.skipped !== true;
-    if (testCommand && testCommandRuns && evidence.some((e) => e.passed)) {
+    // Gate on the TEST command itself passing — the old `evidence.some(passed)`
+    // clause fired mutation when only lint passed but tests failed/never ran.
+    if (testCommand && testCommandRuns) {
       try {
         mutationCheck = await runMutationCheck(this.cwd, testCommand, async (cmd) => this.exitCode(cmd), async (cmd) => this.captureOutput(cmd), task.fileScope);
         if (mutationCheck.applied) {
@@ -198,14 +211,25 @@ export class VerifierEngine {
     ] as import('./types.js').ChatMessage[];
     try {
       const response = await provider.chat(messages, [], { temperature: 0 });
-      if (response.usage) this.budget.recordTokens(response.usage.totalTokens, this.config.model.model);
+      if (response.usage) this.budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
       const cleaned = (response.content ?? '').replace(/```json\s*|\s*```/g, '').trim();
       const parsed = JSON.parse(cleaned);
-      const status = ['PASS', 'FAIL', 'PARTIAL', 'BLOCKED'].includes(parsed.status) ? parsed.status : 'FAIL';
+      // Unparseable status falls back to the rule-based verdict (return null),
+      // not FAIL: a model glitch must not fail correct work.
+      if (!['PASS', 'FAIL', 'PARTIAL', 'BLOCKED'].includes(parsed.status)) return null;
+      const status = parsed.status as VerificationStatus;
+      const passed = Array.isArray(parsed.passed) ? parsed.passed.map(String) : [];
+      const failed = Array.isArray(parsed.failed) ? parsed.failed.map(String) : [];
+      // Veto a PASS that contradicts failed command evidence: the judge
+      // sometimes declares success while a check demonstrably failed.
+      const realFailures = commandEvidenceList(evidence).filter((e) => !e.passed && e.skipped !== true);
+      if (status === 'PASS' && realFailures.length > 0) {
+        return this.build('PARTIAL', passed, [...failed, ...realFailures.map((e) => `${e.source.replace('command:', '')} failed`)], 'Judge declared PASS but verification commands failed. Repair the failures.', evidence);
+      }
       return this.build(
-        status as VerificationStatus,
-        Array.isArray(parsed.passed) ? parsed.passed.map(String) : [],
-        Array.isArray(parsed.failed) ? parsed.failed.map(String) : [],
+        status,
+        passed,
+        failed,
         String(parsed.recommendation ?? 'Continue working.'),
         evidence,
       );
@@ -217,21 +241,36 @@ export class VerifierEngine {
   private ruleBased(task: Task, evidence: VerificationEvidence[]): VerificationResult {
     const passed: string[] = [];
     const failed: string[] = [];
-    const commandEvidence = evidence.filter((e) => e.source.startsWith('command:'));
-    for (const e of commandEvidence) {
+    const cmdEvidence = commandEvidenceList(evidence);
+    for (const e of cmdEvidence) {
       const name = e.source.replace('command:', '');
       if (e.passed) passed.push(`${name} exited 0`);
       else failed.push(`${name} failed`);
     }
-    const hasCommand = commandEvidence.length > 0;
+    const hasCommand = cmdEvidence.length > 0;
     if (hasCommand && failed.length === 0) return this.build('PASS', passed, failed, 'All verification commands passed.', evidence);
     if (hasCommand && passed.length > 0) return this.build('PARTIAL', passed, failed, 'Some verification commands failed. Continue and repair.', evidence);
-    if (!hasCommand && task.acceptanceCriteria.length === 0) return this.build('PASS', ['No explicit checks required'], [], 'No checks configured.', evidence);
+    const diff = evidence.find((e) => e.source === 'diff');
+    const hasDiff = Boolean(diff && diff.result !== 'No git changes detected' && diff.result.length > 0);
+    if (!hasCommand && task.acceptanceCriteria.length === 0) {
+      // Changes on disk with no runnable check are NOT verified — BLOCK so the
+      // goal layer reports honestly instead of marking untested edits done.
+      // (Agent.verify already short-circuits greenfield/content-only cases;
+      // reaching here with a diff means a code change with zero coverage.)
+      if (hasDiff) return this.build('BLOCKED', passed, ['Changes present but no verification command or acceptance criteria cover them'], 'Add a verification command or acceptance criteria for the changed files.', evidence);
+      return this.build('PASS', ['No explicit checks required'], [], 'No checks configured.', evidence);
+    }
     // Content-only deliverable (docs/config/data): a real git diff showing the
     // expected file changed IS the verification — there is no behavior for a
     // suite to exercise, so demanding a runner would block correct work.
-    const diff = evidence.find((e) => e.source === 'diff');
-    if (diff && diff.result !== 'No git changes detected' && diff.result.length > 0) {
+    // Gated on content-only classification: a diff alone must not pass a
+    // behavior task ("game runs smoothly" + any diff = false PASS before).
+    if (hasDiff && classifyContentOnly({
+      title: task.title,
+      description: task.description,
+      acceptanceCriteria: task.acceptanceCriteria,
+      verificationCommand: task.verificationCommand,
+    })) {
       return this.build('PASS', ['content diff present (content-only deliverable)'], [], 'File content delivered and verified by diff.', evidence);
     }
     // Content-only deliverable in a directory with no runnable checks (not a
@@ -400,10 +439,12 @@ export async function captureBaseline(
   await Promise.all(commands.map(async (cmd) => {
     try {
       const out = await runCommand(cmd);
-      if (!out.includes('exit_code: 0')) {
+      const exitLine = out.match(/^exit_code: (\d+)/);
+      const passed = exitLine ? Number(exitLine[1]) === 0 : false;
+      if (!passed) {
         // A failing check with no parseable failure lines still needs a
         // signature: fall back to the raw exit code so it can match later.
-        const sig = failureSignature(out) || out.split('\n')[0] || 'failed';
+        const sig = failureSignature(out) || (exitLine ? exitLine[0] : out.split('\n')[0]) || 'failed';
         signatures.set(cmd, sig);
       }
     } catch {
@@ -414,12 +455,33 @@ export async function captureBaseline(
   return { signatures, capturedAt: Date.now() };
 }
 
+/** Command-result evidence subset (excludes diff/status/mutation notes). */
+function commandEvidenceList(evidence: VerificationEvidence[]): VerificationEvidence[] {
+  return evidence.filter((e) => e.source.startsWith('command:'));
+}
+
+/** Normalize a verification command for baseline keying: strip a leading
+ *  `cd <dir> && ` prefix so `cd sub && npm test` matches a baseline captured
+ *  as `npm test`. Without this the debt-mask never matched scoped commands. */
+export function normalizeCommandKey(cmd: string): string {
+  const t = cmd.trim().replace(/^cd\s+\S+\s*&&\s*/, '');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
 /** True when a post-work failure is identical to the pre-work baseline. */
 export function matchesBaseline(baseline: VerificationBaseline | undefined, command: string, output: string): boolean {
   if (!baseline) return false;
-  const sig = baseline.signatures.get(command);
+  const key = normalizeCommandKey(command);
+  let sig = baseline.signatures.get(command);
+  if (sig === undefined) {
+    // Fall back to normalized-key lookup for scoped (`cd dir && ...`) runs.
+    for (const [k, v] of baseline.signatures) {
+      if (normalizeCommandKey(k) === key) { sig = v; break; }
+    }
+  }
   if (sig === undefined) return false;
   if (sig === '') return false; // passed at baseline; failing now is new
-  const now = failureSignature(output) || output.split('\n')[0] || 'failed';
+  const exitLine = output.match(/^exit_code: (\d+)/);
+  const now = failureSignature(output) || (exitLine ? exitLine[0] : output.split('\n')[0]) || 'failed';
   return now === sig;
 }

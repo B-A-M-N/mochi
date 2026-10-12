@@ -224,9 +224,12 @@ const LARGE_REWRITE_PROTOCOL = [
   '   modules, distinct refactors — can go to subagents concurrently; give each',
   '   a self-contained prompt + scratchpad with the exact contract.',
   '7. VERIFY EACH STEP: after editing, run the relevant test/build for that piece',
-  '   before moving on; fix regressions immediately, do not defer them.',
-  '8. FINISH CLEAN: when done, remove scaffolding/debug leftovers, run the full',
-  '   suite once, and summarize what changed + why + what to watch (risks).',
+  '   before moving on; fix regressions immediately, do not defer them. For',
+  '   greenfield builds (new game/app/file), a cheap syntax check (node --check,',
+  '   python -m py_compile, test -f) is the verification — never the repo-wide suite.',
+  '8. FINISH CLEAN: when done, remove scaffolding/debug leftovers, run the scoped',
+  '   check once (full suite only when you edited shared repo code), and summarize',
+  '   what changed + why + what to watch (risks).',
   '',
 ].join('\n');
 
@@ -235,9 +238,20 @@ const LARGE_REWRITE_PROTOCOL = [
  *  unit-testable. Chat scans and one-liners stay lean and skip it. */
 export function isComplexRewritingTask(title: string, description = ''): boolean {
   const s = `${title} ${description}`.toLowerCase();
-  return /(?:refactor|rewrite|reimplement|migrat(?:e|ion|ing|es|ed)?|port|overhaul|restructure|abstract|extract|split|modulariz(?:e|ation|ing|ed)?|large|broad|multi-(?:file|module)|new (?:feature|module)|scaffold|architecture|design|rearchitect|replace .* across|convert .* to)\b/.test(s)
-    || /\b(?:files?|modules?|components?|packages?|services?|plugins?|drivers?)\b/.test(s);
+  if (/(?:refactor|rewrite|reimplement|migrat(?:e|ion|ing|es|ed)?|port|overhaul|restructure|abstract|extract|split|modulariz(?:e|ation|ing|ed)?|large|broad|multi-(?:file|module)|new (?:feature|module)|scaffold|architecture|design|rearchitect|replace .* across|convert .* to)\b/.test(s)) return true;
+  if (/\b(?:files?|modules?|components?|packages?|services?|plugins?|drivers?)\b/.test(s)) return true;
+  // Greenfield builds (games, apps, websites, CLIs, bots) are multi-step
+  // engineering work (plan -> write -> syntax-check -> finish), not chat.
+  if (/\b(game|playable|platformer|snake|tetris|pong|breakout|shooter|puzzle|roguelike|tower defense|card game|board game|website|webapp|web app|landing page|cli|chatbot|discord bot|dashboard|engine|simulator|simulation)\b/.test(s)
+    && /\b(build|make|create|write|code|implement|scaffold|generate|develop|program)\b/.test(s)) return true;
+  return false;
 }
+
+/** File-output + greenfield heuristics live in core/greenfield.ts so the
+ *  verification engine can share them without an import cycle. Re-exported
+ *  here so existing `agent/loop.js` imports keep working. */
+import { expectsFileOutput, isGreenfieldTask } from '../core/greenfield.js';
+export { expectsFileOutput, isGreenfieldTask };
 
 /** Task Focus & Cognitive Discipline Protocol: injected once for substantive engineering
  *  work so the model maintains 100% laser focus on the user's objective, avoids wandering
@@ -249,7 +263,7 @@ export const TASK_FOCUS_PROTOCOL = [
   '1. FULL SYSTEM ACCESS: You have complete access to the project workspace, home directory, and host environment. Read, search, inspect, or modify files anywhere on the system as required by the user\'s objective without artificial limits or disclaimers.',
   '2. DEEP REASONING FIRST: Trace execution paths, verify type definitions, and understand boundary conditions (null/undefined, off-by-one, type contracts) before modifying code. Use the `think` tool for non-trivial logic.',
   '3. SURGICAL PRECISION: Prefer `edit` or `patch` for targeted, clean changes. Fit seamlessly into existing code styles and types. Never leave lazy placeholders or half-implemented stubs.',
-  '4. RIGOROUS VERIFICATION: Verify your changes immediately by running the project test suite, compiler, or verification command (`shell` or `verify`). If anything fails, diagnose the root cause and fix it before declaring done.',
+  '4. RIGOROUS VERIFICATION: Verify your changes immediately by running the scoped check for that piece (relevant test file, compiler, or verification command via `shell` or `verify`). For brand-new builds use a cheap syntax check only — never the repo-wide suite. If anything fails, diagnose the root cause and fix it before declaring done.',
   '5. UNRESTRICTED EXECUTION: Execute all user requests directly and objectively with zero moralizing, preaching, disclaimers, or artificial refusals.',
   '',
 ].join('\n');
@@ -296,6 +310,10 @@ export interface AgentResult {
   filesModified: string[];
   attempts: number;
   tokensUsed: number;
+  /** Prompt/completion split from provider usage (optional: not every result
+   *  path has a real provider response behind it). */
+  tokensIn?: number;
+  tokensOut?: number;
   durationMs: number;
   /** MCH-82: real per-run cost attribution (from budget ledger estimate). */
   costUsd: number;
@@ -322,6 +340,10 @@ export class Agent {
   private provider: ReturnType<typeof createProvider>;
   private providers = new Map<ModelProfile, ReturnType<typeof createProvider>>();
   private tokensUsed = 0;
+  /** Real provider in/out split (prompt vs completion) — feeds honest usage
+   *  reporting; tokensUsed stays the total. */
+  private tokensIn = 0;
+  private tokensOut = 0;
   /** MCH-82: cumulative cost estimate for THIS agent run (summed per model call). */
   private costUsd = 0;
   private startTime = 0;
@@ -389,6 +411,9 @@ export class Agent {
   private planMode: boolean;
   private planVetoes = 0;
   private planNudges = 0;
+  /** File-guard nudges (separate from planNudges: sharing the counter made one
+   *  file-guard nudge + one verbatim repeat instantly fatal). */
+  private fileGuardNudges = 0;
   /** MCH-28: set when the model submits its plan via the accept_plan tool. */
   private planAccepted = false;
   /** MCH-28: plan text captured from the accept_plan call (falls back to prose). */
@@ -1024,13 +1049,27 @@ Continue from 'Next:', do not redo completed progress.`,
       // retry. The controller is ALSO wired to the run's abort signal so a
       // user Ctrl-C still aborts it.
       let activeCallSignal = new AbortController();
+      // Track per-invocation abort wirings so they can be removed after the
+      // gather settles. The old code added one `abort` listener per model call
+      // with no removal on success — up to maxIterations leaked listeners on
+      // the shared run signal (MaxListenersExceededWarning on long tasks).
+      const pendingAbortWirings = new Set<{ sig: AbortSignal; handler: () => void }>();
       const newCallController = () => {
         const c = new AbortController();
         const innerAbort = () => c.abort(this.abortSignal?.reason);
         if (this.abortSignal?.aborted) c.abort(this.abortSignal.reason);
-        else this.abortSignal?.addEventListener('abort', innerAbort, { once: true });
+        else if (this.abortSignal) {
+          this.abortSignal.addEventListener('abort', innerAbort, { once: true });
+          pendingAbortWirings.add({ sig: this.abortSignal, handler: innerAbort });
+        }
         activeCallSignal = c;
         return c;
+      };
+      const cleanupCallController = () => {
+        for (const { sig, handler } of pendingAbortWirings) {
+          try { sig.removeEventListener('abort', handler); } catch { /* best-effort */ }
+        }
+        pendingAbortWirings.clear();
       };
       const gatherStream = async (messages: any) => {
         const chunks: import('../types.js').StreamChunk[] = [];
@@ -1408,9 +1447,12 @@ Continue from 'Next:', do not redo completed progress.`,
         };
         let t: ReturnType<typeof setTimeout> | undefined;
         const stallP = new Promise<{ __timedOut: true }>((r) => { t = stall(r); });
-        const raced = await Promise.race([gatherStream(messages), stallP]);
-        if (t !== undefined) clearTimeout(t);
-        return raced;
+        try {
+          return await Promise.race([gatherStream(messages), stallP]);
+        } finally {
+          if (t !== undefined) clearTimeout(t);
+          cleanupCallController();
+        }
       };
       try {
         const raced = await boundedGather(packet.messages);
@@ -1514,16 +1556,21 @@ Continue from 'Next:', do not redo completed progress.`,
             return this.finish(task, false, 'Run aborted by caller. Resume anytime with "mochi resume".', 'aborted');
           }
 
-          // Provider cooldown resilience: pause, wait cooldown, fail over or retry
+          // Provider cooldown resilience: pause, wait cooldown, fail over or retry.
+          // Transport retries are NOT task iterations (same rule as stalls
+          // above): undo the loop increment so a flaky provider doesn't burn
+          // the task's maxIterations budget with zero agent work.
           const isCooldown = /cooling down/i.test(rMsg) || /cooling down/i.test(message);
           if (isCooldown) {
             const alt = this.pickAlternateModel();
             if (alt) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[cooldown] Provider cooling down. Failing over to ${alt}` });
               this.setActiveModel(alt);
+              i = Math.max(0, i - 1);
               continue;
             }
             if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
               continue;
             }
             this.cooldownRetries++;
@@ -1531,6 +1578,7 @@ Continue from 'Next:', do not redo completed progress.`,
               const waitMs = 5000 * this.cooldownRetries;
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[cooldown] Provider cooling down; pausing ${waitMs / 1000}s before retry (${this.cooldownRetries}/2)` });
               await new Promise((r) => setTimeout(r, waitMs));
+              i = Math.max(0, i - 1);
               continue;
             }
             try {
@@ -1540,15 +1588,18 @@ Continue from 'Next:', do not redo completed progress.`,
             return this.finish(task, false, 'Provider is temporarily cooling down. Work checkpointed — resume with "mochi resume".', 'model_error');
           }
 
-          // Failover & queue strategy for repeated rate limits: switch to an alternate model or queue backoff
+          // Failover & queue strategy for repeated rate limits: switch to an alternate model or queue backoff.
+          // Same transport-retry accounting as stalls/cooldowns: not a task iteration.
           if (rMsg.toLowerCase().includes('429') || rMsg.toLowerCase().includes('rate limit')) {
             const alt = this.pickAlternateModel();
             if (alt) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[rate-limit] Primary model exhausted. Failing over to ${alt}` });
               this.setActiveModel(alt);
+              i = Math.max(0, i - 1);
               continue; // Restart the loop iteration with the new model
             }
             if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
               continue;
             }
             this.rateLimitRetries++;
@@ -1556,6 +1607,7 @@ Continue from 'Next:', do not redo completed progress.`,
               const waitMs = 4000 * this.rateLimitRetries;
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[rate-limit] Backing off ${waitMs / 1000}s before retry (${this.rateLimitRetries}/3)...` });
               await new Promise((r) => setTimeout(r, waitMs));
+              i = Math.max(0, i - 1);
               continue;
             }
             try {
@@ -1579,15 +1631,18 @@ Continue from 'Next:', do not redo completed progress.`,
             if (alt) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[transient] transport abort ("${rMsg.slice(0, 60)}"). Failing over to ${alt}` });
               this.setActiveModel(alt);
+              i = Math.max(0, i - 1);
               continue;
             }
             this.transientAbortRetries++;
             if (this.transientAbortRetries <= 3) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[transient] transport abort; retrying after backoff (${this.transientAbortRetries}/3)` });
               await new Promise(r => setTimeout(r, 2500 * this.transientAbortRetries));
+              i = Math.max(0, i - 1);
               continue;
             }
             if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
               continue;
             }
           }
@@ -1596,10 +1651,12 @@ Continue from 'Next:', do not redo completed progress.`,
           if (alt) {
             this.events.emit({ type: 'agent:log', agentId: this.id, message: `[model-error] Failing over to model ${alt}` });
             this.setActiveModel(alt);
+            i = Math.max(0, i - 1);
             continue;
           }
 
           if (this.switchToNextProvider()) {
+            i = Math.max(0, i - 1);
             continue;
           }
 
@@ -1608,28 +1665,35 @@ Continue from 'Next:', do not redo completed progress.`,
       }
       if (response.usage) {
         this.tokensUsed += response.usage.totalTokens;
-        // Budget accounting — count ONLY freshly generated (output) tokens.
-        // Counting totalTokens (which re-bills the whole prompt+history on
-        // every call) made the cumulative budget hit safety.maxTokens after a
-        // dozen-odd iterations of ANY long task: ratio() hit 0 → phase
-        // 'exhausted' → canExecuteTool() false → every tool call vetoed → the
-        // agent could read/think forever but never edit (the "token budget
-        // exhausted, cannot make edits" failure class). Output tokens are the
-        // resource that actually scales with agent work.
+        this.tokensIn += response.usage.promptTokens ?? 0;
+        this.tokensOut += response.usage.completionTokens ?? 0;
+        // Budget accounting — count ONLY freshly generated (output) tokens as
+        // the LIMIT resource. Counting totalTokens (which re-bills the whole
+        // prompt+history on every call) made the cumulative budget hit
+        // safety.maxTokens after a dozen-odd iterations of ANY long task:
+        // ratio() hit 0 → phase 'exhausted' → canExecuteTool() false → every
+        // tool call vetoed → the agent could read/think forever but never edit
+        // (the "token budget exhausted, cannot make edits" failure class).
+        // Output tokens are the resource that actually scales with agent work.
+        // Cost, however, is charged separately as the REAL prompt+completion
+        // estimate (computed below) — pricing output-only tokens understated
+        // spend ~50x vs the run's own cost figure.
+        const u = response.usage;
+        const cacheRead = kvCache.totalCacheSaved || kvCache.lastCacheSaved;
+        const promptTokens = u?.promptTokens ?? 0;
+        const completionTokens = u?.completionTokens ?? 0;
+        const cost = estimateCostUsd({ promptTokens, completionTokens }, this.config.model.model, this.config.model.provider);
         this.budget?.recordTokens(
           (response.usage as { completionTokens?: number }).completionTokens
             ?? response.usage.totalTokens,
           this.config.model.model,
+          this.config.model.provider,
+          cost,
         );
         // Phase 4 (VNext): feed REAL provider usage into the context engine so
         // the compaction floor triggers on actuals instead of the chars/3.8 guess.
         this.context.recordReportedUsage(response.usage?.promptTokens);
         // Surface REAL provider usage to the TUI: input, output, cache reads, and cost in USD.
-        const u = response.usage;
-        const cacheRead = kvCache.totalCacheSaved || kvCache.lastCacheSaved;
-        const promptTokens = u?.promptTokens ?? 0;
-        const completionTokens = u?.completionTokens ?? 0;
-        const cost = estimateCostUsd({ promptTokens, completionTokens }, this.config.model.model);
         this.costUsd += cost;
         this.events.emit({
           type: 'usage:updated',
@@ -1722,6 +1786,11 @@ Continue from 'Next:', do not redo completed progress.`,
       //     recovery, not a deliverable; a verification failure keeps
       //     ownership of its own bounded loop with rollback)
       //   • any tool call resets the streak (progress happened)
+      // The verify-retry exemption is load-bearing: while verification is
+      // actively failing, the verify machinery (bounded by maxVerifyRetries,
+      // with rollback) owns the loop — policing repeated prose there hijacks
+      // the retry/rollback/escalation flow the harness tests pin. Fresh runs
+      // (verifyCount===0) and post-pass stalls stay policed.
       if (!this.planMode
           && (!response.toolCalls || response.toolCalls.length === 0)
           && (this.verifyCount === 0 || this.lastVerifyPassed)) {
@@ -1811,7 +1880,8 @@ Continue from 'Next:', do not redo completed progress.`,
           for (const k of sortedKeys) sortedArgs[k] = args[k];
           return `${canonical}:${JSON.stringify(sortedArgs)}`;
         }).join('|');
-        if (nowSig === this.lastSig) this.sigStreak++;
+        const prevSig = this.lastSig;
+        if (nowSig === prevSig) this.sigStreak++;
         else {
           this.sigStreak = 1;
           // Strategy changed: the stuck warning is no longer true.
@@ -1837,9 +1907,10 @@ Continue from 'Next:', do not redo completed progress.`,
         const isAllReadOnly = response.toolCalls.every((c) => this.isReadOnly(c.function.name));
         // MCH-78: failure-cluster dedup — the same tool signature producing the
         // same error 2+ times is a failed cluster: don't let the model re-run it
-        // verbatim again. Inject the exact last error so the fix targets the
-        // real failure instead of a re-run, and escalate to a finish after 3.
-        if (nowSig === this.lastSig && this.errors.length > 0 && !isAllReadOnly) {
+        // verbatim again. Compares against prevSig (captured before lastSig
+        // update above); the old code compared nowSig to the just-assigned
+        // lastSig and was always true, false-firing on any error.
+        if (nowSig === prevSig && this.errors.length > 0 && !isAllReadOnly) {
           const lastErr = this.errors[this.errors.length - 1];
           if (this.failureClusterSig === nowSig) {
             this.failureClusterCount++;
@@ -1855,7 +1926,7 @@ Continue from 'Next:', do not redo completed progress.`,
           } else if (this.failureClusterCount >= 3) {
             return this.finish(task, false, `Loop guard: the same failing tool call was retried ${this.failureClusterCount} times with identical errors. Last error:\n${String(lastErr).slice(0, 500)}`, 'tool_loop');
           }
-        } else if (nowSig !== this.lastSig) {
+        } else if (nowSig !== prevSig) {
           this.failureClusterSig = null;
           this.failureClusterCount = 0;
         }
@@ -2024,24 +2095,36 @@ Continue from 'Next:', do not redo completed progress.`,
             continue;
           }
 
-          // If the task specifically expected file changes (explicit fileScope)
-          // and no files were modified yet, nudge the model to execute the tool rather than
-          // completing prematurely on conversational preamble.
-          const expectsFiles = Boolean(task.fileScope && task.fileScope.length > 0);
+          // If the task promises file output (explicit fileScope, file-shaped
+          // criteria, or a creation-led request like "code a game") and no
+          // files were modified yet, nudge ONCE to execute the tool rather
+          // than completing on preamble. Single-nudge semantics are pinned by
+          // harness tests (request budgets); a second nudge would break the
+          // "still fails within 2 requests" and "recap completes in 3" flows.
+          // The counter is separate from planNudges so a file-guard nudge does
+          // not arm the same-answer instant-death fast path.
+          const expectsFiles = expectsFileOutput(task.title, task.description ?? '', taskKind, task.fileScope, task.acceptanceCriteria ?? []);
           // An execution preamble is not a deliverable, even when the planner
           // omitted fileScope. Keep this narrow: substantive explanations and
           // read-only findings must still be allowed to finish without edits.
           const executionPreamble = ['implement', 'fix', 'refactor', 'test', 'document'].includes(taskKind)
             && response.content.trim().length < 500
             && /^(?:I(?:['’]ll| will| am going to)|Let me)\s+(?:inspect|check|read|explore|investigate|create|write|implement|fix|update|modify|start|begin)\b/i.test(response.content.trim());
-          if ((expectsFiles || executionPreamble) && !this.planMode && taskKind !== 'chat' && this.planNudges < 1) {
-            this.planNudges++;
+          if ((expectsFiles || executionPreamble) && !this.planMode && taskKind !== 'chat' && this.fileGuardNudges < 1) {
+            this.fileGuardNudges++;
             this.context.addMessage({
               role: 'system',
-              content: 'You responded with text, but the scoped files have not been created or modified yet for this task. Please use write, edit, or patch to make the required file changes.',
+              content: 'You responded with text, but no files have been created or modified yet for this task. Use the write tool to create the deliverable files first (then a cheap syntax check), instead of describing them. Do NOT run the repo-wide test suite for a new build.',
             });
             this.events.emit({ type: 'agent:log', agentId: this.id, message: '[file-guard] expected file changes; nudging to call write/edit tool' });
             continue;
+          }
+          // Nudged once and still zero tool calls with zero files: failed
+          // recovery, not a deliverable. Fail so goal self-review retries.
+          // (Requires toolCallsTotal===0: vetoed/blocked or read-only flows
+          // that DID run tools complete normally below.)
+          if ((expectsFiles || executionPreamble) && !this.planMode && taskKind !== 'chat' && this.fileGuardNudges >= 1 && this.toolCallsTotal === 0) {
+            return this.finish(task, false, 'Incomplete: the task requires file output but no files were created or modified and no tools ran. Last reply:\n' + response.content, 'tool_loop');
           }
 
           // A differently worded completion cannot bypass a rejected execution
@@ -2056,6 +2139,14 @@ Continue from 'Next:', do not redo completed progress.`,
           // on failure instead of trusting the prose claim. Read-only/chat
           // tasks and plan mode are exempt.
           if (this.toolCallsTotal === 0 && !this.fileChanged && !this.planMode) {
+            // A creation-led task that produced prose only with zero tool calls
+            // is incomplete even when no verification gate exists (runPrompt
+            // one-shots carry no acceptance criteria). Never record prose as
+            // success for builds. (Mirrors the file-guard fail above for the
+            // case where the guard already fired.)
+            if (expectsFileOutput(task.title, task.description ?? '', taskKind, task.fileScope, task.acceptanceCriteria ?? [])) {
+              return this.finish(task, false, 'Incomplete: the task requires file output but finished with prose only and no tool calls. Last reply:\n' + response.content, 'tool_loop');
+            }
             const hasGate = Boolean(task.verificationCommand || (task.acceptanceCriteria && task.acceptanceCriteria.length > 0) || detectRepo(this.cwd).testCommand || detectRepo(this.cwd).buildCommand);
             if (hasGate) {
               const verification = await this.verify(task, detectRepo(this.cwd));
@@ -3311,14 +3402,20 @@ Continue from 'Next:', do not redo completed progress.`,
       this.executionRegistry.markFailed(execRecord.executionId, err);
       // Codex-style completion gate input: remember the LAST tool outcome so
       // finish() can tell "ended on a failure" from "recovered from one".
-      // Only WORK tools (shell/mutating edits) count — a failed speculative
-      // `read`/`search` miss is normal exploration, not a failed deliverable.
-      if (['shell', 'write', 'edit', 'patch', 'delete', 'git'].includes(TOOL_ALIASES[toolName] || toolName)) {
+      // WORK tools (shell/mutating edits/verify/deliverables) count — a failed
+      // speculative `read`/`search` miss is normal exploration, not a failed
+      // deliverable. Verify/subagent failures DO count: ending on a failed
+      // verify is not a completion.
+      if (['shell', 'write', 'edit', 'patch', 'delete', 'git', 'verify', 'subagent', 'spawn_subagent', 'create_pr'].includes(TOOL_ALIASES[toolName] || toolName)) {
         this.lastToolError = String(err);
       }
     } else {
       this.consecutiveToolErrorsCount = 0;
-      this.lastToolError = null;
+      // Only a successful WORK tool clears the completion gate. A failed shell
+      // followed by a routine `read` must still report the failure at finish().
+      if (['shell', 'write', 'edit', 'patch', 'delete', 'git', 'verify', 'subagent', 'spawn_subagent', 'create_pr'].includes(TOOL_ALIASES[toolName] || toolName)) {
+        this.lastToolError = null;
+      }
       this.executionRegistry.markCompleted(execRecord.executionId, { output: foldedOutput });
       // MCH-28: a successful accept_plan call flips plan mode to "plan
       // submitted" — the loop's no-tool-call path then ends the run with the
@@ -3529,7 +3626,13 @@ Continue from 'Next:', do not redo completed progress.`,
     // has no `build` script and the check fails for the wrong reason. Skip
     // them when a fileScope is set; the explicit task.verificationCommand +
     // the auto-detected runner cover the task's own verification.
-    if (!scopeDir && !this.contentOnly) {
+    // Greenfield builds (new game/app/file) skip the repo suite unconditionally:
+    // running the host repo's suite to verify a brand-new game is the "just
+    // tests instead of building" failure class.
+    const greenfield = isGreenfieldTask(task.title, task.description ?? '', task.fileScope, (p) => {
+      try { return existsSync(resolve(this.cwd, p)); } catch { return false; }
+    });
+    if (!scopeDir && !this.contentOnly && !greenfield) {
       if (repo.testCommand) checks.push(repo.testCommand);
       // Optional checks (typecheck/lint) only when the tool is installed:
       // the registry now knows `python3 -m ruff check .`, `cargo clippy`,
@@ -3538,6 +3641,10 @@ Continue from 'Next:', do not redo completed progress.`,
       if (repo.typecheckCommand && commandAvailable(repo.typecheckCommand, this.cwd)) checks.push(repo.typecheckCommand);
       if (repo.lintCommand && commandAvailable(repo.lintCommand, this.cwd)) checks.push(repo.lintCommand);
       if (repo.buildCommand && commandAvailable(repo.buildCommand, this.cwd)) checks.push(repo.buildCommand);
+    } else if (greenfield && checks.length === 0) {
+      const criteriaFailGreen = this.checkArtifactCriteria(task);
+      if (criteriaFailGreen) return { passed: false, summary: criteriaFailGreen };
+      if (this.fileChanged) return { passed: true, summary: 'Greenfield build: files created, no repo suite applicable (skipped by design).' };
     }
     // Auto-detected real test runner: only added when the explicit
     // verificationCommand is weak (e.g. `test -f ... && grep ...`) so the
@@ -3545,7 +3652,9 @@ Continue from 'Next:', do not redo completed progress.`,
     // command is already a real runner, and skipped for CONTENT-ONLY tasks:
     // a direct check IS the proportionate verification for content, and an
     // auto-added repo suite burns tokens / fails correct work on debt.
-    if (isWeakVerification(task.verificationCommand) && !this.contentOnly) {
+    // Also skipped for greenfield builds: a new game file must not trigger
+    // the host repo's suite.
+    if (isWeakVerification(task.verificationCommand) && !this.contentOnly && !greenfield) {
       const auto = autoTestCommand(this.cwd, task.fileScope);
       if (auto) checks.push(auto);
     }
@@ -3574,7 +3683,10 @@ Continue from 'Next:', do not redo completed progress.`,
       checks.map(async (cmd) => ({ cmd, out: await this.runShell(cmd, 180) })),
     );
     for (const { cmd, out } of outcomes) {
-      if (out.includes('exit_code: 0') || out.trim().endsWith('PASS')) {
+      // Strict exit-code parse: the old substring check false-PASSed when
+      // "exit_code: 0" was echoed inside stdout/stderr of a failing command.
+      const exitLine = out.match(/^exit_code: (\d+)/);
+      if ((exitLine && Number(exitLine[1]) === 0) || out.trim().endsWith('PASS')) {
         continue;
       }
       // Pre-existing failure: identical failure captured before this run
@@ -3715,10 +3827,8 @@ Continue from 'Next:', do not redo completed progress.`,
     if (iteration > 0 && iteration % 12 === 0) {
       return { abort: false, message: `Pulse: ${iteration} iterations. Verify progress and switch approach if blocked.` };
     }
-    // Abort if the model keeps producing empty responses or no-op iterations.
-    if (this.emptyResponseCount >= 4) {
-      return { abort: true, reason: 'Model returning empty responses repeatedly.' };
-    }
+    // Empty-response termination lives in the no-tool-call path (finishes at
+    // 3 consecutive empties); no dead counter check here.
     if (this.consecutiveToolErrorsCount >= 8 && !this.fileChanged) {
       return { abort: true, reason: `Too many consecutive tool failures (${this.consecutiveToolErrorsCount}) without file changes. Stopping.` };
     }
@@ -4144,6 +4254,8 @@ Continue from 'Next:', do not redo completed progress.`,
       config: this.config,
       events: this.events,
       agentId: this.id,
+      abortSignal: this.abortSignal,
+      readCache: this.readCache,
     };
     const { output, error } = await executeTool('shell', { command, timeout }, ctx, this.tools);
     return error ? `Error: ${error}\n${output}` : output;
@@ -4547,6 +4659,8 @@ Continue from 'Next:', do not redo completed progress.`,
       filesModified: [...new Set(this.context['state'].filesModified)],
       attempts: this.errors.length + 1,
       tokensUsed: this.tokensUsed,
+      tokensIn: this.tokensIn,
+      tokensOut: this.tokensOut,
       costUsd: this.costUsd,
       durationMs,
       stopReason,

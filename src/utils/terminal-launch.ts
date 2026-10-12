@@ -107,10 +107,13 @@ export interface LaunchResult {
   command?: string[];
 }
 
-/** Open the new window (detached). Never throws — returns a result. */
+/** Open the new window (detached). Never throws — returns a result.
+ *  `dryRun: true` resolves the emulator + command and returns WITHOUT
+ *  spawning — the old code always spawned, then printed `MOCHI-TERM:` after
+ *  the window had already opened, so the documented safety valve wasn't one. */
 export async function launchInNewTerminal(
   mochiArgs: string[] = [],
-  opts: { title?: string; cols?: number; rows?: number; emulator?: string; pathEnv?: string } = {},
+  opts: { title?: string; cols?: number; rows?: number; emulator?: string; pathEnv?: string; dryRun?: boolean } = {},
 ): Promise<LaunchResult> {
   const execPath = process.execPath;
   const self = resolveSelfCommand(execPath, process.argv);
@@ -130,6 +133,9 @@ export async function launchInNewTerminal(
   }
   const args = buildLaunchArgs(choice.name, [...self, ...mochiArgs], geo);
   const command = [choice.path, ...args];
+  if (opts.dryRun) {
+    return { ok: true, emulator: choice.name, command };
+  }
   try {
     const child = spawn(choice.path, args, {
       cwd: process.cwd(),

@@ -7,7 +7,7 @@
 // binary isn't built; run scripts/tui-smoke.sh manually for the full report.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,8 +15,24 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..');
 const bin = resolve(root, 'dist', 'mochi-bin');
 const scriptBin = ['/usr/bin/script', '/bin/script'].find((p) => existsSync(p));
+// Stale-binary guard: the test drives dist/mochi-bin, which `npm test` does
+// NOT rebuild (only `npm run build:bin` does). A binary older than the TUI
+// sources would fail confusingly against new screen content — skip instead,
+// loudly, so `npm run build:bin && npm test` is the obvious fix.
+function binIsStale(): boolean {
+  try {
+    const binTime = statSync(bin).mtimeMs;
+    for (const f of ['src/tui/app.ts', 'src/cli.ts']) {
+      if (statSync(resolve(root, f)).mtimeMs > binTime) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+const staleMsg = binIsStale() ? ' (stale binary: run npm run build:bin first)' : '';
 
-describe.skipIf(!scriptBin || !existsSync(bin))('TUI PTY visual smoke', () => {
+describe.skipIf(!scriptBin || !existsSync(bin) || binIsStale())('TUI PTY visual smoke' + staleMsg, () => {
   it('splash, composer, and dropdown render over a real PTY', () => {
     const logPath = resolve(root, '.mochi-audit', 'tui-smoke', 'vitest-typescript.log');
     mkdirSync(dirname(logPath), { recursive: true });

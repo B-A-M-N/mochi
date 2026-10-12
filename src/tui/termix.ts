@@ -106,8 +106,8 @@ async function runSession(
       output = response.content ?? '';
       if (response.usage) {
         tokensUsed += response.usage.totalTokens;
-        budget.recordTokens(response.usage.totalTokens, config.model.model);
-        costUsd += estimateCostUsd(response.usage.totalTokens, config.model.model);
+        budget.recordTokens(response.usage.totalTokens, config.model.model, config.model.provider);
+        costUsd += estimateCostUsd(response.usage.totalTokens, config.model.model, config.model.provider);
       }
       steps++;
 

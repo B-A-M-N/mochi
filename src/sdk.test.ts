@@ -25,7 +25,18 @@ afterEach(async () => { await fake?.close(); if (dir) rmSync(dir, { recursive: t
 
 describe('Mochi SDK (in-process mode)', () => {
   it('runs a prompt end-to-end and returns a structured result', async () => {
-    const mochi = await setup([{ content: 'Created the file and ran tests. All pass.', finishReason: 'stop' }]);
+    // End-to-end intent: SDK plumbing returns a structured result. The script
+    // performs a REAL write: prose-only replies to a creation-led prompt are
+    // (correctly) failed as incomplete by the file-output guard, so a
+    // do-nothing script must not expect success here.
+    const mochi = await setup([
+      {
+        content: 'Creating the file now.',
+        finishReason: 'tool_calls',
+        toolCalls: [{ id: 'sdk-w1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'greeting.txt', content: 'hello mochi' }) } }],
+      },
+      { content: 'Created the file and ran tests. All pass.', finishReason: 'stop' },
+    ]);
     const r = await mochi.prompt('Create greeting file and verify. fix tests too');
     expect(r.success).toBe(true);
     expect(r.summary).toContain('Created the file');

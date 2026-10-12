@@ -28,6 +28,16 @@ function base(): MochiConfig {
 }
 
 describe('setProvider', () => {
+  it('survives a missing/empty config file (fresh install has no model object)', () => {
+    // loadConfigFile() returns {} as MochiConfig when config.json doesn't
+    // exist — the old code read cfg.model.apiKey while building the literal
+    // and threw, making login/use/model fatal before anything was saved.
+    const cfg = setProvider({} as MochiConfig, { provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', apiKey: 'sk-fresh-install' });
+    expect(cfg.model.provider).toBe('openai');
+    expect(cfg.model.model).toBe('gpt-4o');
+    expect(cfg.model.apiKey).toBe('sk-fresh-install');
+  });
+
   it('writes the provider/model and persists to the config file', () => {
     const cfg = setProvider(base(), { provider: 'freeinference', baseUrl: 'https://freeinference.org/v1', model: 'deepseek-v4-flash', apiKey: 'sk-test-1234567890' });
     expect(cfg.model.provider).toBe('freeinference');

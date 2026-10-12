@@ -56,6 +56,41 @@ describe('background tasks', () => {
     expect(t.output).toContain('task killed');
   });
 
+  it('persists a ledger so a FRESH process can list/logs the task', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
+    const t = startBackgroundTask('echo ledger-roundtrip', dir);
+    for (let i = 0; i < 50 && t.status === 'running'; i++) await sleep(100);
+    const { listPersistedTasks, getPersistedTask } = await import('./background-tasks.js');
+    const found = getPersistedTask(t.id, dir);
+    expect(found?.status).toBe('completed');
+    expect(found?.output).toContain('ledger-roundtrip');
+    expect(listPersistedTasks(dir).some((x) => x.id === t.id)).toBe(true);
+  }, 15_000);
+
+  it('ledger: corrects stale running records (dead owner pid) and kill fails honestly', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const { mkdirSync, writeFileSync, readFileSync } = await import('node:fs');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
+    mkdirSync(resolve(dir, '.mochi'), { recursive: true });
+    // A pid that just exited (spawnSync waits for it) — near-zero reuse risk.
+    const deadPid = spawnSync('true').pid ?? 999999;
+    writeFileSync(resolve(dir, '.mochi', 'bg-tasks.json'), JSON.stringify([
+      { id: 'stale01', command: 'npm test', startedAt: Date.now(), status: 'running', output: '', pid: deadPid },
+    ]));
+    const { listPersistedTasks, killPersistedTask } = await import('./background-tasks.js');
+    const list = listPersistedTasks(dir);
+    expect(list).toHaveLength(1);
+    expect(list[0].status).toBe('failed');
+    expect(list[0].output).toContain('owner process exited');
+    // Already-dead task: kill reports failure (old in-process path returned
+    // true-ish nothing; a CLI must not claim success for a corpse).
+    expect(killPersistedTask('stale01', dir)).toBe(false);
+    expect(killPersistedTask('no-such-task', dir)).toBe(false);
+    // The correction was written back to the ledger.
+    const raw = JSON.parse(readFileSync(resolve(dir, '.mochi', 'bg-tasks.json'), 'utf8'));
+    expect(raw[0].status).toBe('failed');
+  });
+
   it('manages tasks via bgTaskTool', async () => {
     const { bgTaskTool } = await import('../tools/bg-task.js');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));

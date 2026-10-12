@@ -77,15 +77,28 @@ export function modeSpec(mode: AgentMode): ModeSpec {
 }
 
 export function isMode(s: string): s is AgentMode {
-  return s in MODES;
+  return Object.prototype.hasOwnProperty.call(MODES, s);
 }
 
-/** Apply a mode to a config, returning the modified copy (pure). */
+/** Apply a mode to a config, returning the modified copy (pure). Deep-clones
+ *  nested objects: the old shallow spread shared `model.profiles` /
+ *  `permissions` refs, so mutating the returned config leaked into the source. */
 export function applyMode(config: MochiConfig, mode: AgentMode): MochiConfig {
   const spec = modeSpec(mode);
-  const next = { ...config, mode, planMode: spec.planMode ?? config.planMode };
+  const next: MochiConfig = {
+    ...config,
+    mode,
+    planMode: spec.planMode ?? config.planMode,
+    model: {
+      ...config.model,
+      profiles: config.model.profiles ? { ...config.model.profiles } : undefined,
+      failover: config.model.failover?.map((f) => ({ ...f })),
+    },
+    safety: { ...config.safety },
+    permissions: { ...config.permissions },
+  };
   if (spec.safetyMode) {
-    next.safety = { ...config.safety, mode: spec.safetyMode };
+    next.safety = { ...next.safety, mode: spec.safetyMode };
   }
   return next;
 }

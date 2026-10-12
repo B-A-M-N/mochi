@@ -308,16 +308,23 @@ export class Runtime {
    */
   async autoImprove(prompt: string, runs: number, opts?: { sessionId?: string; onProgress?: (i: number, lastSummary: string) => void; signal?: AbortSignal }): Promise<{ summaries: string[]; finalSummary: string; tokensUsed: number; costUsd: number; durationMs: number }> {
       const boundedRuns = Math.max(1, Math.min(40, runs | 0));
-      const cap = this.config.safety.maxIterations;
-      if (cap < 50) (this.config.safety as { maxIterations: number }).maxIterations = 50;
+      // Per-run usage delta: the old code reported the GLOBAL ledger total, so
+      // repeated autoImprove calls double-counted every prior run's tokens.
+      const usageBefore = this.usage.total();
       const startedAt = performance.now();
       const summaries: string[] = [];
       const sessionId = opts?.sessionId ?? this.activeSessionId;
+      // No shared-config mutation: the old code raised
+      // config.safety.maxIterations to 50 and restored it in `finally`, which
+      // raced with concurrent runGoal/autoImprove calls sharing the config
+      // object. Each pass already runs under the configured ceiling.
       try {
         let priorSummary = '';
         let consecutiveStagnant = 0;
         for (let i = 0; i < boundedRuns; i++) {
-          if (opts?.signal?.aborted) break;
+          // Runtime-level abort (Ctrl-C via Runtime.abort) stops the chain too,
+          // not just the per-call opts.signal. The old code ignored it.
+          if (opts?.signal?.aborted || this.abortController.signal.aborted) break;
           // Self-review pass chain (NOT "keep going"): pass 1 produces the
           // strongest first draft; each later pass first CRITICALLY reviews what
           // was just done — naming concrete flaws, missing cases, and anything
@@ -341,7 +348,11 @@ export class Runtime {
 
           if (priorSummary) {
             const isIdentical = summary.trim() === priorSummary.trim();
-            const declaredDone = /<VERDICT>\s*DONE\s*<\/VERDICT>|no\s+(further|remaining)\s+(issues|changes|improvements)|all\s+tests\s+pass|nothing\s+(left|further)\s+to\s+(fix|do|refine)|already\s+(complete|optimal|verified|perfect)/i.test(summary);
+            // Negation guard: "not all tests pass" / "didn't pass" / "failed"
+            // must never count as DONE. The old `all tests pass` alternative
+            // false-matched negated prose and stopped a failing run as converged.
+            const negated = /\b(not|n't|never|no longer)\b[^.]{0,40}\b(pass|green|done|complete|fixed)\b|\b(failed|failing|failure|broken|still)\b/i.test(summary);
+            const declaredDone = !negated && (/<VERDICT>\s*DONE\s*<\/VERDICT>|no\s+(further|remaining)\s+(issues|changes|improvements)|\ball\s+tests\s+pass\b|nothing\s+(left|further)\s+to\s+(fix|do|refine)|already\s+(complete|optimal|verified|perfect)/i.test(summary));
             const improvedDeclared = /<VERDICT>\s*IMPROVED\s*<\/VERDICT>/i.test(summary);
             const wordsA = new Set(priorSummary.toLowerCase().split(/\s+/).filter((w) => w.length > 2));
             const wordsB = new Set(summary.toLowerCase().split(/\s+/).filter((w) => w.length > 2));
@@ -387,15 +398,16 @@ export class Runtime {
           if (summary) priorSummary = summary;
         }
       } finally {
-        if (cap < 50) (this.config.safety as { maxIterations: number }).maxIterations = cap;
+        // No shared-config restore needed (no mutation above).
       }
       const finalSummary = summaries[summaries.length - 1] ?? '';
       const t = this.usage.total();
+      const tokensUsed = Math.max(0, ((t.tokensIn ?? 0) + (t.tokensOut ?? 0)) - ((usageBefore.tokensIn ?? 0) + (usageBefore.tokensOut ?? 0)));
       return {
         summaries,
         finalSummary,
-        tokensUsed: (t.tokensIn ?? 0) + (t.tokensOut ?? 0),
-        costUsd: t.costUsd ?? 0,
+        tokensUsed,
+        costUsd: Math.max(0, (t.costUsd ?? 0) - (usageBefore.costUsd ?? 0)),
         durationMs: Math.round(performance.now() - startedAt),
       };
     }
@@ -412,11 +424,12 @@ export class Runtime {
    */
   async selfTrain(opts: { cycles?: number; focus?: string; sessionId?: string; onProgress?: (i: number, message: string) => void; signal?: AbortSignal } = {}): Promise<{ report: string; tokensUsed: number; costUsd: number; durationMs: number }> {
     const cycles = Math.max(1, Math.min(20, opts.cycles ?? 3));
+    const usageBefore = this.usage.total();
     const startedAt = performance.now();
     const reports: string[] = [];
 
     for (let c = 0; c < cycles; c++) {
-      if (opts?.signal?.aborted) break;
+      if (opts?.signal?.aborted || this.abortController.signal.aborted) break;
       // Compose a concrete improvement task from the repo's current state so
       // each cycle targets a REAL gap instead of generic "make me better".
       const improvementTask = this.composeImprovementTask(c + 1, cycles, opts.focus);
@@ -441,8 +454,8 @@ export class Runtime {
     const t = this.usage.total();
     return {
       report: reports.join('\n'),
-      tokensUsed: (t.tokensIn ?? 0) + (t.tokensOut ?? 0),
-      costUsd: t.costUsd ?? 0,
+      tokensUsed: Math.max(0, ((t.tokensIn ?? 0) + (t.tokensOut ?? 0)) - ((usageBefore.tokensIn ?? 0) + (usageBefore.tokensOut ?? 0))),
+      costUsd: Math.max(0, (t.costUsd ?? 0) - (usageBefore.costUsd ?? 0)),
       durationMs: Math.round(performance.now() - startedAt),
     };
   }
@@ -662,12 +675,19 @@ export class Runtime {
     }
   }
 
-  private recordUsage(goal: string, result: { tokensUsed: number; costUsd: number; durationMs: number }): void {
+  private recordUsage(goal: string, result: { tokensUsed: number; costUsd: number; durationMs: number; tokensIn?: number; tokensOut?: number; modelCalls?: number }): void {
     this.usage.record(this.config.model.model, goal, {
-      tokensOut: result.tokensUsed,
+      // Real prompt/completion split when the run chain reported provider
+      // usage. Legacy fallback: keep the TOTAL visible under `out` — the old
+      // code always passed only tokensUsed as output, so `mochi usage` showed
+      // "tokens in: 0" forever.
+      tokensIn: result.tokensIn ?? 0,
+      tokensOut: result.tokensOut ?? result.tokensUsed,
       costUsd: result.costUsd,
       durationMs: result.durationMs,
-      modelCalls: 1,
+      // Real call count from the budget ledger — the old hardcoded 1 made
+      // every entry claim a single model call no matter how many the run made.
+      modelCalls: result.modelCalls ?? 1,
     });
   }
 
@@ -722,9 +742,13 @@ export class Runtime {
     if (info.lintCommand) commands.lint = info.lintCommand;
     const out: Record<string, string> = {};
     const { execFile } = await import('node:child_process');
+    // Bounded at 60s per check (was 120s): `known-good` runs the repo's own
+    // suite, which on big repos outlived probe timeouts and looked hung
+    // (empty output + SIGINT). Slow checks report TIMEOUT, not silence.
     await Promise.all(Object.entries(commands).map(([name, cmd]) => new Promise<void>((res) => {
-      execFile('sh', ['-c', cmd], { cwd: this.cwd, timeout: 120000 }, (e) => {
-        out[name] = e ? 'FAIL' : 'PASS';
+      execFile('sh', ['-c', cmd], { cwd: this.cwd, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }, (e) => {
+        const err = e as (Error & { killed?: boolean }) | null;
+        out[name] = !err ? 'PASS' : err.killed ? 'TIMEOUT (>60s)' : 'FAIL';
         res();
       });
     })));
@@ -740,14 +764,21 @@ export class Runtime {
 
   async knownGood(): Promise<string> {
     const baseline = this.workspace.readJson<{ ts: number; checks: Record<string, string> }>('state/knowngood.json');
-    if (!baseline) return 'No known-good baseline yet. Run /known-good to record one.';
+    if (!baseline) return 'No known-good baseline yet. Run `mochi known-good` (CLI) or `/known-good` (TUI) to record one.';
     const now = await this.runChecks();
     const lines = ['compare baseline vs. current:'];
-    for (const name of Object.keys(baseline.checks)) {
+    // Union of both sides: the old loop walked ONLY baseline keys, so a check
+    // that appeared after the baseline (or vanished) was never reported.
+    const names = new Set([...Object.keys(baseline.checks), ...Object.keys(now)]);
+    let changed = 0;
+    for (const name of names) {
       const b = baseline.checks[name] ?? 'N/A';
       const n = now[name] ?? 'N/A';
-      lines.push(`  ${name}: baseline ${b} -> now ${n}${b === n ? '' : '  (CHANGED)'}`);
+      const tag = b === n ? '' : (b === 'N/A' ? '  (NEW)' : '  (CHANGED)');
+      if (tag) changed++;
+      lines.push(`  ${name}: baseline ${b} -> now ${n}${tag}`);
     }
+    lines.push(changed === 0 ? 'All checks match the baseline.' : `${changed} check(s) differ from the baseline.`);
     return lines.join('\n');
   }
 }

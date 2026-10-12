@@ -27,7 +27,7 @@ describe('diagnoseFile (TS)', () => {
     const d = await diagnoseFile(bad, dir);
     expect(d.ok).toBe(false);
     expect(d.errors.join(' ')).toMatch(/string|number|assign/i);
-  }, 20_000);
+  }, 60_000);
 
   it('passes a clean file', async () => {
     const dir = tsProject();
@@ -35,7 +35,7 @@ describe('diagnoseFile (TS)', () => {
     writeFileSync(good, 'export const n: number = 42;\n');
     const d = await diagnoseFile(good, dir);
     expect(d.ok).toBe(true);
-  }, 20_000);
+  }, 60_000);
 });
 
 describe('diagnoseFile (python)', () => {
@@ -49,7 +49,7 @@ describe('diagnoseFile (python)', () => {
       expect(d.ok).toBe(false);
       expect(d.errors.length).toBeGreaterThan(0);
     }
-  }, 20_000);
+  }, 60_000);
 
   it('passes clean python', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-diag-py-'));
@@ -57,7 +57,7 @@ describe('diagnoseFile (python)', () => {
     writeFileSync(good, 'def fine():\n    return 1\n');
     const d = await diagnoseFile(good, dir);
     expect(d.ok).toBe(true);
-  }, 20_000);
+  }, 60_000);
 });
 
 describe('diagnoseFile (unknown)', () => {

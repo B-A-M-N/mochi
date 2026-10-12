@@ -26,6 +26,16 @@ function runGit(cwd: string, args: string[]): string {
   return (res.stdout || '').trim();
 }
 
+/** Like runGit, but surfaces failures — runGit drops status/stderr, which is
+ *  why restore could report success after a `reset --hard` or `apply` that
+ *  git had rejected (non-repo, bad sha, patch conflict). */
+function runGitChecked(cwd: string, args: string[]): { ok: boolean; out: string; err: string } {
+  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (res.error) return { ok: false, out: (res.stdout || '').trim(), err: String(res.error.message) };
+  const ok = res.status === 0;
+  return { ok, out: (res.stdout || '').trim(), err: ok ? '' : (res.stderr || `git ${args.join(' ')} exited ${res.status}`).trim() };
+}
+
 /** Save a named snapshot of current working tree and git state */
 export async function saveNamedCheckpoint(
   cwd: string,
@@ -92,18 +102,39 @@ export async function restoreNamedCheckpoint(
 
   const checkpoint = JSON.parse(readFileSync(filePath, 'utf8')) as NamedCheckpoint;
 
+  // Nothing to restore (e.g. saved outside a git repo: sha 'uncommitted' and
+  // an empty patch) — reporting success here was a pure lie.
+  if ((!checkpoint.gitCommitSha || checkpoint.gitCommitSha === 'uncommitted') && !checkpoint.patch) {
+    return {
+      success: false,
+      message: `Checkpoint "${checkpoint.name}" has no git state or patch to restore (it was saved outside a git repository).`,
+    };
+  }
+
   try {
     // 1. Reset tracked files to the recorded commit
     if (checkpoint.gitCommitSha && checkpoint.gitCommitSha !== 'uncommitted') {
-      runGit(cwd, ['reset', '--hard', checkpoint.gitCommitSha]);
+      const r = runGitChecked(cwd, ['reset', '--hard', checkpoint.gitCommitSha]);
+      if (!r.ok) {
+        return {
+          success: false,
+          message: `Failed to restore checkpoint "${name}": git reset --hard rejected — ${r.err}`,
+        };
+      }
     }
 
     // 2. If there was a dirty working tree patch, re-apply it cleanly
     if (checkpoint.patch) {
       const tempPatchPath = resolve(dir, `_temp_${Date.now()}.patch`);
       writeFileSync(tempPatchPath, checkpoint.patch, 'utf8');
-      runGit(cwd, ['apply', tempPatchPath]);
+      const r = runGitChecked(cwd, ['apply', tempPatchPath]);
       try { unlinkSync(tempPatchPath); } catch {}
+      if (!r.ok) {
+        return {
+          success: false,
+          message: `Checkpoint "${name}": commit restored, but the working-tree patch could NOT be re-applied — ${r.err}`,
+        };
+      }
     }
 
     return {

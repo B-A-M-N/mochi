@@ -53,12 +53,21 @@ export function autoTestCommand(cwd: string, fileScope: string[] | undefined): s
   const candidates = fileScope.map((f) => (isAbsolute(f) ? f : resolve(cwd, f)));
   if (candidates.length === 0) return null;
   const dir = dirname(candidates[0]);
+  // Multi-directory scopes have no single workspace: probing only the first
+  // dir verified the wrong directory (waste/false-FAIL). Bail out and let the
+  // explicit verification command + per-task checks cover it.
+  if (!candidates.every((c) => resolve(dirname(c)) === resolve(dir))) return null;
 
-  // Test files under this directory?
-  const hasTestFile = fileScope.some((f) => /(\.|_|-)(test|spec)\.[cm]?[jt]sx?$/i.test(f));
+  // Test files under this directory? Match all common conventions, not just
+  // JS `*.test.ts` (the old regex missed `_test.go`, `test_*.py`, `*Test.java`
+  // and skipped verification for those languages entirely).
+  const hasTestFile = fileScope.some((f) => /(\.|_|-)(test|spec)\.[cm]?[jt]sx?$|_test\.go$|test_.*\.py$|.*test\.py$|(test|spec)_.*\.py$|.*test\.(java|kt|cs|rb|php|swift|dart)$/i.test(f));
   if (!hasTestFile) {
     // Even without an in-scope test file, if the directory has any *test*.ts
-    // in it, the agent probably needs them run.
+    // in it, the agent probably needs them run. Fall through to the parent
+    // probe below when the local package.json has no runner (monorepo nested
+    // package) instead of returning null and skipping verification.
+    // (Greenfield/content-only callers already veto the auto suite upstream.)
     try {
       const pkgPath = resolve(dir, 'package.json');
       if (existsSync(pkgPath)) {
@@ -66,7 +75,10 @@ export function autoTestCommand(cwd: string, fileScope: string[] | undefined): s
         const hasVitest = pkg.devDependencies?.vitest || pkg.dependencies?.vitest;
         const hasJest = pkg.devDependencies?.jest || pkg.dependencies?.jest;
         const hasNodeTest = typeof pkg.scripts?.test === 'string' && pkg.scripts.test.includes('node --test');
-        if (!hasVitest && !hasJest && !hasNodeTest) return null;
+        if (!hasVitest && !hasJest && !hasNodeTest) {
+          // Local manifest has no runner — do NOT return null here; the
+          // upward probe below may still find the workspace-root runner.
+        }
       }
     } catch {
       return null;
@@ -101,14 +113,15 @@ export function autoTestCommand(cwd: string, fileScope: string[] | undefined): s
     probe = parent;
   }
 
-  // Python fallback
+  // Python fallback (no `| tail` pipe: the pipe's exit code is tail's (0) and
+  // masks real test failures; the harness output cap + condenser handle size).
   if (existsSync(resolve(dir, 'pytest.ini')) || existsSync(resolve(dir, 'pyproject.toml')) || existsSync(resolve(dir, 'setup.py'))) {
-    return `cd ${dir} && (python -m pytest -q || python3 -m pytest -q || pytest -q) 2>&1 | tail -20`;
+    return `cd ${dir} && (python -m pytest -q || python3 -m pytest -q || pytest -q) 2>&1`;
   }
 
   // Go: any in-scope file with path ending in _test.go or a go.mod nearby.
   if (existsSync(resolve(dir, 'go.mod')) || fileScope.some((f) => f.endsWith('_test.go'))) {
-    return `cd ${dir} && go test ./... 2>&1 | tail -20`;
+    return `cd ${dir} && go test ./... 2>&1`;
   }
 
   // Rust: Cargo.toml anywhere between dir and the project root (src/lib.rs
@@ -116,7 +129,7 @@ export function autoTestCommand(cwd: string, fileScope: string[] | undefined): s
   let cargoProbe: string = dir;
   for (let i = 0; i < 4; i++) {
     if (existsSync(resolve(cargoProbe, 'Cargo.toml'))) {
-      return `cd ${cargoProbe} && cargo test 2>&1 | tail -20`;
+      return `cd ${cargoProbe} && cargo test 2>&1`;
     }
     const parent = dirname(cargoProbe);
     if (parent === cargoProbe) break;
@@ -134,7 +147,7 @@ export function autoTestCommand(cwd: string, fileScope: string[] | undefined): s
   for (let i = 0; i < 5; i++) {
     const repo = detectRepo(langProbe);
     if (repo.testCommand && repo.language !== 'js' && repo.language !== 'ts') {
-      return `cd ${langProbe} && ${repo.testCommand} 2>&1 | tail -20`;
+      return `cd ${langProbe} && ${repo.testCommand} 2>&1`;
     }
     const parent = dirname(langProbe);
     if (parent === langProbe) break;
@@ -152,6 +165,9 @@ export function isWeakVerification(command: string | undefined): boolean {
   const c = command.trim();
   // Pure existence/grep/find checks are weak.
   if (/^\s*test\s+-/.test(c) || /^\s*\[/.test(c)) return true;
+  // Compiler / linter invocations are REAL verification for their scope —
+  // treating them as weak caused a wasteful auto-added suite alongside them.
+  if (/\btsc\b|\beslint\b|\bcargo\s+build\b|\bcargo\s+clippy\b|\bgo\s+vet\b|\bgo\s+build\b|\bmypy\b|\bruff\b|\bpyright\b/.test(c)) return false;
   if (/\bgrep\b/.test(c) || /\bfind\b/.test(c) || /\bcat\b/.test(c) || /\bls\b/.test(c)) return true;
   if (/\bwc\b/.test(c) || /\bhead\b/.test(c) || /\btail\b/.test(c)) return true;
   // Anything that actually invokes a runner is not weak.

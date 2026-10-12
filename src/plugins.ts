@@ -19,6 +19,11 @@ export interface PluginManifest {
   hooks?: Partial<Record<HookName, string | string[]>>;
   /** Command that runs when a plugin is loaded, e.g. "node ./activate.js". */
   activation?: string;
+  /** When true, hooks are documented as sandbox-safe (no network, no writes
+   *  outside the workspace). The HookManager does not enforce this yet —
+   *  `validateDir` warns on obviously-unsafe commands so authors opt in
+   *  honestly. */
+  sandbox?: boolean;
 }
 
 export interface PluginRecord {
@@ -28,6 +33,7 @@ export interface PluginRecord {
   dir: string;
   scope: 'project' | 'user';
   hooks: HookName[];
+  enabled: boolean;
 }
 
 const HOOK_KEYS: HookName[] = [
@@ -80,6 +86,7 @@ export class PluginRegistry {
             dir: p,
             scope,
             hooks: Object.keys(manifest.hooks ?? {}) as HookName[],
+            enabled: !existsSync(resolve(p, '.disabled')),
           });
         } catch {
           // skip malformed plugin dirs; don't crash the catalog
@@ -120,7 +127,7 @@ export class PluginRegistry {
     // Removed target first so a stale copy never masks the new one.
     if (existsSync(target)) rmSync(target, { recursive: true, force: true });
     cpSync(source, target, { recursive: true });
-    return { name, version: manifest.version, description: manifest.description ?? '', dir: target, scope, hooks: Object.keys(manifest.hooks ?? {}) as HookName[] };
+    return { name, version: manifest.version, description: manifest.description ?? '', dir: target, scope, hooks: Object.keys(manifest.hooks ?? {}) as HookName[], enabled: true };
   }
 
   remove(name: string): boolean {
@@ -132,10 +139,116 @@ export class PluginRegistry {
     return removed;
   }
 
+  /** Disable without deleting (writes a `.disabled` sentinel; hooks stop merging). */
+  setEnabled(name: string, enabled: boolean): boolean {
+    let changed = false;
+    for (const p of this.list().filter((x) => x.name === name)) {
+      const flag = resolve(p.dir, '.disabled');
+      if (enabled && existsSync(flag)) {
+        rmSync(flag, { force: true });
+        changed = true;
+      } else if (!enabled && !existsSync(flag)) {
+        writeFileSync(flag, 'disabled by `mochi plugin disable`\n');
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** Human-readable manifest dump for `mochi plugin info`. */
+  info(name: string): string {
+    const hit = this.list().find((p) => p.name === name);
+    if (!hit) throw new Error(`No plugin "${name}" installed.`);
+    const manifest = readManifest(hit.dir);
+    const lines = [
+      `${manifest.name} v${manifest.version} [${hit.scope}] ${hit.enabled ? 'enabled' : 'disabled'}`,
+      manifest.description ? `  ${manifest.description}` : '',
+      `  dir: ${hit.dir}`,
+      hit.hooks.length ? `  hooks: ${hit.hooks.join(', ')}` : '  hooks: (none)',
+      manifest.activation ? `  activation: ${manifest.activation}` : '',
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+
+  /** Validate a plugin dir without installing (manifest + hook names). */
+  static validateDir(dir: string): string[] {
+    const problems: string[] = [];
+    try {
+      const manifest = readManifest(dir);
+      if (!manifest.version) problems.push('plugin.json missing "version"');
+      for (const k of Object.keys(manifest.hooks ?? {})) {
+        if (!isHookName(k)) problems.push(`unknown hook "${k}"`);
+      }
+    } catch (e) {
+      problems.push(e instanceof Error ? e.message : String(e));
+    }
+    return problems;
+  }
+
+  /** Sandbox lint: warnings (not errors) for hooks that look unsafe when the
+   *  manifest claims `sandbox: true` — or informational when it doesn't.
+   *  Pure, never throws. */
+  static lintSandbox(dir: string): string[] {
+    const warnings: string[] = [];
+    let manifest: PluginManifest;
+    try {
+      manifest = readManifest(dir);
+    } catch {
+      return warnings;
+    }
+    const cmds: string[] = [];
+    for (const v of Object.values(manifest.hooks ?? {})) {
+      if (typeof v === 'string') cmds.push(v);
+      else if (Array.isArray(v)) cmds.push(...v);
+    }
+    if (manifest.activation) cmds.push(manifest.activation);
+    const risky: Array<[RegExp, string]> = [
+      [/rm\s+-rf?\s+\//, 'rm -rf / — destructive filesystem wipe'],
+      [/curl[^|]*\|\s*(ba)?sh/, 'curl-piped-to-shell installer'],
+      [/wget[^|]*\|\s*(ba)?sh/, 'wget-piped-to-shell installer'],
+      [/nc\s+-l/, 'netcat listener'],
+      [/chmod\s+777/, 'chmod 777 — world-writable'],
+    ];
+    for (const c of cmds) {
+      for (const [re, label] of risky) {
+        if (re.test(c)) warnings.push(`sandbox: ${label} in "${c.slice(0, 80)}"`);
+      }
+    }
+    if (manifest.sandbox && warnings.length) {
+      warnings.unshift('manifest claims sandbox:true but hooks look unsafe — drop the flag or clean the commands');
+    }
+    return [...new Set(warnings)];
+  }
+
+  /** Search installed plugins by name/description/hooks (case-insensitive). */
+  search(query: string): PluginRecord[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return this.list();
+    return this.list().filter((p) => {
+      const hay = `${p.name} ${p.description} ${p.hooks.join(' ')}`.toLowerCase();
+      if (hay.includes(q)) return true;
+      const toks = q.split(/\s+/).filter(Boolean);
+      return toks.length > 1 && toks.every((t) => hay.includes(t));
+    });
+  }
+
+  /** Export an installed plugin to a portable directory (manifest + files).
+   *  Share the directory; recipients install with `mochi plugin add <dir>`. */
+  pack(name: string, outDir: string): string {
+    const hit = this.list().find((p) => p.name === name);
+    if (!hit) throw new Error(`No plugin "${name}" installed.`);
+    const dest = resolve(outDir, name);
+    mkdirSync(outDir, { recursive: true });
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    cpSync(hit.dir, dest, { recursive: true });
+    return dest;
+  }
+
   /** The effective hooks.json content contributed by all installed plugins. */
   mergedHooks(): HookConfig {
     const out: HookConfig = {};
     for (const plugin of this.list()) {
+      if (!plugin.enabled) continue;
       const manifest = readManifest(plugin.dir);
       if (!manifest.hooks) continue;
       for (const [hook, command] of Object.entries(manifest.hooks)) {
@@ -153,7 +266,13 @@ export class PluginRegistry {
       if (isHookName(hook)) merged[hook] = toArray(command);
     }
     for (const [hook, chunks] of Object.entries(this.mergedHooks())) {
-      merged[hook] = [...toArray(merged[hook] ?? []), ...toArray(chunks)];
+      // Dedupe: each `plugin add` re-syncs ALL plugin hooks, so appending
+      // blindly duplicated every plugin's commands in hooks.json on each add.
+      const mergedList = toArray(merged[hook] ?? []);
+      for (const c of toArray(chunks)) {
+        if (!mergedList.includes(c)) mergedList.push(c);
+      }
+      merged[hook] = mergedList;
     }
     mkdirSync(resolve(hooksFile, '..'), { recursive: true });
     writeFileSync(hooksFile, JSON.stringify(merged, null, 2) + '\n');

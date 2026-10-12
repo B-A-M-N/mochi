@@ -51,8 +51,16 @@ export const DEFAULT_COST_PER_TOKEN: Record<string, { prompt: number; completion
 
 import { nativeEstimateCostUsd, nativeBudgetDecide } from './native/core.js';
 
-export function estimateCostUsd(tokens: number | { promptTokens?: number; completionTokens?: number }, model: string): number {
-  if (model.toLowerCase().includes('free')) return 0;
+export function estimateCostUsd(
+  tokens: number | { promptTokens?: number; completionTokens?: number },
+  model: string,
+  provider = '',
+): number {
+  // Free endpoints bill nothing — 'free' in the model id (deepseek-v4-flash-free,
+  // openrouter ':free' variants) or the provider id (freeinference). Pricing a
+  // free endpoint by token count reported fake spend and made the goal summary's
+  // "Cost:" line disagree with the run's own cost figure.
+  if (model.toLowerCase().includes('free') || provider.toLowerCase().includes('free')) return 0;
   if (typeof tokens !== 'number' && tokens.promptTokens !== undefined && tokens.completionTokens !== undefined) {
     const nat = nativeEstimateCostUsd(model, tokens.promptTokens, tokens.completionTokens, 0);
     if (nat !== null && nat > 0) return nat;
@@ -101,13 +109,21 @@ export class BudgetEngine {
     this.startedAt = performance.now();
   }
 
-  recordTokens(tokens: number, model: string) {
+  /** @param provider Provider id — free providers bill $0 (see estimateCostUsd).
+   *  @param realCostUsd Caller-computed cost for THIS record (prompt+completion
+   *  priced). The token-based fallback understates spend when `tokens` is
+   *  output-only — the main loop deliberately records only output tokens for
+   *  LIMIT purposes (full re-billing exhausts maxTokens early) but must still
+   *  charge real cost, or the goal summary showed "Cost: $0.0002" next to
+   *  "Costliest tasks: … ($0.0136)" for the same run. */
+  recordTokens(tokens: number, model: string, provider = '', realCostUsd?: number) {
     this.usedTokens += tokens;
-    this.usedCostUsd += estimateCostUsd(tokens, model);
+    const cost = realCostUsd ?? estimateCostUsd(tokens, model, provider);
+    this.usedCostUsd += cost;
     // MCH-79: per-model ledger for the /usage cost breakdown.
     const e = this.byModel.get(model) ?? { tokens: 0, costUsd: 0, calls: 0 };
     e.tokens += tokens;
-    e.costUsd += estimateCostUsd(tokens, model);
+    e.costUsd += cost;
     e.calls += 1;
     this.byModel.set(model, e);
   }
@@ -223,7 +239,10 @@ export class BudgetEngine {
   }
 
   canExecuteTool(): boolean {
-    return this.remainingDurationMs() > 0 && (this.phase() === 'full' || this.phase() === 'reduced' || this.phase() === 'cheap');
+    // Verify phase (ratio<=0.05) is the "spend remaining budget on proving the
+    // work" phase: it must still allow tool calls (especially the verify
+    // tool / scoped checks). Only a truly exhausted budget vetoes tools.
+    return this.remainingDurationMs() > 0 && this.phase() !== 'exhausted';
   }
 
   shouldUseCheaperModel(): boolean {

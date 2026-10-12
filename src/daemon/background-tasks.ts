@@ -6,8 +6,16 @@
 // Design: one registry per process (daemon-safe), keyed by task id. The shell
 // tool gets a `background: true` flag; the tool returns immediately with a
 // task id, and the agent loop polls delivered results between model calls.
+//
+// The registry is ALSO persisted to <cwd>/.mochi/bg-tasks.json, because a
+// fresh `mochi bg list|logs|kill` CLI process used to read this in-process
+// Map — which is always empty in a new process, so the command could never
+// show or kill anything. Readers should merge: in-process truth first, then
+// the on-disk ledger (with owner-pid liveness checks for stale 'running').
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface BackgroundTask {
   id: string;
@@ -18,11 +26,45 @@ export interface BackgroundTask {
   status: 'running' | 'completed' | 'failed' | 'timeout';
   exitCode?: number | null;
   output: string;
+  /** Child pid — lets a DIFFERENT process (`mochi bg kill`) signal the task. */
+  pid?: number;
 }
 
 const tasks = new Map<string, BackgroundTask>();
 const processes = new Map<string, import('node:child_process').ChildProcess>();
 const MAX_COMPLETED = 20;
+/** Last dir whose ledger we wrote — status transitions land here even when a
+ *  callback doesn't carry cwd (exit/error handlers). */
+let lastStateDir: string | undefined;
+/** Output cap per task IN THE LEDGER (in-memory buffer stays at 200KB). */
+const PERSIST_OUTPUT_CAP = 100_000;
+
+function statePathFor(cwd: string): string {
+  return resolve(cwd, '.mochi', 'bg-tasks.json');
+}
+
+function writeLedger(dir: string | undefined, list: BackgroundTask[]): void {
+  if (!dir) return;
+  try {
+    const file = statePathFor(dir);
+    const parent = resolve(file, '..');
+    if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
+    const slim = list.map((t) => ({
+      ...t,
+      output: t.output.length > PERSIST_OUTPUT_CAP
+        ? `…(truncated)\n${t.output.slice(-PERSIST_OUTPUT_CAP)}`
+        : t.output,
+    }));
+    writeFileSync(file, JSON.stringify(slim));
+  } catch {
+    /* ledger is best-effort — never break a task over it */
+  }
+}
+
+/** Persist the current registry (throttled callers guard their own cadence). */
+function persist(): void {
+  writeLedger(lastStateDir, [...tasks.values()]);
+}
 
 function prune() {
   const done = [...tasks.values()].filter((t) => t.status !== 'running');
@@ -31,6 +73,17 @@ function prune() {
       tasks.delete(t.id);
       processes.delete(t.id);
     }
+  }
+}
+
+function isPidAlive(pid?: number): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM = alive but owned by another user; ESRCH = no such process.
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 
@@ -53,14 +106,30 @@ export function startBackgroundTask(
     env: opts.env ?? process.env,
     detached: false,
   });
+  task.pid = child.pid;
   processes.set(id, child);
+  lastStateDir = cwd;
   let buffer = '';
   const cap = 200_000;
+  let lastFlushAt = 0;
+  // Live output: reflect the buffer on the task and flush the ledger at most
+  // once a second so `mochi bg logs` on a RUNNING task shows something and a
+  // crash of the owner doesn't lose the whole run's output.
+  const flush = (force = false) => {
+    task.output = buffer;
+    const now = Date.now();
+    if (force || now - lastFlushAt > 1000) {
+      lastFlushAt = now;
+      persist();
+    }
+  };
   child.stdout?.on('data', (d: Buffer) => {
     if (buffer.length < cap) buffer += d.toString();
+    flush();
   });
   child.stderr?.on('data', (d: Buffer) => {
     if (buffer.length < cap) buffer += d.toString();
+    flush();
   });
   const timeout = opts.timeoutMs ?? 10 * 60_000;
   const timer = setTimeout(() => {
@@ -69,6 +138,7 @@ export function startBackgroundTask(
     task.status = 'timeout';
     task.endedAt = Date.now();
     task.output = buffer;
+    persist();
   }, timeout);
   child.on('exit', (code) => {
     clearTimeout(timer);
@@ -80,6 +150,7 @@ export function startBackgroundTask(
       task.output = buffer;
       prune();
     }
+    persist();
   });
   child.on('error', () => {
     clearTimeout(timer);
@@ -87,8 +158,10 @@ export function startBackgroundTask(
     task.status = 'failed';
     task.endedAt = Date.now();
     task.output = buffer + '\n(spawn error)';
+    persist();
   });
   tasks.set(id, task);
+  persist();
   return task;
 }
 
@@ -111,6 +184,7 @@ export function killTask(id: string): boolean {
   t.endedAt = Date.now();
   t.output = t.output ? `${t.output}\n(task killed by agent)` : '(task killed by agent)';
   prune();
+  persist();
   return true;
 }
 
@@ -120,6 +194,73 @@ export function getTask(id: string): BackgroundTask | undefined {
 
 export function listTasks(): BackgroundTask[] {
   return [...tasks.values()].sort((a, b) => b.startedAt - a.startedAt);
+}
+
+// ---- Cross-process ledger (CLI: `mochi bg …`) -----------------------------
+
+function readLedger(cwd: string): BackgroundTask[] {
+  try {
+    const file = statePathFor(cwd);
+    if (!existsSync(file)) return [];
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    return Array.isArray(parsed) ? (parsed as BackgroundTask[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Tasks from the on-disk ledger, with owner-pid liveness applied: a record
+ *  still 'running' whose child pid is dead (and which this process doesn't
+ *  own) is corrected to 'failed' — the owning agent exited before recording
+ *  the outcome, so the status is unknowable, not "still running". */
+export function listPersistedTasks(cwd: string): BackgroundTask[] {
+  const list = readLedger(cwd);
+  let changed = false;
+  for (const t of list) {
+    if (t.status !== 'running') continue;
+    if (processes.has(t.id)) continue; // this process owns it — Map is truth
+    if (!isPidAlive(t.pid)) {
+      t.status = 'failed';
+      t.endedAt = t.endedAt ?? Date.now();
+      t.output = (t.output ? `${t.output}\n` : '') + '(owner process exited before completion — exit status unknown)';
+      changed = true;
+    }
+  }
+  if (changed) writeLedger(cwd, list);
+  return list.sort((a, b) => b.startedAt - a.startedAt);
+}
+
+export function getPersistedTask(id: string, cwd: string): BackgroundTask | undefined {
+  return listPersistedTasks(cwd).find((t) => t.id === id);
+}
+
+/** Kill a task recorded in the ledger from a DIFFERENT process (signals the
+ *  child pid directly). Returns false when the task is gone or already dead —
+ *  after marking the record so it stops claiming 'running'. */
+export function killPersistedTask(id: string, cwd: string): boolean {
+  const list = readLedger(cwd);
+  const t = list.find((x) => x.id === id);
+  if (!t) return false;
+  if (processes.has(id)) return killTask(id); // this process owns it
+  if (t.status !== 'running') return false;
+  if (isPidAlive(t.pid)) {
+    try {
+      process.kill(t.pid!, 'SIGTERM');
+    } catch {
+      return false;
+    }
+  } else {
+    t.status = 'failed';
+    t.endedAt = Date.now();
+    t.output = (t.output ? `${t.output}\n` : '') + '(task was already dead when kill was requested)';
+    writeLedger(cwd, list);
+    return false;
+  }
+  t.status = 'failed';
+  t.endedAt = Date.now();
+  t.output = (t.output ? `${t.output}\n` : '') + '(task killed)';
+  writeLedger(cwd, list);
+  return true;
 }
 
 /** Human/agent-readable snapshot for tool results. */

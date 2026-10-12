@@ -18,6 +18,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, statSync } from 'node:fs';
 import {join, dirname} from 'node:path';
 import { safeSlug } from '../skills/skill-manager.js';
+import { maybeRedact } from '../security/security.js';
 import type { Tool, ToolContext } from './types.js';
 import { recordToolUsage, toolUsageLine } from './tool-usage.js';
 import type { ToolDefinition } from '../types.js';
@@ -188,16 +189,18 @@ export function runAuthoredCommand(m: AuthoredToolManifest, args: Record<string,
         MOCHI_TOOL_DIR: join(toolsRoot(projectDir), safeSlug(m.name)),
       },
     }, (error, stdout, stderr) => {
-      let out = stdout.toString();
+      // Redact secrets: authored-command output is persisted to tool results
+      // and can echo env/secret material into the transcript + trace files.
+      let out = maybeRedact(stdout.toString());
       if (out.length > MAX_OUTPUT_CHARS) out = out.slice(0, MAX_OUTPUT_CHARS) + `\n[... truncated at ${MAX_OUTPUT_CHARS} chars ...]`;
       if (error) {
-        const errTail = stderr.toString().slice(-2_000).trim();
+        const errTail = maybeRedact(stderr.toString().slice(-2_000).trim());
         const timedOut = (error as { killed?: boolean }).killed === true;
         resolve({
           output: out,
           error: timedOut
             ? `command timed out after ${timeoutMs}ms`
-            : `exit failed: ${errTail || error.message}`,
+            : `exit failed: ${errTail || maybeRedact(error.message)}`,
           durationMs: Date.now() - started,
         });
         return;

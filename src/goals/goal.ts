@@ -29,7 +29,15 @@ export interface GoalResult {
   filesModified: string[];
   summary: string;
   tokensUsed: number;
+  /** Prompt/completion split when the underlying runs reported real provider
+   *  usage (legacy/partial paths leave these unset — consumers fall back). */
+  tokensIn?: number;
+  tokensOut?: number;
   costUsd: number;
+  /** Real model-call count from the run's budget ledger (every loop /
+   *  verification / speculative call records one). Optional: legacy/partial
+   *  paths fall back to 1 in the usage store. */
+  modelCalls?: number;
   durationMs: number;
 }
 
@@ -38,7 +46,7 @@ export class GoalEngine {
   private workspace: Workspace;
   private events: EventBus;
   private cwd: string;
-  private goalStats = { tokens: 0, duration: 0 };
+  private goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, duration: 0 };
   /** Baseline for the in-flight run (undefined outside runGoal). */
   private runBaseline: VerificationBaseline | Promise<VerificationBaseline | undefined> | undefined;
   private baselineCache?: { baseline: VerificationBaseline; cachedAt: number };
@@ -157,7 +165,7 @@ export class GoalEngine {
       : '';
     const verifyInstruction = this.config.planMode
       ? ''
-      : '\nIMPORTANT: verification must match the task\'s SCOPE. If the task changes code with existing tests, verificationCommand should run ONLY the relevant subset (e.g. `npx vitest run src/foo.test.ts`, `python3 -m pytest tests/test_foo.py -q`), NOT the repo-wide suite. If the task only creates/edits a file with no behavior change (docs, config, data, simple scripts), use a cheap direct check like `test -f <path>` or `grep -q <expected> <path>` and keep acceptanceCriteria minimal. If the task is pure research/planning, omit verificationCommand entirely. Repo-wide runners are for tasks that intentionally change broad behavior; the harness also baseline-guards against pre-existing failures.';
+      : '\nIMPORTANT: verification must match the task\'s SCOPE. If the task changes code with existing tests, verificationCommand should run ONLY the relevant subset (e.g. `npx vitest run src/foo.test.ts`, `python3 -m pytest tests/test_foo.py -q`), NOT the repo-wide suite. If the task only creates/edits a file with no behavior change (docs, config, data, simple scripts), use a cheap direct check like `test -f <path>` or `grep -q <expected> <path>` and keep acceptanceCriteria minimal. GREENFIELD RULE: when the goal builds something brand-new (game, app, website, CLI, bot, script — files that do not exist yet), every build task MUST set fileScope to the exact new file paths (e.g. ["snake-game/index.html"]) with acceptanceCriteria like "<path> exists", and verificationCommand MUST be a cheap direct check (`test -f <path>` plus a syntax check like `node --check <file>` or `python3 -m py_compile <file>`), NEVER the repo-wide suite (`npm test`, `vitest run` without a path, `pytest` without a path). If the task is pure research/planning, omit verificationCommand entirely. Repo-wide runners are for tasks that intentionally change broad behavior; the harness also baseline-guards against pre-existing failures.';
     const decomposePrompt = `Decompose the goal into a JSON array of tasks. Each task:
 {
   "title": string,
@@ -236,7 +244,7 @@ Return ONLY the JSON array, no markdown.`;
         durationMs: 0,
       };
     }
-    this.goalStats = { tokens: 0, duration: 0 };
+    this.goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, duration: 0 };
     this.goalFiles = [];
     const budget = new BudgetEngine(this.config.safety);
     budget.start();
@@ -330,7 +338,7 @@ Return ONLY the JSON array, no markdown.`;
       // in-flight pool and launch into freed slots as soon as ANY task
       // completes. Scheduler readiness is still re-checked per launch, so
       // file-scope conflict gating is unchanged.
-      const launched = this.startReadyBatch(scheduler, goal, abortController.signal, budget, extraContext, maxConcurrency - inFlight.size, verifier, readCache, sessionId);
+      const launched = await this.startReadyBatch(scheduler, goal, abortController.signal, budget, extraContext, maxConcurrency - inFlight.size, verifier, readCache, sessionId);
       for (const p of launched) {
         const safe = p.catch(() => { /* runOne marks failure via scheduler */ });
         inFlight.add(safe);
@@ -374,7 +382,10 @@ Return ONLY the JSON array, no markdown.`;
               .join(' | ')
           : ''),
       tokensUsed: this.goalStats.tokens,
+      tokensIn: this.goalStats.tokensIn,
+      tokensOut: this.goalStats.tokensOut,
       costUsd: budget.snapshot(this.config.model.model).usedCostUsd,
+      modelCalls: budget.snapshot(this.config.model.model).usedModelCalls,
       durationMs: this.goalStats.duration,
       filesModified: [...this.goalFiles],
     };
@@ -417,7 +428,7 @@ Return ONLY the JSON array, no markdown.`;
    * the worker promise for each actually-started task (empty if none could
    * launch because every ready task conflicts with the running set).
    */
-  private startReadyBatch(
+  private async startReadyBatch(
     scheduler: TaskScheduler,
     goal: Goal,
     abortSignal: AbortSignal,
@@ -427,16 +438,24 @@ Return ONLY the JSON array, no markdown.`;
     verifier: VerifierEngine,
     readCache: ReadCache,
     sessionId?: string,
-  ): Promise<void>[] {
+  ): Promise<Promise<void>[]> {
     const launched: Promise<void>[] = [];
     while (launched.length < maxConcurrency && !scheduler.isDone()) {
       const ready = scheduler.readyTasks();
       if (ready.length === 0) break;
       const task = ready[0];
-      const taskHook = this.hooks.runBefore('before_task', { task: task.id });
+      // Await the hook BEFORE marking running: the old code started the task
+      // synchronously then awaited the veto inside runOne, so a vetoed task
+      // briefly occupied a concurrency slot and polluted conflict detection.
+      const taskHook = await this.hooks.runBefore('before_task', { task: task.id });
+      if (!taskHook.allowed) {
+        scheduler.fail(task.id, 'Task blocked by before_task hook', this.agentId(task));
+        await this.hooks.runAfter('after_task', { task: task.id, status: 'failed' });
+        continue;
+      }
       // Start synchronously so the conflict detector sees this task's scope.
       scheduler.start(task.id);
-      launched.push(this.runOne(scheduler, goal, task, abortSignal, budget, extraContext, taskHook, verifier, readCache, sessionId));
+      launched.push(this.runOne(scheduler, goal, task, abortSignal, budget, extraContext, verifier, readCache, sessionId));
     }
     return launched;
   }
@@ -449,16 +468,10 @@ Return ONLY the JSON array, no markdown.`;
     abortSignal: AbortSignal,
     budget: BudgetEngine,
     extraContext: string[],
-    taskHook: Promise<{ allowed: boolean }>,
     verifier: VerifierEngine,
     readCache: ReadCache,
     sessionId?: string,
   ): Promise<void> {
-    const hook = await taskHook;
-    if (!hook.allowed) {
-      scheduler.fail(task.id, 'Task blocked by before_task hook', this.agentId(task));
-      return;
-    }
     // Self-review retry loop (per task): if a task's verification fails, don't
     // give up immediately — re-run the SAME task with a critical-review nudge
     // that names the verification failure and asks the agent to fix the real
@@ -468,6 +481,8 @@ Return ONLY the JSON array, no markdown.`;
     const maxSelfReviews = Math.max(0, Number(process.env.MOCHI_GOAL_SELF_REVIEW_ATTEMPTS ?? 2) || 0);
     let result = await this.runTask(goal, task, abortSignal, budget, extraContext, readCache, sessionId, this.failoverCursor++);
     this.goalStats.tokens += result.tokensUsed;
+    this.goalStats.tokensIn += result.tokensIn ?? 0;
+    this.goalStats.tokensOut += result.tokensOut ?? 0;
     this.goalStats.duration += result.durationMs;
     // MCH-81: per-task cost attribution for the goal summary card (guard: agent
     // run results don't always carry costUsd — crash found by live probe).
@@ -492,6 +507,11 @@ Return ONLY the JSON array, no markdown.`;
     // Plan mode intentionally changes nothing, so end-state acceptance checks
     // ("file exists", verification commands) would always fail. A plan run
     // succeeds on the agent's own result; the plan text is the deliverable.
+    // Bare one-shot tasks (no criteria/command, e.g. `mochi -p "create X"`)
+    // stay on the Agent layer's own verify gate: it already runs before any
+    // finish (scoped checks, greenfield artifact pass, strict exit codes), and
+    // the goal verifier has no criteria to judge them against — sending them
+    // there BLOCKs correct one-shot builds instead of completing them.
     const needsVerification = !this.config.planMode && (task.acceptanceCriteria.length > 0 || Boolean(task.verificationCommand));
     if (needsVerification) {
       // Simple acceptance criteria shortcut: if there is no explicit verification command
@@ -503,18 +523,25 @@ Return ONLY the JSON array, no markdown.`;
         for (const crit of task.acceptanceCriteria) {
           const trimmed = crit.trim().toLowerCase();
           const match = trimmed.match(/^(.+?)\s+exists$/);
-          if (match) {
-            const filePath = match[1].replace(/^['\"]|['\"]$/g, '');
-            try {
-              fs.accessSync(resolve(this.cwd, filePath));
-            } catch {
-              simplePass = false;
-              break;
-            }
-          } else {
+          // Only path-like criteria qualify ("src/x.ts exists"). The old
+          // regex accepted any "<words> exists" ("Database exists") and
+          // probed `<cwd>/database`. Empty files don't satisfy: a 0-byte
+          // deliverable is not done.
+          const rawPath = match?.[1].replace(/^['\"]|['\"]$/g, '') ?? '';
+          const pathLike = match && (rawPath.includes('/') || rawPath.includes('\\') || /\.[a-z0-9]{1,8}$/.test(rawPath));
+          if (!pathLike) {
             simplePass = false;
             break;
           }
+          try {
+            fs.accessSync(resolve(this.cwd, rawPath));
+            const st = fs.statSync(resolve(this.cwd, rawPath));
+            if (st.isFile() && st.size === 0) simplePass = false;
+          } catch {
+            simplePass = false;
+            break;
+          }
+          if (!simplePass) break;
         }
         if (simplePass) {
           task.output = 'All acceptance criteria passed (simple check).';
@@ -526,9 +553,11 @@ Return ONLY the JSON array, no markdown.`;
       let verification = await verifier.verify(task, result.summary);
       // Self-review improvement passes: iterate the task toward verified-passing
       // before declaring it done, so /goal refines each step instead of leaving
-      // it half-finished.
+      // it half-finished. BLOCKED is an environment/config problem (missing
+      // runner, hook veto), not a code defect — retrying it with "fix it
+      // properly" corrupts correct work, so it fails fast with no retries.
       let review = 0;
-      while (verification.status !== 'PASS' && review < maxSelfReviews && !abortSignal.aborted) {
+      while ((verification.status === 'FAIL' || verification.status === 'PARTIAL') && review < maxSelfReviews && !abortSignal.aborted) {
         review++;
         this.events.emit({
           type: 'agent:log',
@@ -555,6 +584,8 @@ Return ONLY the JSON array, no markdown.`;
         });
         const reviewResult = await this.runAgentWithAutoResume(reviewAgent, goal, task, reviewContext, abortSignal);
         this.goalStats.tokens += reviewResult.tokensUsed;
+        this.goalStats.tokensIn += reviewResult.tokensIn ?? 0;
+        this.goalStats.tokensOut += reviewResult.tokensOut ?? 0;
         this.goalStats.duration += reviewResult.durationMs;
         if (!reviewResult.success) break;
         result = reviewResult;
@@ -703,6 +734,8 @@ Return ONLY the JSON array, no markdown.`;
         filesModified: [],
         attempts: 0,
         tokensUsed: 0,
+        tokensIn: 0,
+        tokensOut: 0,
         costUsd: 0,
         durationMs: 0,
       };

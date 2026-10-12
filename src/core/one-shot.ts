@@ -50,7 +50,9 @@ export function classifyOneShot(input: ClassifyInput): { kind: OneShotKind; sugg
   const text = `${input.title} ${input.description}`.toLowerCase();
 
   // Explicit write/verification intent overrides any answer phrasing.
-  if (WORK_MARKERS.some((m) => text.includes(m))) {
+  // Word-boundary match: the old substring check fired on "creative" (contains
+  // "create") and forced chat into a full coding loop.
+  if (WORK_MARKERS.some((m) => new RegExp(`\\b${m.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text))) {
     return { kind: 'not_one_shot' as const, suggests: null };
   }
   if (input.verificationCommand) {

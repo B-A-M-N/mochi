@@ -1,6 +1,6 @@
 # MOCHI vs Competitors — Capability Matrix (Phase 4.1)
 
-Date: 2026-10-04. Sources: public docs/help of each competitor (fetched where
+Date: 2026-10-04, refreshed 2026-10-12 (table verdicts synced with Gaps closed appendix — no stale rows). Sources: public docs/help of each competitor (fetched where
 network allowed), else the maintainer's working knowledge marked `(wk)` and
 flagged for verification. Verdicts: **ahead / parity / gap / won't-do**.
 Rule from MASTER-PROMPT: every "ahead" row must cite the mechanism in code —
@@ -11,12 +11,12 @@ no vaporware rows.
 | Context compaction | auto-summarize at window limit (docs) | truncation + summary (wk) | LLM summarize (wk) | ledger + compaction | valid-cut-point compaction (Rust planner + TS fallback), Pi-style structured checkpoint, file-ledger carryover, fidelity test (`context-compaction-fidelity.test.ts`) | **ahead** |
 | Subagents/orchestration | Task tool, parallel (docs) | limited (wk) | agents dir (wk) | delegate_task | team engine, parallel goal scheduler w/ file-scope conflict gating (`goals/goal.ts`), subagents | **parity** |
 | Planning mode | plan mode (docs) | no (wk) | plan mode (wk) | N/A | planMode w/ read-only allowlist, veto+dangling-id answers, plan nudges, plan-shaped detection | **parity** |
-| Hooks | PreToolUse/PostToolUse/Stop (docs) | no (wk) | no (wk) | hooks | HookManager (`src/hooks.ts`) + veto-with-tool-id | **parity** — lifecycle coverage audit still open |
-| MCP client | yes (docs) | yes (docs) | yes | yes | MCP close paths in loop; **round-trip test missing** | **gap** (test) |
-| Skills/memory | CLAUDE.md, no skill system (docs) | no | no | 170+ curated static skills | self-authoring skills, evidence-gated curator, **real dedup** (`skillSimilarity` ≥0.7 merge, tested), `/skills audit`, tool_factory agent-authored executable tools | **ahead** (mechanism unique; regression doctor open) |
+| Hooks | PreToolUse/PostToolUse/Stop (docs) | no (wk) | no (wk) | hooks | HookManager (`src/hooks.ts`) + veto-with-tool-id | **parity** |
+| MCP client | yes (docs) | yes (docs) | yes | yes | MCP close paths in loop; round-trip covered (`src/mcp/tools.test.ts`) | **parity** |
+| Skills/memory | CLAUDE.md, no skill system (docs) | no | no | 170+ curated static skills | self-authoring skills, evidence-gated curator, **real dedup** (`skillSimilarity` ≥0.7 merge, tested), `/skills audit`, tool_factory agent-authored executable tools, skill regression doctor (`runSkillDoctor`) | **ahead** (mechanism unique) |
 | Verification loops | bash + CI (docs) | sandbox exec | run hooks | shell | per-task verification, baseline debt-gating, intent gate (wantsGreen), diff-hygiene pass, self-review, verify>3 → **auto-rollback** | **ahead** |
-| Diff review UX | diff-first (docs) | diff | diff | git | git checkpoint/restore, `gitRollback`, pending `/diff` command **not yet built** | **gap** (UX) |
-| Session resume | --resume (docs) | sessions | sessions | sessions | session store, checkpoints, `mochi resume` | **parity** — kill-9 fidelity test open |
+| Diff review UX | diff-first (docs) | diff | diff | git | git checkpoint/restore, `gitRollback`, interactive `/diff` (`src/tui/app.ts`) | **parity** |
+| Session resume | --resume (docs) | sessions | sessions | sessions | session store, checkpoints, `mochi resume`, kill-9 fidelity tested (`src/agent/kill9-resume.test.ts`) | **parity** |
 | Permission models | allowlist prompts (docs) | sandbox | modes | ask/auto | safe/ask/auto + planMode allowlist + per-tool perms | **parity** |
 | Model failover | manual switch (docs) | single | manual | failover chain | auto chain (env keys), `pickAlternateModel`, rate-limit + **transient-abort failover** (bounded 3x backoff), provider cooldown registry | **ahead** |
 | Degenerate-output defense | none documented | none | none documented | none | phrase-window + **cross-phrase cycle detector**, periodicity check, stream budgets, same-answer nudge→stop, chaos suite (`agent/chaos.test.ts`, 5 shapes) | **ahead** — no competitor documents anything here |

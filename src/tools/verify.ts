@@ -1,9 +1,12 @@
-import { spawn } from 'node:child_process';
 import type { Tool } from './types.js';
 import { detectRepo } from '../repo/repo.js';
+import { runShellString } from '../exec.js';
+import { maybeRedact } from '../security/security.js';
 
 // Run project verification commands (test, build, typecheck, lint) with
-// smart command injection and result summarization
+// smart command injection and result summarization.
+// Central policy: runs through exec.ts runShellString (timeout + SIGKILL,
+// output cap) and redacts secrets from output before returning to the model.
 export const verifyTool: Tool = {
   def: {
     name: 'verify',
@@ -23,7 +26,7 @@ export const verifyTool: Tool = {
     const repo = detectRepo(ctx.cwd);
     const cmdType = String(args.command ?? 'test');
     const target = args.target ? String(args.target) : undefined;
-    const timeout = (args.timeout ? Number(args.timeout) : 120) * 1000;
+    const timeoutSec = Math.min(Math.max(5, args.timeout ? Number(args.timeout) : 120), 600);
 
     // Determine the actual command to run based on project type
     let cmd: string;
@@ -46,42 +49,23 @@ export const verifyTool: Tool = {
       cmd = `${cmd} ${target.includes('--') ? '' : '-- '}${target}`.trim();
     }
 
-    return new Promise((resolve) => {
-      const start = Date.now();
-      const child = spawn('sh', ['-c', cmd], {
+    const start = Date.now();
+    try {
+      const r = await runShellString(cmd, {
         cwd: ctx.cwd,
+        timeoutMs: timeoutSec * 1000,
+        maxOutput: 512 * 1024,
         env: { ...process.env, AI_AGENT: 'mochi' },
-        stdio: 'pipe',
       });
-
-      let stdout = '';
-      let stderr = '';
-
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL');
-        resolve(`VERIFICATION TIMEOUT after ${timeout / 1000}s\n${stdout}\n${stderr}`);
-      }, timeout);
-
-      child.stdout?.on('data', (chunk) => { stdout += String(chunk); });
-      child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
-
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        const duration = Date.now() - start;
-        const output = stdout + (stderr ? `\n[stderr]:\n${stderr}` : '');
-        const truncated = output.slice(0, 8000);
-
-        if (code === 0) {
-          resolve(`[PASS] Verification PASSED (${Math.round(duration / 1000)}s)\n${truncated}`);
-        } else {
-          resolve(`[FAIL] Verification FAILED (exit ${code}, ${Math.round(duration / 1000)}s)\n${truncated}`);
-        }
-      });
-
-      child.on('error', (err) => {
-        clearTimeout(timer);
-        resolve(`[ERR] Verification ERROR: ${err.message}`);
-      });
-    });
+      const duration = Date.now() - start;
+      const output = maybeRedact(`${r.stdout}${r.stderr ? `\n[stderr]:\n${r.stderr}` : ''}`).slice(0, 8000);
+      if ((r.code ?? 1) === 0) {
+        return `[PASS] Verification PASSED (${Math.round(duration / 1000)}s)\n${output}`;
+      }
+      const note = r.timedOut ? ' (timed out, SIGKILLed)' : '';
+      return `[FAIL] Verification FAILED (exit ${r.code ?? 1}${note}, ${Math.round(duration / 1000)}s)\n${output}`;
+    } catch (err) {
+      return `[ERR] Verification ERROR: ${maybeRedact(err instanceof Error ? err.message : String(err))}`;
+    }
   },
 };

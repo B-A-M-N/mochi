@@ -1,5 +1,5 @@
 import {highlightRange} from './selection.js';
-import { execFile, spawn } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 import { findProjectRoot } from '../repo/repo.js';
 import { Runtime } from '../runtime.js';
@@ -30,6 +30,7 @@ import {
   gradientCacheBar,
   splashFrame,
   SPLASH_TICKS,
+  farewellFrame,
   statusBarRow1,
   statusBarRow2,
   renderMarkdown,
@@ -84,6 +85,7 @@ interface TaskView {
 
 const COMMANDS = [
   { name: '/help', hint: 'Show commands' },
+  { name: '/onboard', hint: 'Cozy setup: import keys, models, skills, MCPs, editors' },
   { name: '/expand', hint: 'Inspect uncompressed code, hidden reasoning & tool output (or press Ctrl+O)' },
   { name: '/clear', hint: 'Clear transcript' },
   { name: '/copy', hint: 'Copy last assistant message to clipboard (works without mouse)' },
@@ -103,7 +105,7 @@ const COMMANDS = [
   { name: '/diff', hint: 'Show pending git changes' },
   { name: '/commit', hint: 'Create a checkpoint commit' },
   { name: '/undo', hint: 'Restore previous checkpoint' },
-  { name: '/redo', hint: 'Reapply last checkpoint' },
+  { name: '/redo', hint: 'Re-run the last prompt or command' },
   { name: '/rewind', hint: 'Rollback to last checkpoint' },
   { name: '/yolo', hint: 'Toggle auto-approve for all tool actions' },
   { name: '/workspace-safe', hint: 'Auto-approve edits, prompt for shell' },
@@ -121,17 +123,24 @@ const COMMANDS = [
   { name: '/usage', hint: 'Show token usage, costs, and cache hits' },
   { name: '/tokens', hint: 'Show token breakdown and prompt cache efficiency' },
   { name: '/stats', hint: 'Show real-time performance and cost statistics' },
-  { name: '/chameleon', hint: 'Synthesize Chameleon synthetic reasoning parameters for a task' },
   { name: '/self-train', hint: 'Auto-improve Mochi: self-review, iterate to done, train its own skills/code' },
   { name: '/doctor', hint: 'Diagnose workspace configuration' },
   { name: '/init', hint: 'Create project MOCHI.md instructions' },
   { name: '/context', hint: 'Show context usage health (colored bar + tips)' },
-  { name: '/compact [focus]', hint: 'Compact the session transcript, optionally keeping lines about <focus>' },
-  { name: '/review [staged|last]', hint: 'Review the working-tree diff before commit' },
-  { name: '/security-review [staged|last]', hint: 'Security-focused review of the diff' },
+  { name: '/compact', hint: 'Compact the session transcript, optionally keeping lines about [focus]' },
+  { name: '/review', hint: 'Review the working-tree diff before commit [staged|last]' },
+  { name: '/security-review', hint: 'Security-focused review of the diff [staged|last]' },
   { name: '/new', hint: 'Start a fresh conversation session' },
   { name: '/tab', hint: 'Multi-session tabs: new|close|next|prev|rename|list|N (Alt+T/W/1-8)' },
-  { name: '/branch [title]', hint: 'Branch the current session (forks the transcript, keeps lineage)' },
+  { name: '/team', hint: 'Run concurrent specialist agents on one objective' },
+  { name: '/image', hint: 'Attach image file(s) to your next message [path...|clear]' },
+  { name: '/run', hint: 'Run a shell command and show output' },
+  { name: '/shell', hint: 'Run a shell command and show output' },
+  { name: '/test', hint: 'Run the detected repo test command [extra args]' },
+  { name: '/checkpoint', hint: 'Save a named git snapshot of the workspace' },
+  { name: '/rollback', hint: 'Restore the last checkpoint' },
+  { name: '/tools', hint: 'List available agent tools' },
+  { name: '/branch', hint: 'Branch the current session (forks the transcript, keeps lineage) [title]' },
   { name: '/skip', hint: 'Skip/interrupt current in-flight task' },
   { name: '/stop', hint: 'Interrupt current in-flight task' },
   { name: '/exit', hint: 'Quit Mochi CLI' },
@@ -434,7 +443,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   let renderQueued = false;
   let renderPaused = false;
   let pasteBuffer = '';
+  let pasteStartAt = 0;
+  let pfBadgeCache: { at: number; text: string } | undefined;
   let lastRenderAt = 0;
+  let lastUnpauseAt = 0;
   let exited = false;
   let spinnerTimer: NodeJS.Timeout | undefined;
   let cleanupFns: Array<() => void> = [];
@@ -487,7 +499,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       state.splashProgress = 1;
     }
     spinnerTimer = setInterval(() => {
-      state.spinner = prefersReducedMotion() ? 0 : (state.spinner + 1) % 60;
+      // Tick EVERY busy tab, not just the active one: the old code advanced
+      // only `state` (rebound on tab switch), so a background run's tab went
+      // static and looked frozen, and a completion on another tab stopped the
+      // timer while this tab was still busy.
+      for (const st of tabStates.values()) {
+        if (st.busy) st.spinner = prefersReducedMotion() ? 0 : (st.spinner + 1) % 60;
+      }
       if (state.splashTick < SPLASH_TICKS) {
         state.splashTick++;
         state.splashProgress = Math.min(1, state.splashTick / SPLASH_TICKS);
@@ -497,24 +515,43 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       } else {
         state.splashTick = (state.splashTick + 1) % 60000;
       }
-      if (state.splashDismissed && !state.busy && state.splashProgress >= 1) {
+      if (state.splashDismissed && !anyTabBusy() && state.splashProgress >= 1) {
         stopSpinner();
       }
       scheduleRender();
     }, 60);
     // Freeze-guard: if something starves event-driven renders for > 800ms,
-    // force a redraw so the TUI can never appear frozen mid-task.
+    // force a redraw so the TUI can never appear frozen mid-task. Also
+    // un-wedges renderPaused (one poisoned frame paused rendering forever):
+    // retry at most every 5s so a persistently-throwing frame can't spam.
     schedulerTimer = setInterval(() => {
-      if (state.busy && Date.now() - lastRenderAt > 800) scheduleRender();
+      if (!anyTabBusy()) return;
+      if (Date.now() - lastRenderAt > 800) {
+        if (renderPaused && Date.now() - lastUnpauseAt > 5000) {
+          lastUnpauseAt = Date.now();
+          renderPaused = false;
+        }
+        scheduleRender();
+      }
     }, 300);
   };
 
-  const stopSpinner = () => {
+  const stopSpinner = (force = false) => {
     if (!spinnerTimer) return;
+    // Stop only when no tab is still busy: completions/aborts on one tab must
+    // not freeze the spinner of another tab mid-run. `force` (process exit)
+    // always stops.
+    if (!force && anyTabBusy()) return;
     clearInterval(spinnerTimer);
     spinnerTimer = undefined;
     if (schedulerTimer) { clearInterval(schedulerTimer); schedulerTimer = undefined; }
   };
+
+  /** True when any tab (active or background) has a run in flight. */
+  function anyTabBusy(): boolean {
+    for (const st of tabStates.values()) if (st.busy) return true;
+    return false;
+  }
   // `wrap` and `visibleLen` are imported from ./wrap.js (shared, testable).
 
   function prettifyToolCall(text: string): string | undefined {
@@ -867,51 +904,34 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   function copyToClipboard(text: string): 'osc52' | 'x11' | 'wayland' | 'pbcopy' | 'failed' {
     if (!text) return 'failed';
     // OSC-52 needs no local tools and survives remote sessions. It is also
-    // silently absorbed if the terminal doesn't support it, so the binary
+    // silently absorbed if the terminal doesn't support it, so the native
     // fallback below handles the case where the host terminal doesn't have
     // OSC-52 enabled but the user is sitting at a real desktop.
     let osc52Ok = false;
     try {
       osc52Ok = process.stdout.write(`\x1b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\x07`);
     } catch { /* ignore */ }
-    // Run the native-binary fallback on the next tick so the OSC-52 frame
-    // gets a chance to flush first.
-    let nativeResult: 'x11' | 'wayland' | 'pbcopy' | null = null;
-    setImmediate(() => {
-      const feed = (p: ReturnType<typeof spawn> | null) => {
-        if (!p || !p.stdin) return;
-        p.stdin.on('error', () => {});
-        p.stdin.end(Buffer.from(text, 'utf8'));
-      };
-      const tryChain = (cmds: Array<{ bin: string; args: string[]; tag: 'x11' | 'wayland' | 'pbcopy' }>, idx = 0): void => {
-        if (idx >= cmds.length) return;
-        const { bin, args, tag } = cmds[idx];
-        let p: ReturnType<typeof spawn>;
-        try {
-          p = spawn(bin, args);
-        } catch {
-          tryChain(cmds, idx + 1);
-          return;
-        }
-        p.on('error', () => tryChain(cmds, idx + 1));
-        p.on('spawn', () => {
-          nativeResult = tag;
-          feed(p);
-        });
-      };
-      if (process.env.WAYLAND_DISPLAY) {
-        tryChain([
-          { bin: 'wl-copy', args: ['--type', 'text/plain'], tag: 'wayland' },
-          { bin: 'xsel', args: ['-ib'], tag: 'x11' },
-        ]);
-      } else {
-        tryChain([
-          { bin: 'xclip', args: ['-selection', 'clipboard'], tag: 'x11' },
-          { bin: 'pbcopy', args: [], tag: 'pbcopy' },
-        ]);
+    // Sync native attempt: execFileSync either copies NOW (reported) or throws
+    // ENOENT (tool absent). The old setImmediate fire-and-forget chain could
+    // never report success — xclip copies always read back as 'failed'.
+    const buf = Buffer.from(text, 'utf8');
+    const attempt = (bin: string, args: string[]): boolean => {
+      try {
+        execFileSync(bin, args, { input: buf, timeout: 2000, stdio: ['pipe', 'ignore', 'ignore'] });
+        return true;
+      } catch {
+        return false;
       }
-    });
-    return osc52Ok ? 'osc52' : nativeResult ?? 'failed';
+    };
+    const chains: Array<Array<{ bin: string; args: string[]; tag: 'x11' | 'wayland' | 'pbcopy' }>> = process.env.WAYLAND_DISPLAY
+      ? [[{ bin: 'wl-copy', args: ['--type', 'text/plain'], tag: 'wayland' }], [{ bin: 'xsel', args: ['-ib'], tag: 'x11' }]]
+      : [[{ bin: 'xclip', args: ['-selection', 'clipboard'], tag: 'x11' }], [{ bin: 'pbcopy', args: [], tag: 'pbcopy' }]];
+    for (const group of chains) {
+      for (const { bin, args, tag } of group) {
+        if (attempt(bin, args)) return tag;
+      }
+    }
+    return osc52Ok ? 'osc52' : 'failed';
   }
 
   function beginSelection(row: number, col: number) {
@@ -1123,8 +1143,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
     const extra: string[] = [];
     if (kvCache.badge()) extra.push(kvCache.badge());
-    const pfBadge = prefetchBadge(runtime.workspace.dir);
-    if (pfBadge) extra.push(pfBadge);
+    // prefetchBadge does a sync readFileSync+JSON.parse per call — cache it
+    // for 5s so the 60ms spinner cadence doesn't re-read the ledger file.
+    const nowPf = Date.now();
+    if (!pfBadgeCache || nowPf - pfBadgeCache.at > 5000) {
+      pfBadgeCache = { at: nowPf, text: prefetchBadge(runtime.workspace.dir) };
+    }
+    if (pfBadgeCache.text) extra.push(pfBadgeCache.text);
     const queued = [...state.tasks.values()].filter((t) => t.status === 'pending').length;
     if (queued) extra.push(`${queued} queued`);
     const activeSubs = state.activeSubagents ? [...state.activeSubagents.values()] : [];
@@ -1487,9 +1512,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         scheduleRender();
         return;
       }
-      // Numeric: copy Nth-most-recent line
+      // Numeric: copy Nth-most-recent line. Strict digits: parseInt('2 junk')
+      // used to silently copy line 2.
+      if (!/^\d+$/.test(arg)) {
+        push('system', `Usage: /copy [last | err | N] — copies to clipboard`);
+        scheduleRender();
+        return;
+      }
       const n = parseInt(arg, 10);
-      if (!isNaN(n) && n > 0 && n <= state.lines.length) {
+      if (n > 0 && n <= state.lines.length) {
         const idx = state.lines.length - n;
         const t = state.lines[idx].text;
         const via = copyToClipboard(t);
@@ -1527,14 +1558,24 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const { PluginRegistry } = await import('../plugins.js');
       const records = new PluginRegistry(resolve(projectRoot, '.mochi', 'plugins')).list();
       if (!records.length) { push('system', 'No plugins installed. Use: mochi plugin add <dir>'); return; }
-      push('system', records.map((p) => `${p.name} v${p.version} [${p.scope}] ${p.description}${p.hooks.length ? ` hooks:${p.hooks.join(',')}` : ''}`).join('\n'));
+      push('system', records.map((p) => `${p.name} v${p.version} [${p.scope}]${p.enabled ? '' : ' [disabled]'} ${p.description}${p.hooks.length ? ` hooks:${p.hooks.join(',')}` : ''}`).join('\n') + '\n\nManage: mochi plugin info|enable|disable|validate');
       return;
     }
     if (line === '/rules') {
+      // Show BOTH rule systems: modular .mochi/rules/ entries and the
+      // MOCHI.md behavioral contract. (A second bare-/rules branch below used
+      // to be shadowed by this return and never ran.)
       const { loadRules } = await import('../rules.js');
+      const { listRules } = await import('../contract.js');
       const all = loadRules(projectRoot);
-      if (!all.length) { push('system', 'No modular rules found in .mochi/rules/.'); return; }
-      push('system', `🍡 Modular Project Rules (${all.length}):\n` + all.map(r => `• ${r.id.padEnd(16)} "${r.title}"`).join('\n'));
+      const contract = listRules(runtime.cwd);
+      const mod = all.length
+        ? `🍡 Modular Project Rules (${all.length}):\n` + all.map(r => `• ${r.id.padEnd(16)} "${r.title}"`).join('\n')
+        : 'No modular rules found in .mochi/rules/.';
+      const con = contract.length
+        ? `MOCHI.md contract (${contract.length}):\n` + contract.map((x, i) => `${i + 1}. ${x}`).join('\n')
+        : 'No MOCHI.md rules yet. Try: /rules add <rule>';
+      push('system', `${mod}\n\n${con}`);
       return;
     }
     if (line.startsWith('/symbols ') || line === '/symbols' || line.startsWith('/find ') || line === '/find') {
@@ -1559,13 +1600,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       await run(async () => {
         const { generateProjectDocs } = await import('../docgen.js');
         const docs = generateProjectDocs(projectRoot);
-        return docs.markdown;
+        // Truncate like every other runner: full dumps of big repos stall the
+        // transcript and the wrap pass. Use `mochi docgen` for the whole file.
+        return docs.markdown.slice(0, 12000);
       });
       return;
     }
     if (line === '/profiles') { await run(async () => runtime.profiles().map(p => `${p.name} (${p.role}) model=${p.defaultModel ?? 'coding'} verification=${p.verification ?? 'optional'}`).join('\n')); return; }
     if (line === '/memory') { await run(async () => runtime.memory() || 'No project memory yet.'); return; }
-    if (line === '/rules') {await run(async () => { const { listRules} = await import('../contract.js'); const r = listRules(runtime.cwd); if (r.length === 0) return 'No MOCHI.md rules yet. Try: /rules add <rule>'; return r.map((x, i) => `${i + 1}. ${x}`).join('\n'); }); return; }
     if (line.startsWith('/rules add ')) { await run(async () => { const { appendRule } = await import('../contract.js'); const rule = line.slice('/rules add '.length).trim(); if (!rule) return 'empty rule'; const r = appendRule(runtime.cwd, rule); return `appended → ${r.file}`; }); return; }
     if (line === '/facts') { await run(async () => { const { memoryDigest } = await import('../memory/memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
     if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory/memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
@@ -1662,25 +1704,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       }, true);
       return;
     }
-    if (line.startsWith('/chameleon ') || line === '/chameleon' || line.startsWith('/enhance ') || line === '/enhance') {
-      const task = line.startsWith('/chameleon ')
-        ? line.slice(11).trim()
-        : line.startsWith('/enhance ')
-        ? line.slice(9).trim()
-        : await ask('Task to synthesize reasoning parameters for:');
-      if (task) {
-        push('user', `/chameleon ${task}`);
-        scheduleRender();
-        await run(async () => {
-          const { ChameleonEngine } = await import('../chameleon.js');
-          const engine = new ChameleonEngine(runtime.config);
-          const r = await engine.enhance({ task, mode: 'auto', cwd: runtime.cwd });
-          return `[Lazy Chameleon v2.4 — Mode: ${r.mode}, Strategy: ${r.strategy}, ${r.strategies.length} passes, ${r.tokensUsed} tokens, ${r.durationMs}ms]\n\n${r.context}`;
-        });
-      }
+    if (line.startsWith('/chameleon') || line.startsWith('/enhance')) {
+      // Removed as a standalone command: output landed in the transcript where
+      // the agent never saw it (dead-end; /plan covers pre-work it executes).
+      // Keep a branch so the input doesn't fall through to free-form chat.
+      push('system', '`/chameleon` was removed as a command — its output never reached the agent.\nThe engine still runs automatically (its scaffold is injected into implement/fix/refactor/plan context), and the agent can call the `chameleon` tool mid-task. For goal runs, use `mochi goal --enhance`.');
       return;
     }
-    if (line.startsWith('/compact')) { push('system', 'Context compaction is managed automatically.'); return; }
     if (line === '/doctor' || line === '/settings') {
       await run(async () => {
         const { describeConfig } = await import('../model/model-manager.js');
@@ -1719,6 +1749,22 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/check') { await run(async () => runtime.knownGood()); return; }
     if (line === '/providers') { await providerMenu(); return; }
     if (line === '/login' || line === '/provider') { await loginFlow(); return; }
+    if (line === '/onboard' || line === '/setup' || line === '/welcome') {
+      await run(async () => {
+        const { scanForOnboarding } = await import('../onboarding/detect.js');
+        const { welcomeFrame, stepFrame } = await import('../onboarding/wizard.js');
+        const scan = scanForOnboarding(runtime.cwd);
+        const out: string[] = [];
+        for (const l of welcomeFrame(pkg.version)) out.push(l.replace(/\x1b\[[0-9;]*m/g, ''));
+        for (const step of ['providers', 'models', 'skills', 'mcp', 'editors', 'done'] as const) {
+          out.push('');
+          for (const l of stepFrame(step, scan)) out.push(l.replace(/\x1b\[[0-9;]*m/g, ''));
+        }
+        out.push('', 'Apply it headlessly: `mochi onboard --yes` (imports keys + skills + MCPs, marks this done).');
+        return out.join('\n');
+      });
+      return;
+    }
     if (line === '/model' || line.startsWith('/model ')) {
       const specific = line.startsWith('/model ') ? line.slice(7).trim() : '';
       if (specific) {
@@ -2041,8 +2087,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const rest = line.startsWith('/image ') ? line.slice(7).trim() : '';
       if (!rest) {
         if (pendingImages.length === 0) { push('system', `Usage: /image <path...> — attaches image(s) to your next message. Or: /image clear`); return; }
+        const dropped = pendingImages.length;
         pendingImages.length = 0;
-        push('system', '○ pending image attachments cleared');
+        push('system', `○ cleared ${dropped} pending image attachment(s) (listed, not silently dropped)`);
         return;
       }
       for (const p of rest.split(/\s+/)) {
@@ -2110,6 +2157,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
     if (line === '/commit') {
       const msg = await ask('Commit message:');
+      if (!msg.trim()) { push('system', 'Commit cancelled.'); return; }
       await run(async () => {
         const { checkpoint } = await import('../repo/git.js');
         const cp = await checkpoint(projectRoot, msg || 'mochi commit');
@@ -2117,6 +2165,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       });
       return;
     }
+    if (line === '/run' || line === '/shell') { push('system', 'Usage: /run <shell command>  (or /shell <shell command>)'); return; }
     if (line.startsWith('/run ') || line.startsWith('/shell ')) {
       const cmd = line.slice(line.startsWith('/run ') ? 5 : 7).trim();
       await runShell(cmd);
@@ -2132,14 +2181,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       // agent stops receiving new passes but the current pass can still
       // finish cleanly (vs. nuking its in-progress tool call).
       state.autoImproveAbort = true;
+      if (!state.busy) { push('system', 'No in-flight task to stop.'); return; }
       runtime.abort('User stopped/skipped in-flight task');
-      push('system', '[STOP] Skipped / stopped in-flight task. Auto-improve loop also halted.');
-      state.busy = false;
-      stopSpinner();
+      push('system', '[STOP] Skipping / stopping in-flight task… (clears when the run unwinds)');
+      // NOTE: busy + spinner clear in run()'s finally once the abort actually
+      // unwinds. Clearing here first made the UI read idle while work was
+      // still running, letting a second run overlap the first.
       scheduleRender();
       return;
     }
-    if (line === '/undo' || line === '/redo') {
+    if (line === '/undo') {
       const cp = runtime.workspace.readJson<{ ref: string; type: 'commit' | 'stash'; message: string }>('checkpoints/latest.json');
       if (!cp) { push('system', 'No checkpoint yet. Run /checkpoint first.'); return; }
       await run(async () => {
@@ -2147,6 +2198,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         await restore(projectRoot, cp);
         return `Restored ${cp.type} ${cp.ref}`;
       });
+      return;
+    }
+    if (line === '/redo') {
+      // Re-dispatch the most recent non-redo input (prompt or /command).
+      // There is no forward-restore stack — a checkpoint restore cannot be
+      // undone — so redo means "run that again", stated honestly.
+      const prev = [...state.history].reverse().find((h) => h.trim() && !h.trim().startsWith('/redo'));
+      if (!prev) { push('system', 'Nothing to redo yet.'); return; }
+      push('system', `◇ redoing: ${prev.slice(0, 120)}`);
+      await handleCommand(prev);
       return;
     }
     // Permission policy slash commands
@@ -2276,10 +2337,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       scheduleRender();
       // Drain the message queue: messages typed mid-run send now, in order.
       // Sequential (not parallel) so each queued message gets a full run.
+      // Per-item try/catch: one throwing drain item must not strand the rest
+      // with busy already false and no future drain trigger.
       while (messageQueue.length > 0 && !exited) {
         const next = messageQueue.shift()!;
         push('system', `◇ sending queued message (${messageQueue.length + 1} total were queued)`);
-        await handleCommand(next);
+        try {
+          await handleCommand(next);
+        } catch (e) {
+          push('error', `queued message failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
     }
     return out;
@@ -2324,6 +2391,13 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
   function ask(question: string): Promise<string> {
     return new Promise((res) => {
+      // Never orphan a prior waiter: resolve an armed prompt as cancelled
+      // ('') before arming a new one, or its handleCommand hangs forever.
+      if (pendingResolver) {
+        const old = pendingResolver;
+        pendingResolver = undefined;
+        old('');
+      }
       state.promptActive = true;
       pendingResolver = res;
       state.input = '';
@@ -2335,6 +2409,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
   function openMenu(title: string, items: string[], mark?: Set<number>): Promise<number> {
     return new Promise((res) => {
+      // Never orphan a prior waiter: cancel an armed menu (-1) before arming
+      // a new one, or its handleCommand hangs forever on a dead resolver.
+      // Inline (not closeMenu): avoids its auto-improve title side-effects.
+      if (menuResolver) {
+        const old = menuResolver;
+        menuResolver = undefined;
+        state.menuActive = false;
+        state.menuItems = [];
+        old(-1);
+      }
       state.menuActive = true;
       state.menuTitle = title;
       state.menuItems = items;
@@ -2813,19 +2897,60 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
   }
 
+  interface ExportedLine { kind: string; text: string; fullContent?: string }
+  interface ExportedSession { app: 'mochi'; version: 1; cwd: string; model: unknown; time: string; lines: ExportedLine[] }
+
   async function exportSession() {
     const file = await ask('Export path:');
+    if (!file.trim()) { push('system', 'Export cancelled.'); return; }
     await run(async () => {
       const { writeFileSync } = await import('node:fs');
-      const data = JSON.stringify({ cwd: projectRoot, model: runtime.config.model, time: new Date().toISOString() });
-      writeFileSync(file, data + '\n');
-      return `Exported to ${file}`;
+      const data: ExportedSession = {
+        app: 'mochi',
+        version: 1,
+        cwd: projectRoot,
+        model: runtime.config.model,
+        time: new Date().toISOString(),
+        lines: state.lines.map((l) => ({
+          kind: l.kind,
+          text: String(l.text).slice(0, 20_000),
+          ...(typeof l.fullContent === 'string' ? { fullContent: l.fullContent.slice(0, 200_000) } : {}),
+        })),
+      };
+      writeFileSync(file, JSON.stringify(data) + '\n');
+      return `Exported ${data.lines.length} transcript line(s) to ${file}`;
     });
   }
 
   async function importFlow() {
     const file = await ask('Import path:');
-    handleCommand(`/export ${file}`);
+    if (!file.trim()) { push('system', 'Import cancelled.'); return; }
+    await run(async () => {
+      const { readFileSync, existsSync } = await import('node:fs');
+      if (!existsSync(file)) return `Import failed: no such file: ${file}`;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(readFileSync(file, 'utf8'));
+      } catch {
+        return `Import failed: ${file} is not valid JSON.`;
+      }
+      const lines = (parsed as Partial<ExportedSession>)?.lines;
+      if (!Array.isArray(lines) || lines.length === 0) return `Import failed: ${file} has no transcript lines (expected {app:"mochi", lines:[...]}).`;
+      const validKinds = new Set(['user', 'assistant', 'system', 'error', 'tool']);
+      let n = 0;
+      for (const l of lines.slice(0, 500)) {
+        if (l && typeof l.text === 'string') {
+          state.lines.push({
+            kind: (validKinds.has(l.kind) ? l.kind : 'assistant') as LineKind,
+            text: l.text.slice(0, 20_000),
+            ...(typeof l.fullContent === 'string' ? { fullContent: l.fullContent.slice(0, 200_000) } : {}),
+          });
+          n++;
+        }
+      }
+      state.chatVer++;
+      return `Imported ${n} transcript line(s) from ${file}`;
+    });
   }
 
   function listTasks(): string {
@@ -2846,7 +2971,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   function pushHelp() {
-    const text = COMMANDS.map(c => `${c.name.padEnd(12)} ${c.hint}`).join('\n');
+    const w = Math.max(...COMMANDS.map(c => c.name.length));
+    const text = COMMANDS.map(c => `${c.name.padEnd(w)}  ${c.hint}`).join('\n');
     const tips =
       `\nCopying text from the transcript:\n` +
       `  Drag with the left mouse button to select text — release copies to clipboard.\n` +
@@ -2870,7 +2996,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   function exit() {
     if (exited) return;
     exited = true;
-    stopSpinner();
+    stopSpinner(true);
     // Restore the tty BEFORE anything else: raw mode (no echo, no canonical
     // line processing) is a termios attribute that outlives the process, so
     // skipping this leaves the user's terminal looking frozen after exit.
@@ -2881,6 +3007,24 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // restore must never win over finishing the restore.
     try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
     try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}`); } catch { /* EPIPE */ }
+    // Goodbye card (opencode-style): printed AFTER the alt-screen teardown
+    // so it persists in scrollback — logo + session id + stats + safety
+    // badge (uncensored/admin when privileged). Best-effort, never throws.
+    try {
+      const w = process.stdout.columns || 80;
+      const uncensored = runtime.permPolicy === 'yolo' || runtime.config.safety.mode === 'uncensored';
+      const frame = farewellFrame({
+        version: pkg.version,
+        sessionId: (runtime.activeSessionId ?? activeTabId).slice(0, 8),
+        tokens: state.totalTokens,
+        costUsd: state.totalCost,
+        durationMs: Date.now() - state.startedAt,
+        uiMode: state.uiMode,
+        safetyMode: runtime.config.safety.mode,
+        uncensored,
+      }, w);
+      process.stdout.write(frame.join('\n') + '\n');
+    } catch { /* farewell must never block exit */ }
     try { for (const fn of cleanupFns) fn(); } catch { /* cleanup must not block exit */ }
     try { process.exit(0); } catch { process.exitCode = 0; }
   }
@@ -2891,9 +3035,15 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
     // Bracketed paste: the terminal wraps pasted text in
     // \x1b[200~ ... \x1b[201~ (possibly split across many data chunks).
+    // Latch breaker: a split chunk, non-supporting terminal, or interrupted
+    // paste could leave `pasting` true forever (dead keyboard that looks
+    // frozen). After 10s without the closer, drop the latch and process
+    // normally.
+    if (state.pasting && Date.now() - pasteStartAt > 10_000) state.pasting = false;
     if (state.pasting || s.includes('\x1b[200~')) {
       if (!state.pasting) {
         state.pasting = true;
+        pasteStartAt = Date.now();
         pasteBuffer = s.replace(/^\x1b\[200~/, '');
       } else {
         pasteBuffer += s;
@@ -3050,6 +3200,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       // 3. Shift+Tab: open interactive auto-improve selection menu
       if (rest.startsWith('\x1b[Z')) {
         i += 3;
+        // Never clobber a real menu's resolver/items: a pending openMenu
+        // waiter would hang forever on the replaced resolver.
+        if (menuResolver) continue;
         state.menuActive = true;
         state.menuTitle = 'Auto-improve — choose iteration count';
         state.menuItems = [
@@ -3163,7 +3316,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         if (state.dropActive) {
           const items = currentDropItems();
           const pick = items[Math.min(state.dropSelected, items.length - 1)];
-          const takesArg = pick && ['/goal', '/plan', '/team', '/model', '/reasoning', '/theme', '/inspect', '/run', '/shell', '/login', '/import', '/rename', '/compact', '/review', '/security-review', '/self-train'].includes(pick.name);
+          const takesArg = pick && ['/goal', '/plan', '/team', '/model', '/reasoning', '/theme', '/inspect', '/run', '/shell', '/login', '/import', '/rename', '/compact', '/review', '/security-review', '/self-train', '/image'].includes(pick.name);
           // Only hijack Enter when the composer holds the BARE command name
           // (no arguments typed yet) — then expand to "/cmd " for the user to
           // type args. Once arguments exist, Enter must SEND the command
@@ -3267,14 +3420,25 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           continue;
         }
         if (rest === '\x1b') {
+          // Armed prompt cancels first: ESC answers pending ask() with ''
+          // (callers treat it as cancel) instead of leaving it armed until
+          // some arbitrary future text answers it.
+          if (pendingResolver) {
+            const old = pendingResolver;
+            pendingResolver = undefined;
+            state.promptActive = false;
+            old('');
+            push('system', 'Cancelled prompt.');
+            scheduleRender();
+            i++;
+            continue;
+          }
           if (state.busy) {
             const now = Date.now();
             if (now - lastEscAbortAt < 1500) {
               lastEscAbortAt = 0;
               runtime.abort('User skipped/cancelled task via double ESC');
-              push('system', '[STOP] Task cancelled via double ESC.');
-              state.busy = false;
-              stopSpinner();
+              push('system', '[STOP] Task cancel requested — clears when the run unwinds.');
               scheduleRender();
               i++;
               continue;
@@ -3324,9 +3488,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       if (c === '\u0003') {
         if (state.busy) {
           runtime.abort('User cancelled task via Ctrl+C');
-          push('system', '[STOP] Task cancelled via Ctrl+C.');
-          state.busy = false;
-          stopSpinner();
+          push('system', '[STOP] Task cancel requested — clears when the run unwinds.');
           scheduleRender();
           i++;
           continue;
@@ -3546,6 +3708,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       if (!state.userScrolled) state.scroll = 0;
       scheduleRender();
     }
+    // Completion events render nothing through reduceEvent (pure-chat turns
+    // return false), so a finished run with a dead spinner tick looked stuck
+    // on "thinking". Always frame completion work visibly.
+    if (event.type === 'agent:completed' || event.type === 'summary:rendered') {
+      scheduleRender();
+    }
     // Keep the status bar's git stats + token meter live.
     const type = event.type;
     if (type === 'file:changed' || type === 'tool:completed') void refreshGitStats();
@@ -3562,7 +3730,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
   }
 
-  function start() {
+  async function start() {
     // Enable SGR mouse reporting. The three modes do different things:
     //   ?1000  — basic press/release (needed for click)
     //   ?1002  — button-event tracking: forwards MOTION events while a button
@@ -3608,6 +3776,23 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     process.on('SIGHUP', signalExit);
     subscribeTab(activeTabId, runtime);
     void refreshGitStats(); // seed the status bar diff stats
+    // Cozy one-time welcome: first launch ever shows the onboarding banner
+    // as transcript lines (one-time popup). Dismissed forever once the user
+    // runs `mochi onboard --yes` (marker file) or sends their first prompt.
+    try {
+      const { isOnboarded } = await import('../onboarding/import.js');
+      if (!isOnboarded() && !initialPrompt) {
+        const { scanForOnboarding } = await import('../onboarding/detect.js');
+        const { welcomeFrame } = await import('../onboarding/wizard.js');
+        const scan = scanForOnboarding(runtime.cwd);
+        const keys = scan.providers.filter((p) => p.hasKey).length;
+        for (const row of welcomeFrame(pkg.version)) {
+          if (row.trim()) push('system', row);
+        }
+        push('system', `Found ${keys} provider key(s), ${scan.totalSkills} skill(s), ${scan.totalMcpServers} MCP server(s) from your other agents. Type /onboard to import them, or run \`mochi onboard --yes\`. This hello won't show again once onboarded.`);
+        scheduleRender();
+      }
+    } catch { /* onboarding banner is best-effort */ }
     cleanupFns = [
       () => process.stdin.off('data', keyListener),
       () => process.stdout.off('resize', resizeListener),
@@ -3631,7 +3816,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
   }
 
-  start();
+  void start();
   return new Promise<void>(() => {});
 }
 

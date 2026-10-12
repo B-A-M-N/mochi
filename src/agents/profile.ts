@@ -109,7 +109,10 @@ export class AgentProfileService {
   }
 
   list(): AgentProfile[] {
-    return [...new Map(this.cache.entries()).values()];
+    // Each profile is cached under TWO keys (role + name) — a plain value
+    // list printed every profile twice ("Lead orchestrator (lead)" x2).
+    // Set dedupes by object identity.
+    return [...new Set(this.cache.values())];
   }
 }
 

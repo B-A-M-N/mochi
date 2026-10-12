@@ -144,6 +144,8 @@ describe('VerifierEngine', () => {
   // This is a real integration test: it spawns `git`, writes source, and runs
   // `npm test` more than once, so it legitimately needs a longer timeout than
   // the default 5s (it reproduces a CMP -> 'a > b' vs 'a < b' mutant surviving).
+  // 120s: under full-suite load (217 workers + a busy machine) each npm spawn
+  // can take tens of seconds; 30s flaked in exactly that environment.
   it('downgrades a PASS to PARTIAL when an injected mutation survives a weak test suite', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-verify-mut-'));
     // A git repo with changed source AND a test command that never fails - the
@@ -171,7 +173,7 @@ describe('VerifierEngine', () => {
     // verifier must NOT report a clean PASS.
     expect(result.status).toBe('PARTIAL');
     expect(result.summary).toContain('Mutation check');
-  }, 30_000);
+  }, 120_000);
 
   it('fileScope filters the diff evidence so out-of-scope changes do not poison the judge', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-verify-scope-'));

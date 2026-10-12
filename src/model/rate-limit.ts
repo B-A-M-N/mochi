@@ -23,9 +23,13 @@ export interface RetryOptions {
    *  provider rotate credentials (401/429) to a fresh pool key between
    *  attempts. */
   onRetryable?: (attempt: number, error: unknown) => void;
+  /** Abort signal: when aborted, stop waiting and throw immediately instead
+   *  of sleeping out the full backoff (Ctrl-C during a 60s backoff previously
+   *  hung until the sleep ended). */
+  signal?: AbortSignal;
 }
 
-const DEFAULT: Required<Omit<RetryOptions, 'onBackoff' | 'onRetryable'>> = {
+const DEFAULT: Required<Omit<RetryOptions, 'onBackoff' | 'onRetryable' | 'signal'>> = {
   maxAttempts: 4,
   maxTotalWaitMs: 60_000,
   baseDelayMs: 400,
@@ -33,7 +37,21 @@ const DEFAULT: Required<Omit<RetryOptions, 'onBackoff' | 'onRetryable'>> = {
   jitter: 0.3,
 };
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(signal.reason instanceof Error ? signal.reason : new Error('aborted'));
+    return;
+  }
+  const t = setTimeout(() => {
+    signal?.removeEventListener('abort', onAbort);
+    resolve();
+  }, ms);
+  const onAbort = () => {
+    clearTimeout(t);
+    reject(signal?.reason instanceof Error ? signal.reason : new Error('aborted'));
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
+});
 
 // ─── Client-side request throttle (shared token bucket) ─────────────────────
 //
@@ -74,16 +92,18 @@ class TokenBucket {
     }
   }
 
-  /** Wait until at least one token is available, then consume it. */
-  async acquire(): Promise<void> {
+  /** Wait until at least one token is available, then consume it. Aborts promptly
+   *  when the signal fires instead of sleeping out the refill wait. */
+  async acquire(signal?: AbortSignal): Promise<void> {
     for (;;) {
+      if (signal?.aborted) throw (signal.reason instanceof Error ? signal.reason : new Error('aborted'));
       this.refill();
       if (this.tokens >= 1) {
         this.tokens -= 1;
         return;
       }
       const deficit = 1 - this.tokens;
-      await sleep(Math.max(5, Math.ceil(deficit / this.refillPerMs)));
+      await sleep(Math.max(5, Math.ceil(deficit / this.refillPerMs)), signal);
     }
   }
 }
@@ -137,11 +157,17 @@ function readThrottleConfig(): { bucket: TokenBucket | null; sem: Semaphore | nu
   };
 }
 
-// Built once per process; both knobs are read at first use.
-let THROTTLE: { bucket: TokenBucket | null; sem: Semaphore | null } | undefined;
+// Built once per process; rebuilt when the env knobs change mid-process
+// (the old cache ignored MOCHI_RATE_LIMIT_RPM/_CONCURRENCY edits until restart).
+let THROTTLE: { bucket: TokenBucket | null; sem: Semaphore | null; key: string } | undefined;
+
+function throttleKey(): string {
+  return `${process.env.MOCHI_RATE_LIMIT_RPM ?? ''}|${process.env.MOCHI_RATE_LIMIT_CONCURRENCY ?? ''}`;
+}
 
 function throttle(): { bucket: TokenBucket | null; sem: Semaphore | null } {
-  if (!THROTTLE) THROTTLE = readThrottleConfig();
+  const key = throttleKey();
+  if (!THROTTLE || THROTTLE.key !== key) THROTTLE = { ...readThrottleConfig(), key };
   return THROTTLE;
 }
 
@@ -151,17 +177,15 @@ export function resetThrottleForTests(): void {
 
 /**
  * Apply the shared client-side throttle around `fn`: waits for a token AND a
- * concurrency slot (if configured) before running. Never blocks past the
- * provider's retry budget because it only delays up to the leaky bucket's
- * refill pace and releases immediately if the throttle is disabled.
+ * concurrency slot (if configured) before running. The token wait happens
+ * BEFORE taking a semaphore slot so a low-RPM refill wait does not head-of-line
+ * block every other caller holding the single concurrency slot.
  */
-export async function throttled<T>(fn: () => Promise<T>): Promise<T> {
+export async function throttled<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   const { bucket, sem } = throttle();
   if (!bucket && !sem) return fn(); // throttle disabled — zero overhead path
-  const run = async () => {
-    if (bucket) await bucket.acquire();
-    return fn();
-  };
+  if (bucket) await bucket.acquire(signal);
+  const run = () => fn();
   return sem ? sem.run(run) : run();
 }
 
@@ -248,14 +272,16 @@ export async function withRetries<T>(fn: () => Promise<T>, opts: RetryOptions = 
   let attempts = 0;
   let waited = 0;
   while (true) {
+    if (opts.signal?.aborted) throw (opts.signal.reason instanceof Error ? opts.signal.reason : new Error('aborted'));
     attempts++;
     try {
       // Run the caller's work behind the shared client-side throttle (token
       // bucket + optional concurrency cap) so concurrent agents sharing one
       // free-tier endpoint self-regulate instead of tripping 429s in a burst.
       // The throttle is a no-op unless MOCHI_RATE_LIMIT_RPM/_CONCURRENCY is set.
-      return await throttled(fn);
+      return await throttled(fn, opts.signal);
     } catch (err) {
+      if (opts.signal?.aborted) throw err;
       if (attempts >= maxAttempts) throw err;
 
       const info = classifyError(err);
@@ -275,7 +301,11 @@ export async function withRetries<T>(fn: () => Promise<T>, opts: RetryOptions = 
 
       opts.onBackoff?.(attempts, delay, err);
       opts.onRetryable?.(attempts, err);
-      await sleep(delay);
+      try {
+        await sleep(delay, opts.signal);
+      } catch (sleepErr) {
+        throw sleepErr instanceof Error ? sleepErr : err;
+      }
       waited += delay;
     }
   }

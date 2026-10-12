@@ -203,7 +203,7 @@ if (!cfg.model.failover || cfg.model.failover.length === 0) {
   merge(cfg as unknown as Record<string, unknown>, { model: envModelConfig() });
   if (process.env.MOCHI_PROJECT_DIR) cfg.projectDir = process.env.MOCHI_PROJECT_DIR;
   if (process.env.MOCHI_CONFIG_DIR) cfg.configDir = process.env.MOCHI_CONFIG_DIR;
-  if (process.env.MOCHI_TELEMETRY) cfg.telemetry = /^1|true|yes$/i.test(process.env.MOCHI_TELEMETRY);
+  if (process.env.MOCHI_TELEMETRY) cfg.telemetry = /^(1|true|yes)$/i.test(process.env.MOCHI_TELEMETRY.trim());
   if (process.env.MOCHI_UNCENSORED === '1') {
     cfg.safety.mode = 'uncensored';
     cfg.permissions = {
@@ -215,16 +215,25 @@ if (!cfg.model.failover || cfg.model.failover.length === 0) {
       admin: true,
     };
   }
-  if (process.env.MOCHI_SAFETY) cfg.safety.mode = process.env.MOCHI_SAFETY as MochiConfig['safety']['mode'];
+  if (process.env.MOCHI_SAFETY) {
+    const raw = process.env.MOCHI_SAFETY.trim().toLowerCase();
+    if (raw === 'safe' || raw === 'ask' || raw === 'auto' || raw === 'uncensored') {
+      cfg.safety.mode = raw as MochiConfig['safety']['mode'];
+    } else if (!process.env.VITEST) {
+      console.error(`Unknown MOCHI_SAFETY "${process.env.MOCHI_SAFETY}" — must be safe|ask|auto|uncensored. Keeping "${cfg.safety.mode}".`);
+    }
+  }
   if (process.env.MOCHI_SANDBOX === 'off' || process.env.MOCHI_SANDBOX === 'auto' || process.env.MOCHI_SANDBOX === 'bubblewrap') {
     cfg.safety.sandbox = process.env.MOCHI_SANDBOX;
+  } else if (process.env.MOCHI_SANDBOX !== undefined && !process.env.VITEST) {
+    console.error(`Unknown MOCHI_SANDBOX "${process.env.MOCHI_SANDBOX}" — must be off|auto|bubblewrap. Ignoring.`);
   }
-  if (process.env.MOCHI_PERMISSION_READ) cfg.permissions.read = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_READ);
-  if (process.env.MOCHI_PERMISSION_WRITE) cfg.permissions.write = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_WRITE);
-  if (process.env.MOCHI_PERMISSION_SHELL) cfg.permissions.shell = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_SHELL);
-  if (process.env.MOCHI_PERMISSION_NETWORK) cfg.permissions.network = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_NETWORK);
-  if (process.env.MOCHI_PERMISSION_GIT_DESTRUCTIVE) cfg.permissions.gitDestructive = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_GIT_DESTRUCTIVE);
-  if (process.env.MOCHI_PERMISSION_ADMIN) cfg.permissions.admin = /^1|true|yes$/i.test(process.env.MOCHI_PERMISSION_ADMIN);
+  if (process.env.MOCHI_PERMISSION_READ) cfg.permissions.read = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_READ.trim());
+  if (process.env.MOCHI_PERMISSION_WRITE) cfg.permissions.write = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_WRITE.trim());
+  if (process.env.MOCHI_PERMISSION_SHELL) cfg.permissions.shell = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_SHELL.trim());
+  if (process.env.MOCHI_PERMISSION_NETWORK) cfg.permissions.network = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_NETWORK.trim());
+  if (process.env.MOCHI_PERMISSION_GIT_DESTRUCTIVE) cfg.permissions.gitDestructive = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_GIT_DESTRUCTIVE.trim());
+  if (process.env.MOCHI_PERMISSION_ADMIN) cfg.permissions.admin = /^(1|true|yes)$/i.test(process.env.MOCHI_PERMISSION_ADMIN.trim());
   if (cfg.safety.mode === 'uncensored') {
     cfg.permissions.read = true;
     cfg.permissions.write = true;
@@ -238,11 +247,17 @@ if (!cfg.model.failover || cfg.model.failover.length === 0) {
   if (process.env.MOCHI_DEBUG) cfg.debug = true;
   if (process.env.MOCHI_REASONING) {
     const raw = process.env.MOCHI_REASONING.trim().toLowerCase();
+    const known = ['max', 'extreme', 'deep', 'high', 'hard', 'low', 'easy', 'medium', 'off', 'auto'];
     const mapped = raw === 'max' || raw === 'extreme' || raw === 'deep' ? 'max'
       : raw === 'high' || raw === 'hard' ? 'high'
       : raw === 'low' || raw === 'easy' ? 'low'
+      : raw === 'off' ? 'off'
+      : raw === 'auto' ? 'auto'
       : 'medium';
-    cfg.reasoning = mapped;
+    if (!known.includes(raw) && !process.env.VITEST) {
+      console.error(`Unknown MOCHI_REASONING "${process.env.MOCHI_REASONING}" — using medium.`);
+    }
+    cfg.reasoning = mapped as MochiConfig['reasoning'];
   }
 
   merge(cfg as unknown as Record<string, unknown>, overrides as Record<string, unknown>);

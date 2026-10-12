@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {skillsRoot, archiveRoot, loadUsage, safeSlug, parseFrontmatter, renderSkill} from './skill-manager.js';
 import { lintSkillDoc, formatSkillLint } from './skill-lint.js';
+import { maybeRedact } from '../security/security.js';
 
 export interface CuratorConfig {
   enabled: boolean;
@@ -596,7 +597,9 @@ export function runSkillDoctor(
         history.byName[s.name] = { consecutiveFailures: 0, lastCheckedAt: now };
         healthy++;
       } catch (err: any) {
-        const errorMsg = (err.stderr?.toString() || err.message || String(err)).trim().slice(0, 300);
+        // Redact: snippet stderr is persisted to history.json and could echo
+        // secret material from the environment the snippet ran in.
+        const errorMsg = maybeRedact((err.stderr?.toString() || err.message || String(err)).trim()).slice(0, 300);
         const rec = history.byName[s.name] || { consecutiveFailures: 0, lastCheckedAt: now };
         rec.consecutiveFailures += 1;
         rec.lastError = errorMsg;

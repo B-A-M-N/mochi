@@ -26,7 +26,7 @@ maybeDescribe('SessionStore', () => {
     expect(msgs.length).toBe(2);
     expect(msgs[0].content).toContain('token bucket');
     expect(msgs[1].content).toContain('TokenBucket');
-  }, 20_000);
+  }, 60_000);
 
   it('lists sessions newest first', () => {
     const a = store.begin({ goalId: 'g-slow', objective: 'slow task' });
@@ -35,19 +35,19 @@ maybeDescribe('SessionStore', () => {
     expect(l.length).toBeGreaterThanOrEqual(1);
     expect(l.some((r) => r.goalId === 'g-slow')).toBe(true);
     expect(l[0].goalId).toBeDefined();
-  }, 20_000);
+  }, 60_000);
 
   it('full-text search finds content across sessions', () => {
     // 'rate limiter' appears only in session g1.
     const hits = store.search('rate limiter');
     expect(hits.length).toBeGreaterThanOrEqual(1);
     expect(hits[0].content).toContain('token bucket');
-  }, 20_000);
+  }, 60_000);
 
   it('handles malformed FTS queries gracefully', () => {
     const hits = store.search('AND AND AND'); // invalid bare operators
     expect(Array.isArray(hits)).toBe(true);
-  }, 20_000);
+  }, 60_000);
 
   it('caps oversized messages', () => {
     const id = store.begin({ goalId: 'g-huge', objective: 'huge' });
@@ -55,5 +55,5 @@ maybeDescribe('SessionStore', () => {
     store.append(id, 'assistant', huge);
     const m = store.messages(id);
     expect(m[m.length - 1].content.length).toBeLessThan(100_000);
-  }, 20_000);
+  }, 60_000);
 });

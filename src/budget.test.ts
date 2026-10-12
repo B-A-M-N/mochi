@@ -16,6 +16,25 @@ describe('BudgetEngine', () => {
     expect(estimateCostUsd(1000, 'gpt-4o')).toBeGreaterThan(0);
     expect(estimateCostUsd({ promptTokens: 1000, completionTokens: 100 }, 'gpt-4o')).toBeCloseTo(0.0035);
     expect(estimateCostUsd(1000, 'deepseek-v4-flash-free')).toBe(0);
+    // Free PROVIDERS bill $0 even when the model id has no pricing entry —
+    // freeinference/glm-5.3-flash used to be priced at the unknown-model flat
+    // rate, reporting fake spend on a free endpoint.
+    expect(estimateCostUsd(1000, 'glm-5.3-flash', 'freeinference')).toBe(0);
+    expect(estimateCostUsd(1000, 'glm-5.3-flash', 'some-paid-provider')).toBeGreaterThan(0);
+  });
+
+  it('charges caller-provided real cost while keeping output-only token limits', () => {
+    const b = new BudgetEngine({ ...base, maxTokens: 1000 });
+    b.start();
+    // The loop records output tokens as the LIMIT resource but passes the real
+    // prompt+completion cost — pricing output-only tokens understated spend
+    // (~50x) and made the goal summary contradict itself.
+    b.recordTokens(10, 'gpt-4o', 'openai', 0.42);
+    expect(b.snapshot('gpt-4o').usedTokens).toBe(10); // limit accounting untouched
+    expect(b.snapshot('gpt-4o').usedCostUsd).toBeCloseTo(0.42); // real cost charged
+    // Free provider, no explicit cost → $0 no matter the token count.
+    b.recordTokens(10, 'glm-5.3-flash', 'freeinference');
+    expect(b.snapshot('glm-5.3-flash').usedCostUsd).toBeCloseTo(0.42);
   });
 
   it('starts in full phase and throttles as budget is consumed', () => {
