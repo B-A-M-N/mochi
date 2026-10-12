@@ -103,6 +103,29 @@ describe('PluginRegistry', () => {
     expect(() => readManifest(dir)).toThrow(/missing name/);
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it('disable/enable toggles hooks without deleting', () => {
+    const project = makeProject(mkdtempSync(resolve(tmpdir(), 'mochi-plug-')));
+    const reg = makeReg(project);
+    reg.install(makeSource('toggle', { after_tool: 'echo hi' }));
+    expect(reg.list().find((r) => r.name === 'toggle')!.enabled).toBe(true);
+    expect(Object.keys(reg.mergedHooks())).toContain('after_tool');
+    expect(reg.setEnabled('toggle', false)).toBe(true);
+    expect(reg.list().find((r) => r.name === 'toggle')!.enabled).toBe(false);
+    expect(reg.mergedHooks().after_tool ?? []).toEqual([]);
+    expect(reg.setEnabled('toggle', true)).toBe(true);
+    expect(reg.list().find((r) => r.name === 'toggle')!.enabled).toBe(true);
+    expect(reg.info('toggle')).toContain('toggle');
+    rmSync(project, { recursive: true, force: true });
+  });
+
+  it('validateDir reports unknown hooks', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-plug-'));
+    writeFileSync(resolve(dir, 'plugin.json'), JSON.stringify({ name: 'bad', version: '1', hooks: { nope_hook: 'echo x' } }));
+    const { PluginRegistry: PR2 } = await import('./plugins.js');
+    expect(PR2.validateDir(dir)).toEqual(expect.arrayContaining([expect.stringMatching(/unknown hook/)]));
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 function makeSource(name: string, hooks?: Record<string, string | string[]>) {

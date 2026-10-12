@@ -1,0 +1,200 @@
+{
+  "name": "mochi-vscode",
+  "displayName": "Mochi AI Agent",
+  "description": "Autonomous coding agent in your editor. Sidebar chat, selection actions, plan/act modes over ACP (`mochi acp` stdio).",
+  "publisher": "mochi",
+  "version": "0.23.0",
+  "license": "MIT",
+  "icon": "resources/mochi.png",
+  "galleryBanner": {
+    "color": "#1a1b26",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mochi-agent/mochi.git"
+  },
+  "homepage": "https://github.com/mochi-agent/mochi/blob/main/editors/vscode/README.md",
+  "bugs": {
+    "url": "https://github.com/mochi-agent/mochi/issues"
+  },
+  "qna": "https://github.com/mochi-agent/mochi/discussions",
+  "keywords": ["ai", "agent", "coding", "acp", "chat", "autonomous"],
+  "categories": ["AI", "Chat", "Programming Languages", "Other"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "typecheck": "tsc --noEmit -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "mochi.newSession",
+        "title": "Mochi: New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mochi.prompt",
+        "title": "Mochi: Send Prompt"
+      },
+      {
+        "command": "mochi.promptSelection",
+        "title": "Mochi: Send Selection to Agent"
+      },
+      {
+        "command": "mochi.cancel",
+        "title": "Mochi: Cancel Running Prompt"
+      },
+      {
+        "command": "mochi.toggleMode",
+        "title": "Mochi: Toggle Plan / Act Mode"
+      },
+      {
+        "command": "mochi.showOutput",
+        "title": "Mochi: Show Output Log"
+      },
+      {
+        "command": "mochi.checkHealth",
+        "title": "Mochi: Check Agent Health"
+      },
+      {
+        "command": "mochi.showDiff",
+        "title": "Mochi: Show Diff of Last Edits"
+      },
+      {
+        "command": "mochi.openTerminal",
+        "title": "Mochi: Open Agent Terminal"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mochi",
+          "title": "Mochi",
+          "icon": "resources/mochi.svg"
+        }
+      ]
+    },
+    "views": {
+      "mochi": [
+        {
+          "id": "mochi.chat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "mochi.chat",
+        "contents": "Mochi is ready when `mochi acp` answers.\n[New Session](command:mochi.newSession)\n[Check Health](command:mochi.checkHealth)\n[Show Output](command:mochi.showOutput)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "mochiSetup",
+        "title": "Get started with Mochi",
+        "description": "Install the binary, start a session, and send your first selection to the agent.",
+        "steps": [
+          {
+            "id": "installBinary",
+            "title": "Install the Mochi binary",
+            "description": "The sidebar talks to `mochi acp` over stdio.\n[Check Health](command:mochi.checkHealth)",
+            "media": {
+              "markdown": "Install the agent binary:\n\n```sh\nnpm i -g @mochi/agent\n```\n\nThen verify it answers:\n\n1. Run **Mochi: Check Agent Health** from the Command Palette.\n2. If the binary is not on your `PATH`, set `mochi.binaryPath` to its absolute path (a path ending in `.js` runs under Node).\n"
+            }
+          },
+          {
+            "id": "newSession",
+            "title": "Start a new session",
+            "description": "Open a folder, then start chatting.\n[New Session](command:mochi.newSession)",
+            "media": {
+              "markdown": "1. Open a workspace folder (Mochi spawns `mochi acp` in the workspace root).\n2. Run **Mochi: New Session** or press the *New session* button in the Mochi sidebar.\n3. Watch the status bar: `Mochi <version> · <session> · act` means you are connected.\n"
+            }
+          },
+          {
+            "id": "sendSelection",
+            "title": "Send a selection to the agent",
+            "description": "Select code, then ask for a change.\n[Send Selection to Agent](command:mochi.promptSelection)",
+            "media": {
+              "markdown": "1. Select code in any editor.\n2. Right-click and pick **Mochi: Send Selection to Agent**, or press `Ctrl+Alt+M` (`Cmd+Alt+M` on macOS).\n3. Describe the change (explain, refactor, add tests) — the selection is attached automatically with its file and line number.\n"
+            }
+          }
+        ]
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mochi.promptSelection",
+          "when": "editorHasSelection",
+          "group": "1_mochi"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mochi.promptSelection",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "mochi.prompt",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mochi.cancel",
+        "key": "ctrl+alt+.",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Mochi",
+      "properties": {
+        "mochi.binaryPath": {
+          "type": "string",
+          "default": "mochi",
+          "description": "Path to the Mochi binary used to spawn `mochi acp`. Use an absolute path when mochi is not on your PATH. A path ending in .js is executed with Node."
+        },
+        "mochi.workspaceTrust": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refuse to spawn the agent when the current workspace is not trusted."
+        },
+        "mochi.requestTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 10000,
+          "maximum": 3600000,
+          "description": "Timeout for a single session/prompt round-trip (ms). Streaming chunks keep the session alive; this only fires when the server goes silent."
+        },
+        "mochi.maxSessionHistory": {
+          "type": "number",
+          "default": 200,
+          "minimum": 20,
+          "maximum": 2000,
+          "description": "How many chat messages the sidebar keeps before trimming oldest first."
+        },
+        "mochi.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show VS Code notifications for session lifecycle (new session, errors, ACP restarts)."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.9.0"
+  }
+}

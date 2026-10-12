@@ -21,9 +21,19 @@ __pycache__
 *.sqlite
 *.sqlite-journal
 *.sqlite3
+# MCP server configs may inline client secrets; track only the example.
+.mcp.json
+mcp-oauth.json
 
 # Test coverage artifacts
 coverage/
 
 # Non-deterministic benchmark outputs (rewritten every arena run; flakes pollute diffs)
 bench/arena-results.json
+
+# Editor extension build artifacts (rebuilt via vsce / gradle; never commit)
+editors/vscode/out/
+editors/vscode/*.vsix
+editors/jetbrains/build/
+editors/jetbrains/.gradle/
+# NOTE: gradle-wrapper.jar IS committed (required for reproducible builds).

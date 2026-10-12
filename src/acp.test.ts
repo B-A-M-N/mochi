@@ -186,3 +186,13 @@ describe('ACP session/load', () => {
   }, 60_000);
 });
 
+describe('ACP acpCheck', () => {
+  it('verifies the in-process lifecycle without spawning', async () => {
+    const { acpCheck, ACP_PROTOCOL_VERSION } = await import('./acp.js');
+    expect(ACP_PROTOCOL_VERSION).toBe(1);
+    const r = await acpCheck(process.cwd());
+    expect(r.ok).toBe(true);
+    expect(r.report).toContain('ACP ok');
+  });
+});
+

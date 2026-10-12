@@ -1,0 +1,41 @@
+<idea-plugin>
+  <id>dev.mochi.jetbrains</id>
+  <name>Mochi AI Agent</name>
+  <vendor url="https://github.com/mochi">Mochi</vendor>
+  <description><![CDATA[
+  <p><b>Mochi AI Agent</b> brings the Mochi coding agent directly into your JetBrains IDE.</p>
+  <p>Chat with Mochi from a dedicated tool window, send editor selections for explanation or refactoring,
+  switch between <code>plan</code> and <code>act</code> modes, and stream agent responses in real time.</p>
+  <p>Powered by the Agent Client Protocol (ACP): the plugin spawns <code>mochi acp</code> and communicates
+  over JSON-RPC 2.0 (stdio) — <code>initialize</code>, <code>session/new</code>, <code>session/prompt</code>,
+  <code>session/cancel</code>, <code>shutdown</code>.</p>
+  <p>Requires the <code>mochi</code> binary on your <code>PATH</code> (configurable in
+  <i>Settings &gt; Tools &gt; Mochi</i>).</p>
+  ]]></description>
+  <change-notes><![CDATA[
+  0.1.0: Initial release — Mochi tool window with streaming transcript, Send/Cancel/New session,
+  plan/act mode toggle, Send Selection to Mochi action (Ctrl+Alt+M), and Settings page
+  (binary path, request timeout, notifications).
+  ]]></change-notes>
+
+  <idea-version since-build="241"/>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <projectService serviceImplementation="dev.mochi.MochiService"/>
+    <applicationService serviceImplementation="dev.mochi.MochiSettings"/>
+    <applicationConfigurable parentId="tools" instance="dev.mochi.MochiSettingsConfigurable" displayName="Mochi"/>
+    <toolWindow id="Mochi" anchor="right" icon="/icons/mochi.svg" factoryClass="dev.mochi.MochiToolWindowFactory"/>
+  </extensions>
+
+  <actions>
+    <action id="dev.mochi.SendToMochi"
+            class="dev.mochi.MochiPromptAction"
+            text="Send Selection to Mochi"
+            description="Send the current editor selection to the Mochi agent">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt M"/>
+    </action>
+  </actions>
+</idea-plugin>

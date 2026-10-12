@@ -150,3 +150,28 @@ jobs:
             Mochi*|Usage*) echo "CLI smoke OK" ;;
             *) echo "Unexpected CLI output: $out"; exit 1 ;;
           esac
+
+  editors-vscode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Install VS Code extension deps
+        working-directory: editors/vscode
+        run: npm ci
+      - name: Typecheck VS Code extension
+        working-directory: editors/vscode
+        run: npm run typecheck
+      - name: Compile VS Code extension
+        working-directory: editors/vscode
+        run: npm run compile
+      - name: Package VS Code extension (.vsix)
+        working-directory: editors/vscode
+        run: |
+          npm i -g @vscode/vsce
+          vsce package --no-yarn
