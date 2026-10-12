@@ -400,6 +400,8 @@ Global: `~/.config/mochi/config.json` · Project: `.mochi/config.json`
 | `MOCHI_LIGHT=1` | Disable embedded SQLite index + WASM parser |
 | `FREEINFERENCE_API_KEY=...` | Provider key (or any OpenAI-compatible env) |
 
+**26 built-in providers** — OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Azure, AWS Bedrock, GitHub Models, DeepInfra, Cloudflare Workers AI, HuggingFace, Perplexity, SambaNova, SiliconFlow, Ollama, LM Studio, llama.cpp, OpenCode Zen/Go, FreeInference — all with failover, key-pool rotation, and capability-tier routing. Adding one is a single registry entry plus tests (see the `provider-registration` skill).
+
 Unknown values for `MOCHI_SAFETY` / `MOCHI_SANDBOX` / `MOCHI_REASONING` warn at startup rather than being silently ignored.
 
 ## Safety, Permissions, and Sandboxing
@@ -673,10 +675,20 @@ Git-backed snapshots, so rollback composes with your normal workflow.
 
 30+ built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
 
+### Skill Marketplace
+
+Community skill distribution is git-native — no central server, no account:
+
 ```bash
-mochi skills pack my-skill --out ./pack   # bundle installed skills
-mochi skills unpack ./pack --force        # install a pack
+mochi skills repo add official https://github.com/xanstomper/mochi-skills
+mochi skills search checkpoint              # search bundled + all registered sources
+mochi skills install native-core-port@official
+mochi skills repo publish                   # turn any skills dir into a packs.json catalog
 ```
+
+Any git repo (or `github:owner/repo`, or a plain `https://github.com/owner/repo` URL) is a valid source — sources are shallow-cloned into a local cache and namespaced on import. The official catalog at `xanstomper/mochi-skills` is PR-welcome; every skill must pass the quality bar (triggers → numbered steps with real paths → pitfalls → verification).
+
+Also: `mochi skills pack my-skill --out ./pack` and `mochi skills unpack ./pack --force`.
 
 ## Daemon Cron (Scheduled Jobs)
 
