@@ -45,7 +45,7 @@ const CAPABILITIES = [
   {
     icon: IconGitBranch,
     title: '04 / MULTI-MODEL ROUTER',
-    desc: 'Hot-swap any backup provider (Anthropic Claude 3.5 Sonnet & Claude 3.7 Sonnet, OpenAI GPT-5, o3 & GPT-4o, Google Gemini 2.5 Pro & 2.0 Flash, DeepSeek V3/R1, or local Ollama / llama.cpp) mid-session with multi-key pool rotation, automatic 429 backoff, and zero lost state.'
+    desc: 'Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation, automatic 429 backoff, and zero lost state.'
   },
   {
     icon: IconCpu,
@@ -366,7 +366,7 @@ function CapabilitiesSection() {
                   Multi-Model Router
                 </h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
-                  Hot-swap any backup provider (Anthropic Claude 3.5 Sonnet & Claude 3.7 Sonnet, OpenAI GPT-5, o3 & GPT-4o, Google Gemini 2.5 Pro & 2.0 Flash, DeepSeek V3/R1, or local Ollama / llama.cpp) mid-session with multi-key pool rotation and zero lost state.
+                  Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) mid-session with multi-key pool rotation and zero lost state.
                 </p>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
@@ -1084,7 +1084,7 @@ function AutonomousEcosystemSection() {
                 </div>
                 <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-                  Hot-swap any backup provider (Anthropic Claude 3.5 Sonnet & Claude 3.7 Sonnet, OpenAI GPT-5, o3 & GPT-4o, Google Gemini 2.5 Pro & 2.0 Flash, DeepSeek V3/R1, or local Ollama / llama.cpp) with multi-key pool rotation and automatic 429 backoff.
+                  Hot-swap any backup provider (Anthropic Claude 3.7 / 5 Sonnet & Opus 4.5, OpenAI GPT-5 / GPT-5.5 Astra & o3, DeepSeek V4 Flash & R1, Google Gemini 2.5 Pro & 3.0 Ultra, Kimi k3, GLM-5.3, or local Ollama / llama.cpp) with multi-key pool rotation and automatic 429 backoff.
                 </p>
               </div>
             </div>

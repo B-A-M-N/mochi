@@ -59,7 +59,10 @@ export default function Changelog() {
   });
 
   const toggleExpand = (ver) => {
-    setExpandedVersions((prev) => ({ ...prev, [ver]: !prev[ver] }));
+    setExpandedVersions((prev) => {
+      const current = prev[ver] !== undefined ? prev[ver] : true;
+      return { ...prev, [ver]: !current };
+    });
   };
 
   const expandAll = () => {
@@ -71,7 +74,11 @@ export default function Changelog() {
   };
 
   const collapseAll = () => {
-    setExpandedVersions({});
+    const none = {};
+    RELEASES.forEach((r) => {
+      none[r.version] = false;
+    });
+    setExpandedVersions(none);
   };
 
   const filteredReleases = RELEASES.filter((rel) => {
@@ -142,41 +149,6 @@ export default function Changelog() {
                     </button>
                   ))}
                 </div>
-
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={expandAll}
-                    style={{
-                      padding: '8px 14px',
-                      fontSize: 12,
-                      fontFamily: 'var(--font-mono)',
-                      background: '#ffffff',
-                      border: '1.5px solid rgba(138, 103, 246, 0.25)',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      color: '#8A67F6',
-                      fontWeight: 700,
-                    }}
-                  >
-                    Expand All (35)
-                  </button>
-                  <button
-                    onClick={collapseAll}
-                    style={{
-                      padding: '8px 14px',
-                      fontSize: 12,
-                      fontFamily: 'var(--font-mono)',
-                      background: '#ffffff',
-                      border: '1.5px solid var(--line)',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      color: '#69697A',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Collapse All
-                  </button>
-                </div>
               </div>
 
               {/* Live Search Bar */}
@@ -209,54 +181,130 @@ export default function Changelog() {
           </AnimatedContent>
         </div>
 
-        {/* Sticky Horizontal Version Quick-Jump Bar */}
+        {/* Sticky Horizontal Version Quick-Jump Bar & Expand/Collapse Controls */}
         <AnimatedContent direction="bottom" delay={0.1} distance={30} blur={10}>
           <div
             style={{
               position: 'sticky',
               top: 76,
               zIndex: 30,
-              background: 'rgba(255, 255, 255, 0.92)',
+              background: 'rgba(255, 255, 255, 0.95)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(138, 103, 246, 0.16)',
+              border: '1.5px solid rgba(138, 103, 246, 0.20)',
               borderRadius: 16,
               padding: '10px 14px',
               marginBottom: 36,
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              overflowX: 'auto',
-              boxShadow: '0 4px 20px rgba(138, 103, 246, 0.08)',
+              justifyContent: 'space-between',
+              gap: 12,
+              boxShadow: '0 8px 30px rgba(138, 103, 246, 0.10)',
+              flexWrap: 'wrap',
             }}
           >
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, color: '#8A67F6', textTransform: 'uppercase', whiteSpace: 'nowrap', paddingRight: 6 }}>
-              QUICK JUMP ({filteredReleases.length}):
-            </span>
-            {filteredReleases.map((rel) => {
-              const isActive = activeVersion === rel.version;
-              return (
-                <button
-                  key={rel.version}
-                  onClick={() => scrollToRelease(rel.version)}
-                  style={{
-                    background: isActive ? '#8A67F6' : '#FAF8FC',
-                    color: isActive ? '#ffffff' : '#111116',
-                    border: isActive ? '1px solid #8A67F6' : '1px solid rgba(138, 103, 246, 0.14)',
-                    borderRadius: 8,
-                    padding: '5px 10px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  {rel.version.split(' ')[0]}
-                </button>
-              );
-            })}
+            {/* Quick jump pills - scrollable */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                overflowX: 'auto',
+                flex: '1 1 600px',
+                minWidth: 0,
+                paddingRight: 6,
+                paddingBottom: 2,
+              }}
+            >
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, color: '#8A67F6', textTransform: 'uppercase', whiteSpace: 'nowrap', paddingRight: 6 }}>
+                QUICK JUMP ({filteredReleases.length}):
+              </span>
+              {filteredReleases.map((rel) => {
+                const isActive = activeVersion === rel.version;
+                return (
+                  <button
+                    key={rel.version}
+                    onClick={() => scrollToRelease(rel.version)}
+                    style={{
+                      background: isActive ? '#8A67F6' : '#FAF8FC',
+                      color: isActive ? '#ffffff' : '#111116',
+                      border: isActive ? '1px solid #8A67F6' : '1px solid rgba(138, 103, 246, 0.14)',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.2s ease',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {rel.version.split(' ')[0]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sticky Actions: Expand All / Collapse All with Divider */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                borderLeft: '1.5px solid rgba(138, 103, 246, 0.18)',
+                paddingLeft: 12,
+                flexShrink: 0,
+                marginLeft: 'auto',
+              }}
+            >
+              <button
+                id="btn-expand-all"
+                onClick={expandAll}
+                title="Expand details for all releases"
+                style={{
+                  padding: '7px 13px',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-mono)',
+                  background: 'linear-gradient(135deg, rgba(138, 103, 246, 0.12), rgba(167, 139, 250, 0.20))',
+                  border: '1.5px solid rgba(138, 103, 246, 0.35)',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  color: '#6D28D9',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 900 }}>＋</span> Expand All ({filteredReleases.length})
+              </button>
+              <button
+                id="btn-collapse-all"
+                onClick={collapseAll}
+                title="Collapse details for all releases"
+                style={{
+                  padding: '7px 13px',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-mono)',
+                  background: '#ffffff',
+                  border: '1.5px solid rgba(105, 105, 122, 0.25)',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  color: '#2D2B3A',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 900 }}>−</span> Collapse All
+              </button>
+            </div>
           </div>
         </AnimatedContent>
 
@@ -269,7 +317,7 @@ export default function Changelog() {
             </div>
           ) : (
             filteredReleases.map((rel, idx) => {
-              const isExpanded = expandedVersions[rel.version] !== false;
+              const isExpanded = Boolean(expandedVersions[rel.version]);
               const anchorId = 'rel-' + rel.version.replace(/[^a-zA-Z0-9]/g, '-');
               return (
                 <div key={rel.version} id={anchorId} style={{ scrollMarginTop: 150 }}>
