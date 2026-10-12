@@ -44,4 +44,20 @@ let changed = [];
   }
 }
 
+// 3. Cargo.lock's copy of the crate version — otherwise any cargo build
+// rewrites the lockfile and instantly dirties the tree after a bump.
+{
+  const p = resolve(root, 'native', 'mochi_core', 'Cargo.lock');
+  try {
+    const src = readFileSync(p, 'utf8');
+    const next = src.replace(/(^name = "mochi_core"\nversion = ")[\d.]+(")/m, `$1${version}$2`);
+    if (next !== src) {
+      writeFileSync(p, next);
+      changed.push('native/mochi_core/Cargo.lock');
+    }
+  } catch {
+    console.error('sync-version: native/mochi_core/Cargo.lock not found, skipped');
+  }
+}
+
 console.log(changed.length ? `sync-version: ${changed.join(', ')} → ${version}` : `sync-version: already at ${version}`);
