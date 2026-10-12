@@ -41,4 +41,32 @@
     '</div>';
 
   document.body.insertBefore(header, document.body.firstChild);
+
+  // Gooey sliding pill indicator
+  var navLinks = header.querySelector('.nav-links');
+  if (navLinks) {
+    var indicator = document.createElement('div');
+    indicator.className = 'nav-pill-indicator';
+    navLinks.appendChild(indicator);
+
+    function updateIndicator(target) {
+      if (!target) {
+        target = navLinks.querySelector('.nav-link.active');
+      }
+      if (target) {
+        indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+        indicator.style.width = target.offsetWidth + 'px';
+        indicator.style.opacity = '1';
+      }
+    }
+
+    setTimeout(function() { updateIndicator(); }, 60);
+    window.addEventListener('resize', function() { updateIndicator(); });
+
+    var links = navLinks.querySelectorAll('.nav-link');
+    links.forEach(function(link) {
+      link.addEventListener('mouseenter', function() { updateIndicator(link); });
+    });
+    navLinks.addEventListener('mouseleave', function() { updateIndicator(); });
+  }
 })();

@@ -1,7 +1,15 @@
 import React from 'react';
 
-export default function Mochi({ className = '', style = {}, size }) {
+export default function Mochi({ variant = 'default', className = '', style = {}, size }) {
   const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
+  const fileMap = {
+    default: 'mochi-mascot.png',
+    docs: 'docs-mascot.png',
+    benchmarks: 'benchmarks-mascot.png',
+    changelog: 'changelog-mascot.png',
+    source: 'source-mascot.png',
+  };
+  const fileName = fileMap[variant] || 'mochi-mascot.png';
   const imgStyle = {
     height: 'auto',
     display: 'block',
@@ -12,8 +20,8 @@ export default function Mochi({ className = '', style = {}, size }) {
 
   return (
     <img
-      src={base + '/assets/mochi-mascot.png'}
-      alt="Mochi Mascot"
+      src={base + '/assets/' + fileName}
+      alt={`Mochi ${variant} Mascot`}
       className={className}
       style={imgStyle}
       draggable="false"

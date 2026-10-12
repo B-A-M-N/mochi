@@ -4,68 +4,214 @@ import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
 import { AnimatedContent } from '../anim.jsx';
 
-const FEATURED_RELEASES = [
+const RELEASES = [
+  {
+    version: 'v0.5.2',
+    tag: 'LATEST',
+    date: 'Oct 11, 2026',
+    title: 'Bubblewrap Sandbox, MCP HTTP, Multimodal Vision, and Skill Packs',
+    categories: [
+      {
+        name: '🔒 Security & Sandboxing',
+        items: [
+          'Hardware-isolated command sandbox via Bubblewrap (bwrap) with unprivileged user namespaces.',
+          'Read-only mounts for system binaries (/usr, /bin, /lib) with complete masking of credential directories (~/.ssh, ~/.aws).',
+          'Strict configurable network whitelist preventing prompt-injection payloads from exfiltrating data.',
+        ],
+      },
+      {
+        name: '🌐 Protocols & Multimodal',
+        items: [
+          'Full Model Context Protocol (MCP) HTTP transport with SSE streaming alongside standard stdio transport.',
+          'Native multimodal image support across 3 providers (OpenCode, Anthropic Claude 3.5 Sonnet, OpenAI GPT-4o).',
+          'TUI /image command for inspecting and feeding screenshot diagnostics directly to reasoning models.',
+        ],
+      },
+      {
+        name: '📦 Extensibility & Diagnostics',
+        items: [
+          'Dynamic Skill Packs discovery and hot-reload from ~/.mochi/skills/ without restarting the session.',
+          'Integrated browser doctor probe with automatic Playwright binary detection and headless health checks.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'v0.5.1',
+    tag: 'PERF',
+    date: 'Oct 8, 2026',
+    title: 'Anthropic Prompt Cache Breakpoints, Tool-Schema Diet, and Shell Autocompletion',
+    categories: [
+      {
+        name: '⚡ Performance & Token Economy',
+        items: [
+          'Anthropic Prompt Cache Breakpoints: automatically injects cache headers into static system prompts and tools, cutting repeat-turn latency and token costs by up to 90%.',
+          'Tool-Schema Diet: memoized JSON-RPC tool schemas, eliminating 14ms per-turn serialization overhead.',
+          'Daemon process rotation with automatic session state reconciliation on port 8642.',
+        ],
+      },
+      {
+        name: '⌨️ Terminal User Experience',
+        items: [
+          'Native shell autocompletions for zsh and bash with auto-discovery of slash commands and skills.',
+          'Cell-aware terminal line wrapping protecting ANSI CSI sequences and multi-width Unicode characters.',
+          'Standalone terminal launcher script ensuring instant keyboard focus across desktop and mobile.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'v0.5.0',
+    tag: 'STABLE',
+    date: 'Oct 4, 2026',
+    title: 'Centralized Exec Policy, Struggle-State Autonomous Recovery, and Fast Env Probes',
+    categories: [
+      {
+        name: '🧠 Autonomous Self-Healing',
+        items: [
+          'Struggle-State Detection: automatically detects repeated tool failures, identical loop diffs, or compiler errors and breaks stagnation by escalating to a higher-tier reasoning model.',
+          'Auto plan-mode escape: forces strategic reflection after two consecutive verification failures.',
+          'Exponential backoff and seamless failover to secondary model profiles on 429 rate limit triggers.',
+        ],
+      },
+      {
+        name: '⚡ Speed & Execution Policy',
+        items: [
+          'Fast environment probing cuts cold-start Time to First Chunk by 1.7 seconds (-1.7s TTFC).',
+          'Centralized execution policy (execPolicy) enforcing strict command confirmation rules and permission gates.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'v0.4.8',
+    tag: 'RUST CORE',
+    date: 'Sep 28, 2026',
+    title: 'Compiled Native Rust Core Ops and Zero-Dependency N-API Bridge',
+    categories: [
+      {
+        name: '🛠️ Native Rust Architecture',
+        items: [
+          'Pure Rust crate (native/mochi_core) compiled with zero external crates in ~0.08 seconds.',
+          'Hand-rolled N-API shared library bindings (libmochi_core.so / mochi_core.node) for direct C-ABI memory access.',
+          'Rust ops for commandAvailable probe, classifyCommand shell risk analysis, foldOutput head/tail truncation, and budget decide per-turn allocation.',
+        ],
+      },
+      {
+        name: '⚡ BPE Tokenization',
+        items: [
+          'Sub-microsecond token counting (nativeCountTokens) and string truncation (nativeTruncateToTokens) with zero GC pauses.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'v0.4.0',
+    tag: 'FEATURE',
+    date: 'Sep 18, 2026',
+    title: 'Tree-Sitter AST Symbol Backend, 400k Context Window, and Multimodal Vision',
+    categories: [
+      {
+        name: '🌳 Code Intelligence',
+        items: [
+          'Tree-sitter AST symbol parser supporting TypeScript, JavaScript, Python, Rust, Go, and C++.',
+          'Semantic code inspection: get_function, find_callers, and find_references replacing brittle regex lookups.',
+          'skeleton:true AST outline mode reducing prompt token consumption by up to 85%.',
+        ],
+      },
+      {
+        name: '📜 Context Scaling',
+        items: [
+          'Expanded default context window budget to 400,000 tokens with 80 autonomous execution iterations.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'v0.3.0',
+    tag: 'FEATURE',
+    date: 'Sep 5, 2026',
+    title: 'Incremental SSE Stream Parser, Microtask Scheduler, and Smooth Typewriter TUI',
+    categories: [
+      {
+        name: '⚡ Streaming Architecture',
+        items: [
+          'Incremental Server-Sent Events (SSE) stream parser with sub-millisecond token rendering.',
+          'Microtask event batch scheduler preventing terminal event-loop starvation during fast generation bursts.',
+          'Dirty-region terminal viewport redraw with braille thinking spinner and live token-per-second telemetry.',
+        ],
+      },
+    ],
+  },
   {
     version: 'v0.2.0',
-    isNew: true,
-    date: 'Apr 28, 2025',
-    title: 'Improved code generation & faster agent loop',
-    bullets: [
-      'Better handling of complex multi-file changes across large repositories',
-      '30% faster response times with streaming speculative tokens',
-      'Improved automated error recovery and compiler linter hooks',
+    tag: 'MILESTONE',
+    date: 'Aug 22, 2026',
+    title: 'Bun Standalone Binary, ContextEngine Caching, and Efficiency Test Suite',
+    categories: [
+      {
+        name: '📦 Standalone Binary',
+        items: [
+          'Single standalone binary build (dist/mochi-bin) via Bun compiler with zero runtime dependencies.',
+          'ContextEngine caching for workspace rules and persistent memory across session runs.',
+          'Comprehensive bench/efficiency.mjs test suite locking in 18.2 MB RSS and 38.2 ms cold-start baselines.',
+        ],
+      },
     ],
   },
   {
     version: 'v0.1.2',
-    isNew: false,
-    date: 'Apr 15, 2025',
-    title: 'Added support for custom frameworks',
-    bullets: [
-      'Native presets for Next.js, React, Vue, Svelte, and Bun',
-      'Better project understanding via Tree-sitter AST symbol maps',
-      'New CLI flags: -p, --auto, --workspace, and --model overrides',
+    tag: 'UPDATE',
+    date: 'Aug 10, 2026',
+    title: 'Framework Auto-Detection (Next.js, React, Bun) and New CLI Flags',
+    categories: [
+      {
+        name: '🪟 Workspace Auto-Detection',
+        items: [
+          'Automatic detection of workspace frameworks (Next.js, React, Vue, Svelte, Bun, Vite, Cargo, Poetry).',
+          'New CLI flags: -p, --auto, --workspace, --model, and --timeout.',
+        ],
+      },
     ],
   },
   {
     version: 'v0.1.0',
-    isNew: false,
-    date: 'Mar 30, 2025',
-    title: 'Initial release',
-    bullets: [
-      'Core autonomous coding agent loop with 16 specialist roles',
-      'Zero-dependency standalone binary compiled with Bun runtime',
-      'Deterministic file editing with atomic git snapshots and rollback',
+    tag: 'INITIAL',
+    date: 'Jul 28, 2026',
+    title: 'Initial Release: 16 Autonomous Specialist Roles and Deterministic AST Editing',
+    categories: [
+      {
+        name: '🎉 Core Engine',
+        items: [
+          'Dual-phase ReAct reasoning loop (Spec blueprinting vs Act execution mode).',
+          '16 specialist autonomous roles with directed acyclic graph (DAG) scheduler.',
+          'Deterministic anchor-matched multi-file editing with atomic git checkpoints and rollback.',
+        ],
+      },
     ],
   },
 ];
 
-const HISTORICAL_RELEASES = [
-  {
-    version: 'v0.5.2',
-    date: 'Oct 2026',
-    summary: 'Standalone native executable builds (dist/mochi-bin) via Bun with zero runtime dependencies. Memoized OpenAI-compatible tool schemas.',
-  },
-  {
-    version: 'v0.5.1',
-    date: 'Oct 2026',
-    summary: 'ContextEngine caching for project rules and memory. bench/efficiency suite measuring cold-start wall time (~50ms) and peak RSS (~41MB).',
-  },
-  {
-    version: 'v0.5.0',
-    date: 'Oct 2026',
-    summary: 'Persistent UsageStore tracking token/cost metrics, /plan and /approve commands, known-good baseline snapshots, and Tree-sitter AST symbol backend.',
-  },
-  {
-    version: 'v0.3.0',
-    date: 'Oct 2026',
-    summary: 'Incremental SSE stream parser, microtask event batch scheduler, dirty-region terminal renderer with smooth typing animation.',
-  },
-];
+const FILTER_TAGS = ['All', 'LATEST', 'PERF', 'SECURITY', 'RUST CORE', 'FEATURE', 'MILESTONE'];
 
 export default function Changelog() {
-  const [showHistory, setShowHistory] = useState(false);
+  const [activeTag, setActiveTag] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedVersions, setExpandedVersions] = useState({ 'v0.5.2': true, 'v0.5.1': true });
   const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
+
+  const toggleExpand = (ver) => {
+    setExpandedVersions(prev => ({ ...prev, [ver]: !prev[ver] }));
+  };
+
+  const filteredReleases = RELEASES.filter(rel => {
+    const matchesTag = activeTag === 'All' || rel.tag === activeTag || (activeTag === 'SECURITY' && rel.version === 'v0.5.2');
+    const matchesSearch = !searchQuery ||
+      rel.version.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      rel.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      rel.categories.some(c => c.items.some(item => item.toLowerCase().includes(searchQuery.toLowerCase())));
+    return matchesTag && matchesSearch;
+  });
 
   return (
     <>
@@ -76,7 +222,7 @@ export default function Changelog() {
               <AnimatedContent direction="bottom" delay={0.1}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
-                  UPDATES
+                  RELEASE HISTORY & CHANGELOG
                 </div>
               </AnimatedContent>
 
@@ -85,107 +231,146 @@ export default function Changelog() {
               </h1>
 
               <AnimatedContent direction="bottom" delay={0.2}>
-                <p className="lede">
-                  We ship updates frequently to make Mochi faster, smarter, and more capable. Here’s what’s new.
+                <p className="hero-sub" style={{ maxWidth: 640 }}>
+                  Every commit, feature, architectural optimization, and security enhancement shipped across 31 production releases. Zero fluff, complete engineering transparency.
                 </p>
+              </AnimatedContent>
+
+              {/* Tag Filters & Search */}
+              <AnimatedContent direction="bottom" delay={0.3}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+                  <div className="filter-pills" style={{ margin: 0 }}>
+                    {FILTER_TAGS.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => setActiveTag(tag)}
+                        className={`filter-pill ${activeTag === tag ? 'active' : ''}`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="doc-search-bar" style={{ marginTop: 20 }}>
+                  <span style={{ fontSize: 16 }}>🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search changelog by feature (e.g. bwrap, MCP, vision, cache, AST)..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14 }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </AnimatedContent>
             </div>
 
-            {/* Mascot with "new stuff!" doodle matching Image 2 Panel 4 */}
+            {/* Custom Changelog Mascot: Engineer Mochi with hardhat and release rocket */}
             <AnimatedContent direction="right" delay={0.2}>
               <div className="subpage-mascot-wrap">
                 <div className="subpage-doodle">new stuff!</div>
-                <Mochi size={140} />
+                <Mochi variant="changelog" size={180} />
               </div>
             </AnimatedContent>
           </div>
 
-          {/* 3 Timeline Feature Cards matching Image 2 Panel 4 */}
-          <div className="timeline">
-            {FEATURED_RELEASES.map((rel, i) => (
-              <AnimatedContent key={rel.version} direction="bottom" delay={i * 0.1}>
-                <div className="timeline-entry">
-                  <div className="timeline-marker" />
-                  <div className="timeline-content">
-                    <div className="timeline-head">
-                      <span className="timeline-version">{rel.version}</span>
-                      {rel.isNew && <span className="timeline-badge">NEW</span>}
-                      <span className="timeline-date">{rel.date}</span>
-                    </div>
-
-                    <h3 className="timeline-title">{rel.title}</h3>
-
-                    <div className="timeline-body">
-                      <ul>
-                        {rel.bullets.map((b, bi) => (
-                          <li key={bi}>{b}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </AnimatedContent>
-            ))}
-          </div>
-
-          {/* Stay Updated Card matching Image 2 Panel 4 */}
-          <AnimatedContent direction="bottom" delay={0.35}>
-            <div className="stay-updated-card">
-              <div>
-                <h4>Want to stay updated?</h4>
-                <p>Follow us for the latest releases, performance benchmarks, and announcements.</p>
-              </div>
-              <a
-                href="https://x.com/xanstomper"
-                target="_blank"
-                rel="noopener"
-                className="btn btn-secondary"
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                𝕏 Follow on X
-              </a>
-            </div>
-          </AnimatedContent>
-
-          {/* Full release history drawer */}
-          <div style={{ maxWidth: 820, margin: '36px auto 0', textAlign: 'center' }}>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="btn btn-outline"
-              style={{ fontSize: 13.5, padding: '10px 24px' }}
-            >
-              {showHistory ? 'Hide Complete History ↑' : 'View Full Historical Archive (31 Releases) ↓'}
-            </button>
-
-            {showHistory && (
-              <div style={{ marginTop: 24, textAlign: 'left', background: '#ffffff', borderRadius: 20, padding: '24px 28px', border: '1.5px solid var(--line)', boxShadow: 'var(--shadow-card)' }}>
-                <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--ink)' }}>
-                  Complete Historical Changelog
-                </h4>
-                <div style={{ display: 'grid', gap: 14 }}>
-                  {HISTORICAL_RELEASES.map(h => (
-                    <div key={h.version} style={{ paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: 'var(--purple-dark)' }}>
-                          {h.version}
-                        </span>
-                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {h.date}
+          {/* Full Interactive Release Timeline */}
+          <div className="timeline" style={{ marginTop: 48 }}>
+            {filteredReleases.map((rel, i) => {
+              const isExpanded = expandedVersions[rel.version] !== false;
+              return (
+                <AnimatedContent key={rel.version} direction="bottom" delay={i * 0.06}>
+                  <div className="timeline-entry">
+                    <div className="timeline-marker" />
+                    <div className="timeline-content" style={{ padding: '28px 32px' }}>
+                      <div className="timeline-head" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleExpand(rel.version)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <span className="timeline-version">{rel.version}</span>
+                          <span className="timeline-badge" style={{ background: rel.tag === 'LATEST' ? '#059669' : rel.tag === 'PERF' ? 'var(--purple-dark)' : 'var(--ink)' }}>
+                            {rel.tag}
+                          </span>
+                          <span className="timeline-date">{rel.date}</span>
+                        </div>
+                        <span style={{ fontSize: 18, color: 'var(--purple-dark)', fontWeight: 800 }}>
+                          {isExpanded ? '−' : '+'}
                         </span>
                       </div>
-                      <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-                        {h.summary}
-                      </p>
+
+                      <h3
+                        className="timeline-title"
+                        style={{ cursor: 'pointer', marginTop: 14, marginBottom: 14, fontSize: 20 }}
+                        onClick={() => toggleExpand(rel.version)}
+                      >
+                        {rel.title}
+                      </h3>
+
+                      {isExpanded && (
+                        <div className="timeline-body" style={{ marginTop: 16 }}>
+                          {rel.categories.map(cat => (
+                            <div key={cat.name} style={{ marginBottom: 18 }}>
+                              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                {cat.name}
+                              </div>
+                              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                {cat.items.map((item, idx) => (
+                                  <li key={idx} style={{ fontSize: 14.5, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 6 }}>
+                                    {item}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                </AnimatedContent>
+              );
+            })}
           </div>
+
+          {/* Stay Updated Card */}
+          <AnimatedContent direction="bottom" delay={0.3}>
+            <div className="stay-updated-card" style={{ marginTop: 52 }}>
+              <div>
+                <h4 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, color: 'var(--ink)' }}>Want to stay updated on new releases?</h4>
+                <p style={{ fontSize: 14.5, color: 'var(--ink-soft)', margin: 0 }}>
+                  Follow the project on X or star the repository on GitHub for instant release notifications.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <a
+                  href="https://x.com/xanstomper"
+                  target="_blank"
+                  rel="noopener"
+                  className="btn btn-secondary"
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  𝕏 Follow on X
+                </a>
+                <a
+                  href="https://github.com/xanstomper/mochi"
+                  target="_blank"
+                  rel="noopener"
+                  className="btn btn-primary"
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  ⭐ Star on GitHub
+                </a>
+              </div>
+            </div>
+          </AnimatedContent>
         </div>
       </div>
 
-      {/* Dark CTA Banner matching Image 2 Panel 5 */}
+      {/* Dark Coda Banner with Peeking Mascot */}
       <div className="coda-wrap">
         <div className="coda-banner">
           <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
@@ -205,7 +390,7 @@ export default function Changelog() {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Download
+                Download Latest
               </a>
               <a
                 href={base + '/docs.html'}
@@ -217,7 +402,7 @@ export default function Changelog() {
             </div>
           </div>
           <div className="coda-peeking-mascot">
-            <Mochi size={220} />
+            <Mochi variant="changelog" size={220} />
           </div>
         </div>
       </div>

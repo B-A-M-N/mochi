@@ -8,22 +8,29 @@ import { AnimatedContent } from '../anim.jsx';
 const FEATURES = [
   {
     icon: '🌐',
-    title: 'Open Source',
-    desc: 'Transparent, community-driven, and always open. Audit every line of code on GitHub.',
+    title: 'Open Source & Permissive',
+    desc: 'Transparent, community-driven, and released under the MIT license. Audit every line of Rust and TypeScript on GitHub.',
     link: 'https://github.com/xanstomper/mochi',
   },
   {
     icon: '🤝',
-    title: 'Contribute',
-    desc: 'Help us improve Mochi with code, documentation, benchmarks, and community feedback.',
+    title: 'Contribution Guidelines',
+    desc: 'Help us improve Mochi with code, documentation, benchmarks, and community feedback. Strict CI/CD quality gates.',
     link: 'https://github.com/xanstomper/mochi/blob/main/CONTRIBUTING.md',
   },
   {
     icon: '💬',
-    title: 'Join the Community',
-    desc: 'Get support, share workflows, and connect with thousands of terminal agent builders.',
+    title: 'Community Discussions',
+    desc: 'Get support, share workflows, propose skills, and connect with thousands of terminal agent developers.',
     link: 'https://github.com/xanstomper/mochi/discussions',
   },
+];
+
+const TELEMETRY_BLOCKS = [
+  { val: '727', label: 'SOURCE FILES AUDITED', desc: 'Zero dead code or dangling unused dependencies' },
+  { val: '1,200', label: 'TESTS PASSING', desc: 'Vitest, unit, and headless integration tests passing (100%)' },
+  { val: '0', label: 'RUNTIME DEPENDENCIES', desc: 'Single self-contained Bun executable with Rust core' },
+  { val: 'MIT', label: 'OPEN SOURCE LICENSE', desc: 'Free for personal, academic, and commercial use' },
 ];
 
 const MARQUEE_ITEMS = [
@@ -34,6 +41,8 @@ const MARQUEE_ITEMS = [
   'ZERO DEPENDENCIES',
   '727 FILES AUDITED',
   '1,200 TESTS PASSING',
+  'COMPILED RUST CORE',
+  'BUBBLEWRAP SANDBOX',
 ];
 
 export default function Source() {
@@ -48,7 +57,7 @@ export default function Source() {
               <AnimatedContent direction="bottom" delay={0.1}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
-                  OPEN SOURCE
+                  OPEN SOURCE & TRANSPARENT
                 </div>
               </AnimatedContent>
 
@@ -57,8 +66,8 @@ export default function Source() {
               </h1>
 
               <AnimatedContent direction="bottom" delay={0.2}>
-                <p className="lede">
-                  Mochi is open source. Build, contribute, and make it better together with our community.
+                <p className="hero-sub" style={{ maxWidth: 640 }}>
+                  Mochi is 100% open source under the MIT license. Explore the live interactive repository tree, inspect our pure-Rust core tokenizer, or contribute pull requests to the project.
                 </p>
               </AnimatedContent>
 
@@ -87,60 +96,102 @@ export default function Source() {
               </AnimatedContent>
             </div>
 
-            {/* Mascot with "built by the community ♡" and heart doodle */}
+            {/* Custom Source Mascot: Community Builder Mochi with open-source heart & git node */}
             <AnimatedContent direction="right" delay={0.2}>
               <div className="subpage-mascot-wrap">
                 <div className="subpage-doodle">built by the community ♡</div>
                 <div style={{ position: 'relative' }}>
                   <span className="heart-doodle">♡</span>
-                  <Mochi size={180} />
+                  <Mochi variant="source" size={180} />
                 </div>
               </div>
             </AnimatedContent>
           </div>
+
+          {/* 3 Cards */}
+          <div className="grid3" style={{ marginTop: 44, marginBottom: 48 }}>
+            {FEATURES.map((f, i) => (
+              <AnimatedContent key={f.title} direction="bottom" delay={i * 0.08}>
+                <a
+                  href={f.link}
+                  target="_blank"
+                  rel="noopener"
+                  className="card"
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                >
+                  <div className="card-icon">{f.icon}</div>
+                  <h3 className="card-title">
+                    <span>{f.title}</span>
+                    <span className="card-arrow">↗</span>
+                  </h3>
+                  <p className="card-desc">{f.desc}</p>
+                </a>
+              </AnimatedContent>
+            ))}
+          </div>
+
+          {/* Repository Telemetry Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 52 }}>
+            {TELEMETRY_BLOCKS.map((b, i) => (
+              <AnimatedContent key={b.label} direction="bottom" delay={i * 0.06}>
+                <div style={{ background: '#ffffff', borderRadius: 20, padding: '24px 20px', border: '1.5px solid var(--line)', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--purple-dark)', marginBottom: 4 }}>
+                    {b.val}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>
+                    {b.label}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                    {b.desc}
+                  </div>
+                </div>
+              </AnimatedContent>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Marquee Banner matching Image 2 Panel 5 */}
-      <div className="marquee-wrap">
-        <div className="marquee-content">
+      {/* Marquee Ticker */}
+      <div className="stats-ticker" style={{ marginBottom: 40 }} aria-hidden="true">
+        <div className="ticker-track">
           {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
-            <span key={i} className="marquee-item">
-              ✦ {item}
+            <span key={i} className="ticker-item">
+              <span className="ticker-dot" />
+              {item}
             </span>
           ))}
         </div>
       </div>
 
-      {/* 3 Feature Cards matching Image 2 Panel 5 */}
-      <div className="wrap" style={{ marginBottom: 48 }}>
-        <div className="grid3" style={{ marginBottom: 40 }}>
-          {FEATURES.map((f, i) => (
-            <AnimatedContent key={f.title} direction="bottom" delay={i * 0.08}>
+      {/* Interactive Repo Browser */}
+      <div className="wrap" style={{ marginBottom: 80 }}>
+        <AnimatedContent direction="bottom">
+          <div style={{ background: '#ffffff', borderRadius: 24, padding: '32px 28px', border: '1.5px solid var(--line)', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>
+                  Interactive Repository Explorer
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+                  Browse through Mochi's directory tree, inspect modules, and view source files live in the browser.
+                </p>
+              </div>
               <a
-                href={f.link}
+                href="https://github.com/xanstomper/mochi"
                 target="_blank"
                 rel="noopener"
-                className="card"
+                className="btn btn-outline"
+                style={{ fontSize: 13, padding: '8px 18px' }}
               >
-                <div className="card-icon">{f.icon}</div>
-                <h3 className="card-title">
-                  <span>{f.title}</span>
-                  <span className="card-arrow">→</span>
-                </h3>
-                <p className="card-desc">{f.desc}</p>
+                Open on GitHub ↗
               </a>
-            </AnimatedContent>
-          ))}
-        </div>
-
-        {/* Live Interactive Code Browser */}
-        <div style={{ marginTop: 24 }}>
-          <RepoBrowser />
-        </div>
+            </div>
+            <RepoBrowser />
+          </div>
+        </AnimatedContent>
       </div>
 
-      {/* Dark CTA Banner matching Image 2 Panel 5 */}
+      {/* Dark Coda Banner with Peeking Mascot */}
       <div className="coda-wrap">
         <div className="coda-banner">
           <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
@@ -160,19 +211,21 @@ export default function Source() {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Download
+                Download Mochi
               </a>
               <a
-                href={base + '/docs.html'}
+                href="https://github.com/xanstomper/mochi"
                 className="btn btn-outline"
+                target="_blank"
+                rel="noopener"
                 style={{ background: 'transparent', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }}
               >
-                Read the Docs →
+                Star Repository ↗
               </a>
             </div>
           </div>
           <div className="coda-peeking-mascot">
-            <Mochi size={220} />
+            <Mochi variant="source" size={220} />
           </div>
         </div>
       </div>
