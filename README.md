@@ -135,6 +135,9 @@ Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a sta
 <td align="center" colspan="2"><b>Launch — royal-orchid terminal</b><br><img src="docs/assets/demo/tui_launch.gif" alt="mochi tui launch" width="640"></td>
 </tr>
 <tr>
+<td align="center" colspan="2"><b>From shell to answer — <code>mochi</code> → TUI → "hello"</b><br><img src="docs/assets/demo/tui_type.gif" alt="mochi tui from terminal" width="640"></td>
+</tr>
+<tr>
 <td align="center"><b>Live chat — thinking bar, MCH-111 tier stats</b><br><img src="docs/assets/demo/tui_chat.gif" alt="mochi tui chat" width="360"></td>
 <td align="center"><b>295-skill browser</b><br><img src="docs/assets/demo/tui_skills.gif" alt="mochi tui skills" width="360"></td>
 </tr>
