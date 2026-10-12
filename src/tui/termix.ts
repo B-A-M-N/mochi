@@ -1,5 +1,5 @@
 import { createProvider } from '../model/router.js';
-import { BudgetEngine, estimateCostUsd } from '../budget.js';
+import { BudgetEngine } from '../budget.js';
 import type { MochiConfig, ChatMessage } from '../types.js';
 
 // "Termix" is Mochi's baked-in multi-session workbench. It is NOT a separate
@@ -106,8 +106,8 @@ async function runSession(
       output = response.content ?? '';
       if (response.usage) {
         tokensUsed += response.usage.totalTokens;
-        budget.recordTokens(response.usage.totalTokens, config.model.model, config.model.provider);
-        costUsd += estimateCostUsd(response.usage.totalTokens, config.model.model, config.model.provider);
+        budget.recordTokens(response.usage.totalTokens, config.model.model, config.model.provider, response.usage.costUsd ?? 0);
+        costUsd += response.usage.costUsd ?? 0;
       }
       steps++;
 

@@ -8,7 +8,7 @@
 
 import { resolve } from 'node:path';
 import { createProvider } from '../model/router.js';
-import { BudgetEngine, estimateCostUsd } from '../budget.js';
+import { BudgetEngine } from '../budget.js';
 import type { ChatMessage, MochiConfig, ModelProfile } from '../types.js';
 import { evaluateOwl } from './owl.js';
 import { evaluateSispis } from './sispis.js';
@@ -254,8 +254,8 @@ export class ChameleonEngine {
         const chunk = response.content ?? '';
         if (response.usage) {
           tokensUsed += response.usage.totalTokens;
-          budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
-          costUsd += estimateCostUsd(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
+          budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider, response.usage.costUsd ?? 0);
+          costUsd += response.usage.costUsd ?? 0;
         }
         runs.push(chunk);
         const bestSoFar = chunk.trim() ? chunk : (runs.length > 1 ? runs[runs.length - 2] : deterministicScaffold);

@@ -120,7 +120,7 @@ export function createAnthropicProvider(config: ProviderConfig) {
     const reasoningText = thinkingBlocks.map((b) => b.thinking).filter(Boolean).join('\n');
     const toolUses = blocks.filter((b) => b.type === 'tool_use');
     const toolCalls = toolUses.map((b: any) => ({ id: b.id, type: 'function' as const, function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) } }));
-    const usage = data.usage ? { promptTokens: data.usage.input_tokens ?? 0, completionTokens: data.usage.output_tokens ?? 0, totalTokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0) } : undefined;
+    const usage = data.usage ? { promptTokens: data.usage.input_tokens ?? 0, completionTokens: data.usage.output_tokens ?? 0, totalTokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0), cachedTokens: (data.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0 } : undefined;
     return { content: text, reasoningContent: reasoningText || undefined, toolCalls: toolCalls.length ? toolCalls : undefined, finishReason: data.stop_reason, usage };
   }
 

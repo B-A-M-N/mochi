@@ -211,7 +211,7 @@ export class VerifierEngine {
     ] as import('./types.js').ChatMessage[];
     try {
       const response = await provider.chat(messages, [], { temperature: 0 });
-      if (response.usage) this.budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider);
+      if (response.usage) this.budget.recordTokens(response.usage.totalTokens, this.config.model.model, this.config.model.provider, response.usage.costUsd ?? 0);
       const cleaned = (response.content ?? '').replace(/```json\s*|\s*```/g, '').trim();
       const parsed = JSON.parse(cleaned);
       // Unparseable status falls back to the rule-based verdict (return null),

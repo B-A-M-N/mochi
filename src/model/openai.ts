@@ -299,14 +299,31 @@ export function createOpenAIProvider(config: ProviderConfig) {
               : typeof usageAny.cached_content_token_count === 'number' ? usageAny.cached_content_token_count
               : 0;
             if (cacheRead > 0) kvCache.recordUsage({ cacheReadTokens: cacheRead, promptTokens: totalInput });
+            // Provider-reported billing (OpenRouter-style usage.cost): the only
+            // cost figure we ever trust — no local price table.
+            const reportedCost = typeof usageAny.cost === 'number' ? usageAny.cost : undefined;
+            yield {
+              content: delta.content ?? undefined,
+              reasoningContent: typeof reasoningContent === 'string' && reasoningContent.length > 0 ? reasoningContent : undefined,
+              toolCalls: parsedCalls.length ? parsedCalls : undefined,
+              finishReason: choice?.finish_reason,
+              usage: {
+                promptTokens: totalInput,
+                completionTokens: totalOutput,
+                totalTokens: totalInput + totalOutput,
+                cachedTokens: cacheRead > 0 ? cacheRead : undefined,
+                costUsd: reportedCost,
+              },
+            };
+          } else {
+            yield {
+              content: delta.content ?? undefined,
+              reasoningContent: typeof reasoningContent === 'string' && reasoningContent.length > 0 ? reasoningContent : undefined,
+              toolCalls: parsedCalls.length ? parsedCalls : undefined,
+              finishReason: choice?.finish_reason,
+              usage: { promptTokens: totalInput, completionTokens: totalOutput, totalTokens: totalInput + totalOutput },
+            };
           }
-          yield {
-            content: delta.content ?? undefined,
-            reasoningContent: typeof reasoningContent === 'string' && reasoningContent.length > 0 ? reasoningContent : undefined,
-            toolCalls: parsedCalls.length ? parsedCalls : undefined,
-            finishReason: choice?.finish_reason,
-            usage: { promptTokens: totalInput, completionTokens: totalOutput, totalTokens: totalInput + totalOutput },
-          };
         } catch {
           // ignore malformed lines
         }

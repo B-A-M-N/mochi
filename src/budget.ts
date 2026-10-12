@@ -27,61 +27,15 @@ export interface BudgetSnapshot {
   byModel: Array<{ model: string; tokens: number; costUsd: number; calls: number }>;
 }
 
-export const DEFAULT_COST_PER_TOKEN: Record<string, { prompt: number; completion: number } | number> = {
-  'gpt-4o': { prompt: 0.0000025, completion: 0.00001 },
-  'gpt-4o-mini': { prompt: 0.00000015, completion: 0.0000006 },
-  'gpt-4.1': { prompt: 0.000002, completion: 0.000008 },
-  'gpt-4.1-mini': { prompt: 0.0000004, completion: 0.0000016 },
-  'gpt-5': { prompt: 0.000003, completion: 0.000012 },
-  'claude-3-7-sonnet': { prompt: 0.000003, completion: 0.000015 },
-  'claude-3-5-sonnet': { prompt: 0.000003, completion: 0.000015 },
-  'claude-3-5-haiku': { prompt: 0.0000008, completion: 0.000004 },
-  'deepseek-v4-flash': { prompt: 0.00000014, completion: 0.00000028 },
-  'deepseek-v4-flash-free': 0,
-  'deepseek-chat': { prompt: 0.00000014, completion: 0.00000028 },
-  'deepseek-reasoner': { prompt: 0.00000055, completion: 0.00000219 },
-  'deepseek-r1': { prompt: 0.00000055, completion: 0.00000219 },
-  'deepseek-v3': { prompt: 0.00000014, completion: 0.00000028 },
-  'gemini-2.0-flash': { prompt: 0.0000001, completion: 0.0000004 },
-  'gemini-1.5-pro': { prompt: 0.00000125, completion: 0.000005 },
-  'qwen': { prompt: 0.0000002, completion: 0.0000006 },
-  'zen': { prompt: 0.00000014, completion: 0.00000028 },
-  'opencode': { prompt: 0.00000014, completion: 0.00000028 },
-};
+import { nativeBudgetDecide } from './native/core.js';
 
-import { nativeEstimateCostUsd, nativeBudgetDecide } from './native/core.js';
-
-export function estimateCostUsd(
-  tokens: number | { promptTokens?: number; completionTokens?: number },
-  model: string,
-  provider = '',
-): number {
-  // Free endpoints bill nothing — 'free' in the model id (deepseek-v4-flash-free,
-  // openrouter ':free' variants) or the provider id (freeinference). Pricing a
-  // free endpoint by token count reported fake spend and made the goal summary's
-  // "Cost:" line disagree with the run's own cost figure.
-  if (model.toLowerCase().includes('free') || provider.toLowerCase().includes('free')) return 0;
-  if (typeof tokens !== 'number' && tokens.promptTokens !== undefined && tokens.completionTokens !== undefined) {
-    const nat = nativeEstimateCostUsd(model, tokens.promptTokens, tokens.completionTokens, 0);
-    if (nat !== null && nat > 0) return nat;
-  }
-  const mLower = model.toLowerCase();
-  const key = Object.keys(DEFAULT_COST_PER_TOKEN).find((k) => mLower.includes(k.toLowerCase()));
-  if (!key) {
-    const rate = 0.0000005;
-    if (typeof tokens === 'number') return tokens * rate;
-    return ((tokens.promptTokens ?? 0) + (tokens.completionTokens ?? 0)) * rate;
-  }
-  const pricing = DEFAULT_COST_PER_TOKEN[key];
-  if (typeof pricing === 'number') {
-    if (typeof tokens === 'number') return tokens * pricing;
-    return ((tokens.promptTokens ?? 0) + (tokens.completionTokens ?? 0)) * pricing;
-  }
-  if (typeof tokens === 'number') {
-    return tokens * ((pricing.prompt + pricing.completion) / 2);
-  }
-  return (tokens.promptTokens ?? 0) * pricing.prompt + (tokens.completionTokens ?? 0) * pricing.completion;
-}
+// NOTE: no local price table. A hardcoded per-model pricing map can never stay
+// current (new models ship weekly, and the same model id bills differently per
+// hosting provider), so inventing a number was worse than showing none. Cost is
+// only ever recorded when the PROVIDER's own usage object reports billing
+// (OpenRouter-style usage.cost); otherwise the UI says so and the real
+// provider-measured metrics — tokens in/out/cached and context consumed —
+// carry the accounting.
 
 export class BudgetEngine {
   private limits: BudgetLimits;
@@ -109,16 +63,15 @@ export class BudgetEngine {
     this.startedAt = performance.now();
   }
 
-  /** @param provider Provider id — free providers bill $0 (see estimateCostUsd).
-   *  @param realCostUsd Caller-computed cost for THIS record (prompt+completion
-   *  priced). The token-based fallback understates spend when `tokens` is
-   *  output-only — the main loop deliberately records only output tokens for
-   *  LIMIT purposes (full re-billing exhausts maxTokens early) but must still
-   *  charge real cost, or the goal summary showed "Cost: $0.0002" next to
-   *  "Costliest tasks: … ($0.0136)" for the same run. */
+  /** @param realCostUsd Provider-REPORTED cost for this record (usage.cost from
+   *  the API's own usage object). Never invented: without it the record
+   *  charges $0 and the UI labels cost as not reported. The token limit
+   *  still counts output-only tokens (full re-billing exhausts maxTokens
+   *  early) — output tokens are the resource that scales with agent work. */
   recordTokens(tokens: number, model: string, provider = '', realCostUsd?: number) {
+    void provider; // kept for call-site stability; pricing is provider-reported only
     this.usedTokens += tokens;
-    const cost = realCostUsd ?? estimateCostUsd(tokens, model, provider);
+    const cost = realCostUsd ?? 0;
     this.usedCostUsd += cost;
     // MCH-79: per-model ledger for the /usage cost breakdown.
     const e = this.byModel.get(model) ?? { tokens: 0, costUsd: 0, calls: 0 };

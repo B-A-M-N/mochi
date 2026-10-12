@@ -675,7 +675,7 @@ export class Runtime {
     }
   }
 
-  private recordUsage(goal: string, result: { tokensUsed: number; costUsd: number; durationMs: number; tokensIn?: number; tokensOut?: number; modelCalls?: number }): void {
+  private recordUsage(goal: string, result: { tokensUsed: number; costUsd: number; durationMs: number; tokensIn?: number; tokensOut?: number; tokensCached?: number; contextUsed?: number; modelCalls?: number }): void {
     this.usage.record(this.config.model.model, goal, {
       // Real prompt/completion split when the run chain reported provider
       // usage. Legacy fallback: keep the TOTAL visible under `out` — the old
@@ -683,6 +683,9 @@ export class Runtime {
       // "tokens in: 0" forever.
       tokensIn: result.tokensIn ?? 0,
       tokensOut: result.tokensOut ?? result.tokensUsed,
+      tokensCached: result.tokensCached ?? 0,
+      contextUsed: result.contextUsed ?? 0,
+      // Provider-reported billing only — never estimated locally.
       costUsd: result.costUsd,
       durationMs: result.durationMs,
       // Real call count from the budget ledger — the old hardcoded 1 made

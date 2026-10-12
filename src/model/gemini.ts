@@ -155,7 +155,7 @@ export function createGeminiProvider(config: ProviderConfig) {
       reasoningContent: reasoningText || undefined,
       toolCalls: functionCalls.length ? functionCalls : undefined,
       finishReason: candidates[0]?.finishReason,
-      usage: { promptTokens: u.promptTokenCount ?? 0, completionTokens: u.candidatesTokenCount ?? 0, totalTokens: u.totalTokenCount ?? 0 },
+      usage: { promptTokens: u.promptTokenCount ?? 0, completionTokens: u.candidatesTokenCount ?? 0, totalTokens: u.totalTokenCount ?? 0, cachedTokens: (u as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0 },
     };
   }
 

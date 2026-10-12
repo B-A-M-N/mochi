@@ -33,6 +33,10 @@ export interface GoalResult {
    *  usage (legacy/partial paths leave these unset — consumers fall back). */
   tokensIn?: number;
   tokensOut?: number;
+  /** Provider-reported cached-input tokens and the context the latest request
+   *  actually consumed (both straight from the usage object). */
+  tokensCached?: number;
+  contextUsed?: number;
   costUsd: number;
   /** Real model-call count from the run's budget ledger (every loop /
    *  verification / speculative call records one). Optional: legacy/partial
@@ -46,7 +50,7 @@ export class GoalEngine {
   private workspace: Workspace;
   private events: EventBus;
   private cwd: string;
-  private goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, duration: 0 };
+  private goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, tokensCached: 0, contextUsed: 0, duration: 0 };
   /** Baseline for the in-flight run (undefined outside runGoal). */
   private runBaseline: VerificationBaseline | Promise<VerificationBaseline | undefined> | undefined;
   private baselineCache?: { baseline: VerificationBaseline; cachedAt: number };
@@ -240,11 +244,12 @@ Return ONLY the JSON array, no markdown.`;
         filesModified: [],
         summary: 'Goal blocked by before_goal hook.',
         tokensUsed: 0,
+        modelCalls: 0,
         costUsd: 0,
         durationMs: 0,
       };
     }
-    this.goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, duration: 0 };
+    this.goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, tokensCached: 0, contextUsed: 0, duration: 0 };
     this.goalFiles = [];
     const budget = new BudgetEngine(this.config.safety);
     budget.start();
@@ -366,26 +371,32 @@ Return ONLY the JSON array, no markdown.`;
     this.workspace.saveGoal(goal);
     this.workspace.saveTasks(goal.id, scheduler.all());
 
+    const snap = budget.snapshot(this.config.model.model);
+    const costLine = snap.usedCostUsd > 0
+      ? `Cost: $${snap.usedCostUsd.toFixed(4)} (provider-reported). `
+      : `Cost: not reported by this provider. `;
     const result: GoalResult = {
       success: failed.length === 0,
       goal,
       completedTasks: completed,
       failedTasks: failed,
-      summary: `Goal ${goal.status}. ${completed.length} done, ${failed.length} failed, ${scheduler.all().length - completed.length - failed.length} remaining. Tokens: ${this.goalStats.tokens}. Cost: $${budget.snapshot(this.config.model.model).usedCostUsd.toFixed(4)}. Time: ${Math.round(this.goalStats.duration / 1000)}s.` +
+      summary: `Goal ${goal.status}. ${completed.length} done, ${failed.length} failed, ${scheduler.all().length - completed.length - failed.length} remaining. Tokens: ${this.goalStats.tokens} total (${this.goalStats.tokensIn.toLocaleString()} in / ${this.goalStats.tokensOut.toLocaleString()} out / ${this.goalStats.tokensCached.toLocaleString()} cached). Context in use: ${this.goalStats.contextUsed.toLocaleString()} tokens. ${costLine}Time: ${Math.round(this.goalStats.duration / 1000)}s.` +
         (this.taskCosts.length > 0
-          ? '\nCostliest tasks: ' +
+          ? '\nHeaviest tasks: ' +
             this.taskCosts
               .slice()
-              .sort((a, b) => b.costUsd - a.costUsd)
+              .sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0))
               .slice(0, 3)
-              .map((tc) => `${tc.title.slice(0, 60)} ($${(tc.costUsd ?? 0).toFixed(4)}, ${(tc.tokens ?? 0).toLocaleString()} tok)`)
+              .map((tc) => `${tc.title.slice(0, 60)} (${(tc.tokens ?? 0).toLocaleString()} tok${(tc.costUsd ?? 0) > 0 ? `, $${(tc.costUsd ?? 0).toFixed(4)}` : ''})`)
               .join(' | ')
           : ''),
       tokensUsed: this.goalStats.tokens,
       tokensIn: this.goalStats.tokensIn,
       tokensOut: this.goalStats.tokensOut,
-      costUsd: budget.snapshot(this.config.model.model).usedCostUsd,
-      modelCalls: budget.snapshot(this.config.model.model).usedModelCalls,
+      tokensCached: this.goalStats.tokensCached,
+      contextUsed: this.goalStats.contextUsed,
+      costUsd: snap.usedCostUsd,
+      modelCalls: snap.usedModelCalls,
       durationMs: this.goalStats.duration,
       filesModified: [...this.goalFiles],
     };
@@ -483,6 +494,8 @@ Return ONLY the JSON array, no markdown.`;
     this.goalStats.tokens += result.tokensUsed;
     this.goalStats.tokensIn += result.tokensIn ?? 0;
     this.goalStats.tokensOut += result.tokensOut ?? 0;
+    this.goalStats.tokensCached += result.tokensCached ?? 0;
+    if (result.contextUsed) this.goalStats.contextUsed = result.contextUsed;
     this.goalStats.duration += result.durationMs;
     // MCH-81: per-task cost attribution for the goal summary card (guard: agent
     // run results don't always carry costUsd — crash found by live probe).
@@ -586,6 +599,8 @@ Return ONLY the JSON array, no markdown.`;
         this.goalStats.tokens += reviewResult.tokensUsed;
         this.goalStats.tokensIn += reviewResult.tokensIn ?? 0;
         this.goalStats.tokensOut += reviewResult.tokensOut ?? 0;
+        this.goalStats.tokensCached += reviewResult.tokensCached ?? 0;
+        if (reviewResult.contextUsed) this.goalStats.contextUsed = reviewResult.contextUsed;
         this.goalStats.duration += reviewResult.durationMs;
         if (!reviewResult.success) break;
         result = reviewResult;
@@ -736,6 +751,8 @@ Return ONLY the JSON array, no markdown.`;
         tokensUsed: 0,
         tokensIn: 0,
         tokensOut: 0,
+        tokensCached: 0,
+        contextUsed: 0,
         costUsd: 0,
         durationMs: 0,
       };

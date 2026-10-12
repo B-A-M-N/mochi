@@ -12,7 +12,7 @@ import { loadReadCache, saveReadCache } from '../state/read-cache-store.js';
 import { createProvider } from '../model/router.js';
 import { PROVIDERS } from '../model/providers.js';
 import { isMode, modeInstruction } from '../modes.js';
-import { kvCache } from '../model/kv-cache.js';
+
 import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTools } from '../tools/index.js';
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
@@ -24,7 +24,7 @@ import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
 import { AgentProfileService } from '../agents/profile.js';
-import { BudgetEngine, estimateCostUsd } from '../budget.js';
+import { BudgetEngine } from '../budget.js';
 import { SpeculativeEngine } from './speculative.js';
 import { retrieveSpeculationMemory, recordSpeculationOutcome, speculationMemoryToPrompt, predictNextFiles } from './speculative.js';
 import { join } from 'node:path';
@@ -314,6 +314,10 @@ export interface AgentResult {
    *  path has a real provider response behind it). */
   tokensIn?: number;
   tokensOut?: number;
+  /** Provider-reported cached-input tokens + the context the LATEST request
+   *  actually consumed (prompt+completion, straight from the usage object). */
+  tokensCached?: number;
+  contextUsed?: number;
   durationMs: number;
   /** MCH-82: real per-run cost attribution (from budget ledger estimate). */
   costUsd: number;
@@ -344,6 +348,11 @@ export class Agent {
    *  reporting; tokensUsed stays the total. */
   private tokensIn = 0;
   private tokensOut = 0;
+  /** Provider-reported cached-input tokens (usage.prompt_tokens_details etc.). */
+  private tokensCached = 0;
+  /** Context consumed by the LATEST request: the model's own prompt+completion
+   *  counts — real window occupancy, not a chars/4 estimate. */
+  private lastContextUsed = 0;
   /** MCH-82: cumulative cost estimate for THIS agent run (summed per model call). */
   private costUsd = 0;
   private startTime = 0;
@@ -1664,45 +1673,44 @@ Continue from 'Next:', do not redo completed progress.`,
         }
       }
       if (response.usage) {
-        this.tokensUsed += response.usage.totalTokens;
-        this.tokensIn += response.usage.promptTokens ?? 0;
-        this.tokensOut += response.usage.completionTokens ?? 0;
+        const u = response.usage;
+        this.tokensUsed += u.totalTokens;
+        this.tokensIn += u.promptTokens ?? 0;
+        this.tokensOut += u.completionTokens ?? 0;
+        this.tokensCached += u.cachedTokens ?? 0;
+        // Context consumed by THIS request = the model's own prompt+completion
+        // counts. No local estimation — the provider measured it.
+        this.lastContextUsed = (u.promptTokens ?? 0) + (u.completionTokens ?? 0);
         // Budget accounting — count ONLY freshly generated (output) tokens as
         // the LIMIT resource. Counting totalTokens (which re-bills the whole
         // prompt+history on every call) made the cumulative budget hit
         // safety.maxTokens after a dozen-odd iterations of ANY long task:
         // ratio() hit 0 → phase 'exhausted' → canExecuteTool() false → every
-        // tool call vetoed → the agent could read/think forever but never edit
-        // (the "token budget exhausted, cannot make edits" failure class).
-        // Output tokens are the resource that actually scales with agent work.
-        // Cost, however, is charged separately as the REAL prompt+completion
-        // estimate (computed below) — pricing output-only tokens understated
-        // spend ~50x vs the run's own cost figure.
-        const u = response.usage;
-        const cacheRead = kvCache.totalCacheSaved || kvCache.lastCacheSaved;
-        const promptTokens = u?.promptTokens ?? 0;
-        const completionTokens = u?.completionTokens ?? 0;
-        const cost = estimateCostUsd({ promptTokens, completionTokens }, this.config.model.model, this.config.model.provider);
+        // tool call vetoed (the "token budget exhausted, cannot make edits"
+        // failure class). Output tokens are the resource that actually scales
+        // with agent work. Cost is NOT estimated locally at all: it is the
+        // provider's own billing figure when the usage object carries one
+        // (OpenRouter-style usage.cost), else 0 and labeled "not reported".
+        const providerCost = u.costUsd ?? 0;
         this.budget?.recordTokens(
-          (response.usage as { completionTokens?: number }).completionTokens
-            ?? response.usage.totalTokens,
+          u.completionTokens ?? u.totalTokens,
           this.config.model.model,
           this.config.model.provider,
-          cost,
+          providerCost,
         );
         // Phase 4 (VNext): feed REAL provider usage into the context engine so
         // the compaction floor triggers on actuals instead of the chars/3.8 guess.
-        this.context.recordReportedUsage(response.usage?.promptTokens);
+        this.context.recordReportedUsage(u.promptTokens);
         // Surface REAL provider usage to the TUI: input, output, cache reads, and cost in USD.
-        this.costUsd += cost;
+        this.costUsd += providerCost;
         this.events.emit({
           type: 'usage:updated',
           agentId: this.id,
-          inputTokens: Math.max(0, promptTokens - cacheRead),
-          outputTokens: completionTokens,
-          cacheTokens: cacheRead,
-          totalTokens: u?.totalTokens ?? 0,
-          costUsd: this.budget?.snapshot(this.config.model.model).usedCostUsd ?? cost,
+          inputTokens: Math.max(0, (u.promptTokens ?? 0) - (u.cachedTokens ?? 0)),
+          outputTokens: u.completionTokens ?? 0,
+          cacheTokens: u.cachedTokens ?? 0,
+          totalTokens: u.totalTokens ?? 0,
+          costUsd: this.budget?.snapshot(this.config.model.model).usedCostUsd ?? providerCost,
         });
       }
       // Reset retry counters on any successful model output. stallRetries was
@@ -4661,6 +4669,8 @@ Continue from 'Next:', do not redo completed progress.`,
       tokensUsed: this.tokensUsed,
       tokensIn: this.tokensIn,
       tokensOut: this.tokensOut,
+      tokensCached: this.tokensCached,
+      contextUsed: this.lastContextUsed,
       costUsd: this.costUsd,
       durationMs,
       stopReason,

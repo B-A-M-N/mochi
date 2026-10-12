@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BudgetEngine, estimateCostUsd } from './budget.js';
+import { BudgetEngine } from './budget.js';
 import { isNativeCoreAvailable, nativeBudgetDecide } from './native/core.js';
 
 const base = {
@@ -12,27 +12,20 @@ const base = {
 };
 
 describe('BudgetEngine', () => {
-  it('estimates cost per model', () => {
-    expect(estimateCostUsd(1000, 'gpt-4o')).toBeGreaterThan(0);
-    expect(estimateCostUsd({ promptTokens: 1000, completionTokens: 100 }, 'gpt-4o')).toBeCloseTo(0.0035);
-    expect(estimateCostUsd(1000, 'deepseek-v4-flash-free')).toBe(0);
-    // Free PROVIDERS bill $0 even when the model id has no pricing entry —
-    // freeinference/glm-5.3-flash used to be priced at the unknown-model flat
-    // rate, reporting fake spend on a free endpoint.
-    expect(estimateCostUsd(1000, 'glm-5.3-flash', 'freeinference')).toBe(0);
-    expect(estimateCostUsd(1000, 'glm-5.3-flash', 'some-paid-provider')).toBeGreaterThan(0);
-  });
-
-  it('charges caller-provided real cost while keeping output-only token limits', () => {
+  it('never invents cost — only provider-reported billing is recorded', () => {
     const b = new BudgetEngine({ ...base, maxTokens: 1000 });
     b.start();
-    // The loop records output tokens as the LIMIT resource but passes the real
-    // prompt+completion cost — pricing output-only tokens understated spend
-    // (~50x) and made the goal summary contradict itself.
+    // No local price table: an unpriced model records $0 no matter the token
+    // count (the old flat-rate fallback reported fake spend on free endpoints
+    // and stale prices on paid ones).
+    b.recordTokens(1000, 'some-model-nobody-prices', 'some-provider');
+    expect(b.snapshot('some-model-nobody-prices').usedCostUsd).toBe(0);
+    // The loop records output tokens as the LIMIT resource; provider-reported
+    // billing (usage.cost from the API's own usage object) is charged as-is.
     b.recordTokens(10, 'gpt-4o', 'openai', 0.42);
-    expect(b.snapshot('gpt-4o').usedTokens).toBe(10); // limit accounting untouched
-    expect(b.snapshot('gpt-4o').usedCostUsd).toBeCloseTo(0.42); // real cost charged
-    // Free provider, no explicit cost → $0 no matter the token count.
+    expect(b.snapshot('gpt-4o').usedTokens).toBe(1010); // limit accounting untouched
+    expect(b.snapshot('gpt-4o').usedCostUsd).toBeCloseTo(0.42); // reported cost charged
+    // Another unpriced record adds nothing to cost.
     b.recordTokens(10, 'glm-5.3-flash', 'freeinference');
     expect(b.snapshot('glm-5.3-flash').usedCostUsd).toBeCloseTo(0.42);
   });
