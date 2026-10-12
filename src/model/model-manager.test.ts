@@ -79,7 +79,7 @@ describe('login / selectProviderById', () => {
 
   it('selects a provider with its default model when none given', () => {
     const cfg = selectProviderById(base(), 'freeinference');
-    expect(cfg.model.model).toBe('kimi-k2.7-code');
+    expect(cfg.model.model).toBe('glm-5.3-flash');
   });
 });
 
