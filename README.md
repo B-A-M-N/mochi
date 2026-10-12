@@ -162,7 +162,7 @@ ln -s $(pwd)/dist/cli.js ~/.local/bin/mochi
 **3 · Set an API key** (any OpenAI-compatible endpoint)
 
 ```bash
-export OPENCODE_ZEN_API_KEY=sk-...
+export Anthropic=sk-...
 ```
 
 **4 · Run**
