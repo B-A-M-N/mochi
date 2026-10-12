@@ -37,13 +37,17 @@
   });
 
   var homeHref = inSub ? '/mochi/' : './';
+  var demoHref = inSub ? '/mochi/#live-demo' : './#live-demo';
 
   // Desktop Header with Mobile Toggle
   var header = document.createElement('header');
   header.className = 'site';
   header.innerHTML =
     '<a href="' + homeHref + '" class="nav-brand">mochi<span class="sparkle">✦</span></a>' +
-    '<nav class="nav-links">' + navHTML + '</nav>' +
+    '<nav class="nav-links">' +
+      navHTML +
+      '<a href="' + demoHref + '" class="nav-demo-btn">▶ Live Demo</a>' +
+    '</nav>' +
     '<div class="nav-right">' +
       '<a href="' + REPO + '" class="nav-cta" target="_blank" rel="noopener">' +
         '<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' +
@@ -65,7 +69,10 @@
   mobileTabBar.id = 'mobile-tab-bar';
   mobileTabBar.setAttribute('aria-label', 'Mobile Navigation');
   mobileTabBar.innerHTML =
-    '<div class="mobile-tab-scroll">' + mobPillsHTML + '</div>';
+    '<div class="mobile-tab-scroll">' +
+      mobPillsHTML +
+      '<a href="' + demoHref + '" class="mob-tab-pill mob-demo-pill">▶ Live Demo</a>' +
+    '</div>';
   document.body.insertBefore(mobileTabBar, header.nextSibling);
 
   // Mobile Navigation Drawer Overlay
@@ -80,7 +87,14 @@
         '<a href="' + homeHref + '" class="nav-brand">mochi<span class="sparkle">✦</span></a>' +
         '<button class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Close navigation menu">✕</button>' +
       '</div>' +
-      '<div class="mobile-drawer-nav">' + drawerLinksHTML + '</div>' +
+      '<div class="mobile-drawer-nav">' +
+        drawerLinksHTML +
+        '<a href="' + demoHref + '" class="drawer-nav-link drawer-demo-link">' +
+          '<span class="drawer-link-num">⚡</span>' +
+          '<span class="drawer-link-title" style="color:#8A67F6;font-weight:700">Live Terminal Demo</span>' +
+          '<span class="drawer-link-arrow" style="color:#8A67F6">▶</span>' +
+        '</a>' +
+      '</div>' +
       '<div class="mobile-drawer-footer">' +
         '<a href="' + REPO + '" class="mobile-drawer-cta" target="_blank" rel="noopener">' +
           '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' +
@@ -191,4 +205,19 @@
     });
     navLinks.addEventListener('mouseleave', function() { updateIndicator(); });
   }
+
+  // Smooth scroll handler for demo buttons
+  document.addEventListener('click', function(e) {
+    var target = e.target.closest('a[href*="#live-demo"]');
+    if (target) {
+      var liveEl = document.getElementById('live-demo');
+      if (liveEl) {
+        e.preventDefault();
+        liveEl.scrollIntoView({ behavior: 'smooth' });
+        if (drawer && drawer.classList.contains('is-open')) {
+          closeDrawer();
+        }
+      }
+    }
+  });
 })();

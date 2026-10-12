@@ -238,6 +238,12 @@ function HeroSection() {
               </svg>
               Download
             </a>
+            <a href="#live-demo" className="hero-btn-demo">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Live Terminal Demo
+            </a>
             <a href={base + '/docs.html'} className="hero-btn-docs">
               Read the Docs →
             </a>
@@ -1654,8 +1660,8 @@ export default function Home() {
     <>
       <EngineeringGridBackground />
       <HeroSection />
-      <StatsTicker />
       <LiveTerminalSection />
+      <StatsTicker />
       <CapabilitiesSection />
       <SpecialistRolesSection />
       <ArchitectureSection />
