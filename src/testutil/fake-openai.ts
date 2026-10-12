@@ -54,6 +54,13 @@ export interface FakeScriptResponse {
    *  consumed when the router picks this entry (lets benches route by shape,
    *  not call order). */
     respondFn?: (body: any) => Omit<FakeScriptResponse, 'respondFn'>;
+  /** Keep this entry at the head of the queue after serving a request, so a
+   *  respondFn router answers EVERY call. Required for callers that issue
+   *  requests CONCURRENTLY (e.g. Promise.all over candidates): a plain FIFO
+   *  assigns scripted responses by ARRIVAL order, which is scheduler/OS
+   *  dependent — that flaked the speculative selection test on macOS runners
+   *  while passing on Linux. Pair with respondFn to route by request shape. */
+  sticky?: boolean;
 }
 
 /** Convert the scripted tool call into the shared encoder's shape. */
@@ -98,6 +105,7 @@ export async function startFakeOpenAI(script?: FakeScriptResponse[]): Promise<Fa
       }
       requests.push({ body: JSON.parse(body || '{}') });
       let resp = queue.length ? queue.shift()! : { ...defaultResp };
+      if (resp.sticky) queue.unshift(resp); // router answers every call, in any arrival order
       if (resp.respondFn) resp = { ...resp.respondFn(JSON.parse(body || '{}')) };
 
       if (resp.error) {

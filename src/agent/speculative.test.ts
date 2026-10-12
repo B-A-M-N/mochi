@@ -7,13 +7,36 @@ import type { MochiConfig } from '../types.js';
 let fake: FakeOpenAI;
 let config: MochiConfig;
 
+// Route scripted replies by REQUEST SHAPE, not arrival order: the engine fires
+// the three candidate evaluations concurrently (Promise.all), so a positional
+// FIFO hands responses out by scheduler/OS timing — this test flaked on macOS
+// CI runners (candidate 1 received candidate 2's reply) while passing on
+// Linux. The verifier request is matched first because its body quotes every
+// candidate's text.
+const CANDIDATE_REPLIES: Record<string, string> = {
+  'inspect types': 'Inspect the inferred types and fix the caller.',
+  'reproduce with logging': 'Add logging and reproduce the failure.',
+  'check dependencies': 'Check dependency versions and imports.',
+};
+
 beforeAll(async () => {
   fake = await startFakeOpenAI([
-    { content: '["inspect types","reproduce with logging","check dependencies"]', completionTokens: 20 },
-    { content: 'Inspect the inferred types and fix the caller.', completionTokens: 12 },
-    { content: 'Add logging and reproduce the failure.', completionTokens: 12 },
-    { content: 'Check dependency versions and imports.', completionTokens: 12 },
-    { content: '{"index":1,"reason":"Type inspection finds the root cause most directly."}', completionTokens: 24 },
+    {
+      sticky: true,
+      respondFn: (body) => {
+        const text = JSON.stringify(body?.messages ?? body);
+        if (text.includes('Candidate 1:')) {
+          return {
+            content: '{"index":1,"reason":"Type inspection finds the root cause most directly."}',
+            completionTokens: 24,
+          };
+        }
+        for (const [strategy, reply] of Object.entries(CANDIDATE_REPLIES)) {
+          if (text.includes(strategy)) return { content: reply, completionTokens: 12 };
+        }
+        return { content: JSON.stringify(Object.keys(CANDIDATE_REPLIES)), completionTokens: 20 };
+      },
+    },
   ]);
   config = {
     model: {
