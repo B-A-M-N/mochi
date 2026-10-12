@@ -43,16 +43,31 @@
 
   document.body.insertBefore(header, document.body.firstChild);
 
-  // Dynamic Island scroll behavior: fades away when scrolling past hero banner
+  // Fluid scroll-linked hero header exit & re-entry
+  var ticking = false;
   function updateScrollState() {
     var sy = window.scrollY || window.pageYOffset || 0;
+    // Continuous progress from 0 (at top) to 1 (at 180px scroll)
+    var p = Math.min(1, Math.max(0, sy / 180));
+    header.style.setProperty('--scroll-p', p.toFixed(3));
+
+    // Continuous hero exit progress from 0 (at top) to 1 (at 380px scroll)
+    var heroP = Math.min(1, Math.max(0, sy / 380));
+    document.documentElement.style.setProperty('--hero-scroll-p', heroP.toFixed(3));
+
     if (sy > 45) {
       header.classList.add('is-scrolled');
     } else {
       header.classList.remove('is-scrolled');
     }
+    ticking = false;
   }
-  window.addEventListener('scroll', updateScrollState, { passive: true });
+  window.addEventListener('scroll', function() {
+    if (!ticking) {
+      requestAnimationFrame(updateScrollState);
+      ticking = true;
+    }
+  }, { passive: true });
   updateScrollState();
 
   // Gooey sliding pill indicator

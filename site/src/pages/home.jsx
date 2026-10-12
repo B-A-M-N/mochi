@@ -6,6 +6,7 @@ import EngineeringGridBackground from '../EngineeringGridBackground.jsx';
 import {
   SplitText, BlurText, AnimatedContent, CountUp,
   ScrollFloat, TiltCard, GooeyBorder, BenchChart,
+  EditorialReveal, StaggerGroup,
 } from '../anim.jsx';
 import {
   IconBolt, IconCode, IconShield, IconGitBranch,
@@ -195,7 +196,7 @@ function StatsTicker() {
 function CapabilitiesSection() {
   return (
     <section className="section" id="capabilities" style={{ maxWidth: 1560, margin: '0 auto', padding: '80px 4vw', scrollMarginTop: 100 }}>
-      <AnimatedContent direction="bottom">
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 02 /</span>
@@ -203,33 +204,213 @@ function CapabilitiesSection() {
         </div>
       </AnimatedContent>
 
-      <div className="section-head-huge">
-        <h2 className="section-title-huge">
-          AGENTIC <span className="accent-title">CAPABILITIES</span>
-        </h2>
-        <span className="section-arrow-diag-huge">↗</span>
-      </div>
+      <EditorialReveal delay={0.1}>
+        <div className="section-head-huge">
+          <h2 className="section-title-huge">
+            ARCHITECTURAL <span className="accent-title">DISCIPLINES</span>
+          </h2>
+          <span className="section-arrow-diag-huge">↗</span>
+        </div>
+      </EditorialReveal>
 
-      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 640 }}>
-        Six core architectural disciplines that elevate Mochi above conventional AI wrappers.
-      </p>
+      <AnimatedContent direction="left" delay={0.15} distance={30} blur={10}>
+        <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 680 }}>
+          Six core architectural disciplines that elevate Mochi above conventional AI wrappers — eliminating runaway hallucinated edits, preserving git blame, and enforcing kernel isolation.
+        </p>
+      </AnimatedContent>
 
-      <div className="caps-grid">
-        {CAPABILITIES.map((cap, i) => {
-          const IconComp = cap.icon;
-          const dir = i % 2 === 0 ? 'left' : 'right';
-          return (
-            <AnimatedContent key={cap.title} direction={dir} delay={(i % 3) * 0.09} distance={45} blur={14}>
-              <div className="cap-card">
-                <div className="cap-icon-box">
-                  <IconComp size={22} />
+      <div className="editorial-showcase-container">
+        {/* Asymmetric Showcase 01: Dual-Phase DAG Reasoning */}
+        <AnimatedContent direction="left" delay={0.12} distance={45} blur={14}>
+          <div className="editorial-split-showcase">
+            <div className="editorial-split-left">
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: '#8A67F6' }}>
+                    01 // SPEC-VS-ACT PIPELINE
+                  </span>
+                  <span style={{ fontSize: 11, background: '#EDE8F8', color: '#111116', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
+                    DAG Engine
+                  </span>
                 </div>
-                <h3 className="cap-title">{cap.title}</h3>
-                <p className="cap-desc">{cap.desc}</p>
+                <h3 style={{ fontSize: 28, fontWeight: 850, color: '#111116', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: 16 }}>
+                  Dual-Phase Reasoning with Formal State DAGs
+                </h3>
+                <p style={{ fontSize: 15.5, lineHeight: 1.7, color: 'var(--ink-soft)', marginBottom: 24 }}>
+                  Planning is strictly decoupled from code mutation. In Spec mode, Mochi decomposes ambiguous user prompts into an immutable task dependency DAG, calculates blast radius, and locks the token quota. Only once validated does Act mode engage atomic filesystem writes.
+                </p>
               </div>
-            </AnimatedContent>
-          );
-        })}
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#F4EFFE', color: '#6D28D9', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ SPEC: Blast-radius mapped
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#ECFDF5', color: '#047857', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ ACT: 12ms atomic patch
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#EFF6FF', color: '#1D4ED8', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ GATE: Zero unverified commits
+                </span>
+              </div>
+            </div>
+
+            <div className="editorial-split-right">
+              <div className="editorial-dark-terminal">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 10, marginBottom: 14 }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>mochi-engine · spec_act_pipeline.dag</span>
+                  <span style={{ color: '#34D399', fontSize: 11 }}>● STATE: VERIFIED</span>
+                </div>
+                <div style={{ color: '#A78BFA', marginBottom: 8 }}>
+                  $ mochi --spec "refactor session auth to redis cluster &amp; update all call sites"
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.7 }}>
+                  <div>[SPEC] Decomposing objective into formal dependency DAG...</div>
+                  <div style={{ color: '#6EE7B7' }}>[SPEC] Call graph mapped: 3 mutation targets · 14 read-only consumers</div>
+                  <div style={{ color: '#FDE047' }}>[SPEC] Token quota locked: 6,400 tokens · 0 runaway loops</div>
+                  <div style={{ color: '#C084FC', marginTop: 6 }}>[ACT] Handoff approved → executing surgical AST mutator</div>
+                  <div style={{ color: '#34D399' }}>[VERIFY] Bubblewrap sandbox test run: 32/32 tests green (138ms)</div>
+                  <div style={{ color: '#34D399', fontWeight: 700 }}>✓ Atomic git checkpoint #a481c0 committed in 14ms</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </AnimatedContent>
+
+        {/* Asymmetric Showcase 02: Surgical Tree-Sitter AST Diff Engine */}
+        <AnimatedContent direction="right" delay={0.18} distance={45} blur={14}>
+          <div className="editorial-split-showcase">
+            <div className="editorial-split-left" style={{ background: '#FAF8FC' }}>
+              <div className="editorial-dark-terminal" style={{ height: '100%', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 10, marginBottom: 14 }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>src/auth/jwt.ts · AST Node: RateLimitPolicy</span>
+                  <span style={{ color: '#34D399', fontSize: 11 }}>12MS SURGERY</span>
+                </div>
+                <div style={{ color: '#818CF8', marginBottom: 6 }}>
+                  @@ -42,2 +42,2 @@ Tree-sitter AST Node: RateLimitPolicy
+                </div>
+                <div style={{ color: '#F87171', background: 'rgba(239, 68, 68, 0.12)', padding: '2px 6px', borderRadius: 4, marginBottom: 4 }}>
+                  -   const maxRps = currentTier === 'free' ? 10 : 100;
+                </div>
+                <div style={{ color: '#34D399', background: 'rgba(52, 211, 153, 0.12)', padding: '2px 6px', borderRadius: 4, marginBottom: 8 }}>
+                  +   const maxRps = currentTier === 'free' ? 25 : 250; // Surgical patch: 12ms
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.6, fontSize: 12, borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: 10 }}>
+                  <div style={{ color: '#34D399' }}>✓ Tree-sitter grammar validated: 0 syntax errors</div>
+                  <div style={{ color: '#A78BFA' }}>✓ 100% git blame preserved across surrounding 448 lines</div>
+                  <div style={{ color: '#6EE7B7' }}>✓ 99.4% token waste eliminated vs whole-file rewrite</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="editorial-split-right" style={{ background: '#ffffff' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: '#8A67F6' }}>
+                    02 // AST SURGICAL MUTATION
+                  </span>
+                  <span style={{ fontSize: 11, background: '#EDE8F8', color: '#111116', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
+                    Zero Hallucination
+                  </span>
+                </div>
+                <h3 style={{ fontSize: 28, fontWeight: 850, color: '#111116', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: 16 }}>
+                  Surgical AST Differ vs. Naive File Rewriting
+                </h3>
+                <p style={{ fontSize: 15.5, lineHeight: 1.7, color: 'var(--ink-soft)', marginBottom: 24 }}>
+                  Conventional coding agents rewrite entire 400-line files from scratch, burning 12,000+ tokens on unchanged boilerplate, hallucinating missing imports, and destroying git blame history. Mochi’s tree-sitter engine isolates the exact AST node and applies whitespace-tolerant unified patches in 12ms.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#F4EFFE', color: '#6D28D9', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ 99.4% Less Token Waste
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#ECFDF5', color: '#047857', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ 100% Git Blame Safe
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, background: '#EFF6FF', color: '#1D4ED8', padding: '6px 12px', borderRadius: 8, fontWeight: 700 }}>
+                  ✓ Multi-File Single Pass
+                </span>
+              </div>
+            </div>
+          </div>
+        </AnimatedContent>
+
+        {/* 4-Column Hairline Architectural Foundation Strip */}
+        <AnimatedContent direction="bottom" delay={0.22} distance={40} blur={14}>
+          <div className="editorial-hairline-strip">
+            {/* Column 01: Bubblewrap Sandbox */}
+            <div className="editorial-hairline-col">
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', marginBottom: 8, textTransform: 'uppercase' }}>
+                  03 // ISOLATION
+                </div>
+                <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 10 }}>
+                  Bubblewrap Hardware Jail
+                </h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                  Unprivileged user namespaces mount <code>/usr</code> and <code>/bin</code> read-only, blackhole <code>~/.ssh</code> and <code>~/.aws</code> via tmpfs masks, and prevent prompt breakouts.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
+                MOCHI_SANDBOX=bwrap
+              </span>
+            </div>
+
+            {/* Column 02: Multi-Model Router */}
+            <div className="editorial-hairline-col">
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', marginBottom: 8, textTransform: 'uppercase' }}>
+                  04 // RESILIENCE
+                </div>
+                <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 10 }}>
+                  Multi-Model Router
+                </h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                  Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session. Automatically detects 429 limits and backs off without lost state.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
+                Zero-Downtime Failover
+              </span>
+            </div>
+
+            {/* Column 03: Deterministic Tools */}
+            <div className="editorial-hairline-col">
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', marginBottom: 8, textTransform: 'uppercase' }}>
+                  05 // DETERMINISM
+                </div>
+                <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 10 }}>
+                  Sub-5ms Codebase Search
+                </h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                  Native ripgrep indexing, AST symbol grep, and Git atomic rollback snapshots. Fast, cache-friendly, and bounded by strict privilege boundaries.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
+                3.8ms Grep Index
+              </span>
+            </div>
+
+            {/* Column 04: Zero-Dep Bun Binary */}
+            <div className="editorial-hairline-col">
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', marginBottom: 8, textTransform: 'uppercase' }}>
+                  06 // RUNTIME
+                </div>
+                <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 10 }}>
+                  Zero-Dep Bun Binary
+                </h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                  Compiled into a single self-contained native executable. 18.2 MB peak resident RSS and 38.2 ms cold start — 21.2× lighter than Claude Code.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE8F8', color: '#8A67F6', padding: '4px 10px', borderRadius: 6, fontWeight: 700, width: 'fit-content' }}>
+                18.2 MB RSS · 38.2 ms TTFI
+              </span>
+            </div>
+          </div>
+        </AnimatedContent>
       </div>
     </section>
   );
@@ -240,7 +421,7 @@ function SpecialistRolesSection() {
 
   return (
     <section className="section" id="roles" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
-      <AnimatedContent direction="bottom">
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 03 /</span>
@@ -248,16 +429,20 @@ function SpecialistRolesSection() {
         </div>
       </AnimatedContent>
 
-      <div className="section-head-huge">
-        <h2 className="section-title-huge">
-          16 SPECIALIST <span className="accent-title">AGENT ROLES</span>
-        </h2>
-        <span className="section-arrow-diag-huge">↗</span>
-      </div>
+      <EditorialReveal delay={0.1}>
+        <div className="section-head-huge">
+          <h2 className="section-title-huge">
+            16 SPECIALIST <span className="accent-title">AGENT ROLES</span>
+          </h2>
+          <span className="section-arrow-diag-huge">↗</span>
+        </div>
+      </EditorialReveal>
 
-      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 36, maxWidth: 680 }}>
-        Rather than relying on a single monolithic context window, Mochi dispatches dedicated micro-agents across dependency DAGs.
-      </p>
+      <AnimatedContent direction="left" delay={0.15} distance={30} blur={10}>
+        <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 36, maxWidth: 680 }}>
+          Rather than relying on a single monolithic context window, Mochi dispatches dedicated micro-agents across dependency DAGs.
+        </p>
+      </AnimatedContent>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
         {/* Left Column: Role Selector Grid */}
@@ -387,22 +572,28 @@ function ArchitectureSection() {
 
   return (
     <section className="section" id="architecture" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
-      <AnimatedContent direction="bottom">
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 04 /</span>
           <span className="tag-part-purple">ARCHITECTURE</span>
         </div>
       </AnimatedContent>
-      <div className="section-head-huge">
-        <h2 className="section-title-huge">
-          ENGINEERED FOR <span className="accent-title">PRECISION</span>
-        </h2>
-        <span className="section-arrow-diag-huge">↗</span>
-      </div>
-      <p className="section-desc" style={{ maxWidth: 760, marginBottom: 32, fontSize: 17, color: 'var(--ink-soft)' }}>
-        Inspect how Mochi’s Spec/Act dual-engine separation, AST surgical diffing, and unprivileged sandboxing outperform traditional AI agent wrappers.
-      </p>
+
+      <EditorialReveal delay={0.1}>
+        <div className="section-head-huge">
+          <h2 className="section-title-huge">
+            ENGINEERED FOR <span className="accent-title">PRECISION</span>
+          </h2>
+          <span className="section-arrow-diag-huge">↗</span>
+        </div>
+      </EditorialReveal>
+
+      <AnimatedContent direction="left" delay={0.15} distance={30} blur={10}>
+        <p className="section-desc" style={{ maxWidth: 760, marginBottom: 32, fontSize: 17, color: 'var(--ink-soft)' }}>
+          Inspect how Mochi’s Spec/Act dual-engine separation, AST surgical diffing, and unprivileged sandboxing outperform traditional AI agent wrappers.
+        </p>
+      </AnimatedContent>
 
       {/* Interactive Tabs Bar */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
@@ -722,7 +913,7 @@ function AutonomousEcosystemSection() {
 
   return (
     <section className="section" id="pipeline" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
-      <AnimatedContent direction="bottom">
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 05 /</span>
@@ -730,16 +921,20 @@ function AutonomousEcosystemSection() {
         </div>
       </AnimatedContent>
 
-      <div className="section-head-huge">
-        <h2 className="section-title-huge">
-          THE SWARM EXECUTION <span className="accent-title">DAG PIPELINE</span>
-        </h2>
-        <span className="section-arrow-diag-huge">↗</span>
-      </div>
+      <EditorialReveal delay={0.1}>
+        <div className="section-head-huge">
+          <h2 className="section-title-huge">
+            THE SWARM EXECUTION <span className="accent-title">DAG PIPELINE</span>
+          </h2>
+          <span className="section-arrow-diag-huge">↗</span>
+        </div>
+      </EditorialReveal>
 
-      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 700 }}>
-        From ambiguous objective to verified atomic git commit: follow how Mochi coordinates multi-role subagent swarms across directed acyclic graphs.
-      </p>
+      <AnimatedContent direction="left" delay={0.15} distance={30} blur={10}>
+        <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 700 }}>
+          From ambiguous objective to verified atomic git commit: follow how Mochi coordinates multi-role subagent swarms across directed acyclic graphs.
+        </p>
+      </AnimatedContent>
 
       {/* Stepper Navigation */}
       <AnimatedContent direction="left" delay={0.1} distance={40} blur={14}>
@@ -849,68 +1044,105 @@ function AutonomousEcosystemSection() {
         </div>
       </AnimatedContent>
 
-      {/* 6-Card Ecosystem Grid with Staggered Side Flow */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
-        <AnimatedContent direction="left" delay={0.08} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>01 / PROTOCOL</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Model Context Protocol (MCP)</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Connects seamlessly to any external MCP tool server over stdio and SSE protocols, enabling custom database, browser, and enterprise tools.
-            </p>
+      {/* Architectural Specification Ledger */}
+      <AnimatedContent direction="bottom" delay={0.18} distance={35} blur={14}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, color: '#8A67F6', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+              // RUNTIME SPECIFICATIONS &amp; PROTOCOLS
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-soft)' }}>
+              6 SYSTEM BOUNDARIES
+            </span>
           </div>
-        </AnimatedContent>
 
-        <AnimatedContent direction="bottom" delay={0.14} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>02 / INFERENCE</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
-            </p>
-          </div>
-        </AnimatedContent>
+          <div className="editorial-spec-ledger">
+            {/* Spec 01 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>01 // PROTOCOL</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#F4EFFE', color: '#6D28D9', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>stdio + sse</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Model Context Protocol (MCP)</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Connects seamlessly to any external MCP tool server over stdio and SSE protocols, enabling custom database, browser, and enterprise tools.
+                </p>
+              </div>
+            </div>
 
-        <AnimatedContent direction="right" delay={0.2} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>03 / SECURITY</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Bubblewrap Jail</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Hardware unprivileged namespaces mask your SSH keys, AWS credentials, and environment variables from rogue prompts.
-            </p>
-          </div>
-        </AnimatedContent>
+            {/* Spec 02 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>02 // INFERENCE</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#F4EFFE', color: '#6D28D9', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>auto-backoff</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
+                </p>
+              </div>
+            </div>
 
-        <AnimatedContent direction="left" delay={0.12} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>04 / SYNTAX</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Tree-sitter AST Differ</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Real-time semantic syntax tree parsing across TypeScript, Rust, Python, Go, and C for surgical token-level patch applications.
-            </p>
-          </div>
-        </AnimatedContent>
+            {/* Spec 03 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>03 // SECURITY</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#F4EFFE', color: '#6D28D9', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>tmpfs mask</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Bubblewrap Jail</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Hardware unprivileged namespaces mask your SSH keys, AWS credentials, and environment variables from rogue prompts.
+                </p>
+              </div>
+            </div>
 
-        <AnimatedContent direction="bottom" delay={0.18} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>05 / VERIFICATION</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Mechanical Gate</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Zero unverified code reaches disk; strict compiler diagnostics, test runners, and static analyzers gate every commit.
-            </p>
-          </div>
-        </AnimatedContent>
+            {/* Spec 04 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>04 // SYNTAX</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#F4EFFE', color: '#6D28D9', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>tree-sitter AST</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Tree-sitter AST Differ</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Real-time semantic syntax tree parsing across TypeScript, Rust, Python, Go, and C for surgical token-level patch applications.
+                </p>
+              </div>
+            </div>
 
-        <AnimatedContent direction="right" delay={0.24} distance={40} blur={14}>
-          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>06 / RUNTIME</div>
-            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Zero-Dep Bun Binary</h4>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-              Compiled into a single self-contained native executable with 18.2 MB peak resident RSS and 38.2 ms cold start.
-            </p>
+            {/* Spec 05 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>05 // VERIFICATION</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#ECFDF5', color: '#047857', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>compiler gate</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Mechanical Gate</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Zero unverified code reaches disk; strict compiler diagnostics, test runners, and static analyzers gate every commit.
+                </p>
+              </div>
+            </div>
+
+            {/* Spec 06 */}
+            <div className="editorial-spec-cell">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6' }}>06 // RUNTIME</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: '#EDE8F8', color: '#8A67F6', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>18.2 MB RSS</span>
+                </div>
+                <h4 style={{ fontSize: 17, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Zero-Dep Bun Binary</h4>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+                  Compiled into a single self-contained native executable with 18.2 MB peak resident RSS and 38.2 ms cold start.
+                </p>
+              </div>
+            </div>
           </div>
-        </AnimatedContent>
-      </div>
+        </div>
+      </AnimatedContent>
     </section>
   );
 }
@@ -939,7 +1171,7 @@ function BenchmarksSection() {
 
   return (
     <section className="section" id="benchmarks" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw', scrollMarginTop: 100 }}>
-      <AnimatedContent direction="bottom">
+      <AnimatedContent direction="bottom" delay={0.05} blur={12}>
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 06 /</span>
@@ -947,16 +1179,20 @@ function BenchmarksSection() {
         </div>
       </AnimatedContent>
 
-      <div className="section-head-huge">
-        <h2 className="section-title-huge">
-          MEASURED. VERIFIED. <span className="accent-title">REPEATED.</span>
-        </h2>
-        <span className="section-arrow-diag-huge">↗</span>
-      </div>
+      <EditorialReveal delay={0.1}>
+        <div className="section-head-huge">
+          <h2 className="section-title-huge">
+            MEASURED. VERIFIED. <span className="accent-title">REPEATED.</span>
+          </h2>
+          <span className="section-arrow-diag-huge">↗</span>
+        </div>
+      </EditorialReveal>
 
-      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 680 }}>
-        Every benchmark on this site is measured empirically with Valgrind massif and high-resolution wall clocks on standard Linux x86_64 machines. Zero synthetic marketing claims.
-      </p>
+      <AnimatedContent direction="left" delay={0.15} distance={30} blur={10}>
+        <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 680 }}>
+          Every benchmark on this site is measured empirically with Valgrind massif and high-resolution wall clocks on standard Linux x86_64 machines. Zero synthetic marketing claims.
+        </p>
+      </AnimatedContent>
 
       {/* Two-Column Responsive Chart Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 32, marginBottom: 40 }}>

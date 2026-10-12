@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import '../assets/style.css';
 import '../assets/sky.css';
 
@@ -101,14 +101,42 @@ export function BlurText({
   );
 }
 
-/* ── AnimatedContent ────────────────────────────────────────── */
+/* ── AnimatedContent & Directional Reveal Presets ──────────── */
 export function AnimatedContent({
-  children, direction = 'bottom', distance = 40, delay = 0,
-  duration = 0.8, scale = 0.96, className = '', once = true,
-  blur = 14,
+  children, direction = 'bottom', distance = 28, delay = 0,
+  duration = 0.75, scale = 0.96, className = '', once = true,
+  blur = 10, preset,
 }) {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
+
+  // Apply preset overrides if specified
+  let effectiveDir = direction;
+  let effectiveDist = distance;
+  let effectiveBlur = blur;
+  let effectiveDur = duration;
+
+  if (preset === 'blur') {
+    effectiveDir = 'bottom';
+    effectiveDist = 20;
+    effectiveBlur = 10;
+    effectiveDur = 0.7;
+  } else if (preset === 'left') {
+    effectiveDir = 'left';
+    effectiveDist = 32;
+    effectiveBlur = 10;
+    effectiveDur = 0.8;
+  } else if (preset === 'right') {
+    effectiveDir = 'right';
+    effectiveDist = 32;
+    effectiveBlur = 10;
+    effectiveDur = 0.8;
+  } else if (preset === 'depth') {
+    effectiveDir = 'scale';
+    effectiveDist = 0;
+    effectiveBlur = 8;
+    effectiveDur = 0.8;
+  }
 
   useEffect(() => {
     const el = ref.current;
@@ -126,7 +154,7 @@ export function AnimatedContent({
           setInView(false);
         }
       },
-      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
     );
     io.observe(el);
     return () => {
@@ -137,15 +165,70 @@ export function AnimatedContent({
   return (
     <div
       ref={ref}
-      className={`ac from-${direction} ${inView ? 'in' : ''} ${className}`}
+      className={`ac from-${effectiveDir} ${inView ? 'in' : ''} ${className}`}
       style={{
         transitionDelay: `${delay}s`,
-        transitionDuration: `${duration}s`,
-        '--ac-distance': `${distance}px`,
-        '--ac-blur': `${blur}px`,
+        transitionDuration: `${effectiveDur}s`,
+        '--ac-distance': `${effectiveDist}px`,
+        '--ac-blur': `${effectiveBlur}px`,
+        '--ac-scale': `${scale}`,
       }}
     >
       {children}
+    </div>
+  );
+}
+
+/* ── Preset D: EditorialReveal ──────────────────────────────── */
+export function EditorialReveal({
+  children, delay = 0, duration = 0.8, className = '',
+  as: Tag = 'div', once = true,
+}) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+        if (once) io.disconnect();
+      } else if (!once) setInView(false);
+    }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [once]);
+
+  return (
+    <Tag ref={ref} className={`editorial-mask ${className}`} style={{ overflow: 'hidden' }}>
+      <div
+        className={`editorial-inner ${inView ? 'in' : ''}`}
+        style={{
+          transitionDelay: `${delay}s`,
+          transitionDuration: `${duration}s`,
+        }}
+      >
+        {children}
+      </div>
+    </Tag>
+  );
+}
+
+/* ── Preset E: StaggerGroup ─────────────────────────────────── */
+export function StaggerGroup({ children, className = '', interval = 0.08, baseDelay = 0 }) {
+  return (
+    <div className={`stagger-group ${className}`}>
+      {React.Children.map(children, (child, idx) => {
+        if (!React.isValidElement(child)) return child;
+        return React.cloneElement(child, {
+          delay: (child.props.delay ?? 0) + baseDelay + idx * interval,
+        });
+      })}
     </div>
   );
 }
