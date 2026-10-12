@@ -1,153 +1,287 @@
-# 🍡 Mochi
+# Mochi
 
-**➡️ [Website & Docs — xanstomper.github.io/mochi](https://xanstomper.github.io/mochi)**
+[![Version](https://img.shields.io/badge/version-0.23.0-8b5cf6?style=flat-square)](https://github.com/xanstomper/mochi/releases)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Rust Core](https://img.shields.io/badge/core-rust--native-dea584?style=flat-square&logo=rust&logoColor=white)](native/mochi_core)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-1494%20passing-3fb950?style=flat-square)](#testing)
+[![Runtime Deps](https://img.shields.io/badge/runtime%20deps-0-cf222e?style=flat-square)](#architecture)
+[![CI](https://img.shields.io/badge/CI-linux%20%7C%20macOS%20%7C%20Windows-2094d3?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/xanstomper/mochi/actions)
 
-> Minimal Orchestrative Coding Harness Intelligence — a minimal, fast, autonomous coding agent for the terminal. Goals, task DAGs, teams,
-> a persistent daemon, and deep run traces on a Rust runtime core with a TypeScript
-> frontend.
+[**Website**](https://xanstomper.github.io/mochi) · [**Documentation**](docs/ARCHITECTURE.md) · [**Benchmarks**](docs/BENCHMARKS.md) · [**CLI Reference**](docs/CLI_REFERENCE.md) · [**Changelog**](CHANGELOG.md) · [**Report a Bug**](https://github.com/xanstomper/mochi/issues)
 
-Mochi is a from-scratch re-imagining of the terminal coding-agent harness. It keeps the
-best ideas from Pi (tools, sessions, context files, minimal TUI) and adds first-class
-support for goals, task DAGs, teams, persistent state, checkpoints, verification,
-recovery, budgets, hooks, retrieval, memory, and local harness learning.
+---
+
+**Mochi** — *Minimal Orchestrative Coding Harness Intelligence* — is a minimal, fast, autonomous coding agent for the terminal. It is a from-scratch re-imagining of the terminal coding-agent harness: it keeps the best ideas from Pi (tools, sessions, context files, minimal TUI) and adds first-class support for **goals, task DAGs, teams, persistent state, checkpoints, verification, recovery, budgets, hooks, retrieval, memory, and local harness learning** — all on a **zero-dependency Rust runtime core** with a TypeScript frontend.
 
 ```bash
-npm install && npm run build
 mochi "add a rate limiter to the auth service"   # one-shot agent run
-mochi daemon start --host 0.0.0.0                 # persistent agent over HTTP
-mochi daemon send "finish the auth flow"          # drive it from anywhere
-mochi team "ship the payments refactor"           # role-diverse agent team
-mochi trace <goalId>                               # replay any run end to end
+mochi daemon start --host 0.0.0.0                # persistent agent over HTTP
+mochi daemon send "finish the auth flow"         # drive it from anywhere
+mochi team "ship the payments refactor"          # role-diverse agent team
+mochi trace <goalId>                             # replay any run end to end
 ```
 
-Zero runtime JS dependencies; runs under Node 22 or Bun, and ships a standalone native
-binary (`npm run build:bin`) that needs no runtime at all. The performance core is a
-zero-dependency Rust crate (`native/mochi_core`): tokenization, budget math, context
-compaction planning, and agent-loop decisions run natively, with the TypeScript frontend
-handling model I/O, TUI, and tool execution. Every native path has a parity-tested TS
-fallback, so nothing breaks when the Rust binary is absent (CI, cold installs). The
-harness is polyglot: 15-language registry, tree-sitter codegraph, and native Rust/C++
-accelerators in the `edit`/`patch` hot paths.
+Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a standalone native binary (`npm run build:bin`) that needs no runtime at all. The performance core is a zero-dependency Rust crate (`native/mochi_core`): tokenization, budget math, context compaction planning, and agent-loop decisions run natively — every native path has a parity-tested TypeScript fallback, so nothing breaks when the Rust binary is absent (CI, cold installs). The harness is polyglot: a 15-language registry, tree-sitter codegraph, and native Rust/C++ accelerators in the `edit`/`patch` hot paths.
 
-## Comprehensive Documentation
+---
 
-- **[Technical Architecture Blueprint](docs/ARCHITECTURE.md)**: Deep dive into the dual-engine Rust Core + TypeScript TUI architecture, compaction protocols, and event loops.
-- **[Complete Capabilities Reference](docs/CAPABILITIES.md)**: Detailed breakdown of the **16 specialized agent roles**, 30+ native tools, 30+ skills, and MCP/ACP protocols.
-- **[Empirical Benchmarks vs Other Agents](docs/BENCHMARKS.md)**: Standardized PSS memory, TTFF, TTFI, and compaction latency benchmarks vs jcode, Claude Code, Cursor, Copilot, and OpenCode.
-- **[CLI & Interface Reference](docs/CLI_REFERENCE.md)**: Complete guide to CLI flags, daemon endpoints, interactive slash commands, and keybindings.
+## Table of Contents
 
-## Performance Highlights (vs Other Agents)
+- [Why Mochi](#why-mochi)
+- [Performance Highlights](#performance-highlights)
+- [Quick Start](#quick-start)
+- [CLI Command Reference](#cli-command-reference)
+- [Comprehensive Documentation](#comprehensive-documentation)
+- [Architecture](#architecture)
+- [The Agent Loop](#the-agent-loop)
+- [Rust Native Core](#rust-native-core)
+- [Configuration](#configuration)
+- [Environment Variables](#environment-variables)
+- [Safety, Permissions, and Sandboxing](#safety-permissions-and-sandboxing)
+- [Plan-then-Act Mode](#plan-then-act-mode)
+- [Execution Modes](#execution-modes)
+- [Agent Profiles](#agent-profiles)
+- [Teams](#teams)
+- [Hooks](#hooks)
+- [Project Memory](#project-memory)
+- [Model Routing, Failover, and Escalation](#model-routing-failover-and-escalation)
+- [Rate Throttling for Concurrent Agents](#rate-throttling-for-concurrent-agents)
+- [MCP Servers](#mcp-servers)
+- [Daemon (Persistent Agent over HTTP)](#daemon-persistent-agent-over-http)
+- [Editor Integration (ACP)](#editor-integration-acp)
+- [Interactive TUI](#interactive-tui)
+- [Interactive Commands](#interactive-commands)
+- [Integrations](#integrations)
+- [Symbol Graph Backends](#symbol-graph-backends)
+- [Light Mode](#light-mode)
+- [Run Traces](#run-traces)
+- [Sessions](#sessions)
+- [Checkpoints and Rollback](#checkpoints-and-rollback)
+- [Skills](#skills)
+- [Daemon Cron (Scheduled Jobs)](#daemon-cron-scheduled-jobs)
+- [Building](#building)
+- [Testing](#testing)
+- [Benchmarks](#benchmarks)
+- [Project Layout](#project-layout)
+- [Design Principles](#design-principles)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Why Mochi
+
+Most terminal agents are either thin wrappers around one model call, or heavyweight platforms that need a cloud account. Mochi takes a third path: a **complete harness** — every loop, guard, budget, and recovery path owned in-repo — that is deliberately *minimal* in surface and *maximal* in verified behavior.
+
+| | What that means in practice |
+|---|---|
+| **Autonomous by default** | Give it a goal; it plans, executes, verifies, recovers, and reports. `--auto` for hands-off, `--plan` for read-only research. |
+| **Verified work, not vibes** | Every task runs through verification gates: baseline comparison so pre-existing repo debt doesn't fail correct work, an independent verifier, an outcome judge, and rule-based BLOCK on unverified changes. |
+| **Honest accounting** | Budgets on tokens, cost, wall time, tool calls, model calls, and agent count. Structured stop reasons (`completed` / `aborted` / `runtime_limit` / `budget` / `model_error`) on every run. |
+| **Recovery is a first-class path** | Failover across providers, key-pool rotation, model auto-escalation after repeated verification failures, warm-start resume with prior transcript injection, and local learning of successful recovery strategies. |
+| **The model sees its own struggles** | The harness detects consecutive tool errors, repeated identical results, empty responses, and verification loops — and injects a STRUGGLE STATE + escape-plan directive into the model's own prompt before the next move. |
+| **Fast and tiny** | 11.2 ms time-to-first-frame, 18.2 MB PSS for a single session, 0.12 ms compaction-cut calculation from the Rust core. Numbers below, methodology in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). |
+| **Yours, locally** | No cloud account, no telemetry dependency. Works with any OpenAI-compatible endpoint, Anthropic, and Gemini. State lives in your project's `.mochi/`. |
+
+## Performance Highlights
+
+Reproducible cross-harness matrix — `bench/cli-matrix.mjs` measures cold-start wall time and kernel peak RSS for every installed coding-agent CLI (`--version`, N runs, p50/mean). Full methodology, PTY probe scripts, and the 9-agent comparison tables live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 | Benchmark Metric | Mochi (Rust Core) | jcode | Cursor Agent | Claude Code | OpenCode |
-| :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 | **1 Active Session (PSS)** | **18.2 MB** [1st] | 27.8 MB | 214.9 MB | 386.6 MB | 371.5 MB |
-| **10 Active Sessions (PSS)**| **84.5 MB** [1st] | 117.0 MB | 1632.4 MB | 2300.6 MB | 3237.2 MB |
-| **Time to First Frame (TTFF)**| **11.2 ms** [1st] | 14.0 ms | 1949.7 ms | 3436.9 ms | 1035.9 ms |
-| **Time to First Input (TTFI)**| **38.2 ms** [1st] | 48.7 ms | 1978.7 ms | 3512.8 ms | 1047.9 ms |
-| **Compaction Cut Calculation** | **0.12 ms** (Rust) [1st]| 0.45 ms | 14.5 ms | 35.0 ms | 19.8 ms |
+| **10 Active Sessions (PSS)** | **84.5 MB** [1st] | 117.0 MB | 1632.4 MB | 2300.6 MB | 3237.2 MB |
+| **Time to First Frame (TTFF)** | **11.2 ms** [1st] | 14.0 ms | 1949.7 ms | 3436.9 ms | 1035.9 ms |
+| **Time to First Input (TTFI)** | **38.2 ms** [1st] | 48.7 ms | 1978.7 ms | 3512.8 ms | 1047.9 ms |
+| **Compaction Cut Calculation** | **0.12 ms** (Rust) [1st] | 0.45 ms | 14.5 ms | 35.0 ms | 19.8 ms |
 
-*See full test methodology, PTY probe scripts, and 9-agent comparison tables in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).*
+Multi-round arena (6 standardized tasks, same model, same backend): **Mochi 12/12 PASS at a 21.7 s median** — the only harness with a perfect multi-round record in the comparison set. Token cost: ~15–21 K input / 0.8–3.7 K output per task.
 
-## Status
+## Quick Start
 
-Implemented:
-
-- Event bus architecture
-- Model-agnostic OpenAI-compatible provider with OpenCode aliases
-- Model routing by capability profile (`fast` / `coding` / `reasoning` / `review`)
-- Budget-aware model fallback
-- Tool bus: `read`, `write`, `edit`, `delete`, `shell`, `search`, `glob`, `git`, `inspect`, `memory`, `patch`, `todo`, `skill`, `subagent`
-- Codex-style multi-file `patch` tool (`*** Begin Patch` / `Add` / `Update` / `Delete File` sections) with context matching that tolerates whitespace drift
-- `edit` tool falls back to whitespace-insensitive matching (unique anchor required; ambiguity is refused rather than guessing)
-- Permission system (`safe` / `ask` / `auto`)
-- Adaptive context engine with token budget, compaction, project memory, and retrieval
-- Agent runtime loop: preflight → model → tools → verify → recover → pulse
-- Persistent goals and task DAG scheduler
-- Team orchestration with role-based agents
-- Agent profiles from `.mochi/agents/*.md`
-- Independent verifier and outcome judge
-- Budget engine with token, cost, time, tool, model, and agent limits
-- Hook pipeline (`before_*`, `after_*`, `on_*`)
-- Intelligent retrieval across files, symbols, references, imports, and git history
-- Speculative execution for difficult problems
-- Project memory and cross-session engineering facts
-- Local harness learning for successful recovery strategies
-- Git checkpoint / rollback
-- Interactive terminal UI with rounded input, transcript, command palette, and status bar
-- Multiple workspaces
-- Persistent daemon over HTTP: `start/status/jobs/send/approve/resume/cron/stop`
-- Durable run traces with deep redaction (`mochi trace [<goalId>]`)
-- Full-text session history in SQLite+FTS5 (`mochi session list` / `mochi session search`)
-- Recurring agent jobs on a schedule (`mochi daemon cron add|list|remove`)
-- Credential pools: multi-key rotation on 401/429/403
-- Shared client-side rate throttle: leaky-bucket RPM + concurrency cap so concurrent agents/sessions self-regulate a free-tier endpoint instead of tripping 429s in a burst (`MOCHI_RATE_LIMIT_RPM`, `MOCHI_RATE_LIMIT_CONCURRENCY`)
-- Instant per-file diagnostics (TS LanguageService + Python) after every edit
-- Background tasks: async shell (`shell` with `background:true`) + result delivery
-- Name-addressed whole-symbol edit (`replace_symbol` via the code symbol index)
-- Baseline + proportionate verification (pre-existing repo debt doesn't fail correct work)
-- Mid-stream cancellation: Ctrl-C aborts the model request on the wire
-- Structured stop reasons (`completed`/`aborted`/`runtime_limit`/`budget`/`model_error`/...) on every `AgentResult`
-- Warm-start resume: prior session transcript + failed attempts injected on restart
-- Unit and integration tests
-
-## Quick start
+Requires Node 22+ (or Bun). No other toolchain needed — the Rust core ships as prebuilt binaries with a pure-TS fallback.
 
 ```bash
-# Build
+# 1. Build
+git clone https://github.com/xanstomper/mochi.git
+cd mochi
 npm install
 npm run build
 
-# Link globally (optional)
+# 2. Link globally (optional)
 ln -s $(pwd)/dist/cli.js ~/.local/bin/mochi
 
-# Set an API key
+# 3. Set an API key (any OpenAI-compatible endpoint)
 export OPENCODE_ZEN_API_KEY=sk-...
 
-# Interactive mode
-mochi
-
-# One-shot task
-mochi -p "list all TypeScript files"
-
-# Plan only
-mochi plan "refactor authentication"
-
-# Autonomous goal
-mochi goal "fix all failing tests"
-
-# Team goal
-mochi team "build a REST API for users"
-
-# Inspect a symbol or subsystem
-mochi inspect "SessionManager"
-
-# Speculative reasoning
-mochi speculate "difficult TS2345 failure"
-
-# Own terminal window (black bg, monospace, 190x45)
-mochi term
+# 4. Run
+mochi                                   # interactive TUI
+mochi -p "list all TypeScript files"    # one-shot, print and exit
+mochi plan "refactor authentication"    # plan only, no edits
+mochi goal "fix all failing tests"      # autonomous goal
+mochi team "build a REST API for users" # multi-agent team
+mochi inspect "SessionManager"          # inspect a symbol or subsystem
+mochi speculate "difficult TS2345"      # speculative reasoning
+mochi term                              # own terminal window (190x45, black bg)
 mochi term --geometry 100x30 -- goal "fix auth"
-
-# Shell completions (bash|zsh|fish)
-eval "$(mochi completion bash)"
-
-# Skill sharing
-mochi skills pack my-skill --out ./pack     # bundle installed skills
-mochi skills unpack ./pack --force          # install a pack
+eval "$(mochi completion bash)"         # shell completions (bash|zsh|fish)
 ```
 
-> **Speculative preflight** (`model.speculative.preflight: true` in config): for hard
-> non-chat tasks, mochi runs a cheap speculative pass before the main loop call and
-> injects the chosen approach + alternatives as a system hint, so the model commits
-> to a better plan before firing tools (DeepSeek/Cline-style "think a cheap model
-> ahead"). `model.speculative.selfCritique: true` reinforces the loop's existing
-> failure-repair flow on the first verification miss. Both are opt-in and never block
-> the task — a failed/skipped preflight degrades to a normal run.
+### Install via npm
+
+```bash
+npm install -g @mochi/agent
+```
+
+### Prebuilt native binary
+
+For deployments where even Node/Bun aren't guaranteed, compile Mochi into a single self-contained executable. The binary embeds the runtime and all modules — no `node_modules`, no runtime install:
+
+```bash
+npm run build:bin   # produces ./dist/mochi-bin (Bun required)
+./dist/mochi-bin --version
+```
+
+Fully functional end to end (agent loop, tools, config, workspaces); drop it onto a low-spec or headless box as-is. The compiled binary also ships via [GitHub Releases](https://github.com/xanstomper/mochi/releases).
+
+## CLI Command Reference
+
+`mochi --help` is self-documenting and version-pinned; shell completions are generated from the same command table (a test fails if any command lacks completion coverage). Full flag-by-flag reference: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
+
+| Command | Purpose |
+|---|---|
+| `mochi ["prompt"]` | Interactive TUI, or one-shot prompt with `-p` |
+| `mochi goal "..."` | Autonomous goal with task decomposition and DAG scheduling |
+| `mochi team "..."` | Role-diverse multi-agent team run |
+| `mochi plan "..."` | Plan-then-act: research and return a plan, no edits |
+| `mochi resume` | Warm-start resume of the last interrupted session |
+| `mochi checkpoint save/list/restore` | Named git snapshots and rollback |
+| `mochi rollback` | Roll back to the last checkpoint |
+| `mochi trace [<goalId>]` | Replay any run end to end from its JSONL trace |
+| `mochi session list / search "..."` | Full-text search across past transcripts |
+| `mochi inspect "<query>"` | Symbol / subsystem inspection via the codegraph |
+| `mochi speculate "<question>"` | Speculative reasoning pass on a hard question |
+| `mochi mode <normal\|spec\|security\|codemod\|chaos>` | Execution mode |
+| `mochi reasoning [low\|med\|high\|max]` | View or set reasoning depth |
+| `mochi rules [list\|add]` | Modular project rules |
+| `mochi bg [list\|logs\|kill]` | Async background task management |
+| `mochi review [--strict] [--json] [--diff-only]` | AI code review of the git diff |
+| `mochi fix [--auto-commit]` | Feed a crash log, get a fix |
+| `mochi security` / `mochi audit` | Static security and credential audit |
+| `mochi docgen [--write]` | Architecture diagram + API reference generation |
+| `mochi daemon start/status/jobs/send/approve/resume/rotate/cron/restart/stop` | Persistent HTTP agent service |
+| `mochi acp` | Agent Client Protocol server for editors |
+| `mochi discord run` | Discord bot gateway |
+| `mochi dashboard` / `mochi web` | Web dashboard |
+| `mochi plugin add/remove/list` | Plugin registry |
+| `mochi enhance "<task>" [--mode <mode>]` | Synthetic-parameter reasoning enhancement |
+| `mochi termix ["<task>"] [--coms\|--sep] [--sessions N]` | Multi-session split panes |
+| `mochi term [--title T] [--geometry CxR]` | Dedicated native terminal window |
+| `mochi workspace create/list/switch` | Multiple workspaces |
+| `mochi profiles` | List agent profiles |
+| `mochi memory` | Inspect project memory |
+| `mochi skills pack/unpack` | Bundle and install skill packs |
+| `mochi mcp search/add` | Discover and install MCP servers |
+| `mochi completion <bash\|zsh\|fish>` | Shell completion script |
+| `mochi doctor` | Self-inspect the full harness |
+| `mochi self-train [N] [focus]` | Cycles of self-review + skill curation |
+| `mochi perf` | Stream-pipeline micro-benchmarks |
+
+## Comprehensive Documentation
+
+- **[Technical Architecture Blueprint](docs/ARCHITECTURE.md)** — deep dive into the dual-engine Rust Core + TypeScript TUI architecture, compaction protocols, and event loops. Auto-generated coverage of 298 modules / 3105 symbols via `mochi docgen`.
+- **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 30+ native tools, 30+ skills, and MCP/ACP protocols.
+- **[Empirical Benchmarks](docs/BENCHMARKS.md)** — standardized PSS memory, TTFF, TTFI, and compaction latency vs jcode, Claude Code, Cursor, Copilot, and OpenCode, with reproducible probe scripts.
+- **[CLI & Interface Reference](docs/CLI_REFERENCE.md)** — complete flags, daemon endpoints, slash commands, and keybindings.
+- **[TECHMAP.md](TECHMAP.md)** — every repo path mapped, nothing mystery-meat.
+- **[MOCHI.md](MOCHI.md)** — project conventions for agents working *in* this repo.
+
+## Architecture
+
+Two engines, one process: a **zero-dependency Rust crate** for per-byte compute and a **TypeScript frontend** for everything that touches the outside world (model I/O, TUI, tools). Every Rust path has a parity-tested TS fallback engaged automatically when the native binary is absent.
+
+```text
+Mochi
+├── Runtime
+│   ├── Config / Workspace / EventBus / HookManager / GoalEngine
+├── Goals
+│   ├── Persistent goal state
+│   ├── Task DAG + Scheduler
+│   └── Decomposition via model
+├── Teams
+│   ├── Dynamic agent spawning
+│   ├── Agent profiles
+│   └── Role-based model selection
+├── Agent Loop
+│   ├── ContextEngine (token budget, compaction, freshness)
+│   ├── RetrievalEngine (files, symbols, references, git history)
+│   ├── Model provider / router / failover
+│   ├── Tool bus (30+ tools, tiered advertising)
+│   ├── BudgetEngine
+│   └── Verification / Recovery / Pulse
+├── Memory
+│   ├── Curated project facts
+│   └── Local recovery learning
+├── Performance Pipeline
+│   ├── Incremental stream parser
+│   ├── FastEventBus
+│   ├── Batched state store
+│   ├── Dirty-region renderer
+│   └── Measured frame budget
+├── native/mochi_core        ← Rust: zero-dep, prebuilt + TS fallback
+└── CLI / TUI                ← TypeScript entrypoints
+```
+
+### Source organization
+
+`src/` is organized topically — `model/`, `stream/`, `memory/`, `skills/`, `state/`, `security/`, `daemon/`, `repo/`, `observability/`, `core/`, `tools/`, `tui/` — with the root holding entrypoints only. `mochi docgen` regenerates the architecture graph and API reference from the tree.
+
+## The Agent Loop
+
+The runtime loop is `preflight → model → tools → verify → recover → pulse`, with every stage owned in-repo:
+
+1. **Preflight** — context packet built in ~325 ms cold (batched binary probing, fingerprint-cached rules/memory so multi-hundred-iteration tasks don't re-read disk every call).
+2. **Model** — tiered tool advertising (20 lean tools / ~2.6 K tokens on the first call, 56 on demand via `load_tools` recovery), speculative preflight on hard tasks, streaming with mid-stream Ctrl-C abort on the wire.
+3. **Tools** — 30+ tools through a permission-gated bus; every shell command risk-classified (17 destructive + 16 network patterns); output folded head/tail through the Rust core; secrets redacted on every output, trace line, and disk write.
+4. **Verify** — baseline + proportionate verification, independent verifier, outcome judge with rule-based veto on contradictory PASSes.
+5. **Recover** — provider failover, key rotation, model auto-escalation, checkpoint/rollback, warm-start resume.
+6. **Pulse / Struggle injection** — consecutive tool errors, repeated identical tool results (3+ reads of the same content), empty responses, and verification loops are surfaced to the model as a STRUGGLE STATE system message plus an escape-plan directive, so a struggling model never starts its next turn blind to its own failure history. Healthy runs pay nothing (zero-cost no-op).
+
+## Rust Native Core
+
+`native/mochi_core` is a zero-dependency crate (empty `[dependencies]` — a load-bearing constraint that keeps the static binary tiny). Ported hot paths:
+
+| Op | What it does |
+|---|---|
+| `estimateTokens` / `countTokens` | Token estimation; batched whole-history counting over the stdio daemon |
+| `skeletonizeSource` | Per-byte source compaction |
+| `diffNumstat` | Diff statistics |
+| `redactSecrets` | 10-pattern secret redaction as a hand-rolled byte-scanner DFA (sk-, AIza, GitHub PATs ×5, JWT, Bearer, AKIA, xox, glpat, private keys) |
+| `budgetDecide` | Per-turn budget phase (exhausted → verify → cheap → reduced → full) |
+| `classifyCommand` | Shell-command risk classification (destructive + network patterns, word-boundary aware) |
+| `foldOutput` | Tool-output head/tail line selection |
+| `stripAnsi` | Full ECMA-48 CSI stripping (0x40–0x7E terminators) |
+| `commandAvailable` | Batched which-style binary probes |
+| `estimateCostUsd` | Model cost math with free-tier short-circuit |
+| `searchDir` | Directory search |
+
+Each op follows the same proven template: zero-dep Rust module → Rust unit tests → `lib.rs` C-ABI export → `napi.rs` JS binding (routed through the C-ABI as single source of truth) → TS wrapper (`core.ts`) with N-API + Bun FFI dual surface → caller-side native-first with TS fallback → differential parity tests (including adversarial cases: braces inside tool args, UTF-8 around keys, idempotency).
+
+Build it yourself:
+
+```bash
+npm run build:native   # or: cd native/mochi_core && cargo build --release
+# artifacts: mochi-agent (~440KB, stdio daemon, 2MB RSS) + libmochi_core.so (~452KB)
+```
+
+The stdio daemon is verified end to end: `echo '{"op":"ping"}' | ./native/bin/mochi-agent plan`.
+
+**FFI honesty note (measured, do not re-learn):** for *cheap* ops the FFI round-trip is ~80× slower than pure TS (call overhead dominates). Native wins on heavy per-byte work and resident memory — the selection rule is *only port ops whose result is small relative to their input*. Bulk-text ops stay in TS on purpose.
 
 ## Configuration
 
-Global: `~/.config/mochi/config.json`
-Project: `.mochi/config.json`
+Global: `~/.config/mochi/config.json` · Project: `.mochi/config.json`
 
 ```json
 {
@@ -195,85 +329,52 @@ Project: `.mochi/config.json`
 }
 ```
 
-### Environment switches (no config file needed)
+> **Speculative preflight** (`model.speculative.preflight: true`): for hard non-chat tasks, Mochi runs a cheap speculative pass before the main loop call and injects the chosen approach + alternatives as a system hint, so the model commits to a better plan before firing tools. `selfCritique: true` reinforces the failure-repair flow on the first verification miss. Both are opt-in and never block the task — a failed or skipped preflight degrades to a normal run.
 
-```bash
-MOCHI_YOLO=1 mochi goal "..."        # auto-approve everything (same as --yolo)
-MOCHI_SANDBOX=auto mochi -p "..."    # bubblewrap isolation when available (off|auto|bubblewrap)
-MOCHI_SAFETY=auto mochi              # safety mode override (safe|ask|auto|uncensored)
-```
+## Environment Variables
 
-Model auto-escalation: after 3 consecutive verification failures the harness
-hands the task one tier up (fast→coding→reasoning) to a *different configured*
-model, once per task — free models attempt first, stronger models rescue stuck
-work. Configure distinct models per tier under `model.profiles` for it to bite.
+| Variable | Effect |
+|---|---|
+| `MOCHI_YOLO=1` | Auto-approve everything (same as `--yolo`) |
+| `MOCHI_SAFETY=auto` | Safety mode override (`safe\|ask\|auto\|uncensored`) |
+| `MOCHI_SANDBOX=auto` | Bubblewrap isolation when available (`off\|auto\|bubblewrap`) |
+| `MOCHI_REASONING=max` | Reasoning depth override |
+| `MOCHI_RATE_LIMIT_RPM=20` | Leaky-bucket request-rate cap |
+| `MOCHI_RATE_LIMIT_CONCURRENCY=3` | Concurrent in-flight request cap |
+| `MOCHI_CPG_BACKEND=tree-sitter` | Tree-sitter symbol-graph backend (falls back to TS-AST) |
+| `MOCHI_LIGHT=1` | Disable embedded SQLite index + WASM parser |
+| `FREEINFERENCE_API_KEY=...` | Provider key (or any OpenAI-compatible env) |
 
-### MCP servers
+Unknown values for `MOCHI_SAFETY` / `MOCHI_SANDBOX` / `MOCHI_REASONING` warn at startup rather than being silently ignored.
 
-`mcpServers` entries are stdio MCP servers (spawned per run) or HTTP servers
-(`{ "url": "https://…", "headers": {...} }` for Streamable-HTTP endpoints).
-Each handshakes over JSON-RPC, and its tools are registered natively as
-`serverName__toolName` (e.g. `memory__create_entities`) with `network`
-permission, so the model calls them like any built-in tool. Failed servers are
-logged and skipped; a crashed server rejects its pending calls instead of
-hanging the run. Servers that expose MCP **resources** additionally get
-`serverName__resources_list` and `serverName__resources_read` tools (read
-permission) so the model can pull server-provided context on demand.
-Discover and install built-ins without hand-editing JSON:
-`mochi mcp search <keywords>` (also `/mcp search` in the TUI) and
-`mochi mcp add <server-id>` write `.mcp.json` for you. Servers needing
-bearer tokens use pre-registered OAuth client credentials (no browser flow):
-`{ "url": "https://…", "oauth": { "tokenUrl": "https://…", "clientId": "${CLIENT_ID}",
-"clientSecret": "${CLIENT_SECRET}", "scope": "…" } }` — `${ENV}` refs keep
-secrets out of the file; tokens cache under `~/.mochi/mcp-oauth.json` (0600)
-and refresh automatically.
+## Safety, Permissions, and Sandboxing
 
-### Plan-then-act mode
+- **Permission system** — `safe` / `ask` / `auto` per action class; `gitDestructive` gated separately.
+- **Central exec policy** — every subprocess (shell tool, verification, hooks, cron notify) goes through one policy: timeout → SIGTERM → SIGKILL, output caps, argv-vs-shell discipline, and an audit hook.
+- **Command risk classification** — every shell call runs through the native risk gate before execution.
+- **Secret redaction** — 10-pattern DFA runs on every tool output, trace line, and disk write. Traces are safe to share.
+- **Sandboxing** — opt-in bubblewrap isolation (`safety.sandbox`): read-only root, writable cwd/tmp/dev-caches, optional `--unshare-net`. Surfaced in `mochi doctor`.
+- **Daemon security** — bearer-token auth, `daemon rotate` kills the old token immediately, binds to `127.0.0.1` by default.
 
-Set `"planMode": true` in config or pass `--plan` on any run: every agent
-researches with read-only tools and returns a plan (steps, files, risks,
-verification). Mutating tools (`write`/`edit`/`delete`/`shell`) are vetoed, the
-model is redirected to produce the plan, and no files are changed.
+## Plan-then-Act Mode
 
-### Subagent delegation
+Set `"planMode": true` or pass `--plan` on any run: every agent researches with read-only tools and returns a plan (steps, files, risks, verification). Mutating tools (`write` / `edit` / `delete` / `shell`) are vetoed, the model is redirected to produce the plan, and no files change. In the TUI, Tab toggles plan/act inline in the composer hint row.
 
-The `subagent` tool lets the model delegate a self-contained subtask to a fresh
-child agent that shares the run's budget, read cache, and workspace, returning a
-summary. Delegation is one level deep (children cannot spawn grandchildren) to
-bound runaway fan-out.
+## Execution Modes
 
-### Client-side rate throttling (concurrent agents)
+`mochi mode <mode>` sets the harness posture:
 
-Every model call already retries transient failures (429/5xx/timeout) with
-exponential backoff honoring `Retry-After` and rotating pooled keys. But when
-several processes, sessions, or sub-agents share **one free-tier endpoint**, they
-can trip rate limits *faster* than retry recovery can keep up. A lightweight
-leaky-bucket throttle placed ahead of the wire lets concurrent agents
-self-regulate the burst so they collectively land under the provider's RPM
-ceiling instead of hammering it. Retries then absorb only the residual jitter.
+| Mode | Use for |
+|---|---|
+| `normal` | Everyday coding |
+| `spec` | Speculative multi-pass reasoning |
+| `security` | Security-sensitive review and audit |
+| `codemod` | Large mechanical rewrites |
+| `chaos` | Adversarial robustness testing |
 
-The throttle is a single process-global token bucket that `withRetries` consults
-before each request. It is **opt-in** (a no-op by default, so single-agent runs
-keep their current latency):
+## Agent Profiles
 
-```bash
-# Cap request rate at ~10 calls/minute
-MOCHI_RATE_LIMIT_RPM=10 mochi "..."
-
-# Also cap simultaneous in-flight requests to 2 (e.g. multiple Terminus sessions)
-MOCHI_RATE_LIMIT_CONCURRENCY=2 mochi "..."
-
-# Typical free-tier hardening when driving several agents at once:
-MOCHI_RATE_LIMIT_RPM=20 MOCHI_RATE_LIMIT_CONCURRENCY=3 mochi daemon start
-```
-
-The bucket never blocks past the provider's own retry budget: it only delays up
-to the configured refill pace, and the whole throttle is bypassed when neither
-env var is set.
-
-## Agent profiles
-
-Create lightweight profiles in `.mochi/agents/`:
+Lightweight role definitions in `.mochi/agents/`:
 
 ```markdown
 ---
@@ -294,6 +395,10 @@ Reproduce the failure, classify the error, identify the root cause, and apply th
 
 Profiles control tools, model routing, verification requirements, and behavior. Teams instantiate these profiles dynamically.
 
+## Teams
+
+`mochi team "..."` spawns a role-diverse set of agents (architect, implementer, reviewer, verifier — 16 specialized roles available) sharing one budget and workspace, coordinating through the task DAG. Each role can route to a different configured model tier.
+
 ## Hooks
 
 Create `.mochi/hooks.json`:
@@ -306,9 +411,9 @@ Create `.mochi/hooks.json`:
 }
 ```
 
-A failing `before_*` hook vetoes the action. `after_*` hooks observe completed actions.
+All 17 hook lifecycle points (`before_*`, `after_*`, `on_*`) are pinned by a static test that fails on any future hook name without a call site. A failing `before_*` hook vetoes the action; `after_*` hooks observe completed actions. Hook subprocesses run under the central exec policy (timeout → SIGKILL, output cap).
 
-## Project memory
+## Project Memory
 
 Mochi maintains curated engineering memory in:
 
@@ -322,168 +427,73 @@ Mochi maintains curated engineering memory in:
     └── failures.md
 ```
 
-Agents can add durable facts through the `memory` tool. Conversation history is never dumped into memory.
+Agents add durable facts through the `memory` tool. Conversation history is never dumped into memory. Project rules (`mochi rules add`) and memory are fingerprint-cached per iteration.
 
-## Interactive commands
+## Model Routing, Failover, and Escalation
 
-```text
-/help
-/goal <objective>
-/team <objective>
-/plan <objective>
-/tasks
-/status
-/diff
-/changes
-/checkpoint
-/rollback
-/model
-/profiles
-/memory
-/inspect <query>
-/clear
-/exit
-```
+- **Capability-profile routing** — `fast` / `coding` / `reasoning` / `review` tiers map to different configured models per task type (`classifyTaskTier` is wired into provider selection).
+- **Provider failover** — transient failures (429 / 5xx / timeout) retry with exponential backoff honoring `Retry-After`; credential pools rotate multi-key on 401 / 429 / 403; empty responses escalate fast (2 blanks → switch model, 3 → switch provider).
+- **Model auto-escalation** — after 3 consecutive verification failures the task hands one tier up (fast → coding → reasoning) to a *different configured* model, once per task, with an explicit handoff note. Free models attempt first, stronger models rescue stuck work.
+- **Prompt caching** — stable system prompt ships as a single `cache_control: ephemeral` block on Anthropic (and the OpenAI equivalent), so it isn't rebilled every turn.
+- **Vision everywhere** — data-URI and remote-URL images map to native parts on OpenAI, Anthropic (base64 blocks), and Gemini (inlineData).
 
-## Architecture
+## Rate Throttling for Concurrent Agents
 
-```text
-Mochi
-├── Runtime
-│   ├── Config
-│   ├── Workspace
-│   ├── EventBus
-│   ├── HookManager
-│   └── GoalEngine
-├── Goals
-│   ├── Persistent goal state
-│   ├── Task DAG + Scheduler
-│   └── Decomposition via model
-├── Teams
-│   ├── Dynamic agent spawning
-│   ├── Agent profiles
-│   └── Role-based model selection
-├── Agent Loop
-│   ├── ContextEngine
-│   ├── RetrievalEngine
-│   ├── Model provider/router
-│   ├── Tool bus
-│   ├── BudgetEngine
-│   └── Verification/Recovery/Pulse
-├── Memory
-│   ├── Project facts
-│   └── Local recovery learning
-├── Performance Pipeline
-│   ├── Incremental stream parser
-│   ├── FastEventBus
-│   ├── Batched state store
-│   ├── Dirty-region renderer
-│   └── Measured frame budget
-└── CLI / TUI
-```
-
-## Performance
-
-The stream pipeline is event-driven and measured end to end:
-
-```text
-Model stream
-  ↓
-Incremental parser
-  ↓
-Compact events
-  ↓
-FastEventBus
-  ↓
-Batched state
-  ↓
-Dirty regions
-  ↓
-Renderer
-```
-
-Benchmark it:
+Every model call retries transient failures, but when several processes or sub-agents share **one free-tier endpoint** they can trip limits faster than retries recover. An opt-in leaky-bucket throttle sits ahead of the wire so concurrent agents self-regulate their collective burst:
 
 ```bash
-mochi perf --chunks 10000
+MOCHI_RATE_LIMIT_RPM=10 mochi "..."                # ~10 calls/minute
+MOCHI_RATE_LIMIT_CONCURRENCY=2 mochi "..."         # max 2 in-flight
+MOCHI_RATE_LIMIT_RPM=20 MOCHI_RATE_LIMIT_CONCURRENCY=3 mochi daemon start
 ```
 
-No high-frequency event causes full-state propagation or full-tree rendering.
+The bucket only delays up to the configured refill pace and is a no-op when neither variable is set.
 
-### Standalone native binary (no runtime required)
+## MCP Servers
 
-For deployments where even Node/Bun aren't guaranteed, compile Mochi into a single
-self-contained executable with Bun. The binary embeds the runtime and all modules;
-no `node_modules`, `package.json`, or runtime install is needed:
+`mcpServers` entries are stdio MCP servers (spawned per run) or HTTP servers (`{ "url": "https://…", "headers": {...} }` for Streamable-HTTP). Each handshakes over JSON-RPC and its tools register natively as `serverName__toolName` with `network` permission. Failed servers are logged and skipped; a crashed server rejects its pending calls instead of hanging the run. Servers exposing MCP **resources** also get `serverName__resources_list` / `serverName__resources_read` tools.
+
+Skip the JSON hand-editing:
 
 ```bash
-npm run build:bin   # produces ./dist/mochi-bin (bun required)
-./dist/mochi-bin --version
+mochi mcp search <keywords>    # discover servers (also /mcp search in the TUI)
+mochi mcp add <server-id>      # write .mcp.json for you
 ```
 
-The binary is fully functional end to end (agent loop, tools, config, workspaces), so
-it can be dropped onto a low-spec or headless box without a JS runtime.
+OAuth for servers needing bearer tokens uses pre-registered client credentials (no browser flow) — `${ENV}` refs keep secrets out of the file; tokens cache under `~/.mochi/mcp-oauth.json` (0600) and refresh automatically.
 
-### Cold-start / memory footprint
+## Daemon (Persistent Agent over HTTP)
 
-Mochi is a Rust runtime core with a TypeScript frontend and **zero runtime JS
-dependencies**. Cold start and peak
-RSS are measured by `bench/efficiency.mjs` (`npm run bench:efficiency`), and the CLI runs
-unmodified under Bun for a lower footprint (useful on low-RAM, hardware-friendly boxes):
-
-```text
-mochi (node)  ~84ms / ~47MB
-mochi (bun)   ~78ms / ~42MB
-```
-
-Long agent runs also avoid repeated disk work: project rules and project memory are
-fingerprint-cached per iteration (see `src/context.ts`), so a multi-hundred-iteration task
-isn't re-reading `MOCHI.md`/`AGENTS.md`/memory from disk on every model call.
-
-## Daemon (persistent agent over HTTP)
-
-Run Mochi as a background service and drive it from any tool (scripts, phone, Discord gateway):
+Run Mochi as a background service and drive it from anything — scripts, phone, a Discord gateway, a dashboard:
 
 ```bash
 mochi daemon start --port 8642 --token sekret   # serve on localhost:8642
-mochi daemon status                            # is it up? jobs running?
-mochi daemon jobs                             # list persisted goals + status
-mochi daemon send "finish the auth flow"      # enqueue a goal
-mochi daemon approve                         # approve queued shell commands (safe mode)
-mochi daemon rotate                          # issue a fresh token (old dies immediately)
+mochi daemon status                             # is it up? jobs running?
+mochi daemon jobs                               # list persisted goals + status
+mochi daemon send "finish the auth flow"        # enqueue a goal
+mochi daemon approve                            # approve queued shell commands (safe mode)
+mochi daemon resume <goalId>                    # resume a persisted goal over HTTP
+mochi daemon rotate                             # fresh token; old one dies immediately
+mochi daemon restart                            # stop + start on the same port
 mochi daemon stop
 ```
 
-HTTP surface (auth via `Authorization: Bearer <token>` header):
-`POST /api/goal {objective}`, `POST /api/status`, `POST /api/jobs`, `POST /api/plan`,
-`POST /api/approve`, `POST /api/resume {goalId}`, `POST /api/inspect {query}`. Goals persist across daemon restarts; a goal
-created by one instance can be resumed by a fresh one via `/api/resume`,
-so interrupted or failed work survives daemon shutdown.
+HTTP surface (auth via `Authorization: Bearer ***`): `POST /api/goal {objective}`, `POST /api/status`, `POST /api/jobs`, `POST /api/plan`, `POST /api/approve`, `POST /api/resume {goalId}`, `POST /api/inspect {query}`. Goals persist across daemon restarts — a goal created by one instance can be resumed by a fresh one via `/api/resume`, so interrupted or failed work survives daemon shutdown.
 
-By default the daemon binds to `127.0.0.1` only. For remote access from a
-phone or another machine on the LAN, bind it explicitly (keep the token
-secret, and prefer a tunnel over a raw public bind):
+By default the daemon binds to `127.0.0.1` only. For LAN access bind explicitly and keep the token secret; prefer a tunnel over a raw public bind:
 
 ```bash
-mochi daemon start --host 0.0.0.0 --port 8642 --token sekret   # LAN access
-ssh -R 8649:localhost:8649 your-server                          # internet via reverse tunnel
+mochi daemon start --host 0.0.0.0 --port 8642 --token sekret
+ssh -R 8649:localhost:8649 your-server   # internet via reverse tunnel
 ```
 
-The daemon is a plain HTTP server, so any gateway (a phone app, a Discord
-bot, a dashboard service) can drive Mochi with the bearer token:
-send goals, list jobs, approve queued commands, and resume interrupted
-work from a fresh instance.
+## Editor Integration (ACP)
 
-## Editor integration (ACP)
-
-`mochi acp` starts an Agent Client Protocol v1 server over JSON-RPC stdio, so
-ACP-capable editors (VS Code, Zed, JetBrains) can drive Mochi natively:
+`mochi acp` starts an Agent Client Protocol v1 server over JSON-RPC stdio, so ACP-capable editors (VS Code, Zed, JetBrains) can drive Mochi natively:
 
 ```bash
-mochi acp   # spawn as an editor subprocess; speaks ACP v1 on stdin/stdout
+mochi acp   # spawn as an editor subprocess; ACP v1 on stdin/stdout
 ```
-
-Supported methods (ACP v1):
 
 | Method | Description |
 |--------|-------------|
@@ -501,115 +511,215 @@ Supported methods (ACP v1):
 | `session/request_permission` | MCP permission requests (returns `allowed`) |
 | `shutdown` | Clean server shutdown |
 
-Streaming updates (`session/update`): `tool_call`, `tool_call_update`, `agent_message_chunk`, `usage_update`, `plan`.
+Streaming updates (`session/update`): `tool_call`, `tool_call_update`, `agent_message_chunk`, `usage_update`, `plan`. Prompts accept ACP `ContentBlock[]` payloads; each run returns a `stopReason`.
 
-Prompts accept ACP `ContentBlock[]` payloads; each run returns a `stopReason`.
+## Interactive TUI
 
-## Health (`mochi doctor`)
+A minimal, fast, keyboard-first interface built on a measured frame budget:
 
-`mochi doctor` self-inspects the full harness: model/key state, `node:sqlite`,
-codegraph symbol index, FTS5 session store, daemon status, and toolchain
-detection (TypeScript/Python), ending with an actionable problems list.
+- **Multi-tab sessions** — opencode-style pill tabs with a clickable `+ New session` button; `Alt+T` new, `Alt+W` close, `Alt+1-8` switch, `/tab` commands. Each tab is an isolated runtime (own abort/session/budget); background runs continue and badge unread.
+- **Themes** — 12+ styles including signature **Mochi Purple** (default): crisp white + violet on near-black purple surfaces. Dark themes paint every row over pure black (terminal-profile gray can never show through; SGR tint leaks killed by the frame-level leak guard). Light themes and `NO_COLOR` stay transparent.
+- **Streaming transcript** — dirty-region rendering; no high-frequency event causes full-state propagation or full-tree rendering.
+- **Plan/act toggle** — inline in the composer hint row: `● Plan · Enter send · Tab plan/act · ESC stop · / for commands`.
+- **Live meters** — context bar, token counts, model gauges with track colors that read correctly on black and light themes alike.
+- **`mochi term`** — open the TUI in its own native terminal window (`--geometry 100x30`, `--title`).
+- **Command palette**, mouse support for tabs and clicks, and `mochi termix` for N communicating or isolated split panes (each pane takes a distinct angle: architect, adversarial reviewer, SRE, …) with per-pane steps/tokens/cost plus split totals.
 
-## Run traces
+## Interactive Commands
 
-Every project run writes a durable, deep-redacted JSONL trace (secrets scrubbed):
+```text
+/help                     /goal <objective>       /team <objective>
+/plan <objective>         /tasks                  /status
+/diff                     /changes                /checkpoint
+/rollback                 /model                  /profiles
+/memory                   /inspect <query>        /skills repo
+/mcp search               /tab list               /theme <name>
+/image <path>             /clear                  /exit
+```
+
+## Integrations
+
+### Chameleon (internal synthetic-parameter reasoning)
+
+Turns a flash-class model into a frontier-grade reasoner for hard goals by generating dense "synthetic parameter" reasoning context injected into the agent prompt. Built into Mochi — it uses the agent's **own** configured provider: no external CLI, no shell-out, no extra API key. A failed provider call is a graceful no-op.
+
+```bash
+mochi enhance "Build a Redis rate limiter" --mode hard   # print enhancement context
+mochi goal --enhance "finish the auth flow" --mode auto  # auto-inject before solving
+```
+
+Modes map to how many reasoning strategies run: `flash < turbo < easy < medium < hard < deep < extreme/genius`. Opt in without flags via config: `{ "enhance": { "enabled": true, "mode": "auto" } }`.
+
+### Discord gateway
+
+`mochi discord run` exposes the agent as a Discord bot — send goals from chat, get results back.
+
+### Web dashboard
+
+`mochi dashboard` opens a browser dashboard for goals, jobs, and approvals.
+
+## Symbol Graph Backends
+
+`get_function` / `find_callers` / `type_hierarchy` index the repo into an in-memory SQLite code graph. Two parsers back the index, selectable by env, with backend-agnostic read paths:
+
+- `tsc` (default): the TypeScript compiler AST, always available.
+- `tree-sitter`: a WASM CST walk for lower startup cost. Opt in with `npm i web-tree-sitter tree-sitter-typescript` and set `MOCHI_CPG_BACKEND=tree-sitter`; missing packages fall back automatically.
+
+```bash
+MOCHI_CPG_BACKEND=tree-sitter mochi inspect "SessionManager"
+```
+
+The registry covers **15 languages** (TypeScript, JavaScript, Python, Go, Rust, C, C++, Java, C#, Ruby, PHP, Kotlin, Swift, Zig, Lua — `_test.go` / `test_*.py` / `*Test.java` test-file matching included).
+
+## Light Mode
+
+On very small boxes, disable the embedded SQLite symbol index and tree-sitter WASM parser entirely (both degrade gracefully instead of throwing):
+
+```bash
+MOCHI_LIGHT=1 mochi          # no embedded index, no WASM parser
+MOCHI_NO_EMBED=1 mochi       # same effect
+MOCHI_NO_INDEX=1 mochi       # same effect
+```
+
+Even without the flag the parser is lazy: grammars load on first symbol-index use and only for languages actually present in the repo, so runs that never touch codegraph tools pay nothing.
+
+## Run Traces
+
+Every project run writes a durable, deep-redacted JSONL trace (secrets scrubbed by the native DFA):
 
 ```bash
 mochi trace               # list traces
 mochi trace <goalId>      # replay a goal run: prompts, tool calls, results, stop reason
 ```
 
-## Integrations
+Event kinds include `tool:called`, `tool:completed`, `usage:updated`, `agent:reasoning`, `message:chunk`, `agent:log`, `summary:rendered`, `task:completed` — full post-mortem without leaving the terminal. Trace retention is pruned automatically (`pruneTraces`).
 
+## Sessions
 
-### Chameleon (internal synthetic-parameter reasoning)
-
-Turns a flash-class model into a frontier-grade reasoner for hard goals by
-generating dense "synthetic parameter" reasoning context, injected into the
-agent prompt. This is built into Mochi — it uses the agent's OWN configured
-provider, so there's no external CLI, no shell-out, and no extra API key.
+Full-text session history in SQLite+FTS5:
 
 ```bash
-# Print enhancement context for a task
-mochi enhance "Build a Redis rate limiter" --mode hard
-
-# Auto-inject enhancement before solving a hard goal
-mochi goal --enhance "finish the auth flow" --mode auto
-
-# The agent can also call the `chameleon` tool directly while working.
+mochi session list
+mochi session search "rate limiter"
 ```
 
-Opt in without a flag via config:
-
-```json
-{ "enhance": { "enabled": true, "mode": "auto" } }
-```
-
-Enhance uses the same provider the agent loop uses, so a failed provider call
-is a graceful no-op. Modes map to how many reasoning strategies run:
-`flash<turbo<easy<medium<hard<deep<extreme/genius`.
-
-### Termix (multi-session split)
-
-Termix **splits your current session into N split windows** — all in-process
-agent sessions on the same configured provider. It opens nothing extra: no
-external app, no auto-launched process, no extra terminal. Run it and choose how
-many panes, then whether the panes **communicate** or **separate**:
+## Checkpoints and Rollback
 
 ```bash
-mochi termix                 # interactive: pick task, pane count, and mode
-mochi termix "dedupe JSON"   # pick pane count + mode, task given
-mochi termix "fix auth" --sessions 3 --coms   # 3 panes, shared broadcast channel
-mochi termix "fix auth" --sep                # panes fully isolated
+mochi checkpoint save before-refactor
+mochi checkpoint list
+mochi checkpoint restore before-refactor
+mochi rollback                # last checkpoint
 ```
 
-- `--coms` — panes share a rolling `<broadcast>` channel and see each other's
-  conclusions between passes.
-- `--sep` — each pane works from first principles, fully isolated.
+Git-backed snapshots, so rollback composes with your normal workflow.
 
-Each pane takes a distinct angle (architect, adversarial reviewer, SRE, ...).
-The run prints each pane's steps/tokens/cost plus the whole split's total.
+## Skills
 
-## Symbol graph backends
-
-`get_function` / `find_callers` / `type_hierarchy` index the repo into an
-in-memory SQLite code graph. Two parsers back the index, selectable by env:
-
-- `tsc` (default): the TypeScript compiler AST, always available.
-- `tree-sitter`: a WASM CST walk for lower startup cost. Opt in with
-  `npm i web-tree-sitter tree-sitter-typescript` and set
-  `MOCHI_CPG_BACKEND=tree-sitter`. If the packages are missing it falls back
-  to the TS-AST backend automatically.
+30+ built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
 
 ```bash
-MOCHI_CPG_BACKEND=tree-sitter mochi inspect "SessionManager"
+mochi skills pack my-skill --out ./pack   # bundle installed skills
+mochi skills unpack ./pack --force        # install a pack
 ```
 
-The read paths (`getFunctionSynapse`, `findCallers`, `typeHierarchy`) are
-backend-agnostic, so either parser produces the same tool output.
+## Daemon Cron (Scheduled Jobs)
 
-### Light mode (zero-embed, zero-parser)
-
-On very small boxes you can disable the embedded SQLite symbol index AND the
-tree-sitter WASM parser entirely (both degrade gracefully instead of throwing):
+Recurring agent jobs on a schedule, executed by the daemon:
 
 ```bash
-MOCHI_LIGHT=1 mochi            # no embedded index, no WASM parser
-MOCHI_NO_EMBED=1 mochi         # same effect
-MOCHI_NO_INDEX=1 mochi         # same effect
+mochi daemon cron add --schedule "0 9 * * *" --goal "run the nightly regression audit"
+mochi daemon cron list
+mochi daemon cron remove <jobId>
 ```
 
-Even without the flag, the parser is lazy: grammars load on first symbol-index
-use and only for languages actually present in the repo, so runs that never
-touch codegraph tools pay nothing for them.
-
-## Tests
+## Building
 
 ```bash
-npm test
+npm install
+npm run build         # tsc → dist/cli.js (the authoritative gate)
+npm run build:bin     # standalone bun binary → dist/mochi-bin
+npm run build:native  # Rust core → native/bin/mochi_core.node + mochi-agent
+npm run release:check # full pre-release gate (build + tests + tarball inspection)
 ```
+
+Requires Node ≥ 22. The Rust core builds with any modern `cargo` and is optional — CI and cold installs run the parity-tested TS fallbacks. Prebuilt native binaries ship in releases; the npm tarball excludes the 96 MB standalone (npm runs `dist/cli.js` under node).
+
+## Testing
+
+```bash
+npm test              # vitest — 1494 tests, 211 files
+npm run typecheck     # tsc --noEmit
+```
+
+The suite includes differential parity tests (Rust vs TS for every native op, with adversarial cases), loop-recovery e2e tests driving a scripted "stuck" model over the real OpenAI SSE wire, TUI tests over PTY, mock-server MCP transport tests, and a hook-lifecycle static test. CI runs the full matrix on Linux, macOS, and Windows with a skip-budget guard (`scripts/check-skips.mjs`) that fails on regression to skipping.
+
+## Benchmarks
+
+Reproduce everything yourself:
+
+```bash
+npm run bench                 # startup
+npm run bench:efficiency      # cold start + peak RSS (the BENCHMARKS.md source)
+npm run bench:memory
+npm run bench:task
+npm run bench:stream
+npm run bench:speculation
+node bench/cli-matrix.mjs     # cross-harness cold-start + RSS matrix
+node bench/arena.mjs          # standardized task arena (f1/b1/r1/q1/x1/x2)
+mochi perf --chunks 10000     # stream-pipeline micro-benchmarks
+```
+
+Methodology, PTY probe scripts, and the honest history (including superseded numbers) are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+## Project Layout
+
+```text
+mochi/
+├── src/                    # TypeScript frontend (entrypoints + topical dirs)
+│   ├── agent/              # runtime loop, verification, recovery
+│   ├── model/              # providers, routing, failover, prompt cache
+│   ├── native/             # Rust core bridge (N-API + Bun FFI)
+│   ├── tui/                # terminal UI, tabs, themes, renderer
+│   ├── daemon/             # persistent HTTP agent service
+│   ├── tools/              # tool bus and implementations
+│   ├── security/           # exec policy, redaction, sandbox
+│   └── ...
+├── native/mochi_core/      # zero-dependency Rust crate + stdio daemon
+├── docs/                   # ARCHITECTURE / CAPABILITIES / BENCHMARKS / CLI_REFERENCE
+├── bench/                  # arena, cli-matrix, efficiency, memory, startup
+├── skills/                 # built-in skill registry
+├── scripts/                # build-native, prepack, release-check, sync-version
+├── site/                   # github.io website + docs
+└── examples/               # runnable examples
+```
+
+See [TECHMAP.md](TECHMAP.md) for the full path-by-path map.
+
+## Design Principles
+
+1. **Zero runtime dependencies.** If it can be written with the Node stdlib, it is. The dependency list is a design constraint, not an accident — audits are clean and the tarball is ~3 MB.
+2. **Native only where it pays.** Per-byte compute and resident memory go to Rust; everything else stays in TS. Ops are ported only when the result is small relative to the input.
+3. **Every native path has a parity-tested fallback.** No environment breaks because a binary is missing.
+4. **Verification over confidence.** Greenfield vetoes, baseline comparisons, rule-based BLOCK on unverified changes, and a judge that cannot contradict failed evidence.
+5. **The harness is the lever.** Model choice matters less than what the harness tells the model mid-flight — struggle state, escape plans, and recovery strategies are all prompt-level, in-repo, and testable.
+6. **Honest numbers or no numbers.** Benchmarks ship with reproducible scripts; superseded results are marked superseded, not deleted.
+7. **Small targeted patches.** Strict TypeScript, events for state changes, verify before done.
+
+## Contributing
+
+```bash
+npm install
+npm run build && npm test    # green build + suite before any PR
+npm run typecheck
+```
+
+Read [MOCHI.md](MOCHI.md) for project conventions, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before touching the loop, and [TECHMAP.md](TECHMAP.md) so nothing is mystery meat. Issues and PRs welcome at [github.com/xanstomper/mochi](https://github.com/xanstomper/mochi).
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xanstomper/mochi&type=Timeline)](https://star-history.com/#xanstomper/mochi&Timeline)
