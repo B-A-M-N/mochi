@@ -30,6 +30,9 @@ import {
   SPLASH_TICKS,
   farewellFrame,
   statusBarRow1,
+  statusBarRow2,
+  gradientContextBar,
+  gradientCacheBar,
   renderMarkdown,
   renderDropdown,
 
@@ -37,11 +40,10 @@ import {
   composerPlaceholderRow,
   composerTopRule,
   composerBottomRule,
+  composerHintRow,
   transcriptIndent,
   thinkingLine,
   ellipsize,
-  padEnd,
-  type StatusBarModel,
 } from './view.js';
 
 const HIDE = '\x1b[?25l';
@@ -53,7 +55,7 @@ const AUTOWRAP = '\x1b[?7h';
 const BRACKET_PASTE_ON = '\x1b[?2004h';
 const BRACKET_PASTE_OFF = '\x1b[?2004l';
 const RESET = '\x1b[0m';
-const OSC_BG_BLACK = '\x1b]11;#000000\x07';
+const OSC_BG_BLACK = '\x1b]11;#0a0a0a\x07';
 const OSC_BG_RESET = '\x1b]111\x07';
 
 type LineKind = 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'task' | 'goal' | 'plain' | 'thought' | 'summary';
@@ -268,12 +270,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   function tabBarRow(w: number): string {
     const tabList = tabs.list();
     const layout = tabBarCells(tabList, activeTabId, w);
-    const ACTIVE_BG = '\x1b[48;2;48;44;68m';
+    const ACTIVE_BG = '\x1b[48;2;34;28;48m';
+    const PLUS_BG = '\x1b[48;2;30;30;30m';
     const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
-        return `\x1b[48;2;34;32;48m\x1b[1m\x1b[38;2;225;220;245m${c.plain}${T.reset}`;
+        return `${PLUS_BG}\x1b[38;2;230;230;235m${c.plain}${T.reset}`;
       }
       const isActive = c.tabId === activeTabId;
       const tab = tabList.find((t) => t.id === c.tabId);
@@ -295,13 +298,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const unread = c.unread ? ` \x1b[38;2;244;63;94m•` : '';
 
       if (isActive) {
-        const titleText = `\x1b[1m\x1b[38;2;255;255;255m${c.title}`;
-        const closeText = `\x1b[38;2;180;170;205m×`;
-        return `${ACTIVE_BG} ${iconColored}${ACTIVE_BG} ${titleText}${unread}${ACTIVE_BG} ${closeText} ${T.reset}`;
+        const titleText = `\x1b[1m\x1b[38;2;245;245;250m${c.title}`;
+        const closeText = tabList.length > 1 ? `\x1b[38;2;140;130;165m×` : ' ';
+        return `${ACTIVE_BG} ${iconColored}${ACTIVE_BG} ${titleText}${unread}${ACTIVE_BG} ${closeText}${T.reset} `;
       } else {
         const titleText = `\x1b[38;2;140;135;165m${c.title}`;
-        const closeText = `\x1b[38;2;95;90;120m×`;
-        return ` ${iconColored} ${titleText}${unread} ${closeText} ${T.reset}`;
+        const closeText = tabList.length > 1 ? `\x1b[38;2;85;80;105m×` : ' ';
+        return ` ${iconColored} ${titleText}${unread} ${closeText}${T.reset} `;
       }
     });
 
@@ -1214,9 +1217,74 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       extra,
     };
 
-    const cTop = h - bottomRows;
+    const s1 = h - bottomRows;
+    rows[s1] = statusBarRow1(statusModel, w);
+    let cTop = s1 + 1;
+
+    // Composer hint with the plan/act dots inlined beside the key legend,
+    // color-coded by mode (plan=violet, act=act color).
+    const hintWithMode = (width: number): string => {
+      const base = ' ⏎ send · Tab plan/act · ESC stop · / for commands';
+      if (width < 60) return base;
+      const dot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.act}● Act${T.reset}`;
+      const dim = `${T.grayDark}${base.slice(1)}${T.reset}`;
+      return ` ${dot} ${T.grayDark}·${T.reset} ${dim}`;
+    };
+    
+    if (statusRows === 3) {
+      const promptTotal = state.inTokens + state.cacheTokens;
+      const cacheRate = promptTotal > 0 ? Math.min(1, state.cacheTokens / promptTotal) : 0;
+      const ctxLen = w >= 80 ? 12 : (w >= 60 ? 8 : 5);
+      const cacheLen = w >= 80 ? 10 : (w >= 60 ? 6 : 4);
+      const ctx = gradientContextBar(state.inTokens + state.outTokens, runtime.config.safety.contextBudgetTokens, ctxLen, state.busy ? state.spinner + 1 : 0);
+      const cache = gradientCacheBar(cacheRate, cacheLen, state.busy ? state.spinner + 1 : 0);
+      const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+      // Cache segment only when there IS cache — an empty `cache ───────── 0`
+      // track at rest reads as a broken gauge (screenshot artifact, 2026-10-04).
+      let cacheSeg = '';
+      if (state.cacheTokens > 0) {
+        cacheSeg = w >= 70
+          ? `  ${T.gray}cache${T.reset} ${cache.text} ${T.lime}${fmt(state.cacheTokens)}${T.reset} ${T.gray}(${Math.round(cacheRate * 100)}%)${T.reset}`
+          : `  ${T.gray}cache${T.reset} ${T.lime}${fmt(state.cacheTokens)}${T.reset}`;
+      }
+      // Plan/act toggle sits BESIDE the in/out text + bars (left-aligned
+      // after them), not right-aligned — reads as one continuous row.
+      const planDot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.grayDark}○ Plan${T.reset}`;
+      const actDot = state.uiMode === 'act' ? `${T.act}● Act${T.reset}` : `${T.grayDark}○ Act${T.reset}`;
+      const toggle = `${planDot} ${actDot} ${T.grayDark}(Tab)${T.reset}`;
+      const miniToggle = `${planDot} ${actDot}`;
+      const barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text} ${T.gray}${Math.round(ctx.pct * 100)}%${T.reset}${cacheSeg}`;
+      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
+      const baseLen = visibleLen(barsRowFull);
+      let rowContent: string;
+      if (baseLen + visibleLen(toggle) + 2 <= w) {
+        rowContent = `${barsRowFull}  ${toggle}`;
+      } else if (baseLen + visibleLen(miniToggle) + 2 <= w) {
+        rowContent = `${barsRowFull}  ${miniToggle}`;
+      } else {
+        rowContent = barsRowFull;
+      }
+      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
+      const barsRow = visibleLen(rowContent) > w ? ellipsize(rowContent, w) : rowContent;
+
+      rows[s1 + 1] = barsRow;
+      rows[s1 + 2] = statusBarRow2(statusModel, w);
+      rows[s1 + 3] = composerHintRow(hintWithMode(w), w);
+      cTop = s1 + 4;
+    } else {
+      rows[s1 + 1] = statusBarRow2(statusModel, w);
+      rows[s1 + 2] = composerHintRow(hintWithMode(w), w);
+      cTop = s1 + 3;
+    }
+
     rows[cTop] = composerTopRule(w);
     const visibleTextRows = composerRows - 2;
+    // Cursor-following scroll: instead of always pinning the TAIL of a long
+    // input (which hides the caret and the text you're actively typing),
+    // anchor the visible slice around the cursor's wrapped row. The caret stays
+    // on-screen while you type/edit any line; the tail is only pinned when the
+    // cursor is already on the last visible row. (This is the multiline-editor
+    // scroll the old `slice(-visibleTextRows)` never did.)
     const composerInnerW = Math.max(1, w - 6);
     const composerRawRows = state.input ? wrap(state.input, composerInnerW) : [''];
     const caretRow = Math.max(0, wrap(state.input.slice(0, state.cursor), composerInnerW).length - 1);
@@ -1228,76 +1296,21 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const r = cTop + 1 + i;
       if (r < h) {
         if (i === 0 && !state.input) {
+          // Empty composer: the opencode-style placeholder (this branch used
+          // to sit AFTER the shownRows check, where wrap('') === [''] made it
+          // unreachable dead code — no placeholder ever rendered).
           rows[r] = composerPlaceholderRow('Message mochi… (type / for commands)', w);
         } else if (i < shownRows.length) {
+          // Only the FIRST visible row carries the `❯` prompt glyph; wrapped
+          // continuation rows render without it so a long input doesn't stack
+          // ❯❯❯ symbols and corrupt the box edge.
           rows[r] = composerRow(shownRows[i], w, i === 0);
         } else {
           rows[r] = composerRow('', w, i === 0);
         }
       }
     }
-    const cBottom = cTop + visibleTextRows + 1;
-    if (cBottom < h) {
-      rows[cBottom] = composerBottomRule(w);
-    }
-
-    // Status & footer rows positioned cleanly beneath the composer box:
-    // Row 1 below composer: model + reasoning level + plan/act + token meter
-    // Row 2 below composer (terminal bottom edge): workspace path + git branch/diff + shortcuts
-    const footerRow = (m: StatusBarModel, width: number): string => {
-      const path = m.workspaceName + (m.gitBranch ? ` (${m.gitBranch})` : '');
-      const hasDiff = m.gitDiff && m.gitDiff.files > 0;
-      let diffText = '';
-      if (hasDiff) {
-        diffText = ` ${T.grayDark}|${T.reset} ${T.gray}${m.gitDiff!.files}f${T.reset} ${T.success}+${m.gitDiff!.additions}${T.reset} ${T.error}-${m.gitDiff!.deletions}${T.reset}`;
-      }
-      const left = ` ${T.gray}${path}${T.reset}${diffText}`;
-      const baseShortcuts = '⏎ send · Tab plan/act · Shift+Tab auto · ESC stop · / commands';
-      const compactShortcuts = '⏎ send · Tab mode · ESC stop · / cmds';
-      const miniShortcuts = '⏎ send · / cmds';
-      const shortcuts = width >= 80 ? baseShortcuts : width >= 56 ? compactShortcuts : miniShortcuts;
-      const right = `${T.grayDark}${shortcuts}${T.reset} `;
-      const leftLen = visibleLen(left);
-      const rightLen = visibleLen(right);
-      if (leftLen + rightLen <= width) {
-        const pad = ' '.repeat(width - leftLen - rightLen);
-        return `${left}${pad}${right}`;
-      } else if (leftLen + visibleLen(miniShortcuts) + 1 <= width) {
-        const miniRight = `${T.grayDark}${miniShortcuts}${T.reset} `;
-        const pad = ' '.repeat(Math.max(1, width - leftLen - visibleLen(miniRight)));
-        return `${left}${pad}${miniRight}`;
-      } else {
-        return padEnd(ellipsize(left, width), width);
-      }
-    };
-
-    const compactFooterRow = (m: StatusBarModel, width: number): string => {
-      const modelText = `${T.fg}${ellipsize(m.modelId, 16)}${T.reset}`;
-      const modeDot = m.mode === 'plan' ? `${T.plan}● P` : `${T.act}● A`;
-      const path = `${m.workspaceName}${m.gitBranch ? `(${m.gitBranch})` : ''}`;
-      const left = ` ${modelText} · ${modeDot}${T.reset} · ${T.gray}${path}${T.reset}`;
-      const right = `${T.grayDark}⏎ send · / cmds${T.reset} `;
-      const leftLen = visibleLen(left);
-      const rightLen = visibleLen(right);
-      if (leftLen + rightLen <= width) {
-        const pad = ' '.repeat(width - leftLen - rightLen);
-        return `${left}${pad}${right}`;
-      }
-      return padEnd(ellipsize(left, width), width);
-    };
-
-    if (statusRows === 2) {
-      if (cBottom + 1 < h) {
-        rows[cBottom + 1] = statusBarRow1(statusModel, w);
-      }
-      if (cBottom + 2 < h) {
-        rows[cBottom + 2] = footerRow(statusModel, w);
-      }
-    } else {
-      if (cBottom + 1 < h) {
-        rows[cBottom + 1] = compactFooterRow(statusModel, w);
-      }
-    }
+    rows[cTop + visibleTextRows + 1] = composerBottomRule(w);
     
     // ---- Sleek centered modal menu overlay with scrolling window ----
     if (state.menuActive) {
@@ -1493,7 +1506,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     state.cursor = 0;
 
     if (line === '/exit' || line === '/quit' || line === 'exit' || line === 'quit' || line === ':q' || line === '/q') {
-      exit();
+      if (tabs.count() > 1) {
+        closeActiveTab();
+      } else {
+        exit();
+      }
       return;
     }
     if (line === '/help' || line === '/shortcuts' || line === '/keys') { pushHelp(); return; }
@@ -2045,7 +2062,29 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       closeActiveTab();
       return;
     }
-    if (line === '/new' || line === '/clear-all') {
+    if (line === '/new') {
+      if (state.lines.length > 0) {
+        newTab();
+      } else {
+        runtime.resetSession();
+        runtime.workspace.clearCheckpoint();
+        state.lines = [];
+        state.tasks.clear();
+        state.scroll = 0;
+        state.totalTokens = 0;
+        state.totalCost = 0;
+        state.inTokens = 0;
+        state.outTokens = 0;
+        state.cacheTokens = 0;
+        state.chatVer++;
+        try { tabs.rename(activeTabId, 'Session 1'); } catch {}
+        tabs.setStatus(activeTabId, 'idle');
+        push('system', 'Started a completely fresh session.');
+        scheduleRender();
+      }
+      return;
+    }
+    if (line === '/clear-all') {
       runtime.resetSession();
       runtime.workspace.clearCheckpoint();
       state.lines = [];
@@ -2057,7 +2096,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       state.outTokens = 0;
       state.cacheTokens = 0;
       state.chatVer++;
-      push('system', 'Started a completely fresh session.');
+      push('system', 'Cleared all session context.');
       scheduleRender();
       return;
     }
@@ -3827,39 +3866,10 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     subscribeTab(activeTabId, runtime);
     void refreshGitStats(); // seed the status bar diff stats
 
-    // Populate recent sessions into top tabs on startup (OpenCode parity)
-    try {
-      const { SessionStore } = await import('../state/session-store.js');
-      const store = new SessionStore(projectRoot);
-      const recents = store.list(3);
-      if (recents.length > 0 && !initialPrompt) {
-        tabs.rename(activeTabId, 'Session 1');
-        tabs.setStatus(activeTabId, 'idle');
-        runtime.activeSessionId = undefined;
-        for (let i = 0; i < Math.min(2, recents.length); i++) {
-          const s = recents[i];
-          const tabInfo = tabs.create(slugTitle(s.objective || s.summary || `Session ${i + 2}`));
-          tabs.setStatus(tabInfo.id, 'done');
-          const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
-          rt.activeSessionId = s.id;
-          const st = freshTabState();
-          st.splashDismissed = true;
-          const sMsgs = store.messages(s.id);
-          for (const m of sMsgs) {
-            if (m.role === 'user') pushTo(st, 'user', m.content);
-            else if (m.role === 'assistant') pushTo(st, 'assistant', m.content);
-            else if (m.role === 'system') pushTo(st, 'system', m.content);
-          }
-          tabStates.set(tabInfo.id, st);
-          tabRuntimes.set(tabInfo.id, rt);
-          subscribeTab(tabInfo.id, rt);
-        }
-        tabs.switchTo(0);
-        activeTabId = tabs.activeTab().id;
-        state = tabStates.get(activeTabId) as AppState;
-        runtime = tabRuntimes.get(activeTabId) as Runtime;
-      }
-    } catch { /* best effort */ }
+    // Clean fresh startup: single session tab ready for immediate work
+    tabs.rename(activeTabId, 'Session 1');
+    tabs.setStatus(activeTabId, 'idle');
+    runtime.activeSessionId = undefined;
 
     // Cozy one-time welcome: first launch ever shows the onboarding banner
     // as transcript lines (one-time popup). Dismissed forever once the user

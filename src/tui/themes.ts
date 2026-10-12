@@ -173,7 +173,7 @@ export function canvasBg(): string {
   if (honorsNoColor()) return '';
   if ((process.env.TERM ?? '').toLowerCase() === 'dumb') return '';
   if (!themeIsDark(getCurrentTheme())) return '';
-  return supportsTruecolor() ? '\x1b[48;2;0;0;0m' : '\x1b[48;5;16m';
+  return supportsTruecolor() ? '\x1b[48;2;10;10;10m' : '\x1b[48;5;232m';
 }
 
 /** True when the terminal advertises 24-bit color support. */

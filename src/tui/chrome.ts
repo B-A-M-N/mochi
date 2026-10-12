@@ -31,15 +31,15 @@ export function chromeLayout(opts: {
 }): ChromeLayout {
   const { w, h, inputText, busy } = opts;
   const topRows = opts.topRows ?? 0;
-  const statusRows = h >= 22 ? 2 : 1;
+  const statusRows = h >= 20 ? 3 : 2;
   const innerW = Math.max(1, w - 6);
   const rawRows = inputText ? wrap(inputText, innerW) : [''];
   // Composer expands as the user types, up to 1/3 of screen height.
   // In short windowed mode (h < 24) use 3 rows for single-line input, 4 for multiline.
-  const minComposer = h < 24 ? (rawRows.length > 1 ? 4 : 3) : 3;
+  const minComposer = h < 24 ? (rawRows.length > 1 ? 4 : 3) : 4;
   const composerRows = Math.min(Math.max(minComposer, Math.floor(h / 3)), rawRows.length + 2);
-  // Bottom consists of composer box + status & footer rows (no floating clutter above composer)
-  const bottomRows = composerRows + statusRows;
+  // Bottom consists of composer, status bars, and the auto-approve row.
+  const bottomRows = composerRows + statusRows + 1;
   const contentH = Math.max(1, h - bottomRows - topRows);
   const indent = opts.indent ?? 2;
   const chatMw = Math.min(w - indent * 2, Math.max(24, w - 4));

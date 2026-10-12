@@ -249,14 +249,14 @@ describe('canvasBg (capability-aware black canvas)', () => {
     process.env.TERM = 'xterm-256color';
     process.env.COLORTERM = 'truecolor';
   };
-  it('emits 24-bit black on truecolor dark themes', () => {
+  it('emits 24-bit dark gray (10,10,10) on truecolor dark themes', () => {
     reset();
-    expect(canvasBg()).toBe('\x1b[48;2;0;0;0m');
+    expect(canvasBg()).toBe('\x1b[48;2;10;10;10m');
   });
-  it('emits palette black (16) on 256-color terms — never 24-bit codes', () => {
+  it('emits palette dark gray (232) on 256-color terms — never 24-bit codes', () => {
     reset();
     delete process.env.COLORTERM;
-    expect(canvasBg()).toBe('\x1b[48;5;16m');
+    expect(canvasBg()).toBe('\x1b[48;5;232m');
   });
   it('stays transparent for NO_COLOR and dumb terms', () => {
     reset();
