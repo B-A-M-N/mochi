@@ -50,8 +50,11 @@ describe('mochi_core native Rust engine', () => {
 
   it('searches directory and extracts outline hints', () => {
     if (isNativeCoreAvailable()) {
-      const res = nativeSearchDir(process.cwd(), 'createTuiState', '*.ts', 10);
-      expect(res).toContain('src/tui/state.ts');
+      // Scope to the module's own dir: a whole-repo crawl with a top-10 cap
+      // is traversal-order dependent (CI runners fill the cap with test/dist
+      // copies of the symbol, dropping the defining file — flaked red).
+      const res = nativeSearchDir(process.cwd() + '/src/tui', 'createTuiState', '*.ts', 10);
+      expect(res).toContain('state.ts');
     }
   });
 
