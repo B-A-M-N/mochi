@@ -1573,6 +1573,12 @@ Continue from 'Next:', do not redo completed progress.`,
           // the task's maxIterations budget with zero agent work.
           const isCooldown = /cooling down/i.test(rMsg) || /cooling down/i.test(message);
           if (isCooldown) {
+            // When an entire provider is in cooldown, fail over to the next configured
+            // provider FIRST so we do not loop candidate models on the broken endpoint.
+            if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
+              continue;
+            }
             const alt = this.pickAlternateModel();
             if (alt) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[cooldown] Provider cooling down. Failing over to ${alt}` });
@@ -1580,14 +1586,11 @@ Continue from 'Next:', do not redo completed progress.`,
               i = Math.max(0, i - 1);
               continue;
             }
-            if (this.switchToNextProvider()) {
-              i = Math.max(0, i - 1);
-              continue;
-            }
             this.cooldownRetries++;
             if (this.cooldownRetries <= 2) {
-              const waitMs = 5000 * this.cooldownRetries;
-              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[cooldown] Provider cooling down; pausing ${waitMs / 1000}s before retry (${this.cooldownRetries}/2)` });
+              const waitMatch = /try again in ~?([\d.]+)s/i.exec(rMsg || message);
+              const waitMs = waitMatch ? Math.max(1200, Math.ceil(parseFloat(waitMatch[1]) * 1000) + 500) : 5000 * this.cooldownRetries;
+              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[cooldown] Provider cooling down; pausing ${(waitMs / 1000).toFixed(1)}s before retry (${this.cooldownRetries}/2)` });
               await new Promise((r) => setTimeout(r, waitMs));
               i = Math.max(0, i - 1);
               continue;
@@ -1602,16 +1605,16 @@ Continue from 'Next:', do not redo completed progress.`,
           // Failover & queue strategy for repeated rate limits: switch to an alternate model or queue backoff.
           // Same transport-retry accounting as stalls/cooldowns: not a task iteration.
           if (rMsg.toLowerCase().includes('429') || rMsg.toLowerCase().includes('rate limit')) {
+            if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
+              continue;
+            }
             const alt = this.pickAlternateModel();
             if (alt) {
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[rate-limit] Primary model exhausted. Failing over to ${alt}` });
               this.setActiveModel(alt);
               i = Math.max(0, i - 1);
               continue; // Restart the loop iteration with the new model
-            }
-            if (this.switchToNextProvider()) {
-              i = Math.max(0, i - 1);
-              continue;
             }
             this.rateLimitRetries++;
             if (this.rateLimitRetries <= 3) {
@@ -2564,6 +2567,8 @@ Continue from 'Next:', do not redo completed progress.`,
     this.config.model = { ...this.config.model, model: modelId };
     this.provider = createProvider(this.config.model, this.profile.defaultModel ?? 'coding');
     this.providers.clear();
+    this.cooldownRetries = 0;
+    this.rateLimitRetries = 0;
   }
 
   /** Switch to the next available provider in config.model.failover if models
@@ -2592,6 +2597,8 @@ Continue from 'Next:', do not redo completed progress.`,
       this.provider = createProvider(this.config.model, this.profile.defaultModel ?? 'coding');
       this.providers.clear();
       this.triedFallbackModels.clear();
+      this.cooldownRetries = 0;
+      this.rateLimitRetries = 0;
       return true;
     }
     return false;

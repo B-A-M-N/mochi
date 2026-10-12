@@ -210,7 +210,7 @@ Usage:
   mochi team "..."
   mochi plan "..."
   mochi self-train [N] [focus]        # cycles of self-review + skill curation
-  mochi resume
+  mochi resume [<sessionId|goalId>]       # resume a session (latest or by ID)
   mochi checkpoint [save <name>|list|restore <name>]  # named snapshots & rollback
   mochi docgen [--write]             # generate architecture diagram & API reference
   mochi rollback
@@ -632,13 +632,43 @@ async function main() {
     return;
   }
   if (first === 'resume') {
+    // mochi resume [sessionId|goalId] - resume a specific session/goal by ID,
+    // or the latest if no argument given. Session IDs from the TUI/farewell
+    // screen are goal IDs (short 8-char form works). If a session/tab ID is
+    // given that doesn't match a goal, we also check the session store for
+    // an associated goal_id.
+    const goalId = positional[1];
     const goals = runtime.workspace.listGoals();
     if (goals.length === 0) { console.log('No saved goals to resume.'); return; }
-    const latest = goals[goals.length - 1].replace(/\.json$/, '');
-    const goal = runtime.workspace.loadGoal(latest);
+    let goal;
+    if (goalId) {
+      // Support both short (8-char) and full goal IDs
+      let fullId = goals.find((g) => g.startsWith(goalId) || g.replace(/\.json$/, '') === goalId);
+      // If not found as a goal, check session store for a session with this ID
+      if (!fullId) {
+        const { SessionStore } = await import('./state/session-store.js');
+        const { findProjectRoot } = await loadRepoModule();
+        const sessionStore = new SessionStore(findProjectRoot(runtime.cwd));
+        // Try exact match first
+        let session = sessionStore.session(goalId);
+        // If not found and it looks like a short ID (8 chars), try prefix match
+        if (!session && goalId.length === 8) {
+          const sessions = sessionStore.list(1000);
+          session = sessions.find((s) => s.id.startsWith(goalId));
+        }
+        if (session?.goalId) {
+          fullId = session.goalId + '.json';
+        }
+      }
+      if (!fullId) { console.log(`Goal/session not found: ${goalId}`); return; }
+      goal = runtime.workspace.loadGoal(fullId.replace(/\.json$/, ''));
+    } else {
+      const latest = goals[goals.length - 1].replace(/\.json$/, '');
+      goal = runtime.workspace.loadGoal(latest);
+    }
     if (!goal) { console.log('Goal not found.'); return; }
     const tasks = runtime.workspace.loadTasks(goal.id);
-    console.log(`Resuming goal: ${goal.objective}`);
+    console.log(`Resuming goal: ${goal.objective} (${goal.id.slice(0, 8)})`);
     const result = await runtime.goals.runGoal(goal, tasks);
     console.log(result.summary);
     return;

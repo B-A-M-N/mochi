@@ -228,6 +228,9 @@ export class Runtime {
   /** Reset active conversation session. */
   resetSession(): void {
     this.activeSessionId = undefined;
+    try {
+      this.workspace.clearCheckpoint();
+    } catch { /* best effort */ }
   }
 
   /** List all tools available in this runtime, returning lightweight metadata. */
