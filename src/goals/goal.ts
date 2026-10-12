@@ -10,10 +10,10 @@ import { Agent } from '../agent/loop.js';
 import { AgentProfileService } from '../agents/profile.js';
 import { BudgetEngine } from '../budget.js';
 import { VerifierEngine, captureBaseline, type VerificationBaseline } from '../verification.js';
-import { SessionStore, hasSqlite } from '../session-store.js';
+import { SessionStore, hasSqlite } from '../state/session-store.js';
 import { HookManager } from '../hooks.js';
-import { classifyOneShot } from '../one-shot.js';
-import { consolidate } from '../consolidate.js';
+import { classifyOneShot } from '../core/one-shot.js';
+import { consolidate } from '../memory/consolidate.js';
 import { resolve } from 'node:path';
 import type { ReadCache } from '../tools/types.js';
 
@@ -251,7 +251,7 @@ Return ONLY the JSON array, no markdown.`;
     // Reuse a recent baseline (5-min TTL) so the 2nd+ prompt in a session
     // skips the expensive shell-command capture that freezes the TUI.
     const allTasks = tasks ?? this.workspace.loadTasks(goal.id);
-    const { classifyTaskKind } = await import('../taskkind.js');
+    const { classifyTaskKind } = await import('../core/taskkind.js');
     const isOnlyChatOrResearch = allTasks.length > 0 && allTasks.every((t) => {
       const k = classifyTaskKind(t);
       return k === 'chat' || k === 'research';

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { doctorReport, formatDoctor } from './doctor.js';
-import { addJob } from './cron.js';
+import { addJob } from './daemon/cron.js';
 
 let dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });

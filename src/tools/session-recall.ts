@@ -1,4 +1,4 @@
-import { SessionStore, hasSqlite } from '../session-store.js';
+import { SessionStore, hasSqlite } from '../state/session-store.js';
 import type { Tool } from './types.js';
 
 export const sessionRecallTool: Tool = {

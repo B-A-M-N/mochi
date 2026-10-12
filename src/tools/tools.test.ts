@@ -241,7 +241,7 @@ describe('analyze_code', () => {
 
 describe('session_recall', () => {
   it('searches and lists sessions and fetches transcript', async () => {
-    const { SessionStore } = await import('../session-store.js');
+    const { SessionStore } = await import('../state/session-store.js');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-sessrecall-'));
     const store = new SessionStore(dir);
     const sid = store.begin({ goalId: 'goal-42', objective: 'Implement oauth token refresher' });

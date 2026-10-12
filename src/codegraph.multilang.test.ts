@@ -11,7 +11,7 @@ import {
   LANGUAGES,
   loadTreeSitter,
   getParserBackend,
-} from './codegraph.js';
+} from './repo/codegraph.js';
 
 // node:sqlite exists only on Node >= 22.5; on older runtimes the codegraph
 // degrades to "index unavailable" and these tests cannot assert anything.
@@ -178,7 +178,7 @@ maybeDescribe('codegraph tsc fallback backend', () => {
     process.env.MOCHI_CPG_BACKEND = 'tsc';
     try {
       // Fresh module instance so the env is picked up at init time.
-      const mod = await import('./codegraph.js?force-tsc=' + Date.now());
+      const mod = await import('./repo/codegraph.js?force-tsc=' + Date.now());
       await mod.ensureParserLoaded();
       expect(mod.getParserBackend()).toBe('tsc');
       writeFileSync(resolve(cwd, 'lib.ts'), 'export function tscFn(x: number): number { return x * 2; }\n');

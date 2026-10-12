@@ -27,7 +27,7 @@
 import { existsSync, readdirSync, statSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, isAbsolute } from 'node:path';
 import { execFile } from 'node:child_process';
-import { parseFrontmatter, safeSlug } from '../skill-manager.js';
+import { parseFrontmatter, safeSlug } from '../skills/skill-manager.js';
 
 export interface ImportedSkillInfo {
   name: string;

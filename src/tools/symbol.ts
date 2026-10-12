@@ -1,5 +1,5 @@
 import type { Tool } from './types.js';
-import { getFunctionSynapse, findCallers, typeHierarchy, ensureParserLoaded } from '../codegraph.js';
+import { getFunctionSynapse, findCallers, typeHierarchy, ensureParserLoaded } from '../repo/codegraph.js';
 
 // Code Property Graph-lite: tree-sitter (WASM) + SQLite symbol graph across
 // TS/JS, Python, Rust, Go, Java, and C/C++.

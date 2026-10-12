@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runSkillDoctor, extractVerificationSnippet } from './skill-curator.js';
-import { markUsed, archiveRoot } from './skill-manager.js';
+import { runSkillDoctor, extractVerificationSnippet } from './skills/skill-curator.js';
+import { markUsed, archiveRoot } from './skills/skill-manager.js';
 
 describe('Skill Regression Doctor (MCH-20)', () => {
   let projectDir: string;

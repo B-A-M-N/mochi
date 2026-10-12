@@ -9,7 +9,7 @@
 
 import type { CapabilityRegistry } from './capability-registry.js';
 import type { CapabilityContext, CapabilityExecutionResponse } from './capability.js';
-import { diagnoseFile, renderDiagnostics } from '../diagnostics.js';
+import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import { ExecutionRegistry } from './execution-registry.js';
 import { resolve } from 'node:path';
 

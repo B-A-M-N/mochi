@@ -11,7 +11,7 @@
 // branch-racer execution half needs a git repo fixture per trial and is tracked
 // separately in the ledger. Quality deltas here are planning-quality deltas.
 // Run with: npx tsx bench/speculation.mjs  (imports TS sources directly)
-import { SpeculativeEngine } from '../src/speculative.js';
+import { SpeculativeEngine } from '../src/agent/speculative.js';
 import { SpeculativeBranchRacer } from '../src/core/branch-racer.js';
 import { BudgetEngine } from '../src/budget.js';
 import { startFakeOpenAI } from '../src/testutil/fake-openai.js';

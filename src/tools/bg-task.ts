@@ -1,5 +1,5 @@
 import type { Tool } from './types.js';
-import { listTasks, getTask, killTask, describeTask } from '../background-tasks.js';
+import { listTasks, getTask, killTask, describeTask } from '../daemon/background-tasks.js';
 
 export const bgTaskTool: Tool = {
   def: {

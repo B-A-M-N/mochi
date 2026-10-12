@@ -9,7 +9,7 @@ import { join } from 'node:path';
 // real-store dedup and cross-run dedup regardless of which file binds.
 const tmpFile = join(mkdtempSync('/tmp/mochi-mem-'), 'memory.jsonl');
 process.env['MOCHI_MEMORY_FILE'] = tmpFile;
-const { addFact, recallFacts, memorySimilarity } = await import('./memory-store.js');
+const { addFact, recallFacts, memorySimilarity } = await import('./memory/memory-store.js');
 
 const R = Math.random().toString(36).slice(2, 8); // per-run uniqueness
 

@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { ContextEngine } from './context.js';
-import { discoverSkills, bundledSkillsDir } from './skills.js';
+import { discoverSkills, bundledSkillsDir } from './skills/skills.js';
 import type { MochiConfig, ToolDefinition } from './types.js';
 
 let dir: string;

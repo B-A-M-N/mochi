@@ -3,7 +3,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { recordPrefetchOutcome, prefetchSignalWeights, prefetchFiles } from './prefetch.js';
+import { recordPrefetchOutcome, prefetchSignalWeights, prefetchFiles } from './core/prefetch.js';
 
 let dir = '';
 afterAll(() => { if (dir) try { rmSync(dir, { recursive: true, force: true }); } catch {} });

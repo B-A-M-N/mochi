@@ -273,15 +273,21 @@ describe('canvasBg (capability-aware black canvas)', () => {
     const { tmpdir } = await import('node:os');
     const { resolve } = await import('node:path');
     const prevHome = process.env.HOME;
+    const prevCwd = process.cwd();
     const prevTheme = getCurrentTheme().id;
     const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
     try {
       process.env.HOME = fakeHome;
+      // applyTheme also writes <cwd>/.mochi/theme.json — sandbox cwd too or
+      // this test poisons the real repo's theme file (regression: dracula
+      // hijacked the next launch in ~/mochi).
+      process.chdir(fakeHome);
       applyTheme('paper-light');
       expect(getCurrentTheme().id).toBe('paper-light');
       expect(canvasBg()).toBe('');
     } finally {
       applyTheme(prevTheme);
+      process.chdir(prevCwd);
       if (prevHome === undefined) delete process.env.HOME;
       else process.env.HOME = prevHome;
       rmSync(fakeHome, { recursive: true, force: true });

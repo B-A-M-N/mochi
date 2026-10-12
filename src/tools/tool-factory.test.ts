@@ -7,7 +7,7 @@ import {
   loadAuthoredTools, refreshAuthoredTools, validateManifest,
   runAuthoredCommand, toolFactoryTool, RESERVED_TOOL_NAMES,
 } from './tool-factory.js';
-import { safeSlug } from '../skill-manager.js';
+import { safeSlug } from '../skills/skill-manager.js';
 import type { ToolContext } from './types.js';
 
 let proj: string;

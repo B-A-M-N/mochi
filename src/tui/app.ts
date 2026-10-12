@@ -1,10 +1,10 @@
 import {highlightRange} from './selection.js';
 import { execFile, spawn } from 'node:child_process';
 import { basename, resolve } from 'node:path';
-import { findProjectRoot } from '../repo.js';
+import { findProjectRoot } from '../repo/repo.js';
 import { Runtime } from '../runtime.js';
 import type { MochiEvent } from '../types.js';
-import { PROVIDERS, providerById } from '../providers.js';
+import { PROVIDERS, providerById } from '../model/providers.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
@@ -13,10 +13,10 @@ import { prefersReducedMotion, applyTheme, canvasBg } from './themes.js';
 import { TabManager, tabBarCells, tabBarHit } from './tabs.js';
 import { chromeLayout } from './chrome.js';
 import pkg from '../../package.json' with { type: 'json' };
-import { kvCache } from '../kv-cache.js';
-import { prefetchBadge } from '../prefetch.js';
-import { recordFeedback } from '../feedback.js';
-import type { FeedbackVerdict } from '../feedback.js';
+import { kvCache } from '../model/kv-cache.js';
+import { prefetchBadge } from '../core/prefetch.js';
+import { recordFeedback } from '../observability/feedback.js';
+import type { FeedbackVerdict } from '../observability/feedback.js';
 import { formatModes, isMode } from '../modes.js';
 import type { AgentMode } from '../modes.js';
 import {
@@ -1503,8 +1503,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       scheduleRender();
       return;
     }
-    if (line === '/status' || line === '/changes') { await run(async () => (await import('../git.js')).status(projectRoot)); return; }
-    if (line === '/diff') { await run(async () => (await import('../git.js')).diff(projectRoot)); return; }
+    if (line === '/status' || line === '/changes') { await run(async () => (await import('../repo/git.js')).status(projectRoot)); return; }
+    if (line === '/diff') { await run(async () => (await import('../repo/git.js')).diff(projectRoot)); return; }
     if (line === '/mode' || line.startsWith('/mode ')) {
       const specific = line.startsWith('/mode ') ? line.slice(6).trim() : '';
       if (!specific) {
@@ -1567,13 +1567,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/memory') { await run(async () => runtime.memory() || 'No project memory yet.'); return; }
     if (line === '/rules') {await run(async () => { const { listRules} = await import('../contract.js'); const r = listRules(runtime.cwd); if (r.length === 0) return 'No MOCHI.md rules yet. Try: /rules add <rule>'; return r.map((x, i) => `${i + 1}. ${x}`).join('\n'); }); return; }
     if (line.startsWith('/rules add ')) { await run(async () => { const { appendRule } = await import('../contract.js'); const rule = line.slice('/rules add '.length).trim(); if (!rule) return 'empty rule'; const r = appendRule(runtime.cwd, rule); return `appended → ${r.file}`; }); return; }
-    if (line === '/facts') { await run(async () => { const { memoryDigest } = await import('../memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
-    if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
-    if (line.startsWith('/forget ')) { await run(async () => { const { forgetFact } = await import('../memory-store.js'); const q = line.slice(8).trim(); if (!q) return 'usage: /forget <substring|id>'; const n = forgetFact(q); return `forgot ${n} fact(s)`; }); return; }
-    if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Press g/b on an assistant turn to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
+    if (line === '/facts') { await run(async () => { const { memoryDigest } = await import('../memory/memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
+    if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory/memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
+    if (line.startsWith('/forget ')) { await run(async () => { const { forgetFact } = await import('../memory/memory-store.js'); const q = line.slice(8).trim(); if (!q) return 'usage: /forget <substring|id>'; const n = forgetFact(q); return `forgot ${n} fact(s)`; }); return; }
+    if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../observability/feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Press g/b on an assistant turn to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
     if (line === '/circle') { await run(async () => {
       const { detectCircle } = await import('../circle.js');
-      const { SessionStore } = await import('../session-store.js');
+      const { SessionStore } = await import('../state/session-store.js');
       const store = new SessionStore(projectRoot);
       const sid = runtime.activeSessionId;
       const messages = sid ? store.messages(sid).map((m) => ({ role: m.role as 'assistant' | 'user' | 'system' | 'tool', content: m.content })) : [];
@@ -1683,7 +1683,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line.startsWith('/compact')) { push('system', 'Context compaction is managed automatically.'); return; }
     if (line === '/doctor' || line === '/settings') {
       await run(async () => {
-        const { describeConfig } = await import('../model-manager.js');
+        const { describeConfig } = await import('../model/model-manager.js');
         return `${describeConfig(runtime.config)}\n\nmodel: ${runtime.config.model.model}\ncat: config`;
       });
       return;
@@ -1780,7 +1780,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         // /skills search <keywords> — interactive discovery over every loaded
         // skill (local + user + bundled), usage-boosted, picker to preview.
         const q = specific === 'search' ? '' : specific.slice(7).trim();
-        const { loadAllSkills, searchSkills, readSkillBody, loadSkillUsage, usageBoostMap } = await import('../skills.js');
+        const { loadAllSkills, searchSkills, readSkillBody, loadSkillUsage, usageBoostMap } = await import('../skills/skills.js');
         const { skills } = loadAllSkills(projectRoot);
         const runSearch = async (query: string) => {
           const usage = loadSkillUsage(projectRoot);
@@ -1810,9 +1810,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         // usage counters, last curator report. Proves the skill tree is
         // ALIVE instead of just listing it.
         await run(async () => {
-          const { loadAllSkills } = await import('../skills.js');
+          const { loadAllSkills } = await import('../skills/skills.js');
           const { skills } = loadAllSkills(projectRoot);
-          const { scanSkills, defaultCuratorConfig, loadCuratorState } = await import('../skill-curator.js');
+          const { scanSkills, defaultCuratorConfig, loadCuratorState } = await import('../skills/skill-curator.js');
           const cfg = defaultCuratorConfig();
           const snap = scanSkills(runtime.cwd, cfg);
           const st = loadCuratorState(runtime.cwd);
@@ -1832,7 +1832,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         return;
       }
       if (specific) {
-        const { loadAllSkills, readSkillBody } = await import('../skills.js');
+        const { loadAllSkills, readSkillBody } = await import('../skills/skills.js');
         const { skills } = loadAllSkills(projectRoot);
         const sk = skills.find((s) => s.name === specific || s.name.toLowerCase().includes(specific.toLowerCase()));
         if (!sk) {
@@ -1910,7 +1910,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     }
     if (line === '/rename' || line.startsWith('/rename ')) {
       const specific = line.startsWith('/rename ') ? line.slice(8).trim() : '';
-      const { SessionStore } = await import('../session-store.js');
+      const { SessionStore } = await import('../state/session-store.js');
       const store = new SessionStore(projectRoot);
       const list = store.list(1);
       const target = list[0];
@@ -2111,7 +2111,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     if (line === '/commit') {
       const msg = await ask('Commit message:');
       await run(async () => {
-        const { checkpoint } = await import('../git.js');
+        const { checkpoint } = await import('../repo/git.js');
         const cp = await checkpoint(projectRoot, msg || 'mochi commit');
         return `Committed ${cp.type} ${cp.ref}`;
       });
@@ -2143,7 +2143,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const cp = runtime.workspace.readJson<{ ref: string; type: 'commit' | 'stash'; message: string }>('checkpoints/latest.json');
       if (!cp) { push('system', 'No checkpoint yet. Run /checkpoint first.'); return; }
       await run(async () => {
-        const { restore } = await import('../git.js');
+        const { restore } = await import('../repo/git.js');
         await restore(projectRoot, cp);
         return `Restored ${cp.type} ${cp.ref}`;
       });
@@ -2172,7 +2172,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const cpJson = runtime.workspace.readJson<{ ref: string; type: 'commit' | 'stash'; message: string }>('checkpoints/latest.json');
       if (!cpJson) { push('system', 'No checkpoint found. Use /checkpoint first.'); return; }
       await run(async () => {
-        const { restore } = await import('../git.js');
+        const { restore } = await import('../repo/git.js');
         await restore(projectRoot, cpJson);
         return `[REWIND] Rewound to ${cpJson.type} ${cpJson.ref} — "${cpJson.message}"`;
       });
@@ -2291,7 +2291,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
    *  replacement objective and re-plans; reject clears the pending plan. */
   async function reviewPlan(objective: string, planText: string) {
     try {
-      const { findPriorPlan } = await import('../plan-cache.js');
+      const { findPriorPlan } = await import('../core/plan-cache.js');
       const prior = findPriorPlan(runtime.workspace.dir, objective);
       if (prior) {
         const prevTaskCount = prior.plan.split('\n').filter((l) => l.startsWith('- [ ]')).length;
@@ -2384,7 +2384,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
   async function runTest(extra: string) {
     await run(async () => {
-      const { detectRepo } = await import('../repo.js');
+      const { detectRepo } = await import('../repo/repo.js');
       const repo = detectRepo(projectRoot);
       const cmd = extra ? `node --run ${extra} 2>/dev/null || ${repo.testCommand}` : (repo.testCommand ?? 'no test command detected');
       const { runShellString } = await import('../exec.js');
@@ -2518,7 +2518,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   async function skillsMenu() {
-    const { loadAllSkills, readSkillBody } = await import('../skills.js');
+    const { loadAllSkills, readSkillBody } = await import('../skills/skills.js');
     const { skills } = loadAllSkills(projectRoot);
     if (!skills.length) {
       push('system', 'No skills found in catalog or project.');
@@ -2605,7 +2605,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   async function historySessionMenu() {
-    const { SessionStore } = await import('../session-store.js');
+    const { SessionStore } = await import('../state/session-store.js');
     const store = new SessionStore(projectRoot);
     const sessions = store.list(40);
 

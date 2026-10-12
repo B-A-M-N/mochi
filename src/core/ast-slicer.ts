@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
-import { findCallers, hasSqlite } from '../codegraph.js';
+import { findCallers, hasSqlite } from '../repo/codegraph.js';
 
 export interface ASTSliceOptions {
   cwd: string;

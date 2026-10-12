@@ -7,7 +7,7 @@ import { join } from 'node:path';
 const dir = mkdtempSync(join(tmpdir(), 'mochi-mch63-'));
 process.env['MOCHI_MEMORY_FILE'] = join(dir, 'memory.jsonl');
 
-const store = await import('./memory-store.js');
+const store = await import('./memory/memory-store.js');
 
 afterAll(() => {
   delete process.env['MOCHI_MEMORY_FILE'];

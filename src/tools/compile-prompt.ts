@@ -8,7 +8,7 @@
 
 import type { Tool } from './types.js';
 import { promptCompiler, type CompilerReasoningLevel } from '../prompt/prompt-compiler.js';
-import { detectRepo } from '../repo.js';
+import { detectRepo } from '../repo/repo.js';
 
 const VALID_TIERS = new Set<string>(['low', 'medium', 'med', 'high', 'max', 'auto', 'off']);
 

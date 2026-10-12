@@ -1,5 +1,5 @@
 import type { ModelConfig, ModelProfile, StreamChunk, ModelResponse, ChatMessage, ToolDefinition } from '../types.js';
-import { PROVIDERS } from '../providers.js';
+import { PROVIDERS } from './providers.js';
 import { createOpenAIProvider, type ProviderConfig } from './openai.js';
 import { createAnthropicProvider } from './anthropic.js';
 import { createGeminiProvider } from './gemini.js';

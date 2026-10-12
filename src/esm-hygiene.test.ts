@@ -9,7 +9,7 @@ import { readdirSync, readFileSync, statSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bundledSkillsDir } from './skills.js';
+import { bundledSkillsDir } from './skills/skills.js';
 
 const srcDir = dirname(dirname(fileURLToPath(import.meta.url)));
 

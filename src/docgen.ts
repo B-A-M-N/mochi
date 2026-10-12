@@ -23,8 +23,8 @@ export interface ProjectDocs {
 
 const CODE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.cpp', '.c']);
 
-/** Find all source code files in the directory */
-function scanSourceFiles(dir: string, maxFiles = 100): string[] {
+/** Find all source code files in the directory (recursive, tests excluded). */
+function scanSourceFiles(dir: string, maxFiles = 500): string[] {
   const files: string[] = [];
   const stack = [dir];
 
@@ -44,7 +44,8 @@ function scanSourceFiles(dir: string, maxFiles = 100): string[] {
       const full = resolve(curr, entry.name);
       if (entry.isDirectory()) {
         stack.push(full);
-      } else if (entry.isFile() && CODE_EXTS.has(extname(entry.name).toLowerCase())) {
+      } else if (entry.isFile() && CODE_EXTS.has(extname(entry.name).toLowerCase())
+                 && !entry.name.includes('.test.') && !entry.name.endsWith('.d.ts')) {
         files.push(full);
       }
     }

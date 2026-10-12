@@ -1,4 +1,4 @@
-import { computeSymbolBlastRadius } from '../codegraph.js';
+import { computeSymbolBlastRadius } from '../repo/codegraph.js';
 import type { Tool } from './types.js';
 
 export const blastRadiusTool: Tool = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { searchSkills, type Skill } from './skills.js';
+import { searchSkills, type Skill } from './skills/skills.js';
 
 const mk = (name: string, description: string): Skill => ({ name, description, path: `/s/${name}` });
 const CORPUS: Skill[] = [

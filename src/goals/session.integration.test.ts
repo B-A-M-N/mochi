@@ -10,7 +10,7 @@ import { EventBus } from '../events.js';
 import { GoalEngine } from './goal.js';
 import { createTask } from './task.js';
 import { startFakeOpenAI } from '../testutil/fake-openai.js';
-import { SessionStore, hasSqlite } from '../session-store.js';
+import { SessionStore, hasSqlite } from '../state/session-store.js';
 
 const maybeDescribe = hasSqlite() ? describe : describe.skip;
 let fake: Awaited<ReturnType<typeof startFakeOpenAI>>;

@@ -7,7 +7,7 @@
 
 | Path | What |
 |---|---|
-| `src/` | TypeScript frontend: agent loop, tools, TUI, providers, daemon, SDK. Tests live next to sources (`*.test.ts`). |
+| `src/` | TypeScript frontend, sorted into topical dirs: `agent/`, `model/` (providers/router/usage), `stream/` (SSE+parsers), `memory/`, `skills/`, `state/`, `security/`, `daemon/` (cron/scheduler), `repo/` (git/codegraph), `observability/`, `core/`, `tools/` (72), `tui/`, `mcp/`, `cognitive/`, `chameleon/`, `prompt/`, `summary/`, `goals/`, `teams/`, `native/`, `utils/`. Root keeps entrypoints only (`cli.ts`, `index.ts`, `runtime.ts`, `sdk.ts`, `config.ts`, `types.ts`, `context.ts`, `util.ts`, …). Tests live next to sources (`*.test.ts`). |
 | `native/` | Rust core (`mochi_core/`) + C++/Rust accelerators. Built artifacts go to `native/bin/` (gitignored). |
 | `dist/` | Compiled output (`tsc`) + `mochi-bin` (bun bundle). Gitignored, rebuilt via `npm run build` / `build:bin`. |
 | `scripts/` | Build/test/dev scripts (`browser-driver.mjs`, `check-skips.mjs`, `sync-version.mjs`, …). |

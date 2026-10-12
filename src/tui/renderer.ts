@@ -1,4 +1,4 @@
-import type { UIRegion } from '../stream-events.js';
+import type { UIRegion } from '../stream/stream-events.js';
 
 export interface RenderStats {
   frames: number;

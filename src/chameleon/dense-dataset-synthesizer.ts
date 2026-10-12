@@ -10,8 +10,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { AdaptiveMoE, MicroExpert } from './adaptive-moe.js';
 import { classifyTask, TaskDomain } from './task-classifier.js';
-import { detectRepo } from '../repo.js';
-import { querySymbolGraphSync, hasSqlite } from '../codegraph.js';
+import { detectRepo } from '../repo/repo.js';
+import { querySymbolGraphSync, hasSqlite } from '../repo/codegraph.js';
 
 export interface DenseSyntheticDataset {
   objective: string;

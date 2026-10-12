@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import type { Tool } from './types.js';
-import { loadAllSkills, readSkillBody, recordSkillUsage } from '../skills.js';
-import type { Skill } from '../skills.js';
+import { loadAllSkills, readSkillBody, recordSkillUsage } from '../skills/skills.js';
+import type { Skill } from '../skills/skills.js';
 
 // The `skill` tool lets the model load a reusable, task-specific instruction
 // file on demand (agentskills.io spec). Along with listing available skills in

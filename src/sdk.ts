@@ -15,9 +15,9 @@
 //  - remote (Mochi.connect): POSTs to the daemon's /api/* endpoints. Shares
 //    workspace state, cron, and the SSE stream with the running daemon.
 import { Runtime } from './runtime.js';
-import { SessionStore } from './session-store.js';
-import { addFact, recallFacts } from './memory-store.js';
-import { loadAllSkills, searchSkills } from './skills.js';
+import { SessionStore } from './state/session-store.js';
+import { addFact, recallFacts } from './memory/memory-store.js';
+import { loadAllSkills, searchSkills } from './skills/skills.js';
 import { addMcpServerConfig } from './tools/mcp-manage.js';
 import type { MochiConfig, MochiEvent } from './types.js';
 

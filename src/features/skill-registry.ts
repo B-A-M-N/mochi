@@ -23,8 +23,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { safeSlug } from '../skill-manager.js';
-import { parseFrontmatter } from '../skill-manager.js';
+import { safeSlug } from '../skills/skill-manager.js';
+import { parseFrontmatter } from '../skills/skill-manager.js';
 
 // ─── Registry state ────────────────────────────────────────────────────────
 

@@ -6,29 +6,29 @@ import { contentText } from '../types.js';
 import type { EventBus } from '../events.js';
 import type { Workspace } from '../workspace.js';
 import { ContextEngine, approxTokens } from '../context.js';
-import { MemoryStore } from '../memory.js';
-import { projectMemoryPrefix, recordProjectMemory } from '../project-memory.js';
-import { loadReadCache, saveReadCache } from '../read-cache-store.js';
+import { MemoryStore } from '../memory/memory.js';
+import { projectMemoryPrefix, recordProjectMemory } from '../memory/project-memory.js';
+import { loadReadCache, saveReadCache } from '../state/read-cache-store.js';
 import { createProvider } from '../model/router.js';
-import { PROVIDERS } from '../providers.js';
+import { PROVIDERS } from '../model/providers.js';
 import { isMode, modeInstruction } from '../modes.js';
-import { kvCache } from '../kv-cache.js';
+import { kvCache } from '../model/kv-cache.js';
 import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTools } from '../tools/index.js';
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
-import { detectRepo, languageHint } from '../repo.js';
-import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../taskkind.js';
+import { detectRepo, languageHint } from '../repo/repo.js';
+import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../core/taskkind.js';
 import { trimToLeanTier } from '../tools/index.js';
-import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model-router.js';
+import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
-import { diagnoseFile, renderDiagnostics } from '../diagnostics.js';
+import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
 import { AgentProfileService } from '../agents/profile.js';
 import { BudgetEngine, estimateCostUsd } from '../budget.js';
-import { SpeculativeEngine } from '../speculative.js';
-import { retrieveSpeculationMemory, recordSpeculationOutcome, speculationMemoryToPrompt, predictNextFiles } from '../speculative.js';
+import { SpeculativeEngine } from './speculative.js';
+import { retrieveSpeculationMemory, recordSpeculationOutcome, speculationMemoryToPrompt, predictNextFiles } from './speculative.js';
 import { join } from 'node:path';
-import { detectSkillOpportunities, opportunitiesToPrompt, shouldRunCurator, runCurator, recordCuratorRun, defaultCuratorConfig } from '../skill-curator.js';
+import { detectSkillOpportunities, opportunitiesToPrompt, shouldRunCurator, runCurator, recordCuratorRun, defaultCuratorConfig } from '../skills/skill-curator.js';
 import { LearningStore } from '../learning.js';
 import { classifyFailure as classifyErrorPattern } from '../learning.js';
 import {
@@ -39,14 +39,14 @@ import {
   diagnosisToPrompt,
   type Hypothesis,
   type DiagnosisResult,
-} from '../diagnosis.js';
+} from '../observability/diagnosis.js';
 import {
   loadOrCreateAutopsy,
   appendAttempt,
   finalizeAutopsy,
   autopsyOneLine,
   type Autopsy,
-} from '../autopsy.js';
+} from '../observability/autopsy.js';
 import {
   retrieveLessons,
   recordLesson,
@@ -58,15 +58,15 @@ import { resolve, extname } from 'node:path';
 import { statSync, existsSync, readFileSync } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { condenseOutput } from '../core/output-condenser.js';
-import { autoTestCommand, isWeakVerification, cwdForScope, withCwd } from '../testdetect.js';
-import { classifyOneShot } from '../one-shot.js';
-import { classifyContentOnly } from '../one-shot.js';
+import { autoTestCommand, isWeakVerification, cwdForScope, withCwd } from '../core/testdetect.js';
+import { classifyOneShot } from '../core/one-shot.js';
+import { classifyContentOnly } from '../core/one-shot.js';
 import { buildMcpTools } from '../mcp/tools.js';
-import { preEditSnapshot as gitPreEditSnapshot, rollbackToSnapshot as gitRollback, type CheckpointResult } from '../git.js';
+import { preEditSnapshot as gitPreEditSnapshot, rollbackToSnapshot as gitRollback, type CheckpointResult } from '../repo/git.js';
 import { applyToolOutputPolicy } from '../core/tool-output.js';
 import { scrubAnsiFragments } from '../tui/ansi-hygiene.js';
 import { nativeStripThinkTags } from '../native/core.js';
-import { maybeRedact } from '../security.js';
+import { maybeRedact } from '../security/security.js';
 import { LoopStateMachine } from './loop-state.js';
 import { scanDiffForHygiene, renderHygieneFindings, type HygieneFinding } from '../core/diff-hygiene.js';
 import { parseCompilerDiagnostics, renderCompilerAdvisory } from './error-diagnostics.js';
@@ -383,7 +383,7 @@ export class Agent {
   private crossToolResultHash = new Map<string, { tool: string; count: number }>();
   /** MCH-61: prefetch effectiveness ledger — this run's prediction list and
    *  the cache keys warmed at start (warm ≠ read; excluded from hit counts). */
-  private prefetchLedger: import('../prefetch.js').PrefetchEntry[] = [];
+  private prefetchLedger: import('../core/prefetch.js').PrefetchEntry[] = [];
   private prefetchWarmed = new Set<string>();
   private readCache: ReadCache;
   private planMode: boolean;
@@ -397,7 +397,7 @@ export class Agent {
   private selfReviewCount = 0;
   private taskRunExecuted = false;
   private finishHintSent = false;
-  private taskKind?: import('../taskkind.js').TaskKind;
+  private taskKind?: import('../core/taskkind.js').TaskKind;
   private task?: import('../types.js').Task;
   private contextCutoffNudged = false;
   private lastCompletionAnswer = '';
@@ -588,7 +588,7 @@ export class Agent {
     // MCH-47: warm-start from the plan cache — if a similar task previously
     // succeeded with an accepted plan, surface it as a starting hypothesis.
     try {
-      const { findPriorPlan } = await import('../plan-cache.js');
+      const { findPriorPlan } = await import('../core/plan-cache.js');
       const priorPlan = findPriorPlan(this.workspace.dir, task.title, task.description ?? '');
       if (priorPlan) {
         this.context.addMessage({
@@ -601,7 +601,7 @@ export class Agent {
     // (PageRank over the codegraph symbol graph) so the model plans around
     // hub files instead of discovering them by trial and error.
     try {
-      const { repoMapText } = await import('../repo-map.js');
+      const { repoMapText } = await import('../repo/repo-map.js');
       const mapText = repoMapText(this.workspace.dir);
       if (mapText) {
         this.context.addMessage({ role: 'system', content: mapText });
@@ -610,7 +610,7 @@ export class Agent {
     // MCH-50: prefetch — fused structural+temporal+runtime prediction of the
     // files this task will likely read next.
     try {
-      const pf = await import('../prefetch.js');
+      const pf = await import('../core/prefetch.js');
       // MCH-54: seed the temporal signal with this run's actual read footprint
       // (main loop) — subagents start with an empty footprint, which is fine.
       const touched = Array.from(this.readCache.keys()).slice(-10);
@@ -632,7 +632,7 @@ export class Agent {
     } catch { /* prefetch must never affect task start */ }
     // MCH-52: surface mined tool-route patterns from past successful runs.
     try {
-      const { loadToolSeqs, toolPatternText } = await import('../tool-sequence.js');
+      const { loadToolSeqs, toolPatternText } = await import('../core/tool-sequence.js');
       const patText = toolPatternText(loadToolSeqs(this.workspace.dir));
       if (patText) this.context.addMessage({ role: 'system', content: patText });
     } catch { /* tool-seq injection must never affect task start */ }
@@ -793,7 +793,7 @@ Continue from 'Next:', do not redo completed progress.`,
       if (allowCompiler && (resolvedTier === 'high' || resolvedTier === 'max' || resolvedTier === 'medium')) {
         try {
           const { promptCompiler } = await import('../prompt/prompt-compiler.js');
-          const { detectRepo: detectRepoForCompiler } = await import('../repo.js');
+          const { detectRepo: detectRepoForCompiler } = await import('../repo/repo.js');
           const cRepo = detectRepoForCompiler(this.cwd);
           const tier = resolvedTier;
           const spec = promptCompiler.compile(
@@ -897,7 +897,7 @@ Continue from 'Next:', do not redo completed progress.`,
       sm.beginIteration(i);
       // Deliver completed background tasks as events into the transcript.
       try {
-        const { listTasks, describeTask } = await import('../background-tasks.js');
+        const { listTasks, describeTask } = await import('../daemon/background-tasks.js');
         for (const t of listTasks()) {
           if (t.status !== 'running' && t.endedAt && !bgDelivered.has(t.id)) {
             bgDelivered.add(t.id);
@@ -2780,7 +2780,7 @@ Continue from 'Next:', do not redo completed progress.`,
     // drives the co-change signal, so children land pre-oriented on the files
     // the parent was actually working in). Best-effort.
     try {
-      const { prefetchText } = await import('../prefetch.js');
+      const { prefetchText } = await import('../core/prefetch.js');
       const touched = Array.from(this.readCache.keys()).slice(-10);
       const childHint = prefetchText(this.workspace.dir, touched);
       if (childHint) childContext.addMessage({ role: 'system', content: childHint });
@@ -4400,7 +4400,7 @@ Continue from 'Next:', do not redo completed progress.`,
     // win-rate (wins/loads) self-corrects the MCH-40 relevance boost.
     try {
       const { getSkillsLoadedThisRun, clearSkillsLoadedThisRun } = await import('../tools/skill.js');
-      const { recordSkillUsage } = await import('../skills.js');
+      const { recordSkillUsage } = await import('../skills/skills.js');
       for (const name of getSkillsLoadedThisRun()) recordSkillUsage(this.workspace.dir, name, success === true);
       clearSkillsLoadedThisRun();
     } catch { /* skill outcome attribution must never affect task completion */ }
@@ -4410,7 +4410,7 @@ Continue from 'Next:', do not redo completed progress.`,
     // auto-prune it (MAX_FAILS) and the success-ratio term in recallFacts
     // starts ranking live facts over dead ones. Mirrors MCH-57 skill wins.
     try {
-      const { takeSurfacedFactIds, recordFactAttempt } = await import('../memory-store.js');
+      const { takeSurfacedFactIds, recordFactAttempt } = await import('../memory/memory-store.js');
       for (const id of takeSurfacedFactIds()) recordFactAttempt(id, success === true);
     } catch { /* fact attribution must never affect task completion */ }
     this.mcpClose?.();
@@ -4434,7 +4434,7 @@ Continue from 'Next:', do not redo completed progress.`,
       // pair has now succeeded ≥2 times and no skill covers it, draft one from
       // the run's real lessons. Best-effort; never affects completion.
       try {
-        const { autoDraftSkill } = await import('../skill-curator.js');
+        const { autoDraftSkill } = await import('../skills/skill-curator.js');
         for (const pattern of this.seenPatterns) {
           const rec = this.learning.bestStrategy(pattern);
           if (!rec || rec.successes < 2) continue;
@@ -4455,7 +4455,7 @@ Continue from 'Next:', do not redo completed progress.`,
       try {
         const planText = this.planAcceptedText?.trim();
         if (planText && planText.length > 40) {
-          const { recordPlanSuccess } = await import('../plan-cache.js');
+          const { recordPlanSuccess } = await import('../core/plan-cache.js');
           recordPlanSuccess(this.workspace.dir, task.title, task.description ?? '', planText);
         }
       } catch { /* plan-cache must never affect task completion */ }
@@ -4477,7 +4477,7 @@ Continue from 'Next:', do not redo completed progress.`,
       // predictions against what was actually read (warmed entries excluded).
       try {
         if (this.prefetchLedger.length > 0) {
-          const { recordPrefetchOutcome } = await import('../prefetch.js');
+          const { recordPrefetchOutcome } = await import('../core/prefetch.js');
           const warmedAbs = new Set(Array.from(this.prefetchWarmed));
           const actualReads = Array.from(this.readCache.keys()).filter((k) => !warmedAbs.has(k));
           recordPrefetchOutcome(this.workspace.dir, this.prefetchLedger, actualReads);
@@ -4495,13 +4495,13 @@ Continue from 'Next:', do not redo completed progress.`,
       } catch { /* project memory must never affect task completion */ }
       // MCH-52: persist this run's tool sequence for route-pattern mining.
       try {
-        const { loadToolSeqs, saveToolSeq } = await import('../tool-sequence.js');
+        const { loadToolSeqs, saveToolSeq } = await import('../core/tool-sequence.js');
         if (this.toolSeq.length > 0) saveToolSeq(this.workspace.dir, loadToolSeqs(this.workspace.dir), this.toolSeq);
         // MCH-55: habitual opening routes become auto-drafted skills.
-        const { draftSkillFromToolRoutes } = await import('../skill-curator.js');
+        const { draftSkillFromToolRoutes } = await import('../skills/skill-curator.js');
         await draftSkillFromToolRoutes(this.workspace.dir);
         // MCH-56: archive stale never-used auto skills so the list stays dense.
-        const { curateAutoSkills } = await import('../skill-manager.js');
+        const { curateAutoSkills } = await import('../skills/skill-manager.js');
         curateAutoSkills(this.workspace.dir);
       } catch { /* tool-route persistence must never affect task completion */ }
     }

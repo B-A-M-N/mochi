@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { computeSymbolBlastRadius } from '../codegraph.js';
+import { computeSymbolBlastRadius } from '../repo/codegraph.js';
 import { blastRadiusTool } from './blast-radius.js';
 
 describe('Blast Radius AST Dependency Analyzer', () => {

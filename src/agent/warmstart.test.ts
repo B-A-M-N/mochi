@@ -10,7 +10,7 @@ import { ContextEngine } from '../context.js';
 import { EventBus } from '../events.js';
 import { Workspace } from '../workspace.js';
 import { createTask } from '../goals/task.js';
-import { appendAttempt, loadOrCreateAutopsy } from '../autopsy.js';
+import { appendAttempt, loadOrCreateAutopsy } from '../observability/autopsy.js';
 import { startFakeOpenAI } from '../testutil/fake-openai.js';
 import type { MochiConfig } from '../types.js';
 

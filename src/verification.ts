@@ -1,16 +1,16 @@
 import { execArgvText, runShellString } from './exec.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { diff as gitDiff, status as gitStatus } from './git.js';
-import { detectRepo } from './repo.js';
+import { diff as gitDiff, status as gitStatus } from './repo/git.js';
+import { detectRepo } from './repo/repo.js';
 import { createProvider } from './model/router.js';
 import { HookManager } from './hooks.js';
 import type { EventBus } from './events.js';
 import type { MochiConfig, Task } from './types.js';
 import type { Workspace } from './workspace.js';
 import { BudgetEngine } from './budget.js';
-import { runMutationCheck, type MutationCheck } from './mutation.js';
-import { classifyContentOnly } from './one-shot.js';
+import { runMutationCheck, type MutationCheck } from './core/mutation.js';
+import { classifyContentOnly } from './core/one-shot.js';
 
 function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string> {
   return execArgvText(cmd, args, { cwd, maxBuffer: 4 * 1024 * 1024 });

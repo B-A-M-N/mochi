@@ -8,7 +8,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { redact } from './security.js';
+import { redact } from './security/security.js';
 
 export interface Lesson {
   id: string;

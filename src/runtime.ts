@@ -3,22 +3,22 @@ import type { MochiConfig } from './types.js';
 import { EventBus } from './events.js';
 import { Workspace } from './workspace.js';
 import { GoalEngine } from './goals/goal.js';
-import { findProjectRoot } from './repo.js';
-import { SessionStore } from './session-store.js';
+import { findProjectRoot } from './repo/repo.js';
+import { SessionStore } from './state/session-store.js';
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkpoint as gitCheckpoint, restore as gitRestore, type CheckpointResult } from './git.js';
+import { checkpoint as gitCheckpoint, restore as gitRestore, type CheckpointResult } from './repo/git.js';
 import { HookManager } from './hooks.js';
 import { AgentProfileService } from './agents/profile.js';
-import { MemoryStore } from './memory.js';
-import { RetrievalEngine } from './retrieval.js';
-import { SpeculativeEngine, type SpeculativeResult } from './speculative.js';
+import { MemoryStore } from './memory/memory.js';
+import { RetrievalEngine } from './memory/retrieval.js';
+import { SpeculativeEngine, type SpeculativeResult } from './agent/speculative.js';
 import { BudgetEngine } from './budget.js';
-import {currentConfig, login as doLogin, selectProviderById, describeConfig, listModelsForProvider} from './model-manager.js';
-import { UsageStore } from './usage.js';
+import {currentConfig, login as doLogin, selectProviderById, describeConfig, listModelsForProvider} from './model/model-manager.js';
+import { UsageStore } from './model/usage.js';
 import { buildTools } from './tools/index.js';
 import { applyMode, modeInstruction, MODE_IDS, isMode } from './modes.js';
-import { loadConfigFile, saveConfigFile } from './providers.js';
+import { loadConfigFile, saveConfigFile } from './model/providers.js';
 
 export interface RuntimeOptions {
   cwd?: string;
@@ -279,7 +279,7 @@ export class Runtime {
 
   /** Shared execution: records a run trace, then delegates to GoalEngine. */
   private async runGoalTraced(goal: import('./types.js').Goal, tasks: import('./types.js').Task[], objective: string, opts?: { enhance?: boolean; enhanceMode?: string }, isPlan = this.config.planMode, signal?: AbortSignal): Promise<{ summary: string; result: import('./goals/goal.js').GoalResult }> {
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
       const extra = await this.enhancedCtx(objective, opts);
@@ -432,7 +432,7 @@ export class Runtime {
 
     // Persist lessons as durable skills after the cycles (curator pass).
     try {
-      const { runCurator, defaultCuratorConfig } = await import('./skill-curator.js');
+      const { runCurator, defaultCuratorConfig } = await import('./skills/skill-curator.js');
       const co = runCurator(this.cwd, defaultCuratorConfig());
       const curatorSummary = `scanned ${co.scanned}, agent-authored ${co.agentCreated}, stale ${co.stale.length}, archived ${co.archived.length}, consolidated ${co.consolidated.length}${co.reportPath ? `\nreport: ${co.reportPath}` : ''}`;
       reports.push(`## Skill curator\n${curatorSummary}\n`);
@@ -481,7 +481,7 @@ export class Runtime {
     // Real team run: decompose, assign specialist roles (coder/tester/
     // reviewer/...), and execute through the scheduler concurrently.
     const { runTeam } = await import('./teams/team.js');
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const goal = await this.goals.createGoal(objective);
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
@@ -529,7 +529,7 @@ export class Runtime {
     if (!tasks.length) return `Goal ${goalId.slice(0, 8)} has no tasks to resume.`;
     goal.status = 'active';
     this.workspace.saveGoal(goal);
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
       const result = await this.goals.runGoal(goal, tasks, [], this.abortSignal);
@@ -591,7 +591,7 @@ export class Runtime {
     goal.tasks.push(task.id);
     this.workspace.saveGoal(goal);
     this.workspace.saveTasks(goal.id, [task]);
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
       const result = await this.goals.runGoal(goal, [task], [], this.abortSignal, sessionId);
@@ -634,7 +634,7 @@ export class Runtime {
       `Review the following input (a diff, crash log, or code snippet) for correctness, security, and regressions. Respond with structured findings, one per line: [SEVERITY] file:line message, where SEVERITY is HIGH, MEDIUM, LOW, or INFO. Be specific and cite the file (or '(unknown)' when no file applies).\n\nINPUT:\n${input.slice(0, 120_000)}`,
       { role: 'reviewer', acceptanceCriteria: [], dependencies: [] },
     );
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
       const result = await this.goals.runGoal(goal, [task], [], this.abortSignal);
@@ -651,7 +651,7 @@ export class Runtime {
     const goal = await this.goals.createGoal('Fix the issue described by the provided input.');
     const task = (await this.goals.decompose(goal))[0];
     task.description = `${task.description}\n\nCONTEXT FROM PIPE:\n${input.slice(0, 120_000)}`;
-    const { TraceRecorder } = await import('./trace.js');
+    const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
       const result = await this.goals.runGoal(goal, [task], [], this.abortSignal);
@@ -713,7 +713,7 @@ export class Runtime {
   }
 
   private async runChecks(): Promise<Record<string, string>> {
-    const { detectRepo } = await import('./repo.js');
+    const { detectRepo } = await import('./repo/repo.js');
     const info = detectRepo(this.cwd);
     const commands: Record<string, string> = {};
     if (info.testCommand) commands.test = info.testCommand;

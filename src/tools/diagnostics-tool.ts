@@ -1,5 +1,5 @@
 import type { Tool } from './types.js';
-import { diagnoseFile, renderDiagnostics } from '../diagnostics.js';
+import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 

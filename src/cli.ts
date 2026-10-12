@@ -18,7 +18,7 @@ if (!process.env.NODE_COMPILE_CACHE) {
     enableCompileCache(cacheDir);
   } catch { /* read-only home or pre-22 node — run without cache */ }
 }
-import { findProjectRoot } from './repo.js';
+import { findProjectRoot } from './repo/repo.js';
 import type { MochiConfig } from './types.js';
 
 // Resolve the version from package.json when running from source; when Mochi is
@@ -337,7 +337,7 @@ async function main() {
   let effectiveCwd = process.cwd();
   let worktreeInfo;
   if (flags.worktree || flags.w) {
-    const { WorktreeManager } = await import('./worktree.js');
+    const { WorktreeManager } = await import('./repo/worktree.js');
     const { join: pJoin } = await import('node:path');
     const mochiDir = pJoin(effectiveCwd, '.mochi');
     const wtManager = new WorktreeManager(effectiveCwd, mochiDir);
@@ -354,7 +354,7 @@ async function main() {
   const configOverrides = configFromFlags(flags);
   const { Runtime } = await import('./runtime.js');
   const { randomSlug } = await import('./util.js');
-  const { status, diff, isRepo } = await import('./git.js');
+  const { status, diff, isRepo } = await import('./repo/git.js');
   const runtime = Runtime.create({ cwd, config: configOverrides });
 
   // Permission policy — propagate --yolo / --uncensored / env var to the runtime object so
@@ -383,7 +383,7 @@ async function main() {
   // `mochi daemon ...` — persistent agent over localhost HTTP.
   if (first === 'daemon') {
     const action = positional[1];
-    const { startDaemon, daemonRunning, readDaemonInfo, daemonInfoPath } = await import('./daemon.js');
+    const { startDaemon, daemonRunning, readDaemonInfo, daemonInfoPath } = await import('./daemon/daemon.js');
     const wsDir = runtime.workspace.dir;
     const info = readDaemonInfo(wsDir);
     if (action === 'start') {
@@ -627,13 +627,13 @@ async function main() {
       const name = positional[2];
       const desc = positional.slice(3).join(' ');
       if (!name) { console.log('Usage: mochi checkpoint save <name> ["description"]'); return; }
-      const { saveNamedCheckpoint } = await import('./checkpoint-manager.js');
+      const { saveNamedCheckpoint } = await import('./state/checkpoint-manager.js');
       const cp = await saveNamedCheckpoint(cwd, name, desc);
       console.log(`Saved named checkpoint "${cp.name}" (SHA: ${cp.gitCommitSha.slice(0, 7)})`);
       return;
     }
     if (sub === 'list' || sub === 'ls') {
-      const { listNamedCheckpoints } = await import('./checkpoint-manager.js');
+      const { listNamedCheckpoints } = await import('./state/checkpoint-manager.js');
       const list = listNamedCheckpoints(cwd);
       if (!list.length) { console.log('No named checkpoints found. Use: mochi checkpoint save <name>'); return; }
       console.log(`🍡 Saved Checkpoints (${list.length}):\n`);
@@ -645,7 +645,7 @@ async function main() {
     if (sub === 'restore' || sub === 'load') {
       const name = positional[2];
       if (!name) { console.log('Usage: mochi checkpoint restore <name>'); return; }
-      const { restoreNamedCheckpoint } = await import('./checkpoint-manager.js');
+      const { restoreNamedCheckpoint } = await import('./state/checkpoint-manager.js');
       const res = await restoreNamedCheckpoint(cwd, name);
       console.log(res.message);
       return;
@@ -730,7 +730,7 @@ async function main() {
   if (first === 'term' || first === 'terminal' || first === 'open') {
     // Native terminal window: Mochi in its OWN emulator (black bg, monospace,
     // known geometry) instead of inheriting the caller's terminal quirks.
-    const { launchInNewTerminal } = await import('./terminal-launch.js');
+    const { launchInNewTerminal } = await import('./utils/terminal-launch.js');
     // Parse RAW argv (the global parser eats a bare `--` plus the word after
     // it as a flag value, which would swallow forwarded subcommands).
     const aliasIdx = process.argv.findIndex((a) => a === 'term' || a === 'terminal' || a === 'open');
@@ -821,7 +821,7 @@ async function main() {
     }
   }
   if (first === 'skills') {
-    const {loadAllSkills} = await import('./skills.js');
+    const {loadAllSkills} = await import('./skills/skills.js');
     const sub = positional[1];
     if (sub === 'import' || sub === 'import-skills') {
       // mochi skills import <source> [--force] — alias handled inline so the
@@ -1116,7 +1116,7 @@ async function main() {
     return;
   }
   if (first === 'bg') {
-    const { listTasks, getTask, describeTask, killTask } = await import('./background-tasks.js');
+    const { listTasks, getTask, describeTask, killTask } = await import('./daemon/background-tasks.js');
     const sub = positional[1];
     if (sub === 'list' || !sub) {
       const all = listTasks();
@@ -1166,7 +1166,7 @@ async function main() {
   }
   if (first === 'dashboard' || first === 'web') {
     const wsDir = resolve(cwd, '.mochi');
-    const { readDaemonInfo, startDaemon, daemonRunning } = await import('./daemon.js');
+    const { readDaemonInfo, startDaemon, daemonRunning } = await import('./daemon/daemon.js');
     let info = readDaemonInfo(wsDir);
     if (!info || !daemonRunning(wsDir)) {
       const r = await startDaemon({ cwd, config: configOverrides });
@@ -1222,7 +1222,7 @@ async function main() {
     const summary = await runtime.fix(piped.trim() ? piped : explicit);
     console.log(summary);
     if (flags['auto-commit'] || flags.commit) {
-      const { checkpoint } = await import('./git.js');
+      const { checkpoint } = await import('./repo/git.js');
       const cp = await checkpoint(cwd, 'mochi fix');
       console.log(`Auto-commit: ${cp.ref} (${cp.type})`);
     }
@@ -1285,7 +1285,7 @@ async function main() {
     return;
   }
   if (first === 'perf') {
-    const { benchmarkStream, formatPerfReport } = await import('./perf.js');
+    const { benchmarkStream, formatPerfReport } = await import('./observability/perf.js');
     const count = flags.chunks ? Number(flags.chunks) : 10000;
     console.log(formatPerfReport(benchmarkStream(count)));
     return;
@@ -1325,17 +1325,17 @@ async function main() {
     return;
   }
   if (first === 'providers') {
-    const { PROVIDERS } = await import('./providers.js');
+    const { PROVIDERS } = await import('./model/providers.js');
     for (const p of PROVIDERS) console.log(p.id.padEnd(14) + ' ' + p.name);
     return;
   }
   if (first === 'login' || first === 'use') {
-    const { providerById } = await import('./providers.js');
+    const { providerById } = await import('./model/providers.js');
     const provider = positional[1];
     const model = positional[2];
     if (!provider) {
       console.log('Usage: mochi login <provider> [model]');
-      const { PROVIDERS } = await import('./providers.js');
+      const { PROVIDERS } = await import('./model/providers.js');
       for (const p of PROVIDERS) console.log('  ' + p.id.padEnd(14) + p.name);
       return;
     }
@@ -1347,7 +1347,7 @@ async function main() {
       return;
     }
     const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel) : await runtime.useProvider(p.id, model || p.defaultModel);
-    const { redact } = await import('./security.js');
+    const { redact } = await import('./security/security.js');
     console.log(redact(info));
     return;
   }
@@ -1385,7 +1385,7 @@ async function main() {
   }
   if (first === 'doctor') {
     const { doctorReport, formatDoctor, repairDoctor } = await import('./doctor.js');
-    const { daemonRunning, readDaemonInfo } = await import('./daemon.js');
+    const { daemonRunning, readDaemonInfo } = await import('./daemon/daemon.js');
     const wsDir = findProjectRoot(runtime.cwd);
     
     if (flags.repair || flags.fix || positional[1] === 'repair' || positional[1] === 'fix') {
@@ -1423,7 +1423,7 @@ async function main() {
     return;
   }
   if (first === 'test') {
-    const { detectRepo } = await import('./repo.js');
+    const { detectRepo } = await import('./repo/repo.js');
     const repo = detectRepo(cwd);
     const cmd = repo.testCommand ?? 'no test command detected';
     const { execFile } = await import('node:child_process');
@@ -1447,7 +1447,7 @@ async function main() {
     return;
   }
   if (first === 'commit') {
-    const { checkpoint } = await import('./git.js');
+    const { checkpoint } = await import('./repo/git.js');
     const cp = await checkpoint(cwd, positional.slice(1).join(' ') || 'mochi commit');
     console.log(`Committed ${cp.type} ${cp.ref}`);
     return;
@@ -1484,7 +1484,7 @@ async function main() {
     // process, no auto-launch: all panes are in-process agent sessions on the
     // same configured provider. The user chooses how many splits, then whether
     // they communicate over a shared channel or stay separate.
-    const { termix } = await import('./termix.js');
+    const { termix } = await import('./tui/termix.js');
     const isTTY = Boolean(process.stdin.isTTY);
 
     // Helper: read a single line from stdin (only used when a TTY is present).
@@ -1570,7 +1570,7 @@ async function main() {
 
 
   if (first === 'session') {
-    const { SessionStore, hasSqlite } = await import('./session-store.js');
+    const { SessionStore, hasSqlite } = await import('./state/session-store.js');
     if (!hasSqlite()) { console.log('Session store needs a SQLite driver (Node >= 22.5 or the bun binary).'); return; }
     // GoalEngine persists sessions under the PROJECT ROOT (.mochi/sessions.sqlite);
     // workspace.dir is already that root's .mochi subdir. Use the same key the
@@ -1605,7 +1605,7 @@ async function main() {
   }
 
   if (first === 'trace') {
-    const { readTrace, formatTrace } = await import('./trace.js');
+    const { readTrace, formatTrace } = await import('./observability/trace.js');
     const id = positional[1] ?? '';
     const ids = id ? [id] : [];
     if (!ids.length) {

@@ -1,4 +1,4 @@
-import { MemoryStore } from '../memory.js';
+import { MemoryStore } from '../memory/memory.js';
 import type { Tool } from './types.js';
 
 export const memoryTool: Tool = {

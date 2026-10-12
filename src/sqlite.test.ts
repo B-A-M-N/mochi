@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { hasSqlite, sqliteSource, openDb } from './sqlite.js';
-import { SessionStore, hasSqlite as storeHasSqlite } from './session-store.js';
+import { SessionStore, hasSqlite as storeHasSqlite } from './state/session-store.js';
 
 describe('sqlite driver adapter', () => {
   it('detects a driver on this runtime (node:sqlite or bun:sqlite)', () => {

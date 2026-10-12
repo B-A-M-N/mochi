@@ -5,7 +5,7 @@ import {
   buildChatCompletion,
   encodeSSEDone,
   type SSEToolCall,
-} from '../sse-encode.js';
+} from '../stream/sse-encode.js';
 
 // Test harness fake for the OpenAI-compatible wire protocol.
 //

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import {
   loadSpeculationMemory, recordSpeculationOutcome, retrieveSpeculationMemory, speculationMemoryToPrompt,
-} from './speculative.js';
+} from './agent/speculative.js';
 
 let ws: string;
 beforeEach(() => {

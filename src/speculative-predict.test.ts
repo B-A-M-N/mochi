@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { predictNextFiles } from './speculative.js';
+import { predictNextFiles } from './agent/speculative.js';
 
 describe('predictNextFiles (MCH-43 co-change prefetch)', () => {
   let dir: string;

@@ -17,7 +17,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, statSync } from 'node:fs';
 import {join, dirname} from 'node:path';
-import { safeSlug } from '../skill-manager.js';
+import { safeSlug } from '../skills/skill-manager.js';
 import type { Tool, ToolContext } from './types.js';
 import { recordToolUsage, toolUsageLine } from './tool-usage.js';
 import type { ToolDefinition } from '../types.js';

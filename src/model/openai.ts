@@ -3,7 +3,7 @@ import { contentText } from '../types.js';
 import { ProviderError, describeModelError, parseRetryAfter } from '../utils/http-error.js';
 import { withRetries, classifyError } from './rate-limit.js';
 import { nextKey, retireKey } from './credential-pool.js';
-import { kvCache } from '../kv-cache.js';
+import { kvCache } from './kv-cache.js';
 import { nativeAssembleStream } from '../native/agent-protocol.js';
 
 function logBackoff(attempt: number, delayMs: number, err: unknown): void {

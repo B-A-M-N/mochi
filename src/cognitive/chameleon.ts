@@ -159,7 +159,7 @@ export async function primeScaffold(task: string, cwd = process.cwd(), _unused?:
     let root = cwd;
     try { const { homedir } = await import('node:os'); if (resolve(cwd) === homedir()) root = ''; } catch {}
     if (root) {
-      try { const cg = await import('../codegraph.js'); await cg.warmCodegraph(root, langs); } catch { /* best-effort */ }
+      try { const cg = await import('../repo/codegraph.js'); await cg.warmCodegraph(root, langs); } catch { /* best-effort */ }
     }
     s = synthesizeDeterministicContext(task, cwd);
     _scaffoldCache.set(key, s);

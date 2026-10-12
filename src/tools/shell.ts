@@ -1,5 +1,5 @@
 import type { Tool } from './types.js';
-import { classifyCommand } from '../security.js';
+import { classifyCommand } from '../security/security.js';
 
 // Accumulation guard only (memory safety against firehose output). The final
 // RESULT the model sees is clipped to the shared tool-result budget by
@@ -53,7 +53,7 @@ export const shellTool: Tool = {
 
     // Background task management surface: `bg status <id>` / `bg list` / `bg kill <id>` / `bg logs <id>`.
     if (command === 'bg list' || command.startsWith('bg status') || command.startsWith('bg kill') || command.startsWith('bg logs')) {
-      const { listTasks, getTask, describeTask, killTask } = await import('../background-tasks.js');
+      const { listTasks, getTask, describeTask, killTask } = await import('../daemon/background-tasks.js');
       if (command.startsWith('bg kill')) {
         const id = command.split(/\s+/)[2];
         if (!id) return 'Usage: bg kill <task-id>';
@@ -87,7 +87,7 @@ export const shellTool: Tool = {
     }
 
     if (args.background === true) {
-      const { startBackgroundTask, describeTask } = await import('../background-tasks.js');
+      const { startBackgroundTask, describeTask } = await import('../daemon/background-tasks.js');
       const t = startBackgroundTask(command, ctx.cwd, {
         description: typeof args.description === 'string' ? args.description : undefined,
       });

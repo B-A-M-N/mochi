@@ -2,8 +2,8 @@ import { describe, it, expect, afterAll } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadToolSeqs, saveToolSeq } from './tool-sequence.js';
-import { draftSkillFromToolRoutes } from './skill-curator.js';
+import { loadToolSeqs, saveToolSeq } from './core/tool-sequence.js';
+import { draftSkillFromToolRoutes } from './skills/skill-curator.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'mochi-route-skill-'));
 afterAll(() => { try { rmSync(dir, { recursive: true, force: true }); } catch {} });

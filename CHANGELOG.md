@@ -1,6 +1,10 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Source reorganization** — `src/` sorted from 88 flat root modules into topical dirs (`model/`, `stream/`, `memory/`, `skills/`, `state/`, `security/`, `daemon/`, `repo/`, `observability/`, plus `core/` and friends); 99 files moved with every relative import rewritten mechanically, verified by `tsc` + full suite. Root now holds entrypoints only.
+- **Dead code removal** — deleted 5 unreferenced modules + tests (`core/context-budget`, `core/git-plumbing`, `model/dual-dispatch`, `prompt/prompt-expander`, `stream-degen`), proven unimported via compiler move-away trial before removal.
+- **docgen now covers the whole tree** — scan cap 100→500 files, test files excluded from the architecture graph, recursive walk catches every subdir (ARCHITECTURE.md: 78→298 modules, 778→3105 symbols).
+- **Theme test sandbox hole closed** — `stays transparent on light themes` sandboxed `HOME` but not cwd, so `applyTheme` wrote a real `<repo>/.mochi/theme.json` (dracula) on every test run, hijacking the next launch. Cwd now sandboxed; real files restored to `mochi-purple`.
 - **Repo hygiene** — MIT LICENSE added (was declared but missing; now ships in the tarball), stale Sep-14 coordination docs + `ok.txt` dogfood junk removed, 4x duplicated 1.3MB gif deduped to one, new `TECHMAP.md` maps every repo path so nothing is mystery meat. — 1–6 sweep: publish-ready, committed, faster, correct, audited, cross-platform
 
 - **Anthropic prompt-cache breakpoints (token efficiency)** — `src/model/anthropic.ts` mirrors the OpenAI MCH-38 pattern: the stable system prompt ships as one `cache_control: ephemeral` block instead of being rebilled every turn (~5KB × every iteration). Empty-system wire shape unchanged. Pinned by `src/model/anthropic.test.ts` (blocks, omission, multimodal flattening).

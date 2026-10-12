@@ -6,8 +6,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {existsSync, writeFileSync, mkdirSync} from 'node:fs';
 import { resolve, dirname, relative, isAbsolute } from 'node:path';
-import { WorktreeManager } from '../worktree.js';
-import { detectRepo } from '../repo.js';
+import { WorktreeManager } from '../repo/worktree.js';
+import { detectRepo } from '../repo/repo.js';
 
 const execFileAsync = promisify(execFile);
 

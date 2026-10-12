@@ -8,13 +8,13 @@ export { Agent } from './agent/loop.js';
 export { ContextEngine } from './context.js';
 export { BudgetEngine } from './budget.js';
 export { HookManager } from './hooks.js';
-export { MemoryStore } from './memory.js';
-export { consolidate } from './consolidate.js';
-export { RetrievalEngine } from './retrieval.js';
+export { MemoryStore } from './memory/memory.js';
+export { consolidate } from './memory/consolidate.js';
+export { RetrievalEngine } from './memory/retrieval.js';
 export { VerifierEngine } from './verification.js';
-export { SpeculativeEngine } from './speculative.js';
-export { FastEventBus } from './fast-events.js';
-export { StreamParser } from './stream-parser.js';
+export { SpeculativeEngine } from './agent/speculative.js';
+export { FastEventBus } from './stream/fast-events.js';
+export { StreamParser } from './stream/stream-parser.js';
 export {
   encodeSSEChunk,
   encodeSSEDone,
@@ -27,13 +27,13 @@ export {
   type SSEWireUsage,
   type SSEToolCall,
   type SSEChunk,
-} from './sse-encode.js';
-export { StateStore } from './state-store.js';
-export { BatchScheduler } from './scheduler.js';
-export { PerformancePipeline } from './performance-pipeline.js';
+} from './stream/sse-encode.js';
+export { StateStore } from './state/state-store.js';
+export { BatchScheduler } from './daemon/scheduler.js';
+export { PerformancePipeline } from './observability/performance-pipeline.js';
 export { AnsiRenderer } from './tui/renderer.js';
-export { benchmarkStream, formatPerfReport } from './perf.js';
+export { benchmarkStream, formatPerfReport } from './observability/perf.js';
 export { LearningStore } from './learning.js';
-export { UsageStore } from './usage.js';
+export { UsageStore } from './model/usage.js';
 export { AgentProfileService } from './agents/profile.js';
 export * from './types.js';

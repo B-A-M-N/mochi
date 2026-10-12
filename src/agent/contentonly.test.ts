@@ -12,7 +12,7 @@ import { EventBus } from '../events.js';
 import { Workspace } from '../workspace.js';
 import { createTask } from '../goals/task.js';
 import { startFakeOpenAI } from '../testutil/fake-openai.js';
-import { classifyContentOnly } from '../one-shot.js';
+import { classifyContentOnly } from '../core/one-shot.js';
 import type { MochiConfig } from '../types.js';
 
 function makeConfig(dir: string, url: string): MochiConfig {

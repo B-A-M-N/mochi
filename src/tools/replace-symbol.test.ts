@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { replaceSymbol } from './replace-symbol.js';
-import { getFunctionSynapse, ensureParserLoaded, hasSqlite } from '../codegraph.js';
+import { getFunctionSynapse, ensureParserLoaded, hasSqlite } from '../repo/codegraph.js';
 
 // The symbol index needs node:sqlite (Node >= 22.5); CI also runs Node 20.
 const maybeDescribe = hasSqlite() ? describe : describe.skip;

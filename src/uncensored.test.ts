@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig, validateConfig } from './config.js';
-import { detectPolicy, parsePermissionSlashCommand } from './permission.js';
-import { maybeRedact } from './security.js';
+import { detectPolicy, parsePermissionSlashCommand } from './security/permission.js';
+import { maybeRedact } from './security/security.js';
 import { normalizeToolArgs, buildTools, executeTool } from './tools/index.js';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';

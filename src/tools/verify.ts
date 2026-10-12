@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { Tool } from './types.js';
-import { detectRepo } from '../repo.js';
+import { detectRepo } from '../repo/repo.js';
 
 // Run project verification commands (test, build, typecheck, lint) with
 // smart command injection and result summarization

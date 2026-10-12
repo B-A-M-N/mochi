@@ -1,4 +1,4 @@
-import { RetrievalEngine } from '../retrieval.js';
+import { RetrievalEngine } from '../memory/retrieval.js';
 import type { Tool } from './types.js';
 import { mutationGeneration } from './fs-signal.js';
 

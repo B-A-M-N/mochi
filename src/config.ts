@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MochiConfig, ModelProfile } from './types.js';
-import { PROVIDERS } from './providers.js';
+import { PROVIDERS } from './model/providers.js';
 
 const defaultConfig = (): MochiConfig => ({
   model: {

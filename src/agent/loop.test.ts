@@ -596,7 +596,7 @@ describe('Agent', () => {
     const result = await agent.run(task);
     expect(result.success).toBe(false);
     // Autopsy persisted at <workspace>/autopsies/<taskId>.json with kind + attempts.
-    const auts = await import('../autopsy.js');
+    const auts = await import('../observability/autopsy.js');
     const autopsyFile = resolve(workspace.dir, 'autopsies', `${task.id}.json`);
     expect(existsSync(autopsyFile)).toBe(true);
     const a = auts.loadOrCreateAutopsy(workspace.dir, task.id, 'autopsy-agent', 'Bad edit');

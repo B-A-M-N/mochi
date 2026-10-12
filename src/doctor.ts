@@ -5,10 +5,10 @@
 import { existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { hasSqlite, sqliteSource } from './sqlite.js';
-import { listJobs } from './cron.js';
-import { loadSkillFile, staleSkills, skillConflicts } from './skills.js';
-import { SessionStore } from './session-store.js';
-import { runRetention } from './retention.js';
+import { listJobs } from './daemon/cron.js';
+import { loadSkillFile, staleSkills, skillConflicts } from './skills/skills.js';
+import { SessionStore } from './state/session-store.js';
+import { runRetention } from './memory/retention.js';
 import { loadSavedTheme, getTheme, getCurrentTheme } from './tui/themes.js';
 
 export interface SkillHealthEntry {
@@ -126,7 +126,7 @@ export async function doctorReport(opts: {
   const degradedSkills: SkillHealthEntry[] = [];
   const visitedPaths = new Set<string>();
   let totalSkills = 0;
-  const allDiscoveredSkills: import('./skills.js').Skill[] = [];
+  const allDiscoveredSkills: import('./skills/skills.js').Skill[] = [];
 
   for (const sDir of candidateDirs) {
     if (!existsSync(sDir)) continue;

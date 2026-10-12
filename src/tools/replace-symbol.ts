@@ -4,7 +4,7 @@
 // retries, no full-file rewrites.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getFunctionSynapse } from '../codegraph.js';
+import { getFunctionSynapse } from '../repo/codegraph.js';
 
 export interface ReplaceSymbolResult {
   ok: boolean;

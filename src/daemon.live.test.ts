@@ -58,7 +58,7 @@ suite('daemon live round-trip', () => {
   const outFile = resolve(dir, 'dt.ts');
 
   it('sends a real goal, survives restart, resumes from disk', async () => {
-    const { startDaemonInProcess } = await import('./daemon.js');
+    const { startDaemonInProcess } = await import('./daemon/daemon.js');
 
     // 1. First daemon instance writes+runs a goal with the real provider.
     const h1 = await startDaemonInProcess({ cwd: dir, token: 'sek', config: makeConfig() });

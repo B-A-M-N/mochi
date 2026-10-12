@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { getFunctionSynapse, findCallers, hasSqlite } from '../codegraph.js';
+import { getFunctionSynapse, findCallers, hasSqlite } from '../repo/codegraph.js';
 import { writeTool } from './write.js';
 import type { ToolContext } from './types.js';
 

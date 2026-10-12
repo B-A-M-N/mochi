@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
-import { loadAllSkills, bundledSkillsDir, discoverSkills } from './skills.js';
+import { loadAllSkills, bundledSkillsDir, discoverSkills } from './skills/skills.js';
 
 let dir: string;
 beforeAll(() => {

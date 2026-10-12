@@ -7,8 +7,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { skillSimilarity, consolidateSkills, defaultCuratorConfig, scanSkills, runCurator } from './skill-curator.js';
-import { saveUsage } from './skill-manager.js';
+import { skillSimilarity, consolidateSkills, defaultCuratorConfig, scanSkills, runCurator } from './skills/skill-curator.js';
+import { saveUsage } from './skills/skill-manager.js';
 
 let dir: string;
 

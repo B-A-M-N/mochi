@@ -2,7 +2,7 @@
 // Audits the ratio of test code to production changes, identifies untested newly
 // introduced symbols, and generates actionable test templates to guarantee zero-bug delivery.
 
-import { detectRepo } from '../repo.js';
+import { detectRepo } from '../repo/repo.js';
 
 export interface TestDensityReport {
   productionLinesChanged: number;

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseFrontmatter, discoverSkills, loadProjectSkills } from '../skills.js';
+import { parseFrontmatter, discoverSkills, loadProjectSkills } from '../skills/skills.js';
 import { skillTool } from './skill.js';
 import { Workspace } from '../workspace.js';
 import { EventBus } from '../events.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { selectRelevantSkills, MAX_TASK_SKILLS } from './context.js';
-import type { Skill } from './skills.js';
+import type { Skill } from './skills/skills.js';
 
 function skill(name: string, description: string): Skill {
   return { name, description, path: `/x/${name}/SKILL.md` } as Skill;

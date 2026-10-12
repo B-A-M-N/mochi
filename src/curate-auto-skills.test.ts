@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { skillsRoot, curateAutoSkills, usagePath } from './skill-manager.js';
+import { skillsRoot, curateAutoSkills, usagePath } from './skills/skill-manager.js';
 import { skillTool } from './tools/skill.js';
 
 const ws = mkdtempSync('/tmp/mochi-curate-');
