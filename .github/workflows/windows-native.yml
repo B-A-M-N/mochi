@@ -1,0 +1,73 @@
+name: Windows native check
+
+# Focused, FAST verification that the N-API native core actually builds and
+# passes parity on windows-latest. Why a separate workflow: the 3-OS CI runs
+# the full suite on Windows, which takes 30-40 minutes (216 test files, 2
+# forks, coverage) — and this repo's push cadence cancels in-progress runs
+# every few minutes, so the Windows full-suite leg could never reach a verdict.
+# This job runs in ~3-5 minutes and survives: it never cancels (see concurrency)
+# and covers exactly what the native-linkage fixes touch — build.rs (node.lib /
+# dynamic_lookup), build-native.mjs (.dll copy + independent copies), and the
+# Rust<->TS parity tests that load the built addon.
+#
+# Manual dispatch also allowed so it can be re-run on demand.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'site/**'
+      - 'docs/**'
+      - '.mochi-audit/**'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-native-${{ github.ref }}
+  cancel-in-progress: false # never cancel: it is the only Windows signal
+
+jobs:
+  native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Fetch node.lib for MSVC
+        shell: bash
+        run: |
+          # MSVC links N-API symbols against node.lib at build time (build.rs).
+          # The toolcache node ships WITHOUT node.lib and none is on PATH, so
+          # fetch the single import library from the official dist for the exact
+          # node version (same ABI; the URL node-gyp itself uses).
+          set +e
+          NODE_VERSION="$(node -v)"
+          mkdir -p /tmp/node-lib
+          curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/win-x64/node.lib" -o /tmp/node-lib/node.lib
+          echo "node.lib fetch exit $? ($(wc -c < /tmp/node-lib/node.lib 2>/dev/null) bytes)"
+          if [ -s /tmp/node-lib/node.lib ]; then
+            export MOCHI_NODE_LIB_DIR="$(cygpath -m /tmp/node-lib)"
+          fi
+          echo "preflight: MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
+          set -e
+
+      - run: npm ci
+
+      - name: Build native accelerators (Rust + C++)
+        run: npm run build:native
+
+      - name: Assert native binaries exist
+        shell: bash
+        run: |
+          missing=0
+          for bin in native/bin/mochi-agent native/bin/mochi_core.node; do
+            if [ ! -f "$bin" ] && [ ! -f "$bin.exe" ]; then echo "native binary missing after build: $bin"; missing=1; fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "native binaries present"
+
+      - name: Native parity tests (loads the built addon)
+        run: npx vitest run src/native/core.test.ts src/tools/native-parity.test.ts --reporter=dot
