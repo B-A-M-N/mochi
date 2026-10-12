@@ -80,6 +80,33 @@ header.site > * {
   pointer-events: auto;
 }
 
+header.site .nav-brand,
+header.site .nav-links,
+header.site .nav-right {
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
+}
+
+header.site.is-scrolled .nav-brand,
+header.site.is-scrolled .nav-links,
+header.site.is-scrolled .nav-right {
+  opacity: 0;
+  transform: translateY(-16px) scale(0.96);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+header.site.is-scrolled:hover .nav-brand,
+header.site.is-scrolled:hover .nav-links,
+header.site.is-scrolled:hover .nav-right {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0px);
+  pointer-events: auto;
+}
+
 .nav-brand {
   font-family: var(--font-display);
   font-size: 28px;
@@ -1766,25 +1793,26 @@ header.site > * {
 /* ── SCROLL ENTRANCE ANIMATIONS ─────────────────────────────── */
 .ac {
   opacity: 0;
-  transition-property: opacity, transform;
+  filter: blur(var(--ac-blur, 14px));
+  transition-property: opacity, transform, filter;
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  will-change: opacity, transform, filter;
 }
 
 .ac.from-bottom {
-  transform: translateY(36px);
+  transform: translateY(var(--ac-distance, 40px));
 }
 
 .ac.from-top {
-  transform: translateY(-36px);
+  transform: translateY(calc(-1 * var(--ac-distance, 40px)));
 }
 
 .ac.from-left {
-  transform: translateX(-44px);
+  transform: translateX(calc(-1 * var(--ac-distance, 48px)));
 }
 
 .ac.from-right {
-  transform: translateX(44px);
+  transform: translateX(var(--ac-distance, 48px));
 }
 
 .ac.fade-scale {
@@ -1793,12 +1821,14 @@ header.site > * {
 
 .ac.in {
   opacity: 1 !important;
+  filter: blur(0px) !important;
   transform: translate(0, 0) scale(1) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ac {
     opacity: 1 !important;
+    filter: none !important;
     transform: none !important;
     transition: none !important;
   }

@@ -1,4 +1,4 @@
-import{r as p,j as e,c as P,E as j,A as u,M as O,F as L}from"./anim-D76rC37n.js";import{I as N,f as D,c as $,l as F}from"./icons-62YM1qKD.js";const g={"src/agent/loop.ts":{path:"src/agent/loop.ts",name:"loop.ts",dir:"src/agent",lang:"typescript",size:"241.5 KB",lines:4582,desc:"Turn lifecycle state machine, model streaming, and acceptance verification loop (showing core engine)",code:`import { performance } from 'node:perf_hooks';
+import{r as p,j as e,c as P,E as j,A as u,M as O,F as L}from"./anim-GeDEL2XE.js";import{I as N,f as D,c as $,l as F}from"./icons-Bpqtc_j_.js";const g={"src/agent/loop.ts":{path:"src/agent/loop.ts",name:"loop.ts",dir:"src/agent",lang:"typescript",size:"241.5 KB",lines:4582,desc:"Turn lifecycle state machine, model streaming, and acceptance verification loop (showing core engine)",code:`import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import {sortableId} from '../util.js';
 import type { Attempt, ChatMessage, MochiConfig, ModelProfile, Task, ToolDefinition, ToolCall, ToolResult } from '../types.js';

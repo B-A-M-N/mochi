@@ -43,6 +43,18 @@
 
   document.body.insertBefore(header, document.body.firstChild);
 
+  // Dynamic Island scroll behavior: fades away when scrolling past hero banner
+  function updateScrollState() {
+    var sy = window.scrollY || window.pageYOffset || 0;
+    if (sy > 45) {
+      header.classList.add('is-scrolled');
+    } else {
+      header.classList.remove('is-scrolled');
+    }
+  }
+  window.addEventListener('scroll', updateScrollState, { passive: true });
+  updateScrollState();
+
   // Gooey sliding pill indicator
   var navLinks = header.querySelector('.nav-links');
   if (navLinks) {

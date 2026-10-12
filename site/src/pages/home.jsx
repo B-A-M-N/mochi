@@ -122,19 +122,21 @@ function HeroSection() {
   return (
     <section className="hero" id="hero">
       <div className="hero-copy">
-        <AnimatedContent direction="bottom" delay={0.1}>
+        <AnimatedContent direction="left" delay={0.05} distance={45} blur={16}>
           <div className="hero-eyebrow-clean">
             <span className="sparkle-star">✦</span>
             THE NEXT GENERATION AI CODING AGENT
           </div>
         </AnimatedContent>
 
-        <h1 className="hero-title">
-          A Softer Kind of<br />
-          <span className="accent-title">Intelligence.</span>
-        </h1>
+        <AnimatedContent direction="left" delay={0.15} distance={50} blur={16}>
+          <h1 className="hero-title">
+            A Softer Kind of<br />
+            <span className="accent-title">Intelligence.</span>
+          </h1>
+        </AnimatedContent>
 
-        <AnimatedContent direction="bottom" delay={0.25}>
+        <AnimatedContent direction="left" delay={0.25} distance={45} blur={16}>
           <p className="hero-sub">
             A minimal, powerful, and friendly AI coding intelligence.<br />
             Faster, smarter, and better than your premium coding agents,<br />
@@ -142,7 +144,7 @@ function HeroSection() {
           </p>
         </AnimatedContent>
 
-        <AnimatedContent direction="bottom" delay={0.35}>
+        <AnimatedContent direction="left" delay={0.35} distance={40} blur={16}>
           <div className="hero-actions">
             <a
               href="https://github.com/xanstomper/mochi/releases"
@@ -165,7 +167,7 @@ function HeroSection() {
       </div>
 
       <div className="hero-mascot">
-        <AnimatedContent direction="right" delay={0.25} duration={0.8}>
+        <AnimatedContent direction="right" delay={0.2} duration={0.85} distance={55} blur={16}>
           <div style={{ position: 'relative' }}>
             <Mochi size={960} />
           </div>
@@ -215,8 +217,9 @@ function CapabilitiesSection() {
       <div className="caps-grid">
         {CAPABILITIES.map((cap, i) => {
           const IconComp = cap.icon;
+          const dir = i % 2 === 0 ? 'left' : 'right';
           return (
-            <AnimatedContent key={cap.title} direction="bottom" delay={i * 0.08}>
+            <AnimatedContent key={cap.title} direction={dir} delay={(i % 3) * 0.09} distance={45} blur={14}>
               <div className="cap-card">
                 <div className="cap-icon-box">
                   <IconComp size={22} />
@@ -258,109 +261,115 @@ function SpecialistRolesSection() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
         {/* Left Column: Role Selector Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-          {SPECIALIST_ROLES.map((role) => (
-            <button
-              key={role.id}
-              onClick={() => setSelectedRole(role)}
-              style={{
-                background: selectedRole.id === role.id ? '#F4EFFE' : '#ffffff',
-                border: selectedRole.id === role.id ? '2px solid #8A67F6' : '1.5px solid var(--line)',
-                borderRadius: 18,
-                padding: '18px 20px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: selectedRole.id === role.id ? '0 6px 20px rgba(138, 103, 246, 0.16)' : '0 2px 8px rgba(0,0,0,0.03)',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', textTransform: 'uppercase' }}>
-                  {role.tag}
-                </span>
-                <span style={{ fontSize: 11, background: '#EDE8F8', color: '#111116', padding: '3px 8px', borderRadius: 999, fontWeight: 600 }}>
-                  {role.badge}
-                </span>
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#111116', marginBottom: 4 }}>
-                {role.name}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-                {role.desc.substring(0, 72)}...
-              </div>
-            </button>
-          ))}
-        </div>
+        <AnimatedContent direction="left" delay={0.1} distance={45} blur={14}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+            {SPECIALIST_ROLES.map((role) => (
+              <button
+                key={role.id}
+                onClick={() => setSelectedRole(role)}
+                style={{
+                  background: selectedRole.id === role.id ? '#F4EFFE' : '#ffffff',
+                  border: selectedRole.id === role.id ? '2px solid #8A67F6' : '1.5px solid var(--line)',
+                  borderRadius: 18,
+                  padding: '18px 20px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: selectedRole.id === role.id ? '0 6px 20px rgba(138, 103, 246, 0.16)' : '0 2px 8px rgba(0,0,0,0.03)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#8A67F6', textTransform: 'uppercase' }}>
+                    {role.tag}
+                  </span>
+                  <span style={{ fontSize: 11, background: '#EDE8F8', color: '#111116', padding: '3px 8px', borderRadius: 999, fontWeight: 600 }}>
+                    {role.badge}
+                  </span>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#111116', marginBottom: 4 }}>
+                  {role.name}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                  {role.desc.substring(0, 72)}...
+                </div>
+              </button>
+            ))}
+          </div>
+        </AnimatedContent>
 
         {/* Right Column: Detailed Role Inspector Card */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: 24,
-            padding: 32,
-            border: '1.5px solid rgba(138, 103, 246, 0.25)',
-            boxShadow: '0 8px 32px rgba(138, 103, 246, 0.12)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: '#8A67F6', color: '#ffffff', padding: '4px 12px', borderRadius: 999, fontWeight: 700 }}>
-                ACTIVE ROLE / {selectedRole.tag}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
-                18.2 MB RSS · Sub-process Sandbox
-              </span>
+        <AnimatedContent direction="right" delay={0.2} distance={45} blur={14}>
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 24,
+              padding: 32,
+              border: '1.5px solid rgba(138, 103, 246, 0.25)',
+              boxShadow: '0 8px 32px rgba(138, 103, 246, 0.12)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              height: '100%',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: '#8A67F6', color: '#ffffff', padding: '4px 12px', borderRadius: 999, fontWeight: 700 }}>
+                  ACTIVE ROLE / {selectedRole.tag}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
+                  18.2 MB RSS · Sub-process Sandbox
+                </span>
+              </div>
+
+              <h3 style={{ fontSize: 26, fontWeight: 850, color: '#111116', marginBottom: 12 }}>
+                {selectedRole.name}
+              </h3>
+
+              <p style={{ fontSize: 15.5, lineHeight: 1.7, color: 'var(--ink-soft)', marginBottom: 24 }}>
+                {selectedRole.desc}
+              </p>
+
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: '#111116', textTransform: 'uppercase', marginBottom: 10 }}>
+                  Dedicated Subsystem Tools:
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {selectedRole.tools.map((tool) => (
+                    <span
+                      key={tool}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        background: '#FAF8FC',
+                        border: '1px solid #DCD6EE',
+                        color: '#111116',
+                        padding: '5px 12px',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                      }}
+                    >
+                      ⚡ {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <h3 style={{ fontSize: 26, fontWeight: 850, color: '#111116', marginBottom: 12 }}>
-              {selectedRole.name}
-            </h3>
-
-            <p style={{ fontSize: 15.5, lineHeight: 1.7, color: 'var(--ink-soft)', marginBottom: 24 }}>
-              {selectedRole.desc}
-            </p>
-
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: '#111116', textTransform: 'uppercase', marginBottom: 10 }}>
-                Dedicated Subsystem Tools:
+            <div style={{ background: '#110F1D', borderRadius: 16, padding: '16px 20px', fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#EDE9FE' }}>
+              <div style={{ color: '#8A67F6', fontWeight: 700, marginBottom: 6 }}>
+                // Task DAG Execution Telemetry
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {selectedRole.tools.map((tool) => (
-                  <span
-                    key={tool}
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 12,
-                      background: '#FAF8FC',
-                      border: '1px solid #DCD6EE',
-                      color: '#111116',
-                      padding: '5px 12px',
-                      borderRadius: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    ⚡ {tool}
-                  </span>
-                ))}
+              <div style={{ color: '#34D399' }}>
+                ✓ Spawning {selectedRole.name} worker within Bubblewrap user namespace.
+              </div>
+              <div style={{ color: 'rgba(255, 255, 255, 0.6)', marginTop: 4 }}>
+                → Context budget allocated: 4,096 tokens (91% pruned) · 0 runaway loops.
               </div>
             </div>
           </div>
-
-          <div style={{ background: '#110F1D', borderRadius: 16, padding: '16px 20px', fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#EDE9FE' }}>
-            <div style={{ color: '#8A67F6', fontWeight: 700, marginBottom: 6 }}>
-              // Task DAG Execution Telemetry
-            </div>
-            <div style={{ color: '#34D399' }}>
-              ✓ Spawning {selectedRole.name} worker within Bubblewrap user namespace.
-            </div>
-            <div style={{ color: 'rgba(255, 255, 255, 0.6)', marginTop: 4 }}>
-              → Context budget allocated: 4,096 tokens (91% pruned) · 0 runaway loops.
-            </div>
-          </div>
-        </div>
+        </AnimatedContent>
       </div>
     </section>
   );
@@ -733,158 +742,174 @@ function AutonomousEcosystemSection() {
       </p>
 
       {/* Stepper Navigation */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
-        {steps.map((s, idx) => (
-          <button
-            key={s.id}
-            onClick={() => setActiveStep(idx)}
-            style={{
-              padding: '16px 18px',
-              borderRadius: 18,
-              border: activeStep === idx ? '1.5px solid var(--purple)' : '1px solid var(--line)',
-              background: activeStep === idx ? '#1A1633' : '#ffffff',
-              color: activeStep === idx ? '#ffffff' : 'var(--ink)',
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition: 'all 0.25s ease',
-              boxShadow: activeStep === idx ? '0 6px 20px rgba(138, 103, 246, 0.22)' : 'var(--shadow-card)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: activeStep === idx ? '#A78BFA' : '#8A67F6' }}>
-                STAGE {s.num}
-              </span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', borderRadius: 4, background: activeStep === idx ? 'rgba(255, 255, 255, 0.15)' : '#F4EFFE', color: activeStep === idx ? '#ffffff' : '#8A67F6' }}>
-                {s.role.split(' ')[0]}
-              </span>
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 800 }}>
-              {s.title}
-            </div>
-          </button>
-        ))}
-      </div>
+      <AnimatedContent direction="left" delay={0.1} distance={40} blur={14}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
+          {steps.map((s, idx) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveStep(idx)}
+              style={{
+                padding: '16px 18px',
+                borderRadius: 18,
+                border: activeStep === idx ? '1.5px solid var(--purple)' : '1px solid var(--line)',
+                background: activeStep === idx ? '#1A1633' : '#ffffff',
+                color: activeStep === idx ? '#ffffff' : 'var(--ink)',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'all 0.25s ease',
+                boxShadow: activeStep === idx ? '0 6px 20px rgba(138, 103, 246, 0.22)' : 'var(--shadow-card)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: activeStep === idx ? '#A78BFA' : '#8A67F6' }}>
+                  STAGE {s.num}
+                </span>
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', borderRadius: 4, background: activeStep === idx ? 'rgba(255, 255, 255, 0.15)' : '#F4EFFE', color: activeStep === idx ? '#ffffff' : '#8A67F6' }}>
+                  {s.role.split(' ')[0]}
+                </span>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 800 }}>
+                {s.title}
+              </div>
+            </button>
+          ))}
+        </div>
+      </AnimatedContent>
 
       {/* Active Stage Detailed Display */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 28,
-          border: '1.5px solid rgba(138, 103, 246, 0.2)',
-          padding: '36px 32px',
-          boxShadow: 'var(--shadow-card)',
-          marginBottom: 40,
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, color: '#8A67F6' }}>
-                STAGE {current.num} / {current.title.toUpperCase()}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#F4EFFE', color: '#6D28D9', padding: '3px 10px', borderRadius: 999, fontWeight: 700 }}>
-                {current.role}
-              </span>
+      <AnimatedContent direction="right" delay={0.15} distance={45} blur={14}>
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 28,
+            border: '1.5px solid rgba(138, 103, 246, 0.2)',
+            padding: '36px 32px',
+            boxShadow: 'var(--shadow-card)',
+            marginBottom: 40,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, color: '#8A67F6' }}>
+                  STAGE {current.num} / {current.title.toUpperCase()}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#F4EFFE', color: '#6D28D9', padding: '3px 10px', borderRadius: 999, fontWeight: 700 }}>
+                  {current.role}
+                </span>
+              </div>
+              <p style={{ fontSize: 15, color: 'var(--ink-soft)', margin: 0, maxWidth: 640, lineHeight: 1.6 }}>
+                {current.desc}
+              </p>
             </div>
-            <p style={{ fontSize: 15, color: 'var(--ink-soft)', margin: 0, maxWidth: 640, lineHeight: 1.6 }}>
-              {current.desc}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE9FE', color: 'var(--purple-dark)', padding: '6px 14px', borderRadius: 999, fontWeight: 700 }}>
+              {current.badge}
+            </span>
+          </div>
+
+          {/* Live Terminal Output Block */}
+          <div style={{ background: '#110F1D', borderRadius: 18, padding: '20px 24px', fontFamily: 'var(--font-mono)', fontSize: 13, border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: 20 }}>
+            <div style={{ color: 'rgba(255, 255, 255, 0.4)', marginBottom: 12, borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+              <span>mochi-session · agent_trace.log</span>
+              <span style={{ color: '#34D399' }}>● LIVE EXECUTION</span>
+            </div>
+            {current.trace.map((line, i) => (
+              <div
+                key={i}
+                style={{
+                  color: line.startsWith('$') ? '#A78BFA' : line.includes('PASS') || line.includes('passing') || line.includes('green') ? '#34D399' : '#E2E8F0',
+                  lineHeight: 1.8,
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+
+          {/* Metrics Bar */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {current.metrics.map((m, i) => (
+              <span
+                key={i}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: '#FAF8FC',
+                  color: '#111116',
+                  border: '1px solid var(--line)',
+                  padding: '6px 14px',
+                  borderRadius: 10,
+                }}
+              >
+                ✓ {m}
+              </span>
+            ))}
+          </div>
+        </div>
+      </AnimatedContent>
+
+      {/* 6-Card Ecosystem Grid with Staggered Side Flow */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
+        <AnimatedContent direction="left" delay={0.08} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>01 / PROTOCOL</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Model Context Protocol (MCP)</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Connects seamlessly to any external MCP tool server over stdio and SSE protocols, enabling custom database, browser, and enterprise tools.
             </p>
           </div>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE9FE', color: 'var(--purple-dark)', padding: '6px 14px', borderRadius: 999, fontWeight: 700 }}>
-            {current.badge}
-          </span>
-        </div>
+        </AnimatedContent>
 
-        {/* Live Terminal Output Block */}
-        <div style={{ background: '#110F1D', borderRadius: 18, padding: '20px 24px', fontFamily: 'var(--font-mono)', fontSize: 13, border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: 20 }}>
-          <div style={{ color: 'rgba(255, 255, 255, 0.4)', marginBottom: 12, borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-            <span>mochi-session · agent_trace.log</span>
-            <span style={{ color: '#34D399' }}>● LIVE EXECUTION</span>
+        <AnimatedContent direction="bottom" delay={0.14} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>02 / INFERENCE</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
+            </p>
           </div>
-          {current.trace.map((line, i) => (
-            <div
-              key={i}
-              style={{
-                color: line.startsWith('$') ? '#A78BFA' : line.includes('PASS') || line.includes('passing') || line.includes('green') ? '#34D399' : '#E2E8F0',
-                lineHeight: 1.8,
-              }}
-            >
-              {line}
-            </div>
-          ))}
-        </div>
+        </AnimatedContent>
 
-        {/* Metrics Bar */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {current.metrics.map((m, i) => (
-            <span
-              key={i}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12,
-                fontWeight: 700,
-                background: '#FAF8FC',
-                color: '#111116',
-                border: '1px solid var(--line)',
-                padding: '6px 14px',
-                borderRadius: 10,
-              }}
-            >
-              ✓ {m}
-            </span>
-          ))}
-        </div>
-      </div>
+        <AnimatedContent direction="right" delay={0.2} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>03 / SECURITY</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Bubblewrap Jail</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Hardware unprivileged namespaces mask your SSH keys, AWS credentials, and environment variables from rogue prompts.
+            </p>
+          </div>
+        </AnimatedContent>
 
-      {/* 6-Card Ecosystem Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>01 / PROTOCOL</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Model Context Protocol (MCP)</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Connects seamlessly to any external MCP tool server over stdio and SSE protocols, enabling custom database, browser, and enterprise tools.
-          </p>
-        </div>
+        <AnimatedContent direction="left" delay={0.12} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>04 / SYNTAX</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Tree-sitter AST Differ</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Real-time semantic syntax tree parsing across TypeScript, Rust, Python, Go, and C for surgical token-level patch applications.
+            </p>
+          </div>
+        </AnimatedContent>
 
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>02 / INFERENCE</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
-          </p>
-        </div>
+        <AnimatedContent direction="bottom" delay={0.18} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>05 / VERIFICATION</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Mechanical Gate</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Zero unverified code reaches disk; strict compiler diagnostics, test runners, and static analyzers gate every commit.
+            </p>
+          </div>
+        </AnimatedContent>
 
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>03 / SECURITY</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Bubblewrap Jail</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Hardware unprivileged namespaces mask your SSH keys, AWS credentials, and environment variables from rogue prompts.
-          </p>
-        </div>
-
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>04 / SYNTAX</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Tree-sitter AST Differ</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Real-time semantic syntax tree parsing across TypeScript, Rust, Python, Go, and C for surgical token-level patch applications.
-          </p>
-        </div>
-
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>05 / VERIFICATION</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Mechanical Gate</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Zero unverified code reaches disk; strict compiler diagnostics, test runners, and static analyzers gate every commit.
-          </p>
-        </div>
-
-        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>06 / RUNTIME</div>
-          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Zero-Dep Bun Binary</h4>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
-            Compiled into a single self-contained native executable with 18.2 MB peak resident RSS and 38.2 ms cold start.
-          </p>
-        </div>
+        <AnimatedContent direction="right" delay={0.24} distance={40} blur={14}>
+          <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>06 / RUNTIME</div>
+            <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Zero-Dep Bun Binary</h4>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+              Compiled into a single self-contained native executable with 18.2 MB peak resident RSS and 38.2 ms cold start.
+            </p>
+          </div>
+        </AnimatedContent>
       </div>
     </section>
   );
@@ -1043,89 +1068,91 @@ function BenchmarksSection() {
       </div>
 
       {/* Comprehensive Fullscreen Architectural Comparison Matrix */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 24,
-          border: '1.5px solid var(--line)',
-          boxShadow: 'var(--shadow-card)',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ padding: '24px 30px', borderBottom: '1px solid var(--line)', background: '#FAF8FC' }}>
-          <h3 style={{ fontSize: 18, fontWeight: 800, color: '#111116', margin: 0 }}>
-            Comprehensive Agent Architecture Matrix
-          </h3>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
-            Empirical runtime capabilities across major autonomous terminal and IDE agents.
-          </p>
-        </div>
+      <AnimatedContent direction="bottom" delay={0.2} distance={45} blur={14}>
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 24,
+            border: '1.5px solid var(--line)',
+            boxShadow: 'var(--shadow-card)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '24px 30px', borderBottom: '1px solid var(--line)', background: '#FAF8FC' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#111116', margin: 0 }}>
+              Comprehensive Agent Architecture Matrix
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+              Empirical runtime capabilities across major autonomous terminal and IDE agents.
+            </p>
+          </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: 'var(--font-body)', fontSize: 13.5 }}>
-            <thead>
-              <tr style={{ background: '#F4EFFE', borderBottom: '1.5px solid rgba(138, 103, 246, 0.2)' }}>
-                <th style={{ padding: '14px 20px', fontWeight: 800, color: '#111116' }}>Capability</th>
-                <th style={{ padding: '14px 20px', fontWeight: 800, color: '#8A67F6' }}>Mochi (v0.22.0)</th>
-                <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Claude Code</th>
-                <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Cursor Agent</th>
-                <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Aider</th>
-                <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>OpenCode</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Peak Resident Memory</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>18.2 MB (Bun)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>386.6 MB (Node)</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>214.9 MB (Electron)</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>188.0 MB (Python)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>371.5 MB (Node)</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Cold Start TTFI</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>38.2 ms</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>172.4 ms</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>121.5 ms</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>145.2 ms</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>168.3 ms</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Hardware Sandboxing</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Bubblewrap (bwrap)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Multi-Tab Pinned Sessions</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Native TUI Tabs</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>Single terminal</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>GUI Composer tabs</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>Single terminal</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>Multiple sessions</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>AST Diff Mutations</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Tree-sitter 12ms</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>Whole block replace</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>Fuzzy regex patch</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>Unified diff / search</td>
-                <td style={{ padding: '14px 20px', color: '#4B5563' }}>Whole file replace</td>
-              </tr>
-              <tr>
-                <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>License &amp; Source</td>
-                <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>100% MIT Open Source</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>Proprietary Closed</td>
-                <td style={{ padding: '14px 20px', color: '#DC2626' }}>Proprietary Closed</td>
-                <td style={{ padding: '14px 20px', color: '#059669' }}>Apache 2.0</td>
-                <td style={{ padding: '14px 20px', color: '#059669' }}>MIT Open Source</td>
-              </tr>
-            </tbody>
-          </table>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: 'var(--font-body)', fontSize: 13.5 }}>
+              <thead>
+                <tr style={{ background: '#F4EFFE', borderBottom: '1.5px solid rgba(138, 103, 246, 0.2)' }}>
+                  <th style={{ padding: '14px 20px', fontWeight: 800, color: '#111116' }}>Capability</th>
+                  <th style={{ padding: '14px 20px', fontWeight: 800, color: '#8A67F6' }}>Mochi (v0.22.0)</th>
+                  <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Claude Code</th>
+                  <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Cursor Agent</th>
+                  <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Aider</th>
+                  <th style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>OpenCode</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Peak Resident Memory</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>18.2 MB (Bun)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>386.6 MB (Node)</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>214.9 MB (Electron)</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>188.0 MB (Python)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>371.5 MB (Node)</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Cold Start TTFI</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>38.2 ms</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>172.4 ms</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>121.5 ms</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>145.2 ms</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>168.3 ms</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Hardware Sandboxing</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Bubblewrap (bwrap)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>None (Direct Host)</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>Multi-Tab Pinned Sessions</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Native TUI Tabs</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>Single terminal</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>GUI Composer tabs</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>Single terminal</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>Multiple sessions</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>AST Diff Mutations</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>Tree-sitter 12ms</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>Whole block replace</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>Fuzzy regex patch</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>Unified diff / search</td>
+                  <td style={{ padding: '14px 20px', color: '#4B5563' }}>Whole file replace</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '14px 20px', fontWeight: 700, color: '#111116' }}>License &amp; Source</td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: '#059669' }}>100% MIT Open Source</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>Proprietary Closed</td>
+                  <td style={{ padding: '14px 20px', color: '#DC2626' }}>Proprietary Closed</td>
+                  <td style={{ padding: '14px 20px', color: '#059669' }}>Apache 2.0</td>
+                  <td style={{ padding: '14px 20px', color: '#059669' }}>MIT Open Source</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </AnimatedContent>
     </section>
   );
 }
@@ -1159,106 +1186,110 @@ function CodaSection() {
         }}
       >
         {/* Left Column: Bold, deep black readable typography */}
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 580 }}>
-          <h2 style={{ color: '#111116', fontSize: 'clamp(32px, 4vw, 46px)', fontWeight: 850, marginBottom: 14, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-            Ready to Build with Mochi?
-          </h2>
-          <p style={{ color: '#22222B', fontSize: 17, lineHeight: 1.65, marginBottom: 28, fontWeight: 500 }}>
-            Experience the lightest, fastest autonomous coding intelligence for your terminal. Single standalone Bun binary, compiled Rust core, and 0 external dependencies.
-          </p>
+        <AnimatedContent direction="left" delay={0.1} distance={45} blur={14}>
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 580 }}>
+            <h2 style={{ color: '#111116', fontSize: 'clamp(32px, 4vw, 46px)', fontWeight: 850, marginBottom: 14, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+              Ready to Build with Mochi?
+            </h2>
+            <p style={{ color: '#22222B', fontSize: 17, lineHeight: 1.65, marginBottom: 28, fontWeight: 500 }}>
+              Experience the lightest, fastest autonomous coding intelligence for your terminal. Single standalone Bun binary, compiled Rust core, and 0 external dependencies.
+            </p>
 
-          {/* Quick Install Snippet */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              background: '#ffffff',
-              border: '1.5px solid rgba(138, 103, 246, 0.28)',
-              borderRadius: 14,
-              padding: '8px 16px',
-              marginBottom: 28,
-              gap: 14,
-              boxShadow: '0 2px 10px rgba(138, 103, 246, 0.08)',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5, color: '#111116', fontWeight: 800 }}>
-              curl -fsSL https://mochi.sh | sh
-            </span>
-            <button
-              onClick={copyInstall}
+            {/* Quick Install Snippet */}
+            <div
               style={{
-                background: '#8A67F6',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: '#ffffff',
+                border: '1.5px solid rgba(138, 103, 246, 0.28)',
+                borderRadius: 14,
+                padding: '8px 16px',
+                marginBottom: 28,
+                gap: 14,
+                boxShadow: '0 2px 10px rgba(138, 103, 246, 0.08)',
               }}
             >
-              {copied ? '✓ Copied' : 'Copy'}
-            </button>
-          </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5, color: '#111116', fontWeight: 800 }}>
+                curl -fsSL https://mochi.sh | sh
+              </span>
+              <button
+                onClick={copyInstall}
+                style={{
+                  background: '#8A67F6',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
 
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <a
-              href="https://github.com/xanstomper/mochi/releases"
-              className="btn btn-primary hero-btn-dl"
-              target="_blank"
-              rel="noopener"
-              style={{ textDecoration: 'none' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download Mochi (v0.22.0)
-            </a>
-            <a
-              href={base + '/docs.html'}
-              className="btn btn-outline hero-btn-docs"
-              style={{ textDecoration: 'none' }}
-            >
-              Read the Docs →
-            </a>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <a
+                href="https://github.com/xanstomper/mochi/releases"
+                className="btn btn-primary hero-btn-dl"
+                target="_blank"
+                rel="noopener"
+                style={{ textDecoration: 'none' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download Mochi (v0.22.0)
+              </a>
+              <a
+                href={base + '/docs.html'}
+                className="btn btn-outline hero-btn-docs"
+                style={{ textDecoration: 'none' }}
+              >
+                Read the Docs →
+              </a>
+            </div>
           </div>
-        </div>
+        </AnimatedContent>
 
         {/* Right Column: User's GIF in sleek dark terminal frame */}
-        <div
-          style={{
-            background: '#110F1D',
-            borderRadius: 20,
-            padding: '16px 16px 20px',
-            border: '1.5px solid rgba(138, 103, 246, 0.35)',
-            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.25)',
-          }}
-        >
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12, paddingLeft: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} />
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B' }} />
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', marginLeft: 8 }}>
-              mochi-terminal-session.gif
-            </span>
-          </div>
-          <img
-            src={base + '/IMG_3098.gif'}
-            alt="Mochi Autonomous Terminal Demo"
+        <AnimatedContent direction="right" delay={0.2} distance={45} blur={14}>
+          <div
             style={{
-              width: '100%',
-              borderRadius: 12,
-              display: 'block',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: '#110F1D',
+              borderRadius: 20,
+              padding: '16px 16px 20px',
+              border: '1.5px solid rgba(138, 103, 246, 0.35)',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.25)',
             }}
-          />
-          <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-            Live session trace: autonomous multi-pass verification loop
+          >
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12, paddingLeft: 4 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', marginLeft: 8 }}>
+                mochi-terminal-session.gif
+              </span>
+            </div>
+            <img
+              src={base + '/IMG_3098.gif'}
+              alt="Mochi Autonomous Terminal Demo"
+              style={{
+                width: '100%',
+                borderRadius: 12,
+                display: 'block',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            />
+            <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              Live session trace: autonomous multi-pass verification loop
+            </div>
           </div>
-        </div>
+        </AnimatedContent>
       </div>
     </div>
   );

@@ -103,8 +103,9 @@ export function BlurText({
 
 /* ── AnimatedContent ────────────────────────────────────────── */
 export function AnimatedContent({
-  children, direction = 'bottom', distance = 30, delay = 0,
-  duration = 0.7, scale = 0.96, className = '', once = true,
+  children, direction = 'bottom', distance = 40, delay = 0,
+  duration = 0.8, scale = 0.96, className = '', once = true,
+  blur = 14,
 }) {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
@@ -121,15 +122,15 @@ export function AnimatedContent({
         if (entry.isIntersecting) {
           setInView(true);
           if (once) io.disconnect();
-        } else if (!once) setInView(false);
+        } else if (!once) {
+          setInView(false);
+        }
       },
-      { threshold: 0.01, rootMargin: '250px' }
+      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
     );
     io.observe(el);
-    const fallback = setTimeout(() => setInView(true), 600);
     return () => {
       io.disconnect();
-      clearTimeout(fallback);
     };
   }, [once]);
 
@@ -137,7 +138,12 @@ export function AnimatedContent({
     <div
       ref={ref}
       className={`ac from-${direction} ${inView ? 'in' : ''} ${className}`}
-      style={{ transitionDelay: `${delay}s`, transitionDuration: `${duration}s` }}
+      style={{
+        transitionDelay: `${delay}s`,
+        transitionDuration: `${duration}s`,
+        '--ac-distance': `${distance}px`,
+        '--ac-blur': `${blur}px`,
+      }}
     >
       {children}
     </div>
