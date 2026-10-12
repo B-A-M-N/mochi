@@ -3,7 +3,10 @@
 // and where the gaps are: provider keys, sqlite index, code symbol index,
 // background tasks, cron jobs, sessions, and the running daemon.
 import { existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { hasSqlite, sqliteSource } from './sqlite.js';
 import { listJobs } from './daemon/cron.js';
 import { loadSkillFile, staleSkills, skillConflicts } from './skills/skills.js';
@@ -37,6 +40,9 @@ export interface DoctorReport {
   sandbox: { bubblewrap: boolean };
   browser: { driver: boolean; browsers: string[] };
   skills: { total: number; healthy: number; degraded: SkillHealthEntry[] };
+  acp?: { ok: boolean; detail: string };
+  editors?: { vscodeInstalled: boolean; jetbrainsPluginPresent: boolean; vscodeCli: boolean };
+  onboarding?: { done: boolean };
   problems: string[];
 }
 
@@ -210,6 +216,9 @@ export async function doctorReport(opts: {
     sandbox: { bubblewrap },
     browser: { driver: browserDriver, browsers },
     skills: { total: totalSkills, healthy: healthySkills, degraded: degradedSkills },
+    acp: await acpHealth(),
+    editors: editorHealth(),
+    onboarding: onboardingHealth(),
     problems,
   };
 
@@ -224,7 +233,53 @@ export async function doctorReport(opts: {
       problems.push(`Skill "${s.name}" is degraded (${s.status}): ${s.path}`);
     }
   }
+  if (report.acp && !report.acp.ok) problems.push(`ACP bridge broken: ${report.acp.detail} — editors (VS Code/JetBrains) will fail. Run \`mochi acp --check\`.`);
+  if (report.onboarding && !report.onboarding.done) problems.push('First-run setup not completed — run `mochi onboard --yes` to wire providers/skills/MCPs.');
   return report;
+}
+
+/** ACP bridge health (in-process lifecycle, no spawn). Best-effort, never throws. */
+async function acpHealth(): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const { acpCheck } = await import('./acp.js');
+    const r = await acpCheck(process.cwd());
+    return { ok: r.ok, detail: r.report };
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Editor integration health: VS Code CLI present? JetBrains plugin sources shipped? */
+function editorHealth(): { vscodeInstalled: boolean; jetbrainsPluginPresent: boolean; vscodeCli: boolean } {
+  let vscodeCli = false;
+  try {
+    execFileSync('code', ['--version'], { timeout: 5000, stdio: 'ignore' });
+    vscodeCli = true;
+  } catch {
+    vscodeCli = false;
+  }
+  // This build ships editor sources under <root>/editors (npm tarball may exclude them).
+  let jetbrainsPluginPresent = false;
+  let vscodeInstalled = false;
+  try {
+    vscodeInstalled = existsSync(resolve(process.cwd(), 'editors', 'vscode', 'package.json'));
+    jetbrainsPluginPresent = existsSync(resolve(process.cwd(), 'editors', 'jetbrains', 'build.gradle.kts'));
+    if (!vscodeInstalled || !jetbrainsPluginPresent) {
+      const here = dirname(fileURLToPath(import.meta.url));
+      if (!vscodeInstalled) vscodeInstalled = existsSync(resolve(here, '..', '..', 'editors', 'vscode', 'package.json'));
+      if (!jetbrainsPluginPresent) jetbrainsPluginPresent = existsSync(resolve(here, '..', '..', 'editors', 'jetbrains', 'build.gradle.kts'));
+    }
+  } catch { /* best-effort */ }
+  return { vscodeInstalled, jetbrainsPluginPresent, vscodeCli };
+}
+
+/** Onboarding marker health. */
+function onboardingHealth(): { done: boolean } {
+  try {
+    return { done: existsSync(join(homedir(), '.config', 'mochi', 'onboarded.json')) };
+  } catch {
+    return { done: false };
+  }
 }
 
 /** Live UI theme info. `stuck` is true when the saved theme id is not
@@ -261,6 +316,10 @@ export function formatDoctor(r: DoctorReport): string {
     `  sandbox       ${r.sandbox.bubblewrap ? 'ok    bubblewrap available (safety.sandbox / shell sandbox:true)' : 'MISS  no bwrap (sandbox unavailable)'}`,
     `  browser       ${r.browser.driver && r.browser.browsers.length > 0 ? `ok    playwright + ${r.browser.browsers.join(', ')}` : r.browser.driver ? 'MISS  playwright present but no browser binaries (npx playwright install)' : 'MISS  browser driver unavailable (npm i -g playwright)'}`,
     `  skills        ${ok(r.skills.degraded.length === 0)} ${skillLine}`,
+    `  acp           ${r.acp ? (r.acp.ok ? 'ok    bridge verified (editors will work)' : `MISS  ${r.acp.detail.slice(0, 90)}`) : 'n/a'}`,
+    `  vscode        ${r.editors ? (r.editors.vscodeCli ? 'ok    `code` CLI on PATH' : r.editors.vscodeInstalled ? 'ok    extension sources shipped (`mochi setup vscode`)' : 'MISS  no `code` CLI and no shipped sources') : 'n/a'}`,
+    `  jetbrains     ${r.editors ? (r.editors.jetbrainsPluginPresent ? 'ok    plugin sources shipped (`mochi setup jetbrains`)' : 'MISS  plugin sources not in this install') : 'n/a'}`,
+    `  onboard       ${r.onboarding ? (r.onboarding.done ? 'ok    first-run setup completed' : 'MISS  run `mochi onboard --yes`') : 'n/a'}`,
     `  theme         ${r.theme.id} (${r.theme.name})${r.theme.stuck ? '  STUCK — relaunch the TUI to pick up theming fixes' : ''}`,
     '',
     ...(r.problems.length === 0 ? ['No problems detected.'] : [`Problems (${r.problems.length}):`, ...r.problems.map((p) => `  • ${p}`)]),

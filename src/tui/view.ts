@@ -1292,3 +1292,63 @@ export function splashFrame(tick: number, width: number, version: string, progre
 }
 
 export const SPLASH_TICKS = 14;
+
+// ---- Goodbye screen (opencode-style exit card) ----------------------------
+// Printed once to the real stdout AFTER the alt-screen is torn down, so it
+// persists in scrollback: mini MOCHI logo + session id + run stats + the
+// safety badge (uncensored/admin when privileged). Pure like splashFrame.
+export interface FarewellModel {
+  version: string;
+  sessionId: string;
+  tokens: number;
+  costUsd: number;
+  durationMs: number;
+  uiMode: 'plan' | 'act';
+  safetyMode: string;
+  uncensored: boolean;
+}
+
+/** `125000ms` → `2m05s`, `45000` → `45s`, `3600000+` → `1h02m`. Pure. */
+export function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`;
+}
+
+export function farewellFrame(m: FarewellModel, width: number): string[] {
+  const stops = SPLASH_PALETTES[0];
+  const logoW = MOCHI_ASCII.reduce((mm, l) => Math.max(mm, l.length), 0);
+  const lines: string[] = [''];
+  for (const row of MOCHI_ASCII) {
+    const cells: string[] = [];
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch === ' ') { cells.push(' '); continue; }
+      const t = x / Math.max(1, logoW - 1);
+      const scaled = t * (stops.length - 1);
+      const si = Math.min(stops.length - 2, Math.floor(scaled));
+      const c = lerp(stops[si], stops[si + 1], scaled - si);
+      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}${ch}${T.reset}`);
+    }
+    const v = row.length;
+    lines.push(' '.repeat(Math.max(0, Math.floor((width - v) / 2))) + cells.join(''));
+  }
+  lines.push('');
+  const tok = m.tokens >= 1000 ? `${(m.tokens / 1000).toFixed(1)}k` : `${m.tokens}`;
+  const stats = `session ${m.sessionId} · ${m.uiMode} · ${tok} tokens · $${m.costUsd.toFixed(2)} · ${formatDuration(m.durationMs)}`;
+  lines.push(' '.repeat(Math.max(0, Math.floor((width - stats.length) / 2))) + `${T.gray}${stats}${T.reset}`);
+  const badge = m.uncensored
+    ? `🔓 UNCENSORED · admin privileges active`
+    : `safety: ${m.safetyMode}`;
+  const badgeColored = m.uncensored ? `${T.warning}${T.bold}${badge}${T.reset}` : `${T.grayDark}${badge}${T.reset}`;
+  lines.push(' '.repeat(Math.max(0, Math.floor((width - badge.length) / 2))) + badgeColored);
+  lines.push('');
+  const bye = `thanks for building with mochi v${m.version} — see you soon 🍡`;
+  lines.push(' '.repeat(Math.max(0, Math.floor((width - bye.length) / 2))) + `${T.cyan}${bye}${T.reset}`);
+  const resume = `${T.grayDark}resume anytime: mochi resume${T.reset}`;
+  lines.push(' '.repeat(Math.max(0, Math.floor((width - 28) / 2))) + resume);
+  lines.push('');
+  return lines;
+}

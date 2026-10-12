@@ -23,6 +23,8 @@ import {
   transcriptIndent,
   spinnerFrame,
   thinkingLine,
+  farewellFrame,
+  formatDuration,
   ellipsize,
   visibleLen,
   highlightShellCommand,
@@ -448,6 +450,47 @@ describe('splash screen', () => {
 
   it('phase list ends at The Dongo is ready', () => {
     expect(SPLASH_PHASES[SPLASH_PHASES.length - 1]).toBe('The Dongo is ready');
+  });
+});
+
+describe('farewell screen', () => {
+  const base = {
+    version: '0.23.1',
+    sessionId: 'abc12345',
+    tokens: 12345,
+    costUsd: 0.42,
+    durationMs: 125000,
+    uiMode: 'act' as const,
+    safetyMode: 'ask',
+    uncensored: false,
+  };
+  it('renders logo + session id + stats', () => {
+    const f = farewellFrame(base, 100).join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+    expect(f).toContain('█▀▄▀█');
+    expect(f).toContain('session abc12345');
+    expect(f).toContain('12.3k tokens');
+    expect(f).toContain('$0.42');
+    expect(f).toContain('2m05s');
+    expect(f).toContain('mochi resume');
+  });
+
+  it('shows UNCENSORED admin badge when privileged', () => {
+    const f = farewellFrame({ ...base, uncensored: true, safetyMode: 'uncensored' }, 100)
+      .join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+    expect(f).toContain('UNCENSORED');
+    expect(f).toContain('admin');
+  });
+
+  it('shows plain safety mode otherwise', () => {
+    const f = farewellFrame(base, 100).join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+    expect(f).toContain('safety: ask');
+    expect(f).not.toContain('UNCENSORED');
+  });
+
+  it('formats durations', () => {
+    expect(formatDuration(45000)).toBe('45s');
+    expect(formatDuration(125000)).toBe('2m05s');
+    expect(formatDuration(3700000)).toBe('1h01m');
   });
 });
 

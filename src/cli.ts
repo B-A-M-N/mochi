@@ -36,7 +36,7 @@ import type { MochiConfig } from './types.js';
 // Resolve the version from package.json when running from source; when Mochi is
 // compiled to a standalone binary there is no package.json next to it, so fall
 // back to the constant (kept in sync with package.json at build time).
-let VERSION = '0.23.0';
+let VERSION = '0.23.1';
 try {
   const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../package.json');
   VERSION = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
@@ -389,9 +389,12 @@ async function main() {
     process.env.MOCHI_UNCENSORED === '1';
   runtime.permPolicy = (isUncensored || isYolo) ? 'yolo'
     : (configOverrides.safety?.mode === 'auto' ? 'workspace-safe' : 'strict');
-  if (isUncensored) {
+  // Announce elevated mode ONLY when explicitly requested on THIS command
+  // line. Reading it from config/env printed the banner on every run — noise,
+  // not an announcement (the TUI badge still reflects the active policy).
+  if (configOverrides.__uncensored === true) {
     console.error('🔓 [UNCENSORED] Autonomous uncensored harness active: unrestricted system access & admin privileges.');
-  } else if (isYolo) {
+  } else if (configOverrides.__yolo === true) {
     console.error('[YOLO] YOLO mode: all permission prompts bypassed. Proceeding autonomously.');
   }
 

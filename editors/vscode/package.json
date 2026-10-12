@@ -3,7 +3,7 @@
   "displayName": "Mochi AI Agent",
   "description": "Autonomous coding agent in your editor. Sidebar chat, selection actions, plan/act modes over ACP (`mochi acp` stdio).",
   "publisher": "mochi",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "license": "MIT",
   "icon": "resources/mochi.png",
   "galleryBanner": {
@@ -19,12 +19,26 @@
     "url": "https://github.com/mochi-agent/mochi/issues"
   },
   "qna": "https://github.com/mochi-agent/mochi/discussions",
-  "keywords": ["ai", "agent", "coding", "acp", "chat", "autonomous"],
-  "categories": ["AI", "Chat", "Programming Languages", "Other"],
+  "keywords": [
+    "ai",
+    "agent",
+    "coding",
+    "acp",
+    "chat",
+    "autonomous"
+  ],
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages",
+    "Other"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p ./",

@@ -26,11 +26,11 @@ import { readFileSync } from 'node:fs';
 import { Runtime } from './runtime.js';
 import type { MochiEvent } from './types.js';
 
-const ACP_PROTOCOL_VERSION = 1;
+export const ACP_PROTOCOL_VERSION = 1;
 
 // Baked-in default overridden by the package.json version at runtime (matching
 // the CLI); the baked constant keeps the compiled binary versioned correctly.
-let ACP_AGENT_VERSION = '0.10.4';
+let ACP_AGENT_VERSION = '0.23.1';
 try {
   const pkgPath = resolve(process.cwd(), 'package.json');
   ACP_AGENT_VERSION = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
@@ -339,10 +339,24 @@ export async function handleRpc(
 /** Run the ACP server until stdin closes. `cwd` is where sessions default. */
 export async function serverLoop(cwd: string): Promise<void> {
   const sessions = new Map<string, AcpSession>();
-  const rl = createInterface({ input: process.stdin });
-  const send = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + '\n');
+  // Per-session prompt queue: ACP clients (VS Code, JetBrains) send
+  // session/prompt while a previous prompt is still streaming. Overlapping
+  // Runtime.goals runs on one session corrupt abort state + transcript, so
+  // prompts for the SAME session serialize; different sessions run in parallel.
+  const promptChains = new Map<string, Promise<unknown>>();
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  const send = (msg: unknown) => {
+    try {
+      const ok = process.stdout.write(JSON.stringify(msg) + '\n');
+      if (!ok) process.stdout.once('drain', () => {});
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code ?? '';
+      if (code === 'EPIPE' || code === 'EIO') process.exit(0);
+      throw err;
+    }
+  };
 
-  rl.on('line', async (line) => {
+  rl.on('line', (line) => {
     const trimmed = line.trim();
     if (!trimmed) return;
     let msg: RpcCall;
@@ -350,13 +364,56 @@ export async function serverLoop(cwd: string): Promise<void> {
       msg = JSON.parse(trimmed);
     } catch { return; }
     if (!msg.method) return;
-    const res = await handleRpc(msg, sessions, cwd, (sessionId, update) => {
-      send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
-    });
-    send(res);
-    if (msg.method === 'shutdown') process.exit(0);
+    const isNotification = msg.id === undefined || msg.id === null;
+    // session/cancel is spec'd as a notification (no id). Some clients send
+    // it as a request; handle both, but never reply to a notification.
+    if (msg.method === 'session/prompt' && typeof msg.params?.sessionId === 'string') {
+      const sid = String(msg.params.sessionId);
+      const prev = promptChains.get(sid) ?? Promise.resolve();
+      const run = prev.catch(() => {}).then(async () => {
+        const res = await handleRpc(msg, sessions, cwd, (sessionId, update) => {
+          send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
+        });
+        if (!isNotification) send({ jsonrpc: '2.0', ...res });
+        if (msg.method === 'shutdown') process.exit(0);
+      });
+      promptChains.set(sid, run);
+      void run.catch(() => {}).finally(() => {
+        if (promptChains.get(sid) === run) promptChains.delete(sid);
+      });
+      return;
+    }
+    void (async () => {
+      const res = await handleRpc(msg, sessions, cwd, (sessionId, update) => {
+        send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
+      });
+      if (!isNotification) send({ jsonrpc: '2.0', ...res });
+      if (msg.method === 'shutdown') process.exit(0);
+    })();
   });
   await new Promise<void>((res) => rl.on('close', () => res()));
+}
+
+/** Lightweight health probe for `mochi acp --check` / `mochi doctor`:
+ *  spawns the ACP server in-process (no child), runs initialize + session/new
+ *  + session/close, and returns a human-readable report. Pure logic, no I/O
+ *  beyond the Runtime it constructs (which touches .mochi state). */
+export async function acpCheck(cwd: string): Promise<{ ok: boolean; report: string }> {
+  const sessions = new Map<string, AcpSession>();
+  try {
+    const hello = await handleRpc({ id: 1, method: 'initialize', params: {} }, sessions, cwd);
+    const res = hello.result as { protocolVersion?: number; implementation?: { version?: string } } | undefined;
+    if (!res || res.protocolVersion !== ACP_PROTOCOL_VERSION) {
+      return { ok: false, report: `ACP initialize returned unexpected protocol version (want ${ACP_PROTOCOL_VERSION})` };
+    }
+    const created = await handleRpc({ id: 2, method: 'session/new', params: { cwd } }, sessions, cwd);
+    const sid = (created.result as { sessionId?: string } | undefined)?.sessionId;
+    if (!sid) return { ok: false, report: 'ACP session/new did not return a sessionId' };
+    await handleRpc({ id: 3, method: 'session/close', params: { sessionId: sid } }, sessions, cwd);
+    return { ok: true, report: `ACP ok (protocol v${ACP_PROTOCOL_VERSION}, agent v${res.implementation?.version ?? 'unknown'}, session lifecycle verified)` };
+  } catch (e) {
+    return { ok: false, report: `ACP check failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 /** Note: the CLI dispatcher (`mochi acp`) is the sole entry point — no

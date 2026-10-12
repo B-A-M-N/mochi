@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+# All four binaries cross-compile on Ubuntu via bun (deterministic, fast).
+# Windows/macOS legs then EXECUTE their asset on real hardware, so a green
+# release means every posted binary actually runs -- not just compiles.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+      - name: Typecheck (strict)
+        run: npx tsc -p tsconfig.json --noEmit
+      - name: Build dist
+        run: npm run build
+      - name: Compile all targets
+        shell: bash
+        run: |
+          set -e
+          BIC="--compile --minify --bytecode --no-compile-autoload-dotenv --no-compile-autoload-bunfig"
+          bun build src/cli.ts $BIC --target=bun-linux-x64   --outfile dist/mochi-bin-linux-x64
+          bun build src/cli.ts $BIC --target=bun-windows-x64 --outfile dist/mochi-bin-windows-x64.exe
+          bun build src/cli.ts $BIC --target=bun-darwin-x64  --outfile dist/mochi-bin-darwin-x64
+          bun build src/cli.ts $BIC --target=bun-darwin-arm64 --outfile dist/mochi-bin-darwin-arm64
+      - name: Smoke the linux binary (version + ACP bridge)
+        shell: bash
+        run: |
+          ./dist/mochi-bin-linux-x64 --version
+          ./dist/mochi-bin-linux-x64 acp --check
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -e
+          V="${GITHUB_REF_NAME#v}"
+          node scripts/package-release.mjs --version "$V" --os linux   --arch x64   --bin dist/mochi-bin-linux-x64
+          node scripts/package-release.mjs --version "$V" --os windows --arch x64   --bin dist/mochi-bin-windows-x64.exe
+          node scripts/package-release.mjs --version "$V" --os darwin  --arch x64   --bin dist/mochi-bin-darwin-x64
+          node scripts/package-release.mjs --version "$V" --os darwin  --arch arm64 --bin dist/mochi-bin-darwin-arm64
+      - name: Package VS Code extension (.vsix, linux job only)
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          npm run compile
+          npm i -g @vscode/vsce
+          vsce package --no-yarn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mochi-assets
+          path: |
+            releases/*
+            editors/vscode/*.vsix
+
+  smoke-macos:
+    needs: build
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mochi-assets
+          path: assets
+      - name: Execute the darwin-arm64 binary on real hardware
+        shell: bash
+        run: |
+          tar -xzf assets/mochi-*-darwin-arm64.tar.gz -C /tmp
+          /tmp/mochi --version
+          /tmp/mochi acp --check
+
+  smoke-windows:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mochi-assets
+          path: assets
+      - name: Execute the windows binary on real hardware
+        shell: bash
+        run: |
+          cd assets && unzip -o 'mochi-*-windows-x64.zip' -d /tmp/mochi-win
+          /tmp/mochi-win/mochi.exe --version
+          /tmp/mochi-win/mochi.exe acp --check
+
+  publish:
+    needs: [build, smoke-macos, smoke-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: mochi-assets
+          path: assets
+          merge-multiple: true
+      - name: Create release and upload assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            if [ -f CHANGELOG.md ]; then
+              head -n 40 CHANGELOG.md > /tmp/notes.md
+              gh release create "$TAG" --title "mochi ${TAG}" --notes-file /tmp/notes.md
+            else
+              gh release create "$TAG" --title "mochi ${TAG}" --generate-notes
+            fi
+          fi
+          gh release upload "$TAG" assets/* --clobber

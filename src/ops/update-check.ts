@@ -1,8 +1,9 @@
 // Daily update check (warn-only, offline-safe, opt-out).
-// Prints a one-line stderr hint when the npm registry reports a newer
-// @mochi/agent than the running build. Never blocks startup: 3s fetch
-// budget, 24h cache in ~/.config/mochi/update-check.json, disabled with
-// MOCHI_NO_UPDATE_CHECK=1. No telemetry — only a version string is fetched.
+// Prints a one-line stderr hint when GitHub reports a newer release tag than
+// the running build. (The npm package is unpublished, so the registry can't
+// be the source of truth.) Never blocks startup: 3s fetch budget, 24h cache
+// in ~/.config/mochi/update-check.json, disabled with
+// MOCHI_NO_UPDATE_CHECK=1. No telemetry — only the latest tag is fetched.
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -59,11 +60,15 @@ async function fetchLatest(): Promise<string | undefined> {
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 3000);
-    const res = await fetch('https://registry.npmjs.org/@mochi%2Fagent/latest', { signal: ctl.signal });
+    const res = await fetch('https://api.github.com/repos/xanstomper/mochi/releases/latest', {
+      signal: ctl.signal,
+      headers: { accept: 'application/vnd.github+json' },
+    });
     clearTimeout(t);
     if (!res.ok) return undefined;
-    const { version } = (await res.json()) as { version?: string };
-    return typeof version === 'string' ? version : undefined;
+    const { tag_name } = (await res.json()) as { tag_name?: string };
+    if (typeof tag_name !== 'string') return undefined;
+    return tag_name.replace(/^v/, '');
   } catch {
     return undefined;
   }

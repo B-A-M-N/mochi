@@ -31,7 +31,7 @@ else ok('working tree clean');
 // 2. Version coherence: package.json + CHANGELOG + baked fallback agree.
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const changelog = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8');
-if (!changelog.includes(`## ${pkg.version}`)) fail(`CHANGELOG has no ## ${pkg.version} section`);
+if (!changelog.includes(`## ${pkg.version}`) && !changelog.includes(`## [${pkg.version}]`)) fail(`CHANGELOG has no ## ${pkg.version} section`);
 else ok(`CHANGELOG covers ${pkg.version}`);
 const cliSrc = readFileSync(resolve(root, 'src/cli.ts'), 'utf8');
 const m = cliSrc.match(/^let VERSION = '([^']+)'/m);

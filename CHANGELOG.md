@@ -1,5 +1,12 @@
 # Mochi Changelog
 
+## [0.23.1] - 2026-10-12
+- **First GitHub release** — standalone binaries for linux-x64, windows-x64, darwin-x64, darwin-arm64 on the releases page (`scripts/package-release.mjs` + `release.yml` matrix). No Node needed.
+- **1-line install** — `curl -fsSL https://raw.githubusercontent.com/xanstomper/mochi/main/install.sh | bash` (linux/mac) and `irm …/install.ps1 | iex` (windows). Installs `mochi` to PATH with source-build fallback. See `docs/INSTALL.md`.
+- **Goodbye screen** — exiting the TUI (double Ctrl+C / Ctrl+D) now prints the MOCHI logo + session id + tokens/cost/duration + safety badge (`🔓 UNCENSORED · admin privileges active` when privileged), opencode-style, persisting in scrollback.
+- **Update check** — daily warn-only nudge now reads the GitHub releases API (the npm package is unpublished); `MOCHI_NO_UPDATE_CHECK=1` opts out.
+- **New-user flow verified** — fresh-HOME E2E (`--version`, `--help`, `doctor`, `onboard --yes`, `acp --check`, `setup vscode`, TUI exit card) green on the linux binary.
+
 ## [0.23.0] - 2026-10-12
 - **ACP hardening** — notification handling (no `id` → no reply, string + numeric ids route), per-session prompt queue (overlap on one session serializes, parallel across sessions), `mochi acp --check` verifies initialize → new → close without an editor.
 - **VS Code production** — silent-server `requestTimeoutMs` (streaming keeps alive), markdown chat (code/bold), plan/act mode toggle + badge, `Check Agent Health` round-trip, stderr mirrored to Output log.
