@@ -167,9 +167,9 @@ function HeroSection() {
       </div>
 
       <div className="hero-mascot">
-        <AnimatedContent direction="right" delay={0.2} duration={0.85} distance={55} blur={16}>
-          <div style={{ position: 'relative' }}>
-            <Mochi size={960} />
+        <AnimatedContent direction="bottom" delay={0.2} duration={0.85} distance={30} blur={16}>
+          <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+            <Mochi size={940} />
           </div>
         </AnimatedContent>
       </div>

@@ -394,15 +394,18 @@ header.site.is-scrolled:hover .nav-right {
 .hero-mascot {
   position: relative;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   min-height: 540px;
   width: 100%;
+  overflow: visible;
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 .hero-mascot img {
   width: 100%;
-  max-width: 980px;
+  max-width: min(940px, 100%);
   height: auto;
   display: block;
   position: relative;
