@@ -103,9 +103,9 @@ export function BlurText({
 
 /* ── AnimatedContent & Directional Reveal Presets ──────────── */
 export function AnimatedContent({
-  children, direction = 'bottom', distance = 28, delay = 0,
-  duration = 0.75, scale = 0.96, className = '', once = true,
-  blur = 10, preset,
+  children, direction = 'bottom', distance = 48, delay = 0,
+  duration = 0.85, scale = 0.96, className = '', once = false,
+  blur = 14, preset,
 }) {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
@@ -118,24 +118,24 @@ export function AnimatedContent({
 
   if (preset === 'blur') {
     effectiveDir = 'bottom';
-    effectiveDist = 20;
-    effectiveBlur = 10;
-    effectiveDur = 0.7;
+    effectiveDist = 24;
+    effectiveBlur = 14;
+    effectiveDur = 0.8;
   } else if (preset === 'left') {
     effectiveDir = 'left';
-    effectiveDist = 32;
-    effectiveBlur = 10;
-    effectiveDur = 0.8;
+    effectiveDist = 56;
+    effectiveBlur = 14;
+    effectiveDur = 0.85;
   } else if (preset === 'right') {
     effectiveDir = 'right';
-    effectiveDist = 32;
-    effectiveBlur = 10;
-    effectiveDur = 0.8;
+    effectiveDist = 56;
+    effectiveBlur = 14;
+    effectiveDur = 0.85;
   } else if (preset === 'depth') {
     effectiveDir = 'scale';
     effectiveDist = 0;
-    effectiveBlur = 8;
-    effectiveDur = 0.8;
+    effectiveBlur = 12;
+    effectiveDur = 0.85;
   }
 
   useEffect(() => {
@@ -151,10 +151,13 @@ export function AnimatedContent({
           setInView(true);
           if (once) io.disconnect();
         } else if (!once) {
-          setInView(false);
+          const vh = window.innerHeight || 800;
+          if (entry.boundingClientRect.top > (vh - 60)) {
+            setInView(false);
+          }
         }
       },
-      { threshold: 0.05, rootMargin: '0px 0px 40px 0px' }
+      { threshold: 0.1, rootMargin: '0px 0px -70px 0px' }
     );
     io.observe(el);
     return () => {
@@ -181,8 +184,8 @@ export function AnimatedContent({
 
 /* ── Preset D: EditorialReveal ──────────────────────────────── */
 export function EditorialReveal({
-  children, delay = 0, duration = 0.8, className = '',
-  as: Tag = 'div', once = true,
+  children, delay = 0, duration = 0.85, className = '',
+  as: Tag = 'div', once = false,
 }) {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
@@ -198,8 +201,13 @@ export function EditorialReveal({
       if (entry.isIntersecting) {
         setInView(true);
         if (once) io.disconnect();
-      } else if (!once) setInView(false);
-    }, { threshold: 0.05, rootMargin: '0px 0px 40px 0px' });
+      } else if (!once) {
+        const vh = window.innerHeight || 800;
+        if (entry.boundingClientRect.top > (vh - 60)) {
+          setInView(false);
+        }
+      }
+    }, { threshold: 0.1, rootMargin: '0px 0px -70px 0px' });
     io.observe(el);
     return () => io.disconnect();
   }, [once]);

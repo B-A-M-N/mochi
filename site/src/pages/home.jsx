@@ -596,56 +596,59 @@ function ArchitectureSection() {
       </AnimatedContent>
 
       {/* Interactive Tabs Bar */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            style={{
-              padding: '12px 20px',
-              borderRadius: 14,
-              border: activeTab === t.id ? '1.5px solid var(--purple)' : '1.5px solid var(--line)',
-              background: activeTab === t.id ? 'var(--purple-lighter)' : '#ffffff',
-              color: activeTab === t.id ? 'var(--purple-dark)' : 'var(--ink)',
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              boxShadow: activeTab === t.id ? '0 4px 14px rgba(139, 117, 246, 0.18)' : 'var(--shadow-card)',
-              transition: 'all 0.2s',
-            }}
-          >
-            <span>{t.label}</span>
-            <span
+      <AnimatedContent direction="left" delay={0.1} distance={45} blur={14}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
               style={{
-                fontSize: 10.5,
-                fontFamily: 'var(--font-mono)',
-                padding: '2px 8px',
-                borderRadius: 6,
-                background: activeTab === t.id ? 'var(--purple)' : '#EDE8F5',
-                color: activeTab === t.id ? '#ffffff' : 'var(--purple-dark)',
+                padding: '12px 20px',
+                borderRadius: 14,
+                border: activeTab === t.id ? '1.5px solid var(--purple)' : '1.5px solid var(--line)',
+                background: activeTab === t.id ? 'var(--purple-lighter)' : '#ffffff',
+                color: activeTab === t.id ? 'var(--purple-dark)' : 'var(--ink)',
                 fontWeight: 700,
+                fontSize: 14,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                boxShadow: activeTab === t.id ? '0 4px 14px rgba(139, 117, 246, 0.18)' : 'var(--shadow-card)',
+                transition: 'all 0.2s',
               }}
             >
-              {t.badge}
-            </span>
-          </button>
-        ))}
-      </div>
+              <span>{t.label}</span>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontFamily: 'var(--font-mono)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  background: activeTab === t.id ? 'var(--purple)' : '#EDE8F5',
+                  color: activeTab === t.id ? '#ffffff' : 'var(--purple-dark)',
+                  fontWeight: 700,
+                }}
+              >
+                {t.badge}
+              </span>
+            </button>
+          ))}
+        </div>
+      </AnimatedContent>
 
       {/* Active Tab Interactive Display */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 24,
-          border: '1.5px solid rgba(139, 92, 246, 0.20)',
-          boxShadow: 'var(--shadow-card)',
-          padding: 34,
-          overflow: 'hidden',
-        }}
-      >
+      <AnimatedContent direction="right" delay={0.18} distance={50} blur={14}>
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 24,
+            border: '1.5px solid rgba(139, 92, 246, 0.20)',
+            boxShadow: 'var(--shadow-card)',
+            padding: 34,
+            overflow: 'hidden',
+          }}
+        >
         {activeTab === 'ast' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
@@ -819,7 +822,8 @@ function ArchitectureSection() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </AnimatedContent>
     </section>
   );
 }
