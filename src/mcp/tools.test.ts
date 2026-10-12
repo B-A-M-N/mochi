@@ -58,7 +58,7 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify({ jsonrpc:'2.0', id: body.id, result: { messages: [{ role: 'user', content: { type: 'text', text } }] } }) + '\\n');
   }
 });
-setTimeout(() => {}, 30_000);
+setTimeout(() => {}, 60_000);
 `;
 
 function fakeCtx() {

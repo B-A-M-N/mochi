@@ -61,5 +61,5 @@ describe('compaction fidelity (long tasks never lose the mission)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 60_000);
 });

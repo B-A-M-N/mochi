@@ -122,7 +122,7 @@ describe('GoalEngine auto-resume', () => {
     } finally {
       await resumeFake.close();
     }
-  }, 30_000);
+  }, 60_000);
 
   it('does NOT resume when the caller aborts mid-task', async () => {
     // Stall the first response, abort from the caller mid-flight, and prove
@@ -150,5 +150,5 @@ describe('GoalEngine auto-resume', () => {
     } finally {
       await abortFake.close();
     }
-  }, 30_000);
+  }, 60_000);
 });

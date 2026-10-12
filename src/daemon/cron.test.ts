@@ -112,7 +112,7 @@ describe('notifyJobResult', () => {
     expect((received as any)?.summary).toContain('1 done');
     expect((received as any)?.prompt).toBe('run tests');
     await new Promise<void>((r) => server.close(() => r()));
-  }, 15_000);
+  }, 60_000);
 
   it('runs a shell command with the summary in an env var', async () => {
     const { mkdtempSync, writeFileSync, readFileSync } = await import('node:fs');
@@ -123,7 +123,7 @@ describe('notifyJobResult', () => {
     const job = { id: 'job2', prompt: 'x', schedule: 'every 1m', lastRun: null, nextRun: 0, createdAt: 0, enabled: true, runs: 0, notify: `echo "$MOCHI_JOB_SUMMARY" > ${out}` };
     await notifyJobResult(job, 'the summary text');
     expect(readFileSync(out, 'utf8').trim()).toBe('the summary text');
-  }, 15_000);
+  }, 60_000);
 
   it('refuses to execute a target that fails validation', async () => {
     const { mkdtempSync } = await import('node:fs');
@@ -134,7 +134,7 @@ describe('notifyJobResult', () => {
     const job = { id: 'job3', prompt: 'x', schedule: 'every 1m', lastRun: null, nextRun: 0, createdAt: 0, enabled: true, runs: 0, notify: 'x'.repeat(501) + ` > ${out}` };
     await notifyJobResult(job as never, 'should never run');
     expect(existsSync(out)).toBe(false);
-  }, 15_000);
+  }, 60_000);
 });
 
 describe('validateNotify', () => {

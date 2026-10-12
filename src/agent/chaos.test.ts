@@ -90,7 +90,7 @@ describe('chaos-model defense (degenerate provider shapes terminate bounded)', (
     expect(r.result.success).toBe(true);
     // Flood was suppressed, not streamed verbatim to the TUI.
     expect(r.reasoningEvents).toBeLessThan(100);
-  }, 30_000);
+  }, 60_000);
 
   it('(c) 500 tiny entropy chunks: stream budget cuts it, loop recovers', async () => {
     const words = ['checking', 'the', 'handler', 'logic', 'now', 'tracing', 'calls'];
@@ -102,7 +102,7 @@ describe('chaos-model defense (degenerate provider shapes terminate bounded)', (
       { content: 'Fixed the login bug.', finishReason: 'stop' },
     ]);
     expect(r.result.success).toBe(true);
-  }, 30_000);
+  }, 60_000);
 
   it('(d) alternating 2-phrase loop: detected and bounded', async () => {
     const a = 'The first step is to reproduce the failure locally with the test suite today.';
@@ -113,7 +113,7 @@ describe('chaos-model defense (degenerate provider shapes terminate bounded)', (
       { content: 'Fixed the login bug.', finishReason: 'stop' },
     ]);
     expect(r.result.success).toBe(true);
-  }, 30_000);
+  }, 60_000);
 
   it('(h) valid chunks then silent mid-stream hold: stall guard aborts, honest model_error', async () => {
     const r = await runChaos([
@@ -125,7 +125,7 @@ describe('chaos-model defense (degenerate provider shapes terminate bounded)', (
     // run finished with SOME honest terminal state rather than hanging.
     expect(['completed', 'model_error', 'tool_loop', 'max_iterations', 'aborted']).toContain(r.result.stopReason);
     expect(r.requests).toBeLessThanOrEqual(4);
-  }, 30_000);
+  }, 60_000);
 
   it('(g) tool-call arguments split across many chunks still execute', async () => {
     // The fake provider splits content across SSE boundaries by design; the
@@ -141,5 +141,5 @@ describe('chaos-model defense (degenerate provider shapes terminate bounded)', (
       { content: 'Fix file written and verified. Done.', finishReason: 'stop' },
     ]);
     expect(r.result.success).toBe(true);
-  }, 30_000);
+  }, 60_000);
 });

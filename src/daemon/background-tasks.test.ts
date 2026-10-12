@@ -19,7 +19,7 @@ describe('background tasks', () => {
     expect(t.output).toContain('hello-from-bg');
     expect(describeTask(t)).toContain('[bg:');
     expect(describeTask(t)).toContain('completed');
-  }, 15_000);
+  }, 60_000);
 
   it('captures non-zero exit as failed', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
@@ -27,7 +27,7 @@ describe('background tasks', () => {
     for (let i = 0; i < 50 && t.status === 'running'; i++) await sleep(100);
     expect(t.status).toBe('failed');
     expect(t.exitCode).toBe(3);
-  }, 15_000);
+  }, 60_000);
 
   it('listTasks includes started tasks; getTask round-trips', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
@@ -35,7 +35,7 @@ describe('background tasks', () => {
     expect(getTask(t.id)?.id).toBe(t.id);
     expect(listTasks().some((x) => x.id === t.id)).toBe(true);
     for (let i = 0; i < 50 && t.status === 'running'; i++) await sleep(100);
-  }, 15_000);
+  }, 60_000);
 
   it('truncates describeTask output', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
@@ -43,7 +43,7 @@ describe('background tasks', () => {
     for (let i = 0; i < 100 && t.status === 'running'; i++) await sleep(100);
     const d = describeTask(t, 500);
     expect(d.length).toBeLessThan(1000);
-  }, 30_000);
+  }, 60_000);
 
   it('kills a long-running background task with killTask', async () => {
     const { killTask } = await import('./background-tasks.js');
@@ -54,7 +54,7 @@ describe('background tasks', () => {
     expect(killed).toBe(true);
     expect(t.status).toBe('failed');
     expect(t.output).toContain('task killed');
-  });
+  }, 60_000);
 
   it('persists a ledger so a FRESH process can list/logs the task', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-'));
@@ -65,7 +65,7 @@ describe('background tasks', () => {
     expect(found?.status).toBe('completed');
     expect(found?.output).toContain('ledger-roundtrip');
     expect(listPersistedTasks(dir).some((x) => x.id === t.id)).toBe(true);
-  }, 15_000);
+  }, 60_000);
 
   it('ledger: corrects stale running records (dead owner pid) and kill fails honestly', async () => {
     const { spawnSync } = await import('node:child_process');

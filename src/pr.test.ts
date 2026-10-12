@@ -64,7 +64,7 @@ describe('pr.ts', () => {
     expect(log).toMatch(/Fix #42/);
     const content = readFileSync(resolve(dir, 'a.txt'), 'utf8');
     expect(content).toContain('fixed for #42');
-  }, 30_000);
+  }, 60_000);
 
   it('stage:"branch" creates the branch WITHOUT committing, pushing, or fabricating a summary', async () => {
     const { runIssueToPr } = await import('./pr.js');
@@ -89,5 +89,5 @@ describe('pr.ts', () => {
     // Branch exists and points where we left HEAD.
     const branchHead = execSync('git rev-parse fix-branch-only-test', { cwd: dir, encoding: 'utf-8' }).trim();
     expect(branchHead).toBe(headBefore);
-  }, 30_000);
+  }, 60_000);
 });

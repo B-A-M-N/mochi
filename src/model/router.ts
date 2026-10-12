@@ -188,9 +188,11 @@ function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved
       throw new Error(`Provider ${config.provider} is marked dead (${st.record?.lastError ?? 'previous terminal failure'}). Skipping; re-probe after cooldown.`);
     }
     if (st.status === 'cooldown' && (st.record?.consecutiveFailures ?? 0) >= 2) {
-      const waitMs = st.record?.cooldownUntil ? Math.max(0, st.record.cooldownUntil - Date.now()) : undefined;
-      const wait = waitMs !== undefined ? ` Try again in ~${(Math.round(waitMs / 100) / 10)}s.` : ' Try again shortly.';
-      throw new Error(`Provider ${config.provider} is cooling down after failures.${wait} (${st.record?.lastError ?? ''})`);
+      const waitMs = st.record?.cooldownUntil ? Math.max(0, st.record.cooldownUntil - Date.now()) : 0;
+      if (waitMs > 0) {
+        const wait = ` Try again in ~${(Math.round(waitMs / 100) / 10)}s.`;
+        throw new Error(`Provider ${config.provider} is cooling down after failures.${wait} (${st.record?.lastError ?? ''})`);
+      }
     }
     return reg;
   };

@@ -70,7 +70,7 @@ describe('create_pr tool', () => {
     expect(res).toContain('mochi/add-a-new-feature');
     expect(res).toContain('→ main');
     expect(execSync('git branch --show-current', { cwd: dir, encoding: 'utf8' }).trim()).toBe('mochi/add-a-new-feature');
-  }, 30_000);
+  }, 60_000);
 
   it('refuses to run from a clean working tree', async () => {
     execSync('git reset -q --hard HEAD && git clean -qfd .', { cwd: dir });

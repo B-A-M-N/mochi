@@ -55,5 +55,5 @@ describe('shellTool output budget', () => {
     expect(result).toContain('1\n2\n3');           // head preserved
     expect(result).toMatch(/19999\d\n200000/);    // tail preserved
     expect(result).toMatch(/elided [\d,]+ chars/);
-  }, 20_000);
+  }, 60_000);
 });

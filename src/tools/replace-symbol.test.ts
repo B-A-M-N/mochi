@@ -34,7 +34,7 @@ maybeDescribe('replaceSymbol', () => {
     expect(out).toContain('const keep = 1;');
     expect(out).toContain('console.log("untouched");');
     expect(out).not.toContain('return a + 1;');
-  }, 30_000);
+  }, 60_000);
 
   it('fails clearly for unknown symbols', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rs-'));

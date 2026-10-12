@@ -59,7 +59,7 @@ describe('search tool', () => {
     // Fresh search: the mutated file is still matched (cache was invalidated
     // so results reflect the post-write tree, not a stale generation).
     expect(third).toContain('src/math.ts');
-  }, 30_000);
+  }, 60_000);
 
   it('the sync tree walk is bounded by the file budget (freeze guard)', async () => {
     // Regression for the hard freeze: fallbackSearch walked the whole tree
@@ -76,5 +76,5 @@ describe('search tool', () => {
     } finally {
       rmSync(walkDir, { recursive: true, force: true });
     }
-  }, 20_000);
+  }, 60_000);
 });

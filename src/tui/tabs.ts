@@ -12,6 +12,8 @@ export interface TabInfo {
   unread: number;
   createdAt: number;
   lastActiveAt: number;
+  status?: 'idle' | 'running' | 'done' | 'error';
+  statusText?: string;
 }
 
 /** Hard cap: more parallel agent sessions than this melts small boxes. */
@@ -20,7 +22,7 @@ export const MAX_TABS = 8;
 let tabSeq = 0;
 
 export function defaultTabTitle(n: number): string {
-  return n <= 1 ? 'New session' : `New session ${n}`;
+  return n <= 1 ? 'Session 1' : `Session ${n}`;
 }
 /** Slug a tab title from the user's first prompt (24 cols, no newlines). */
 export function slugTitle(prompt: string): string {
@@ -131,14 +133,25 @@ export class TabManager {
   /** Auto-title a default-named tab from the first user prompt (once). */
   autoTitle(id: string, prompt: string): boolean {
     const t = this.tabs.find((x) => x.id === id);
-    if (!t || !/^(tab \d+|New session( \d+)?)$/.test(t.title)) return false;
+    if (!t || !/^(tab \d+|Session \d+|New session( \d+)?)$/.test(t.title)) return false;
     t.title = slugTitle(prompt);
     return true;
   }
 
+  setStatus(id: string, status: 'idle' | 'running' | 'done' | 'error', statusText?: string): void {
+    const t = this.tabs.find((x) => x.id === id);
+    if (t) {
+      t.status = status;
+      if (statusText !== undefined) t.statusText = statusText;
+    }
+  }
+
   setBusy(id: string, busy: boolean): void {
     const t = this.tabs.find((x) => x.id === id);
-    if (t) t.busy = busy;
+    if (t) {
+      t.busy = busy;
+      if (busy) t.status = 'running';
+    }
   }
 
   /** A background tab produced output: badge it (active tab clears on view). */
@@ -165,21 +178,27 @@ export interface TabBarCell {
   /** Tab id, or null for the `+ New session` button. */
   tabId: string | null;
   /** Plain (unstyled) cell text; width = visibleCells(plain) in cells.
-   *  opencode-style pills: ` {title}{dots} ` — the renderer fills the
+   *  opencode-style pills: ` {icon} {title}{unread} {close} ` — the renderer fills the
    *  active pill with a surface bg, idle pills stay dim text. */
   plain: string;
   /** 0-based index into tabs.list(), -1 for `+`. */
   tabIndex: number;
-  /** Structured parts (renderer colors these; plain === ' '+title+unread+busy+' '). */
+  /** Structured parts (renderer colors these). */
   title: string;
   unread: string;
   busy: string;
+  status: 'idle' | 'running' | 'done' | 'error';
+  statusText?: string;
+  icon: string;
+  close: string;
 }
 
 export interface TabBarLayout {
   cells: TabBarCell[];
   /** 0-based [start, end) column range per cell (parallel to cells). */
   ranges: Array<[number, number]>;
+  /** 0-based [start, end) column range of the `×` close button per cell. */
+  closeRanges: Array<[number, number] | null>;
   /** Whether the key-hint suffix fits after the cells. */
   showHint: boolean;
   /** 0-based [start, end) column range of the `+` button (always present). */
@@ -198,49 +217,99 @@ export const TAB_HINT_PLAIN = 'Alt+T new · Alt+W close · Alt+1-8 switch';
 export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout {
   const w = Math.max(8, maxWidth);
   const unreadOf = (t: TabInfo) => (t.unread > 0 ? ' •' : '');
-  // Pill per tab: ` ` + title + unread-dot + busy-dot + ` `, badges
-  // space-separated (` api • ● `) — dots jammed on text read as typos.
-  // Fixed overhead = 1 + unread + busy + 1.
-  const fixedOf = (t: TabInfo) => 1 + unreadOf(t).length + (t.busy ? 2 : 0) + 1;
-  // Fair-share title budget: shrink only titles that exceed it.
+  const iconOf = (t: TabInfo) => {
+    if (t.busy || t.status === 'running') return '⠋';
+    if (t.status === 'done') return '✓';
+    if (t.status === 'error') return '✗';
+    return '•';
+  };
+  // Fixed overhead per tab:
+  // ` ` (1) + icon (1) + ` ` (1) + title + unread + ` ` (1) + `×` (1) + ` ` (1) = 6 + unread
+  const fixedOf = (t: TabInfo) => 6 + unreadOf(t).length;
   const fixedSum = list.reduce((n, t) => n + fixedOf(t), 0);
-  // Cells tile with NO separators: each tab cell carries its own symmetric
-  // padding (` {title}{dots} `) and the `+` cell follows the last trailing
-  // space directly. The renderer joins with '' so columns match exactly.
   const plusWidth = visibleCells('+ New session');
   let titleBudget = Math.floor((w - plusWidth - fixedSum) / Math.max(1, list.length));
-  // Narrow terminals shrink titles to a bare '…' rather than overflowing:
-  // the bar + `+` must ALWAYS fit so clicks stay exact.
-  titleBudget = Math.max(1, titleBudget);
+  titleBudget = Math.max(0, titleBudget);
+
+  const ranges: Array<[number, number]> = [];
+  const closeRanges: Array<[number, number] | null> = [];
+  let x = 0;
+
   const cells: TabBarCell[] = list.map((t, i) => {
     let title = t.title;
-    if (visibleCells(title) > titleBudget) title = sliceCells(title, Math.max(0, titleBudget - 1)).text + '…';
+    if (titleBudget === 0) {
+      title = '';
+    } else if (visibleCells(title) > titleBudget) {
+      title = sliceCells(title, Math.max(0, titleBudget - 1)).text + '…';
+    }
     const unread = unreadOf(t);
+    const icon = iconOf(t);
     const busy = t.busy ? ' ●' : '';
-    const plain = ` ${title}${unread}${busy} `;
-    return { tabId: t.id, plain, tabIndex: i, title, unread, busy };
-  });
-  cells.push({ tabId: null, plain: '+ New session', tabIndex: -1, title: '+ New session', unread: '', busy: '' });
-  const ranges: Array<[number, number]> = [];
-  let x = 0;
-  cells.forEach((c) => {
-    const cw = visibleCells(c.plain);
+    const close = '×';
+    const plain = ` ${icon} ${title}${unread} ${close} `;
+    const cw = visibleCells(plain);
     ranges.push([x, x + cw]);
+    closeRanges.push([x + cw - 3, x + cw]);
     x += cw;
+    return {
+      tabId: t.id,
+      plain,
+      tabIndex: i,
+      title,
+      unread,
+      busy,
+      status: t.status ?? (t.busy ? 'running' : 'idle'),
+      statusText: t.statusText,
+      icon,
+      close,
+    };
   });
+
+  const plusPlain = '+ New session';
+  const plusW = visibleCells(plusPlain);
+  cells.push({
+    tabId: null,
+    plain: plusPlain,
+    tabIndex: -1,
+    title: plusPlain,
+    unread: '',
+    busy: '',
+    status: 'idle',
+    icon: '+',
+    close: '',
+  });
+  ranges.push([x, x + plusW]);
+  closeRanges.push(null);
+  x += plusW;
+
   const showHint = x + 1 + visibleCells(TAB_HINT_PLAIN) <= w;
-  return { cells, ranges, showHint, plusRange: ranges[ranges.length - 1], width: x };
+  return {
+    cells,
+    ranges,
+    closeRanges,
+    showHint,
+    plusRange: ranges[ranges.length - 1],
+    width: x,
+  };
 }
 
-/** Hit-test a 0-based column against a layout: tab index, 'plus', or null
+/** Hit-test a 0-based column against a layout: tab index, 'close', 'plus', or null
  *  (separators, hint, and empty space are not clickable). */
-export function tabBarHit(layout: TabBarLayout, col: number): { kind: 'tab'; index: number } | { kind: 'plus' } | null {
+export function tabBarHit(
+  layout: TabBarLayout,
+  col: number
+): { kind: 'tab'; index: number } | { kind: 'close'; index: number } | { kind: 'plus' } | null {
   if (col < 0) return null;
   for (let i = 0; i < layout.cells.length; i++) {
     const [s, e] = layout.ranges[i];
     if (col >= s && col < e) {
       const c = layout.cells[i];
-      return c.tabId === null ? { kind: 'plus' } : { kind: 'tab', index: c.tabIndex };
+      if (c.tabId === null) return { kind: 'plus' };
+      const cr = layout.closeRanges[i];
+      if (cr && col >= cr[0] && col < cr[1]) {
+        return { kind: 'close', index: c.tabIndex };
+      }
+      return { kind: 'tab', index: c.tabIndex };
     }
   }
   return null;

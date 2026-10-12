@@ -10,7 +10,7 @@ import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
 import { terminateRow, paintCanvasBg } from './ansi-hygiene.js';
 import { prefersReducedMotion, applyTheme, canvasBg } from './themes.js';
-import { TabManager, tabBarCells, tabBarHit } from './tabs.js';
+import { TabManager, tabBarCells, tabBarHit, slugTitle } from './tabs.js';
 import { chromeLayout } from './chrome.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { kvCache } from '../model/kv-cache.js';
@@ -26,13 +26,10 @@ import {
   getAllThemes,
   getCurrentTheme,
   themeSwatch,
-  gradientContextBar,
-  gradientCacheBar,
   splashFrame,
   SPLASH_TICKS,
   farewellFrame,
   statusBarRow1,
-  statusBarRow2,
   renderMarkdown,
   renderDropdown,
 
@@ -40,10 +37,11 @@ import {
   composerPlaceholderRow,
   composerTopRule,
   composerBottomRule,
-  composerHintRow,
   transcriptIndent,
   thinkingLine,
   ellipsize,
+  padEnd,
+  type StatusBarModel,
 } from './view.js';
 
 const HIDE = '\x1b[?25l';
@@ -131,6 +129,7 @@ const COMMANDS = [
   { name: '/review', hint: 'Review the working-tree diff before commit [staged|last]' },
   { name: '/security-review', hint: 'Security-focused review of the diff [staged|last]' },
   { name: '/new', hint: 'Start a fresh conversation session' },
+  { name: '/close', hint: 'Close and exit the current session tab (Alt+W)' },
   { name: '/tab', hint: 'Multi-session tabs: new|close|next|prev|rename|list|N (Alt+T/W/1-8)' },
   { name: '/team', hint: 'Run concurrent specialist agents on one objective' },
   { name: '/image', hint: 'Attach image file(s) to your next message [path...|clear]' },
@@ -262,34 +261,53 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   /** Render the pinned top tab-bar row from the shared layout (tabs.ts), so
    *  styled columns match hit-test columns EXACTLY (ANSI is zero-width).
-   *  opencode-style pills: the active tab gets a filled surface pill, idle
-   *  tabs are dim text, then a `+ New session` button. */
+  /** Tab bar row for the top of the terminal:
+   *  opencode-style surface pills: elevated surface, live braille spinner for running tabs,
+   *  green check for completed tabs, red cross for errors, soft purple dot for idle,
+   *  and clickable close button on each tab + `+ New session` button. */
   function tabBarRow(w: number): string {
-    // Active-pill fill: a real 48;2 background surface (userBg highlight).
-    // If a theme ever ships a non-bg userBg, fall back to bold accent text.
-    const fill = typeof R.userBg === 'string' && R.userBg.includes('48;2') ? R.userBg : '';
-    const layout = tabBarCells(tabs.list(), activeTabId, w);
-    // Styled twins of the plain ` {title}{unread}{busy} ` cells: identical
-    // visible cells, so hit-testing stays exact (ANSI is zero-width).
-    // Styled twins of the plain ` {title}{unread}{busy} ` cells: identical
-    // visible cells, so hit-testing stays exact (ANSI is zero-width).
-    // No key-hint suffix — the bar keeps sessions only (Alt+T/W/1-8 live in
-    // /tab list and the TUI help instead).
+    const tabList = tabs.list();
+    const layout = tabBarCells(tabList, activeTabId, w);
+    const ACTIVE_BG = '\x1b[48;2;48;44;68m';
+    const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
     const styled = layout.cells.map((c) => {
-      if (c.tabId === null) return `${T.grayDark}+ New session${T.reset}`;
-      const isActive = c.tabId === activeTabId;
-      const unread = c.unread ? ` ${T.act}•${T.reset}` : '';
-      const busy = c.busy ? ` ${T.warning}●${T.reset}` : '';
-      if (isActive) {
-        const dot = c.unread ? ` ${T.act}•` : '';
-        const mark = c.busy ? ` ${T.warning}●` : '';
-        return fill
-          ? `${fill}${T.bold}${T.fg} ${c.title}${dot}${mark} ${T.reset}`
-          : `${T.bold}${T.act} ${c.title}${unread}${busy} ${T.reset}`;
+      if (c.tabId === null) {
+        return `\x1b[48;2;34;32;48m\x1b[1m\x1b[38;2;225;220;245m${c.plain}${T.reset}`;
       }
-      return ` ${T.grayDark}${c.title}${T.reset}${unread}${busy} `;
+      const isActive = c.tabId === activeTabId;
+      const tab = tabList.find((t) => t.id === c.tabId);
+      const isBusy = tab?.busy ?? false;
+      const status = tab?.status ?? (isBusy ? 'running' : 'idle');
+
+      let iconColored = '';
+      if (isBusy || status === 'running') {
+        const frame = BRAILLE[state.spinner % BRAILLE.length];
+        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live braille spinner
+      } else if (status === 'done') {
+        iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
+      } else if (status === 'error') {
+        iconColored = `\x1b[38;2;248;113;113m✗`; // vibrant red error cross
+      } else {
+        iconColored = isActive ? `\x1b[38;2;167;139;250m•` : `\x1b[38;2;120;115;145m•`;
+      }
+
+      const unread = c.unread ? ` \x1b[38;2;244;63;94m•` : '';
+
+      if (isActive) {
+        const titleText = `\x1b[1m\x1b[38;2;255;255;255m${c.title}`;
+        const closeText = `\x1b[38;2;180;170;205m×`;
+        return `${ACTIVE_BG} ${iconColored}${ACTIVE_BG} ${titleText}${unread}${ACTIVE_BG} ${closeText} ${T.reset}`;
+      } else {
+        const titleText = `\x1b[38;2;140;135;165m${c.title}`;
+        const closeText = `\x1b[38;2;95;90;120m×`;
+        return ` ${iconColored} ${titleText}${unread} ${closeText} ${T.reset}`;
+      }
     });
-    return styled.join('');
+
+    const rendered = styled.join('');
+    const remaining = Math.max(0, w - layout.width);
+    return `${rendered}${' '.repeat(remaining)}${T.reset}`;
   }
 
   /** Click handling for the tab bar (screen row 0, 0-based column). */
@@ -300,10 +318,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (!hit) return;
     try {
       if (hit.kind === 'plus') {
-        // New tabs boot clean (splash showing, empty transcript): the tab
-        // bar itself is the feedback, so no transcript line is added here.
-        // (A system line would both spam context AND kill the new splash.)
+        // New tabs boot clean (empty transcript and clean runtime).
         newTab();
+      } else if (hit.kind === 'close') {
+        closeTab(hit.index);
       } else {
         switchTab(hit.index);
       }
@@ -333,7 +351,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (state.menuActive || state.promptActive || state.inspectorActive) return;
     const info = tabs.create(title);
     const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+    rt.resetSession();
+    try { rt.workspace.clearCheckpoint(); } catch { /* best effort */ }
     const st = freshTabState();
+    st.splashDismissed = false;
+    st.splashTick = 0;
+    st.splashProgress = 0;
     tabStates.set(info.id, st);
     tabRuntimes.set(info.id, rt);
     subscribeTab(info.id, rt);
@@ -344,6 +367,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     transMw = 0;
     transSeenTrimmed = 0;
     clearSelection();
+    startSpinner();
     scheduleRender();
   }
 
@@ -401,10 +425,13 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     };
   }
 
-  /** Close the active tab (aborts its run first). Never strands zero tabs. */
-  function closeActiveTab(): void {
+  /** Close a tab by index. Never strands zero tabs. */
+  function closeTab(index: number): void {
     if (state.menuActive || state.promptActive || state.inspectorActive) return;
-    const closing = activeTabId;
+    const tabList = tabs.list();
+    const target = tabList[index];
+    if (!target) return;
+    const closing = target.id;
     const rt = tabRuntimes.get(closing);
     try { rt?.abort('Tab closed by user'); } catch { /* already idle */ }
     const wasLast = tabs.count() === 1;
@@ -412,12 +439,18 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     tabStates.delete(closing);
     tabRuntimes.delete(closing);
     if (wasLast) {
-      // Fresh slate in place: new runtime + dismissed splash.
+      // Fresh slate in place: new runtime + clean checkpoint.
       const rt2 = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+      rt2.resetSession();
+      try { rt2.workspace.clearCheckpoint(); } catch { /* best effort */ }
       const st2 = freshTabState();
+      st2.splashDismissed = false;
+      st2.splashTick = 0;
+      st2.splashProgress = 0;
       tabStates.set(next.id, st2);
       tabRuntimes.set(next.id, rt2);
       subscribeTab(next.id, rt2);
+      startSpinner();
     }
     activeTabId = next.id;
     state = tabStates.get(activeTabId) as AppState;
@@ -427,6 +460,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     transSeenTrimmed = 0;
     clearSelection();
     scheduleRender();
+  }
+
+  /** Close the active tab (aborts its run first). Never strands zero tabs. */
+  function closeActiveTab(): void {
+    const idx = tabs.activeIndex();
+    closeTab(idx);
   }
 
   /** Route one runtime's events into ITS tab's state (badges background tabs). */
@@ -1175,74 +1214,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       extra,
     };
 
-    const s1 = h - bottomRows;
-    rows[s1] = statusBarRow1(statusModel, w);
-    let cTop = s1 + 1;
-
-    // Composer hint with the plan/act dots inlined beside the key legend,
-    // color-coded by mode (plan=violet, act=act color).
-    const hintWithMode = (width: number): string => {
-      const base = ' ⏎ send · Tab plan/act · ESC stop · / for commands';
-      if (width < 60) return base;
-      const dot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.act}● Act${T.reset}`;
-      const dim = `${T.grayDark}${base.slice(1)}${T.reset}`;
-      return ` ${dot} ${T.grayDark}·${T.reset} ${dim}`;
-    };
-    
-    if (statusRows === 3) {
-      const promptTotal = state.inTokens + state.cacheTokens;
-      const cacheRate = promptTotal > 0 ? Math.min(1, state.cacheTokens / promptTotal) : 0;
-      const ctxLen = w >= 80 ? 12 : (w >= 60 ? 8 : 5);
-      const cacheLen = w >= 80 ? 10 : (w >= 60 ? 6 : 4);
-      const ctx = gradientContextBar(state.inTokens + state.outTokens, runtime.config.safety.contextBudgetTokens, ctxLen, state.busy ? state.spinner + 1 : 0);
-      const cache = gradientCacheBar(cacheRate, cacheLen, state.busy ? state.spinner + 1 : 0);
-      const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
-      // Cache segment only when there IS cache — an empty `cache ───────── 0`
-      // track at rest reads as a broken gauge (screenshot artifact, 2026-10-04).
-      let cacheSeg = '';
-      if (state.cacheTokens > 0) {
-        cacheSeg = w >= 70
-          ? `  ${T.gray}cache${T.reset} ${cache.text} ${T.lime}${fmt(state.cacheTokens)}${T.reset} ${T.gray}(${Math.round(cacheRate * 100)}%)${T.reset}`
-          : `  ${T.gray}cache${T.reset} ${T.lime}${fmt(state.cacheTokens)}${T.reset}`;
-      }
-      // Plan/act toggle sits BESIDE the in/out text + bars (left-aligned
-      // after them), not right-aligned — reads as one continuous row.
-      const planDot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.grayDark}○ Plan${T.reset}`;
-      const actDot = state.uiMode === 'act' ? `${T.act}● Act${T.reset}` : `${T.grayDark}○ Act${T.reset}`;
-      const toggle = `${planDot} ${actDot} ${T.grayDark}(Tab)${T.reset}`;
-      const miniToggle = `${planDot} ${actDot}`;
-      const barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text} ${T.gray}${Math.round(ctx.pct * 100)}%${T.reset}${cacheSeg}`;
-      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
-      const baseLen = visibleLen(barsRowFull);
-      let rowContent: string;
-      if (baseLen + visibleLen(toggle) + 2 <= w) {
-        rowContent = `${barsRowFull}  ${toggle}`;
-      } else if (baseLen + visibleLen(miniToggle) + 2 <= w) {
-        rowContent = `${barsRowFull}  ${miniToggle}`;
-      } else {
-        rowContent = barsRowFull;
-      }
-      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
-      const barsRow = visibleLen(rowContent) > w ? ellipsize(rowContent, w) : rowContent;
-
-      rows[s1 + 1] = barsRow;
-      rows[s1 + 2] = statusBarRow2(statusModel, w);
-      rows[s1 + 3] = composerHintRow(hintWithMode(w), w);
-      cTop = s1 + 4;
-    } else {
-      rows[s1 + 1] = statusBarRow2(statusModel, w);
-      rows[s1 + 2] = composerHintRow(hintWithMode(w), w);
-      cTop = s1 + 3;
-    }
-
+    const cTop = h - bottomRows;
     rows[cTop] = composerTopRule(w);
     const visibleTextRows = composerRows - 2;
-    // Cursor-following scroll: instead of always pinning the TAIL of a long
-    // input (which hides the caret and the text you're actively typing),
-    // anchor the visible slice around the cursor's wrapped row. The caret stays
-    // on-screen while you type/edit any line; the tail is only pinned when the
-    // cursor is already on the last visible row. (This is the multiline-editor
-    // scroll the old `slice(-visibleTextRows)` never did.)
     const composerInnerW = Math.max(1, w - 6);
     const composerRawRows = state.input ? wrap(state.input, composerInnerW) : [''];
     const caretRow = Math.max(0, wrap(state.input.slice(0, state.cursor), composerInnerW).length - 1);
@@ -1254,21 +1228,76 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const r = cTop + 1 + i;
       if (r < h) {
         if (i === 0 && !state.input) {
-          // Empty composer: the opencode-style placeholder (this branch used
-          // to sit AFTER the shownRows check, where wrap('') === [''] made it
-          // unreachable dead code — no placeholder ever rendered).
           rows[r] = composerPlaceholderRow('Message mochi… (type / for commands)', w);
         } else if (i < shownRows.length) {
-          // Only the FIRST visible row carries the `❯` prompt glyph; wrapped
-          // continuation rows render without it so a long input doesn't stack
-          // ❯❯❯ symbols and corrupt the box edge.
           rows[r] = composerRow(shownRows[i], w, i === 0);
         } else {
           rows[r] = composerRow('', w, i === 0);
         }
       }
     }
-    rows[cTop + visibleTextRows + 1] = composerBottomRule(w);
+    const cBottom = cTop + visibleTextRows + 1;
+    if (cBottom < h) {
+      rows[cBottom] = composerBottomRule(w);
+    }
+
+    // Status & footer rows positioned cleanly beneath the composer box:
+    // Row 1 below composer: model + reasoning level + plan/act + token meter
+    // Row 2 below composer (terminal bottom edge): workspace path + git branch/diff + shortcuts
+    const footerRow = (m: StatusBarModel, width: number): string => {
+      const path = m.workspaceName + (m.gitBranch ? ` (${m.gitBranch})` : '');
+      const hasDiff = m.gitDiff && m.gitDiff.files > 0;
+      let diffText = '';
+      if (hasDiff) {
+        diffText = ` ${T.grayDark}|${T.reset} ${T.gray}${m.gitDiff!.files}f${T.reset} ${T.success}+${m.gitDiff!.additions}${T.reset} ${T.error}-${m.gitDiff!.deletions}${T.reset}`;
+      }
+      const left = ` ${T.gray}${path}${T.reset}${diffText}`;
+      const baseShortcuts = '⏎ send · Tab plan/act · Shift+Tab auto · ESC stop · / commands';
+      const compactShortcuts = '⏎ send · Tab mode · ESC stop · / cmds';
+      const miniShortcuts = '⏎ send · / cmds';
+      const shortcuts = width >= 80 ? baseShortcuts : width >= 56 ? compactShortcuts : miniShortcuts;
+      const right = `${T.grayDark}${shortcuts}${T.reset} `;
+      const leftLen = visibleLen(left);
+      const rightLen = visibleLen(right);
+      if (leftLen + rightLen <= width) {
+        const pad = ' '.repeat(width - leftLen - rightLen);
+        return `${left}${pad}${right}`;
+      } else if (leftLen + visibleLen(miniShortcuts) + 1 <= width) {
+        const miniRight = `${T.grayDark}${miniShortcuts}${T.reset} `;
+        const pad = ' '.repeat(Math.max(1, width - leftLen - visibleLen(miniRight)));
+        return `${left}${pad}${miniRight}`;
+      } else {
+        return padEnd(ellipsize(left, width), width);
+      }
+    };
+
+    const compactFooterRow = (m: StatusBarModel, width: number): string => {
+      const modelText = `${T.fg}${ellipsize(m.modelId, 16)}${T.reset}`;
+      const modeDot = m.mode === 'plan' ? `${T.plan}● P` : `${T.act}● A`;
+      const path = `${m.workspaceName}${m.gitBranch ? `(${m.gitBranch})` : ''}`;
+      const left = ` ${modelText} · ${modeDot}${T.reset} · ${T.gray}${path}${T.reset}`;
+      const right = `${T.grayDark}⏎ send · / cmds${T.reset} `;
+      const leftLen = visibleLen(left);
+      const rightLen = visibleLen(right);
+      if (leftLen + rightLen <= width) {
+        const pad = ' '.repeat(width - leftLen - rightLen);
+        return `${left}${pad}${right}`;
+      }
+      return padEnd(ellipsize(left, width), width);
+    };
+
+    if (statusRows === 2) {
+      if (cBottom + 1 < h) {
+        rows[cBottom + 1] = statusBarRow1(statusModel, w);
+      }
+      if (cBottom + 2 < h) {
+        rows[cBottom + 2] = footerRow(statusModel, w);
+      }
+    } else {
+      if (cBottom + 1 < h) {
+        rows[cBottom + 1] = compactFooterRow(statusModel, w);
+      }
+    }
     
     // ---- Sleek centered modal menu overlay with scrolling window ----
     if (state.menuActive) {
@@ -1463,7 +1492,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     state.input = '';
     state.cursor = 0;
 
-    if (line === '/exit' || line === '/quit') {
+    if (line === '/exit' || line === '/quit' || line === 'exit' || line === 'quit' || line === ':q' || line === '/q') {
       exit();
       return;
     }
@@ -2012,6 +2041,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       scheduleRender();
       return;
     }
+    if (line === '/close' || line === '/close-tab' || line === '/exit-session') {
+      closeActiveTab();
+      return;
+    }
     if (line === '/new' || line === '/clear-all') {
       runtime.resetSession();
       runtime.workspace.clearCheckpoint();
@@ -2260,6 +2293,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
     // Free-form prompt (already echo:false — agent pushes its own turns via events)
     push('user', line);
+    if (/^(Session \d+|New session( \d+)?|tab \d+)$/.test(tabs.activeTab().title)) {
+      tabs.rename(activeTabId, slugTitle(line));
+    }
     if (state.autoImproveArmed) {
       // Auto-improve is on: run the self-review pipeline. Each pass critically
       // reviews what the previous pass did, verifies it, and makes real fixes —
@@ -2296,6 +2332,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // continue; their events badge the tab unread via onRuntimeEventFor).
     const rs = state;
     const tabId = activeTabId;
+    tabs.setStatus(tabId, 'running');
     tabs.setBusy(tabId, true);
     rs.busy = true;
     startSpinner();
@@ -2304,6 +2341,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     try {
       const result = await fn();
       out = result;
+      tabs.setStatus(tabId, 'done');
       if (echo) pushTo(rs, 'assistant', result);
     } catch (e) {
       // Provider failures get a clean one-liner instead of a raw error dump,
@@ -2317,14 +2355,18 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         await new Promise((res) => setTimeout(res, Math.min(pf.retryAfterMs ?? 2_000, 15_000)));
         try {
           const result = await fn();
+          out = result;
+          tabs.setStatus(tabId, 'done');
           if (echo) pushTo(rs, 'assistant', result);
           pushTo(rs, 'system', '✓ recovered');
         } catch (e2) {
+          tabs.setStatus(tabId, 'error');
           const raw2 = e2 instanceof Error ? e2.message : String(e2);
           const pf2 = describeProviderFailure(e2);
           pushTo(rs, 'error', pf2.kind === 'transient' ? `${pf2.headline} (still degraded — raw: ${raw2.slice(0, 160)})` : raw2.slice(0, 400));
         }
       } else {
+        tabs.setStatus(tabId, 'error');
         pushTo(rs, 'error', raw.length > 200 ? `${pf.headline} (raw: ${raw.slice(0, 160)})` : raw);
       }
     } finally {
@@ -2712,9 +2754,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
     if (idx === 0) {
       runtime.resetSession();
+      try { runtime.workspace.clearCheckpoint(); } catch { /* best effort */ }
       state.lines = [];
       state.tasks.clear();
       state.scroll = 0;
+      try { tabs.rename(activeTabId, 'New session'); } catch {}
+      tabs.setStatus(activeTabId, 'idle');
       push('system', 'Started a fresh session.');
       scheduleRender();
       return;
@@ -2732,6 +2777,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     const actIdx = await openMenu(`Manage: ${(chosen.objective || 'Session').slice(0, 30)}`, subActions);
     if (actIdx === 0) {
       runtime.activeSessionId = chosen.id;
+      try { tabs.rename(activeTabId, (chosen.objective || chosen.summary || 'Session').slice(0, 24)); } catch {}
+      tabs.setStatus(activeTabId, 'idle');
       const msgs = store.messages(chosen.id);
       state.lines = [];
       state.tasks.clear();
@@ -3680,6 +3727,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   function onRuntimeEventFor(tabId: string, event: MochiEvent) {
     const target = tabStates.get(tabId);
     if (!target) return;
+    if (event.type === 'agent:completed' || event.type === 'summary:rendered') {
+      tabs.setStatus(tabId, 'done');
+    }
     const isActive = tabId === activeTabId;
     if (!isActive) {
       reduceEvent(target, event as unknown as Record<string, unknown>);
@@ -3776,6 +3826,41 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     process.on('SIGHUP', signalExit);
     subscribeTab(activeTabId, runtime);
     void refreshGitStats(); // seed the status bar diff stats
+
+    // Populate recent sessions into top tabs on startup (OpenCode parity)
+    try {
+      const { SessionStore } = await import('../state/session-store.js');
+      const store = new SessionStore(projectRoot);
+      const recents = store.list(3);
+      if (recents.length > 0 && !initialPrompt) {
+        tabs.rename(activeTabId, 'Session 1');
+        tabs.setStatus(activeTabId, 'idle');
+        runtime.activeSessionId = undefined;
+        for (let i = 0; i < Math.min(2, recents.length); i++) {
+          const s = recents[i];
+          const tabInfo = tabs.create(slugTitle(s.objective || s.summary || `Session ${i + 2}`));
+          tabs.setStatus(tabInfo.id, 'done');
+          const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+          rt.activeSessionId = s.id;
+          const st = freshTabState();
+          st.splashDismissed = true;
+          const sMsgs = store.messages(s.id);
+          for (const m of sMsgs) {
+            if (m.role === 'user') pushTo(st, 'user', m.content);
+            else if (m.role === 'assistant') pushTo(st, 'assistant', m.content);
+            else if (m.role === 'system') pushTo(st, 'system', m.content);
+          }
+          tabStates.set(tabInfo.id, st);
+          tabRuntimes.set(tabInfo.id, rt);
+          subscribeTab(tabInfo.id, rt);
+        }
+        tabs.switchTo(0);
+        activeTabId = tabs.activeTab().id;
+        state = tabStates.get(activeTabId) as AppState;
+        runtime = tabRuntimes.get(activeTabId) as Runtime;
+      }
+    } catch { /* best effort */ }
+
     // Cozy one-time welcome: first launch ever shows the onboarding banner
     // as transcript lines (one-time popup). Dismissed forever once the user
     // runs `mochi onboard --yes` (marker file) or sends their first prompt.
@@ -3806,13 +3891,25 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     if (initialPrompt) {
       push('user', initialPrompt);
       state.busy = true;
+      tabs.setBusy(activeTabId, true);
+      tabs.setStatus(activeTabId, 'running');
+      tabs.autoTitle(activeTabId, initialPrompt);
       startSpinner();
       // echo:false — the agent streams assistant turns already.
-      runtime.runPrompt(initialPrompt).then(() => {}).catch(e => push('error', e instanceof Error ? e.message : String(e))).finally(() => {
-        state.busy = false;
-        stopSpinner();
-        scheduleRender();
-      });
+      runtime.runPrompt(initialPrompt)
+        .then(() => {
+          tabs.setStatus(activeTabId, 'done');
+        })
+        .catch((e) => {
+          tabs.setStatus(activeTabId, 'error');
+          push('error', e instanceof Error ? e.message : String(e));
+        })
+        .finally(() => {
+          state.busy = false;
+          tabs.setBusy(activeTabId, false);
+          stopSpinner();
+          scheduleRender();
+        });
     }
   }
 

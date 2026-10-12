@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Goal, Task, AgentState } from './types.js';
 
@@ -119,10 +119,11 @@ export class Workspace {
   }
 
   loadCheckpoint(goalId?: string): { goalId: string; checkpoint: string; savedAt: number } | null {
+    if (!goalId) return null;
     const raw = this.readJson<{ goalId?: string; checkpoint?: string; savedAt?: number } | null>('state/checkpoint.json', null);
     if (!raw || typeof raw.checkpoint !== 'string' || !raw.checkpoint.trim()) return null;
     const gid = raw.goalId ?? '';
-    if (goalId && gid && gid !== goalId) return null;
+    if (!gid || gid !== goalId) return null;
     return { goalId: gid, checkpoint: raw.checkpoint, savedAt: raw.savedAt ?? 0 };
   }
 
@@ -174,7 +175,16 @@ export class Workspace {
   listGoals(): string[] {
     if (!existsSync(this.stateDir)) return [];
     const EXCLUDED = new Set(['agent.json', 'workspace.json', 'checkpoint.json', 'todo.json']);
-    return readdirSync(this.stateDir)
+    const files = readdirSync(this.stateDir)
       .filter((f) => f.endsWith('.json') && !f.endsWith('.tasks.json') && !EXCLUDED.has(f));
+    return files.sort((a, b) => {
+      try {
+        const sa = statSync(resolve(this.stateDir, a)).mtimeMs;
+        const sb = statSync(resolve(this.stateDir, b)).mtimeMs;
+        return sa - sb;
+      } catch {
+        return 0;
+      }
+    });
   }
 }

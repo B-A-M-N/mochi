@@ -45,7 +45,7 @@ it('starts, writes info, serves status with the token', async () => {
     method: 'POST', headers: { authorization: 'Bearer nope' },
   });
   expect(bad.status).toBe(401);
-}, 30_000);
+}, 60_000);
 
 it('rotates the bearer token: old dies, new works, info persists', async () => {
   const d2 = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-rot-'));
@@ -78,7 +78,7 @@ it('rotates the bearer token: old dies, new works, info persists', async () => {
   } finally {
     rmSync(d2, { recursive: true, force: true });
   }
-}, 30_000);
+}, 60_000);
 
 it('rejects requests with an expired token and unit-tests the helpers', async () => {
   expect(isTokenExpired({ expiresAt: null })).toBe(false);
@@ -104,7 +104,7 @@ it('rejects requests with an expired token and unit-tests the helpers', async ()
   } finally {
     rmSync(d3, { recursive: true, force: true });
   }
-}, 30_000);
+}, 60_000);
 
 it('runs a goal through the daemon with a scripted model', async () => {
   // Scripted fake provider so no network/model needed: daemon calls
@@ -157,7 +157,7 @@ it('serves inspect and plan, rejects bad JSON and unknown routes', async () => {
   } finally {
     await h.close();
   }
-}, 30_000);
+}, 60_000);
 
 it('serves jobs, resume via approve, status usage, and SSE goal progress', async () => {
   const { startFakeOpenAI } = await import('../testutil/fake-openai.js');

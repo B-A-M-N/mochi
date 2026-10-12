@@ -36,7 +36,7 @@ export interface CapabilityRecord {
 export type CapabilityProbe = (providerKey: string) => Promise<'ok'>;
 
 const DEFAULT_BACKOFF_MS = 5_000;
-const MAX_BACKOFF_MS = 5 * 60_000; // 5m ceiling per provider, per cooldown round
+const MAX_BACKOFF_MS = 30_000; // 30s ceiling per provider, per cooldown round
 
 function safeKey(key: string): string {
   return key.replace(/[^a-zA-Z0-9._-]/g, '_');

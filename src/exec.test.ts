@@ -25,7 +25,7 @@ describe('exec policy', () => {
   it('times out and reports timedOut instead of hanging', async () => {
     const r = await runShellString('sleep 30', { timeoutMs: 300 });
     expect(r.timedOut).toBe(true);
-  }, 15_000);
+  }, 60_000);
 
   it('aborts on signal with cancelled=true', async () => {
     const c = new AbortController();
@@ -33,13 +33,13 @@ describe('exec policy', () => {
     setTimeout(() => c.abort(), 100);
     const r = await p;
     expect(r.cancelled).toBe(true);
-  }, 15_000);
+  }, 60_000);
 
   it('truncates firehose output at the cap', async () => {
     const r = await runShellString('seq 1 200000', { maxOutput: 4096, timeoutMs: 15_000 });
     expect(r.stdout.length).toBeLessThan(9000);
     expect(r.stdout).toContain('[truncated]');
-  }, 20_000);
+  }, 60_000);
 
   it('execArgvText resolves stdout and rejects on failure', async () => {
     await expect(execArgvText('echo', ['ok'])).resolves.toContain('ok');

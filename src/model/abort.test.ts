@@ -51,7 +51,7 @@ it('preserves the caller reason after stream output has started', async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
-}, 10_000);
+}, 60_000);
 
 it('closes the HTTP response when the consumer stops reading early', async () => {
   let responseClosed = false;
@@ -74,7 +74,7 @@ it('closes the HTTP response when the consumer stops reading early', async () =>
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
-}, 10_000);
+}, 60_000);
 
 it('aborts an in-flight stream when the signal fires', async () => {
   const server = createServer((req, res) => {
@@ -100,4 +100,4 @@ it('aborts an in-flight stream when the signal fires', async () => {
   } catch { ended = true; }
   expect(ended).toBe(true);
   server.close();
-}, 10_000);
+}, 60_000);

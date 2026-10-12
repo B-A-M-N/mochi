@@ -26,7 +26,7 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify({ jsonrpc:'2.0', id: body.id, result:{ content:[{type:'text', text}] } }) + '\\n');
   }
 });
-setTimeout(() => {}, 30_000);
+setTimeout(() => {}, 60_000);
 `;
 
 describe('McpClient (stdio, real subprocess)', () => {
@@ -149,5 +149,5 @@ describe('McpClient (HTTP, mock server)', () => {
     } finally {
       client.close();
     }
-  }, 30_000);
+  }, 60_000);
 });

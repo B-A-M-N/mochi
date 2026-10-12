@@ -6,7 +6,7 @@ describe('TabManager', () => {
     const m = new TabManager();
     expect(m.count()).toBe(1);
     expect(m.activeTab().index).toBe(1);
-    expect(m.activeTab().title).toBe('New session');
+    expect(m.activeTab().title).toBe('Session 1');
   });
 
   it('creates, switches, and cycles', () => {
@@ -15,9 +15,9 @@ describe('TabManager', () => {
     expect(m.count()).toBe(2);
     expect(m.activeTab().id).toBe(b.id);
     m.switchTo(0);
-    expect(m.activeTab().title).toBe('New session');
+    expect(m.activeTab().title).toBe('Session 1');
     expect(m.next().title).toBe('api');
-    expect(m.prev().title).toBe('New session');
+    expect(m.prev().title).toBe('Session 1');
     expect(() => m.switchTo(9)).toThrow();
   });
 
@@ -66,8 +66,8 @@ describe('TabManager', () => {
     expect(slugTitle('/goal fix x')).toBe('fix x');
     expect(slugTitle('a\nb')).toBe('a');
     expect(slugTitle('')).toBe('untitled');
-    expect(defaultTabTitle(3)).toBe('New session 3');
-    expect(defaultTabTitle(1)).toBe('New session');
+    expect(defaultTabTitle(3)).toBe('Session 3');
+    expect(defaultTabTitle(1)).toBe('Session 1');
   });
 });
 describe('tabBarCells + tabBarHit (clickable + button)', () => {
@@ -83,13 +83,18 @@ describe('tabBarCells + tabBarHit (clickable + button)', () => {
     const [ps, pe] = layout.plusRange;
     expect(pe - ps).toBe(13);
     expect(layout.width).toBe(pe);
-    // Every column inside a cell hit-tests to that cell.
+    // Every column inside a cell hit-tests to that cell (or close button).
     for (const [i, cell] of layout.cells.entries()) {
       const [s, e] = layout.ranges[i];
       for (let c = s; c < e; c++) {
         const hit = tabBarHit(layout, c);
-        if (cell.tabId === null) expect(hit).toEqual({ kind: 'plus' });
-        else expect(hit).toEqual({ kind: 'tab', index: cell.tabIndex });
+        if (cell.tabId === null) {
+          expect(hit).toEqual({ kind: 'plus' });
+        } else if (c >= e - 3) {
+          expect(hit).toEqual({ kind: 'close', index: cell.tabIndex });
+        } else {
+          expect(hit).toEqual({ kind: 'tab', index: cell.tabIndex });
+        }
       }
     }
     // Between-cell gaps and out-of-range are not clickable.
@@ -120,7 +125,7 @@ describe('tabBarCells + tabBarHit (clickable + button)', () => {
     const layout = tabBarCells(listOf(m), m.activeTab().id, 100);
     expect(layout.width).toBeLessThanOrEqual(100);
     const [s, e] = layout.ranges[0];
-    expect(e - s).toBe(1 + 5 * 2 + 0 + 0 + 1); // pad + 5 wide chars + unread(0) + busy(0) + pad
+    expect(e - s).toBe(1 + 1 + 1 + 5 * 2 + 0 + 1 + 1 + 1); // pad + icon + space + 5 wide chars + unread(0) + space + × + pad
     expect(tabBarHit(layout, s)).toEqual({ kind: 'tab', index: 0 });
   });
 });

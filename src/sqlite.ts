@@ -86,17 +86,32 @@ function syncProbe(): void {
   syncProbed = true;
   try {
     const req = createRequire(import.meta.url);
-    const mod = req('node:sqlite') as { DatabaseSync?: DbCtor } & { Database?: DbCtor };
-    const Ctor = mod.DatabaseSync ?? mod.Database;
-    if (Ctor) {
-      const probe = new Ctor(':memory:');
-      probe.exec('SELECT 1');
-      probe.close?.();
-      theCtor = Ctor;
-      theSource = 'node:sqlite';
-    }
+    try {
+      const mod = req('node:sqlite') as { DatabaseSync?: DbCtor } & { Database?: DbCtor };
+      const Ctor = mod.DatabaseSync ?? mod.Database;
+      if (Ctor) {
+        const probe = new Ctor(':memory:');
+        probe.exec('SELECT 1');
+        probe.close?.();
+        theCtor = Ctor;
+        theSource = 'node:sqlite';
+        return;
+      }
+    } catch {}
+    try {
+      const mod = req('bun:sqlite') as { Database?: DbCtor; DatabaseSync?: DbCtor };
+      const Ctor = mod.DatabaseSync ?? mod.Database;
+      if (Ctor) {
+        const probe = new Ctor(':memory:');
+        probe.exec('SELECT 1');
+        probe.close?.();
+        theCtor = Ctor;
+        theSource = 'bun:sqlite';
+        return;
+      }
+    } catch {}
   } catch {
-    // not under plain node; async detection handles bun
+    // fall through
   }
 }
 

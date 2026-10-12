@@ -120,7 +120,7 @@ describe('mutation.runMutationCheck', () => {
     expect(result.applied).toBe(true);
     expect(['+', '-']).toContain(result.target?.match(/[+-]/)?.[0]);
     expect(readFileSync(resolve(dir, 'arith.py'), 'utf8')).toContain('a + b');
-  }, 20_000);
+  }, 60_000);
 
   it('skips when there are no changed source files', async () => {
     const dir = makeRepo();

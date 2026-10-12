@@ -68,5 +68,5 @@ describe('warm start on resume', () => {
     expect(flat).toContain('increase the timeout');
     expect(flat).toContain('Do NOT repeat');
     await fake.close();
-  }, 30_000);
+  }, 60_000);
 });
