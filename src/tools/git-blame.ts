@@ -1,10 +1,7 @@
 import type { Tool } from './types.js';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { runArgv } from '../exec.js';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-
-const execFileAsync = promisify(execFile);
 
 export const gitBlameTool: Tool = {
   def: {
@@ -33,7 +30,7 @@ export const gitBlameTool: Tool = {
     gitArgs.push('--', rawPath);
 
     try {
-      const { stdout } = await execFileAsync('git', gitArgs, { cwd: ctx.cwd, timeout: 10_000 });
+      const { stdout } = await runArgv('git', gitArgs, { cwd: ctx.cwd, timeoutMs: 10_000 });
       return `# Git Blame: ${rawPath}\n\n${stdout || '(no output)'}`;
     } catch (err) {
       return `Git blame error: ${err instanceof Error ? err.message : String(err)}`;
@@ -61,7 +58,7 @@ export const gitHistoryTool: Tool = {
     }
 
     try {
-      const { stdout } = await execFileAsync('git', gitArgs, { cwd: ctx.cwd, timeout: 10_000 });
+      const { stdout } = await runArgv('git', gitArgs, { cwd: ctx.cwd, timeoutMs: 10_000 });
       return `# Git History: ${rawPath}\n\n${stdout || '(no history found)'}`;
     } catch (err) {
       return `Git history error: ${err instanceof Error ? err.message : String(err)}`;

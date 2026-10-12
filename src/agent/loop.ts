@@ -2080,6 +2080,18 @@ Continue from 'Next:', do not redo completed progress.`,
       // No tool calls: decide based on whether real edits happened.
       if (!this.fileChanged) {
         if (response.content && response.content.trim()) {
+          // A forced recovery plan is an interim artifact, not a delivery.
+          // The auto-escape directive asks for one plan turn, then resumed
+          // editing. Do not let that plan satisfy the run merely because
+          // earlier read-only calls incremented the tool counter.
+          if (this.autoPlanEscapePending && !this.planMode && taskKind !== 'chat') {
+            this.context.addMessage({
+              role: 'system',
+              content: 'RECOVERY PLAN RECEIVED — resume execution now. Call a work tool (write/edit/patch/shell/verify) that changes or checks the task outcome. Do not finish with another plan, summary, or preamble until verification has evidence.',
+            });
+            this.events.emit({ type: 'agent:log', agentId: this.id, message: '[auto-plan-escape] recovery plan received; requiring resumed execution' });
+            continue;
+          }
           // In plan mode the deliverable is the plan itself: a reply that does
           // not look like a plan (e.g. "I'll research the codebase first")
           // is a preamble, not a result. Nudge the model back on task until
@@ -3445,8 +3457,11 @@ Continue from 'Next:', do not redo completed progress.`,
       this.consecutiveToolErrorsCount = 0;
       // Only a successful WORK tool clears the completion gate. A failed shell
       // followed by a routine `read` must still report the failure at finish().
+      // It also ends a forced recovery-plan interval: the model has resumed
+      // execution, so a later plan-shaped response is judged normally.
       if (['shell', 'write', 'edit', 'patch', 'delete', 'git', 'verify', 'subagent', 'spawn_subagent', 'create_pr'].includes(TOOL_ALIASES[toolName] || toolName)) {
         this.lastToolError = null;
+        this.autoPlanEscapePending = false;
       }
       this.executionRegistry.markCompleted(execRecord.executionId, { output: foldedOutput });
       // MCH-28: a successful accept_plan call flips plan mode to "plan
@@ -4108,9 +4123,14 @@ Continue from 'Next:', do not redo completed progress.`,
    * be called from tests and from future escape hatches without re-checking.
    * Rate-limited to once per task. Never blocks. */
   private autoPlanEscaped = false;
+  /** A forced recovery plan has been requested but not yet followed by tool
+   *  execution. The next plan-only response is an interim artifact: resume
+   *  work instead of accepting it as completion. Cleared by tool execution. */
+  private autoPlanEscapePending = false;
   private injectAutoPlanEscape(failureText: string): void {
     if (this.autoPlanEscaped || this.planMode) return;
     this.autoPlanEscaped = true;
+    this.autoPlanEscapePending = true;
     const truncated = failureText.slice(0, 240);
     try {
       this.context.addMessage({

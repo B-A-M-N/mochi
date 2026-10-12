@@ -3,7 +3,7 @@
 // caller implement the change, then commit, push, and open a PR referencing
 // the issue. The code-change work is delegated via the `implement` callback
 // so the plumbing stays deterministic and testable without GitHub.
-import { execFile } from 'node:child_process';
+import { runArgv } from './exec.js';
 
 export interface Issue {
   number: number;
@@ -38,12 +38,13 @@ export interface PrResult {
   pushed: boolean;
 }
 
+// Routed through the central exec policy layer (MCH-10): bounded wall-clock
+// timeout, output cap, SIGTERM→SIGKILL grace, and audit hook instead of a
+// bare execFile with no kill timer.
 function run(cmd: string, args: string[], cwd: string): Promise<string> {
-  return new Promise((res, rej) => {
-    execFile(cmd, args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) rej(new Error(String(stderr || err?.message || '').trim()));
-      else res(String(stdout ?? '').trim());
-    });
+  return runArgv(cmd, args, { cwd, maxOutput: 16 * 1024 * 1024 }).then((r) => {
+    if (r.code !== 0) throw new Error(String(r.stderr || r.stdout || `exit ${r.code}`).trim());
+    return String(r.stdout ?? '').trim();
   });
 }
 

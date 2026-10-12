@@ -26,7 +26,7 @@
 
 import { existsSync, readdirSync, statSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, isAbsolute } from 'node:path';
-import { execFile } from 'node:child_process';
+import { runArgv } from '../exec.js';
 import { parseFrontmatter, safeSlug } from '../skills/skill-manager.js';
 
 export interface ImportedSkillInfo {
@@ -119,7 +119,9 @@ export async function resolveSourceDir(spec: string, { update = false } = {}): P
   const dest = join(cache, repoNameFromSpec(trimmed));
   const url = trimmed.replace(/^git\+/, '').replace(/^github:/, 'https://github.com/');
   const git = (args: string[], cwd = cache) =>
-    new Promise<void>((res, rej) => execFile('git', args, { cwd }, (e) => (e ? rej(e) : res())));
+    runArgv('git', args, { cwd }).then((res) => {
+      if (res.code !== 0) throw new Error(`git ${args[0]} failed (exit ${res.code}): ${res.stderr.trim().slice(0, 500)}`);
+    });
 
   if (existsSync(join(dest, '.git'))) {
     // Cached clone present; optionally refresh it.

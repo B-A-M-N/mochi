@@ -1,13 +1,10 @@
 import type { Tool } from './types.js';
 import { platform, arch, totalmem, freemem, cpus } from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { runArgv } from '../exec.js';
 
 async function checkVersion(cmd: string, args: string[]): Promise<string> {
   try {
-    const { stdout } = await execFileAsync(cmd, args, { timeout: 3_000 });
+    const { stdout } = await runArgv(cmd, args, { timeoutMs: 3_000 });
     return stdout.trim().split('\n')[0];
   } catch {
     return 'not installed';

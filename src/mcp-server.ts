@@ -108,11 +108,11 @@ export async function handleMcp(
           if (!task) return { id, error: { code: -32602, message: 'mochi_plan requires a task' } };
           const rt = getRuntime(state);
           const prevPlan = rt.config.planMode;
-          rt.config.planMode = true;
+          rt.setPlanMode(true);
           try {
             const out = await rt.goal(task, ['plan only - do not execute changes']);
             text = typeof out === 'string' ? out : JSON.stringify(out ?? { planned: true });
-          } finally { rt.config.planMode = prevPlan; }
+          } finally { rt.setPlanMode(prevPlan); }
         } else if (name === 'mochi_status') {
           const rt = getRuntime(state);
           const goals = rt.workspace.listGoals ? rt.workspace.listGoals() : [];

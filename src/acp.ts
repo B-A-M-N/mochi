@@ -273,7 +273,7 @@ export async function handleRpc(
         const session = sessions.get(sid);
         if (!session) return { id, error: { code: -32602, message: `Unknown session ${sid}` } };
         const modeId = typeof params.modeId === 'string' ? params.modeId : 'act';
-        session.runtime.config.planMode = modeId === 'plan';
+        session.runtime.setPlanMode(modeId === 'plan');
         return { id, result: { modeId } };
       }
       case 'session/set_config_option': {
@@ -283,7 +283,7 @@ export async function handleRpc(
         const configId = String(params.configId ?? '');
         const value = params.value;
         if (configId === 'plan_mode') {
-          session.runtime.config.planMode = Boolean(value);
+          session.runtime.setPlanMode(Boolean(value));
           return { id, result: { configId, value: session.runtime.config.planMode, configOptions: SESSION_CONFIG_OPTIONS } };
         } else if (configId === 'max_iterations') {
           const parsed = Math.max(1, Math.min(50, Math.round(Number(value))));

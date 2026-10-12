@@ -69,6 +69,10 @@ export class Runtime {
     if (Object.keys(projectConfig).length) {
       this.config = loadConfig({ ...projectConfig, ...opts.config });
     }
+    // The goal engine captures the config object at construction. If project
+    // configuration replaced Runtime.config above, refresh that reference so
+    // later plan/act toggles cannot silently diverge from executed tasks.
+    this.syncEngines();
 
     // Surface misconfigurations (invalid safety mode, bad numbers, MCP server
     // shape, etc.) at startup instead of mid-run. A missing API key is NOT a
@@ -156,7 +160,21 @@ export class Runtime {
   setMode(mode: string): string {
     if (!isMode(mode)) return `Unknown mode "${mode}". Modes: ${MODE_IDS.join(', ')}`;
     this.config = applyMode(this.config, mode);
+    this.syncEngines();
     return modeInstruction(mode) || 'normal';
+  }
+
+  /** Set plan/act mode and propagate it to engines holding the config.
+   * Direct `runtime.config.planMode = ...` assignments can diverge from
+   * GoalEngine.config after Runtime construction replaces the config object
+   * for project-level settings. Use this setter for every mode transition. */
+  setPlanMode(enabled?: boolean): void {
+    if (enabled === undefined) {
+      delete this.config.planMode;
+    } else {
+      this.config.planMode = enabled;
+    }
+    this.syncEngines();
   }
 
   /** Set the active reasoning effort / compute level (low, medium, high, max). */
@@ -528,11 +546,30 @@ export class Runtime {
     const pending = this.workspace.readJson<{ id: string; objective: string }>('state/pending-goal.json');
     if (!pending) return 'No pending plan. Run /plan first.';
     const goal = this.workspace.loadGoal(pending.id) ?? await this.goals.createGoal(pending.objective);
-    const tasks = this.workspace.loadTasks(pending.id).length ? this.workspace.loadTasks(pending.id) : await this.goals.decompose(goal);
-    const result = await this.goals.runGoal(goal, tasks, [], this.abortSignal);
-    this.recordUsage(pending.objective, result);
-    this.workspace.writeJson('state/pending-goal.json', {});
-    return result.summary;
+    let tasks = this.workspace.loadTasks(pending.id).length ? this.workspace.loadTasks(pending.id) : await this.goals.decompose(goal);
+    // Approval is an explicit execution transition. A runtime left in plan
+    // mode (TUI Tab, --plan, ACP plan mode) would otherwise veto every
+    // mutation and return another plan. Run this pending goal as act, then
+    // restore the caller's selected mode.
+    const previousPlanMode = this.config.planMode;
+    this.setPlanMode(false);
+    try {
+      if (previousPlanMode) {
+        // A pending decomposition made while planning tells every task to
+        // produce a written plan and not modify anything. Executing those
+        // instructions would only produce another plan, so derive executable
+        // tasks from the objective now that approval has switched to act.
+        goal.tasks = [];
+        this.workspace.saveGoal(goal);
+        tasks = await this.goals.decompose(goal);
+      }
+      const result = await this.goals.runGoal(goal, tasks, [], this.abortSignal);
+      this.recordUsage(pending.objective, result);
+      this.workspace.writeJson('state/pending-goal.json', {});
+      return result.summary;
+    } finally {
+      this.setPlanMode(previousPlanMode);
+    }
   }
 
   /** Resume a persisted goal by id (failed, active, or pending) over any
@@ -699,6 +736,7 @@ export class Runtime {
 
   reloadConfig() {
     this.config = loadConfig({} as Partial<MochiConfig>);
+    this.syncEngines();
   }
 
   providerInfo(): string {

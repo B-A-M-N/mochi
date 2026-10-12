@@ -3616,7 +3616,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           state.dropSelected = 0;
         } else {
           state.uiMode = state.uiMode === 'plan' ? 'act' : 'plan';
-          runtime.config.planMode = state.uiMode === 'plan';
+          runtime.setPlanMode(state.uiMode === 'plan');
         }
         state.dropActive = currentDropItems().length > 0;
         scheduleRender();

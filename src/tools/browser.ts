@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
+import { runArgv } from '../exec.js';
 import { fileURLToPath } from 'node:url';
 import type { Tool } from './types.js';
 
@@ -32,32 +32,18 @@ function hereDir(): string {
 export const driverScript = (): string => resolve(hereDir(), '../../scripts/browser-driver.mjs');
 
 function runDriver(args: string[], timeoutMs: number): Promise<string> {
-  return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [driverScript(), ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let out = '';
-    let err = '';
-    let done = false;
-    const finish = (code: number | null) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolvePromise(
-        out.trim() ||
-        (code !== 0 ? `[browser exit ${code}] ${err.trim().slice(0, 500)}` : ''),
-      );
-    };
-    const timer = setTimeout(() => {
-      if (done) return;
-      try { child.kill('SIGTERM'); } catch { /* ignore */ }
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* ignore */ } }, 3000);
-    }, timeoutMs);
-    child.stdout.on('data', (d) => { out += d; if (out.length > 60_000) out = out.slice(-60_000); });
-    child.stderr.on('data', (d) => { err += d; });
-    child.on('error', () => finish(1));
-    child.on('close', (code) => finish(code));
-  });
+  // Central exec path (src/exec.ts): bounded SIGTERM→SIGKILL via killGraceMs,
+  // per-stream output caps, and spawn-error rejection handled below so the
+  // tool's never-throw contract holds.
+  return runArgv(process.execPath, [driverScript(), ...args], {
+    timeoutMs,
+    killGraceMs: 3000,
+  })
+    .then((res) =>
+      res.stdout.trim().slice(-60_000) ||
+      (res.code !== 0 ? `[browser exit ${res.code}] ${res.stderr.trim().slice(0, 500)}` : ''),
+    )
+    .catch((e: unknown) => `[browser exit 1] ${(e as Error).message.trim().slice(0, 500)}`);
 }
 
 export const browserTool: Tool = {

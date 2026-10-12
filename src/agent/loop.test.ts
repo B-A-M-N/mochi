@@ -84,6 +84,52 @@ describe('Agent', () => {
     }
   });
 
+  it('does not accept a recovery plan as success after read-only exploration of a file task', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-plan-after-read-'));
+    const plan = [
+      '1. Assumption: the output path is wrong.',
+      '2. Re-read: recovery.txt.',
+      '3. Edit: create the missing file.',
+      '4. Verify: test -f recovery.txt.',
+      '5. STOP: do not describe the file instead of creating it.',
+    ].join('\n');
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Reading first.',
+        toolCalls: [{ id: 'read-1', type: 'function', function: { name: 'read', arguments: JSON.stringify({ path: 'package.json' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: plan, finishReason: 'stop' },
+      {
+        content: 'Creating the file now.',
+        toolCalls: [{ id: 'write-1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'recovery.txt', content: 'recovered' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create recovery.txt');
+      const task = createTask('Create recovery file', 'Create recovery.txt containing recovered.');
+      const agent = new Agent({ id: 'plan-after-read-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      // Simulate the harness having forced a recovery plan after failures. The
+      // next plan-only response is an interim artifact; the following turn
+      // must resume tool execution rather than completing on the plan.
+      (agent as any).fileGuardNudges = 1;
+      (agent as any).injectAutoPlanEscape('recovery.txt was not created by prior attempts');
+      const result = await agent.run(task);
+      expect(result.success).toBe(true);
+      expect(existsSync(resolve(dir, 'recovery.txt'))).toBe(true);
+      expect(readFileSync(resolve(dir, 'recovery.txt'), 'utf8')).toBe('recovered');
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('ends the run when the same no-tool answer repeats even after a file already changed', async () => {
     // The old `!fileChanged` gate disabled the same-answer guard forever once
     // any file was edited — a model that then repeated the same two prose

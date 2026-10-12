@@ -15,6 +15,22 @@ const TEST_RE = /\b(test|spec|coverage|assert|jest|vitest|pytest|unittest)\b/i;
 const RESEARCH_RE = /\b(research|investigate|explore|find\s*out|discover|learn|how\s*does|why\s*does)\b/i;
 const PLAN_RE = /\b(plan|design|architect|sketch|outline|proposal)\b/i;
 const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*doc|architecture\s*doc)\b/i;
+// Execution beats planning vocabulary: "design and implement" is an
+// implementation task, while "create only a plan" remains planning. The
+// strong verb list intentionally omits create/write/make/generate, which can
+// take a plan as their object ("write the implementation plan").
+const STRONG_EXECUTION_RE = /\b(implement|build|code|add|remove|delete|deploy|set\s?up|setup|install|update|migrate|port|scaffold|open|run|start|init|configure|optimize|debug|integrate|scrape|crawl|parse|convert|compile|package|publish|ship|patch|edit|modify|change|rename|move|extract|split|clean|improve|develop|program)\b/i;
+const PLAN_ONLY_RE = /\b(plan only|planning only|no code|without coding|without implementing|without making changes|proposal only|design only|research only)\b/i;
+const PLAN_ARTIFACT_RE = /\b(create|write|make|draft|propose|outline|document)\b[^.\n]{0,80}\b(plan|proposal|outline|roadmap|design document|spec(?:ification)?)\b/i;
+
+function isPlanOnlyRequest(text: string, role: unknown): boolean {
+  if (PLAN_ONLY_RE.test(text)) return true;
+  if (PLAN_ARTIFACT_RE.test(text) && !STRONG_EXECUTION_RE.test(text)) return true;
+  // An architect role means planning unless the request itself names a
+  // stronger execution verb elsewhere.
+  if (role === 'architect' && !STRONG_EXECUTION_RE.test(text)) return true;
+  return false;
+}
 
 export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'role'>): TaskKind {
   const text = `${task.title} ${task.description}`.trim();
@@ -31,7 +47,13 @@ export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'rol
     if (TEST_RE.test(text) || task.role === 'tester') return 'test';
     if (REFACTOR_RE.test(text)) return 'refactor';
     if (DOC_RE.test(text)) return 'document';
-    if (PLAN_RE.test(text) || task.role === 'architect') return 'plan';
+    if (PLAN_RE.test(text) || task.role === 'architect') {
+      // Planning vocabulary does not win when the same request also names
+      // implementation work ("design and implement X"). Only an explicitly
+      // plan-only request stays in the plan lane.
+      if (isPlanOnlyRequest(text, task.role) || !STRONG_EXECUTION_RE.test(text)) return 'plan';
+      return 'implement';
+    }
     if (RESEARCH_RE.test(text) || task.role === 'researcher') return 'research';
     return 'implement';
   }
@@ -40,7 +62,10 @@ export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'rol
   if (TEST_RE.test(text) || task.role === 'tester') return 'test';
   if (REFACTOR_RE.test(text)) return 'refactor';
   if (DOC_RE.test(text)) return 'document';
-  if (PLAN_RE.test(text) || task.role === 'architect') return 'plan';
+  if (PLAN_RE.test(text) || task.role === 'architect') {
+    if (isPlanOnlyRequest(text, task.role) || !STRONG_EXECUTION_RE.test(text)) return 'plan';
+    return 'implement';
+  }
   if (RESEARCH_RE.test(text) || task.role === 'researcher') return 'research';
 
   // General non-action questions fall back to chat even if assigned coder role

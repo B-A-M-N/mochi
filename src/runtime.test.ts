@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { Runtime } from './runtime.js';
+import { createTask } from './goals/task.js';
 import { startFakeOpenAI, type FakeOpenAI } from './testutil/fake-openai.js';
 import type { MochiConfig } from './types.js';
 
@@ -54,6 +55,17 @@ describe('Runtime setMode', () => {
     expect(rt.setMode('normal')).toBe('normal');
     rt.setMode('codemod');
     expect(rt.config.planMode).toBe(true);
+    expect((rt.goals as any).config.planMode).toBe(true);
+    rmSync(rt.cwd, { recursive: true, force: true });
+  });
+  it('propagates explicit plan-mode transitions to the goal engine', () => {
+    const rt = Runtime.create({ cwd: makeRepo(), config: { ...baseConfig(), planMode: false } });
+    rt.setPlanMode(true);
+    expect(rt.config.planMode).toBe(true);
+    expect((rt.goals as any).config.planMode).toBe(true);
+    rt.setPlanMode(undefined);
+    expect(rt.config.planMode).toBeUndefined();
+    expect((rt.goals as any).config.planMode).toBeUndefined();
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 });
@@ -240,4 +252,118 @@ describe('Runtime abort + interrupt', () => {
     expect(res.summaries.length).toBe(2);
     rmSync(rt.cwd, { recursive: true, force: true });
   });
+});
+
+describe('Runtime approvePlan', () => {
+  it('executes a pending plan in act mode even when the runtime is in plan mode', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-act-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Creating the approved file now.',
+        toolCalls: [{
+          id: 'approve-write',
+          type: 'function',
+          function: { name: 'write', arguments: JSON.stringify({ path: 'approved.txt', content: 'approved' }) },
+        }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Approved file created.', finishReason: 'stop' },
+    ]);
+    const rt = new Runtime({
+      cwd: dir,
+      config: {
+        ...baseConfig(),
+        planMode: true,
+        model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' },
+      } as any,
+    });
+    try {
+      const goal = await rt.goals.createGoal('Create approved.txt');
+      const task = createTask('Create approved.txt', 'Create approved.txt containing approved.', {
+        acceptanceCriteria: ['approved.txt exists'],
+      });
+      rt.workspace.saveTasks(goal.id, [task]);
+      rt.workspace.writeJson('state/pending-goal.json', { id: goal.id, objective: goal.objective });
+
+      await rt.approvePlan();
+
+      expect(existsSync(resolve(dir, 'approved.txt'))).toBe(true);
+      expect(readFileSync(resolve(dir, 'approved.txt'), 'utf8')).toBe('approved');
+      // Approval executes one pending plan; it does not permanently flip the runtime mode.
+      expect(rt.config.planMode).toBe(true);
+      expect((rt.goals as any).config.planMode).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('replaces a plan-mode pending decomposition with executable tasks on approval', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-replan-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    let wrote = false;
+    const fake = await startFakeOpenAI([{
+      sticky: true,
+      respondFn: (body: any) => {
+        const text = JSON.stringify(body?.messages ?? []);
+        if (text.includes('Decompose the goal into a JSON array')) {
+          return {
+            content: JSON.stringify([{
+              title: 'Create approved file',
+              description: 'Create approved.txt containing approved.',
+              role: 'coder',
+              dependencies: [],
+              acceptanceCriteria: ['approved.txt exists'],
+              verificationCommand: '',
+            }]),
+            finishReason: 'stop',
+          };
+        }
+        if (!wrote && text.includes('do NOT modify anything')) {
+          return { content: 'PLAN:\n1. Research approved.txt\n2. Do not modify anything', finishReason: 'stop' };
+        }
+        if (!wrote) {
+          wrote = true;
+          return {
+            content: 'Creating the approved file now.',
+            toolCalls: [{
+              id: 'approve-write',
+              type: 'function',
+              function: { name: 'write', arguments: JSON.stringify({ path: 'approved.txt', content: 'approved' }) },
+            }],
+            finishReason: 'tool_calls',
+          };
+        }
+        return { content: 'Approved file created.', finishReason: 'stop' };
+      },
+    }]);
+    const rt = new Runtime({
+      cwd: dir,
+      config: {
+        ...baseConfig(),
+        planMode: true,
+        model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' },
+      } as any,
+    });
+    try {
+      const goal = await rt.goals.createGoal('Create approved.txt');
+      const planOnlyTask = createTask(
+        'Produce an implementation plan',
+        'Produce a detailed written plan (steps, files, risks, verification), do NOT modify anything.',
+        { role: 'architect', acceptanceCriteria: [] },
+      );
+      rt.workspace.saveTasks(goal.id, [planOnlyTask]);
+      rt.workspace.writeJson('state/pending-goal.json', { id: goal.id, objective: goal.objective });
+
+      await rt.approvePlan();
+
+      expect(existsSync(resolve(dir, 'approved.txt'))).toBe(true);
+      const saved = rt.workspace.loadTasks(goal.id);
+      expect(saved.some((t) => t.description.includes('do NOT modify anything'))).toBe(false);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
