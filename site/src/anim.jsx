@@ -154,7 +154,7 @@ export function AnimatedContent({
           setInView(false);
         }
       },
-      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+      { threshold: 0.05, rootMargin: '0px 0px 40px 0px' }
     );
     io.observe(el);
     return () => {
@@ -199,7 +199,7 @@ export function EditorialReveal({
         setInView(true);
         if (once) io.disconnect();
       } else if (!once) setInView(false);
-    }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
+    }, { threshold: 0.05, rootMargin: '0px 0px 40px 0px' });
     io.observe(el);
     return () => io.disconnect();
   }, [once]);
