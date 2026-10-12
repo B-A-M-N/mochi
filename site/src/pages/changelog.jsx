@@ -1,60 +1,206 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Footer from '../Footer.jsx';
-import { AnimatedContent, SplitText, ScrollFloat } from '../anim.jsx';
+import { AnimatedContent } from '../anim.jsx';
 
-const RELEASES = [
-{v:"0.20.0",sum:"Default model chain upgraded (MCH-35); MCP client; mid-run context digest; independent acceptance gate.",body:"<strong>Default model chain upgraded (MCH-35)</strong> — freeinference <code>kimi-k2.7-code</code> is now the coding/reasoning/review primary; <code>glm-5.3-flash</code> stays the <code>fast</code> profile only and remains first failover.<br/><strong>MCP client (MCH-33)</strong> — minimal Model Context Protocol client over stdio (initialize handshake, <code>tools/list</code>, <code>tools/call</code>). Configure via <code>.mcp.json</code> or <code>config.mcpServers</code>. Each server tool is exposed as a native <code>mcp_&lt;server&gt;_&lt;tool&gt;</code> Mochi tool; a dead server is skipped with a warning and connections are torn down on every finish path.<br/><strong>Mid-run context digest (MCH-32)</strong> — summarization tier between mechanical tool-output shrinking and full compaction: when shrink alone can't get under the context floor, the oldest messages are summarized into a ≤300-word digest while the recent working set stays intact.<br/><strong>Codex-style independent acceptance gate (MCH-31)</strong> — after verification passes, every acceptance criterion naming a concrete artifact is re-checked against the filesystem independently of the builder's claims.<br/><strong>Plan-mode AcceptPlan contract (MCH-28)</strong> — plan mode ends via an explicit <code>accept_plan</code> tool call (Claude Code's ExitPlanMode shape)."},
-{v:"0.11.1",sum:"Fixed a second live hard freeze (glob's unbounded walk), reasoning-stream loops, and duplicated tool cards.",body:"<strong>glob freeze fix</strong> — the glob tool recursed with <code>readdirSync</code>/<code>statSync</code> with no depth/time budget; run from <code>$HOME</code> it blocked the event loop for minutes. Now async (<code>fs.promises.readdir</code>), hard-bounded (24 depth / 25k entries / 3s), skips heavyweight dirs, never follows symlinked directories, and surfaces truncation honestly as <code>(scan truncated …)</code>.<br/><strong>Reasoning-stream loops</strong> now feed the repetition tracker, so a looping model triggers failover/nudge instead of flooding the transcript.<br/><strong>Duplicated tool cards</strong> — <code>tool:called</code> fired from both the agent loop and the tool executor; deduped."},
-{v:"0.11.0",sum:"Reliability overhaul: the agent can no longer hang, freeze, or spin on token-draining loops.",body:"<strong>Cumulative repeated-tool breaker</strong> — a turn repeatedly calling the same tool without file edits is cut short (a chat prompt previously ran 12+ rounds burning ~140k tokens).<br/><strong>Mutating-tools-only no-progress breaker</strong> — never fires on legit context-gathering reads.<br/><strong>Hard per-response stall guard</strong> — a silent provider hold races a 3-minute timer and reports a clean <code>model_error</code>.<br/><strong>SIGKILL fallback on abort</strong> — a stubborn child can never hang the loop.<br/><strong>Subagent timeout fence + event-layer safety</strong> — no unhandled rejections.<br/><strong>Faster defaults</strong> — default reasoning lowered <code>max → medium</code>: a chat reply dropped from ~30s / 139k tokens to ~2s / 7k tokens."},
-{v:"0.10.7",sum:"Interactive /reasoning command, live TUI display, multi-turn context memory.",body:"<strong><code>/reasoning</code></strong> (and <code>/depth</code>) with an interactive menu between <code>low</code>/<code>medium</code>/<code>high</code>/<code>max</code>; live status-bar display (<code>[REASON: HIGH]</code>). Levels map to real provider parameters (<code>reasoning_effort</code>, Anthropic thinking budgets, Gemini thinkingConfig).<br/><strong>Multi-turn context memory</strong> — previous conversational turns are loaded into context; new <code>session_recall</code> tool searches past sessions via SQLite FTS5.<br/><strong>Startup animation & UI polish.</strong>"},
-{v:"0.10.6",sum:"Rust runtime core: tokenizer, budget math, compaction planning in native code.",body:"<strong>Rust core (<code>native/mochi_core</code>)</strong> — zero-dependency crate exposed as an N-API module and a stdio JSON-line protocol (<code>mochi-agent plan</code>). Every native path has a parity-tested TS fallback, so the agent runs identically without a Rust toolchain.<br/><strong>Team roster expanded</strong> — devops, db_admin, frontend, backend, performance, tech_writer, qa_engineer, data_scientist roles join; tester/debugger now carry edit tools.<br/><strong>Light mode</strong> — <code>MOCHI_LIGHT=1</code> disables the embedded SQLite symbol index.<br/><strong>Iteration lifecycle traces (runtime v2 Phase 1)</strong> — a <code>LoopStateMachine</code> walks every turn through preflight → model-call → stream-guard → tool-exec → verify → finish."},
-{v:"0.10.5",sum:"Terminal copy/paste/highlight; no accidental GUI launches; clean non-interactive exits.",body:"<strong>Mouse copy/paste</strong> — click-drag selects transcript text, released copies via OSC-52 with fallbacks; reverse-video highlight.<br/><strong>GUI guard</strong> — the <code>shell</code> tool refuses to spawn desktop GUI apps; BUILD/IMPLEMENT requests are delivered as verified source files headlessly.<br/><strong>Clean exits</strong> — <code>mochi --print</code> exits 0 once output flushes.<br/><strong>Bounded stream spam</strong> — repeated boilerplate blocks abort the stream cleanly. Full-page PgUp/PgDn scroll, bracketed paste, history-path fixes."},
-{v:"0.10.4",sum:"ACP editor adapter: VS Code, Zed, and JetBrains can drive the full agent.",body:"<code>mochi acp</code> speaks Agent Client Protocol v1 over JSON-RPC stdio: <code>initialize</code>, <code>session/new|resume|prompt|close</code>, streaming <code>session/update</code> notifications, per-session abort, <code>session/list</code> pagination, permission requests for MCP.<br/><strong>New tools:</strong> <code>search_replace_multi</code>, <code>analyze_code</code>, <code>verify</code>, <code>perf</code>.<br/><strong>Config validation</strong> at startup catches misconfigurations before mid-run failures."},
-{v:"0.10.3",sum:"Credential pool + rotation; scheduled agent jobs; session history.",body:"<strong>Credential pool</strong> — multiple keys per provider (env lists, credentials files, or config) rotate transparently on 401/403/429 with per-key cooldowns; keys are redacted everywhere.<br/><strong>Cron jobs</strong> — <code>mochi daemon cron add|list|remove</code> runs a prompt on an interval or 5-field cron, persisted to <code>.mochi/cron.json</code>.<br/><strong>Session history</strong> — SQLite + FTS5 transcript store; <code>mochi session search</code> inspects past work, and resuming injects the real prior transcript.<br/><strong>Background tasks</strong> — <code>shell</code> accepts <code>background:true</code>; long builds return a task id immediately."},
-{v:"0.10.2",sum:"Proportionate verification; baseline-aware checks; instant per-file diagnostics.",body:"<strong>Proportionate verification</strong> — content-only tasks no longer trigger the repo's full test/lint/build suite and get charged for pre-existing failures in untouched code.<br/><strong>Baseline-aware verification</strong> — the repo's green baseline is captured once; a task is only blocked when it <em>transitions</em> the suite.<br/><strong><code>replace_symbol</code></strong> — name-addressed whole-symbol replacement with signature matching.<br/><strong>Instant diagnostics</strong> — edited files are type-checked same-turn (TS LanguageService, ~32ms warm)."},
-{v:"0.10.1",sum:"Code-scan cleanup: 10 real findings addressed.",body:"ReDoS in <code>sanitizeVerifyCommand</code>/<code>providerKey</code>, clear-text key logging, a template-literal regex bug, prototype pollution in config merge, lenient end-tag matching, glob metachar escaping, missing CI permissions block. CodeQL default setup enabled for JS/TS. Hermetic daemon test (no real provider in CI). README hero refreshed."},
-{v:"0.10.0",sum:"Daemon resume over CLI; remote daemon access; live round-trip test.",body:"<code>mochi daemon resume &lt;goalId&gt;</code> restarts interrupted goals from a headless box. <code>--host 0.0.0.0</code> binds the HTTP surface for LAN/phone/dashboard access with bearer-token auth. A live test sends a real goal through a daemon, verifies the artifact on disk, and resumes the persisted goal through a fresh instance end to end."},
-{v:"0.9.6",sum:"Mid-stream cancellation; real team mode; structured stop reasons.",body:"<strong>Ctrl-C cancels on the wire</strong> — <code>fetch</code> accepts an AbortSignal; aborting ends the HTTP response immediately.<br/><strong>Real team mode</strong> — <code>mochi team</code> decomposes, assigns specialist roles per task, runs them concurrently through the scheduler.<br/><strong>Structured stop reasons</strong> — every finish path declares why the run ended (<code>completed</code>, <code>aborted</code>, <code>budget</code>, <code>model_error</code>, <code>tool_loop</code>, <code>verification_failed</code>, …)."},
-{v:"0.9.5",sum:"Security package from Horus; content-addressed codegraph fingerprints.",body:"<code>redact</code>/<code>redactObject</code> scrub API keys, JWTs, and tokens from every persistent write. <code>classifyCommand</code> ranks shell commands <code>low</code>/<code>network</code>/<code>destructive</code> with safe-mode blocking. Codegraph fingerprint is now content-addressed (SHA-1) so mtime-preserving edits can't leave a stale symbol index. Plus Horus/OpenFable util ports (randomSlug, sortableId, binarySearch, path utils)."},
-{v:"0.9.4",sum:"Persistent agent daemon.",body:"<code>mochi daemon start|status|send|stop</code> runs a Runtime over localhost HTTP so a phone, dashboard, or script can hand Mochi goals without a TTY. Binds to 127.0.0.1 only; per-workspace bearer token written to <code>~/.mochi/daemon/info.json</code> (0600). Verified end to end with a real model."},
-{v:"0.9.3",sum:"Polyglot code indexing across 7 languages; plan-mode enforcement.",body:"<strong>Polyglot indexing</strong> — tree-sitter WASM backend is now the default and indexes TS/JS, Python, Rust, Go, Java, C/C++ (cold index of 200 files: ~100ms).<br/><strong>Polyglot test detection</strong> — <code>go test</code>, <code>cargo test</code>, pytest auto-detected; language-aware model guidance stops <code>npm test</code> against Rust repos.<br/><strong>Plan-mode enforcement</strong> — a preamble-only reply is rejected; the loop nudges for a real plan up to 3 times."},
-{v:"0.9.2",sum:"Live integration tests against the real provider.",body:"<code>src/agent/loop.live.test.ts</code> exercises the real model end to end (decompose → plan → run → verify): writes a requested file, writes a working vitest test, decomposes a multi-step goal. Auto-skipped without an API key so CI stays offline."},
-{v:"0.9.1",sum:"Scope-aware verification cwd; diff evidence filtered to scope.",body:"Verification commands run from the right directory; repo-level checks are skipped under a fileScope; <code>safeGitDiff</code> drops out-of-scope files so the judge never sees concurrent user work. Task-kind-aware system prompts (implement/fix/refactor/test/research) add focused hints."},
-{v:"0.9.0",sum:"Failure diagnosis, autopsy records, and procedural memory.",body:"<strong>Diagnosis</strong> — verification failures are classified into eight kinds with ordered hypotheses and probe evaluation, so the next attempt is a targeted fix. <strong>Autopsies</strong> persist hypothesis history per task. <strong>Lessons</strong> are surfaced as prior context on matching failure signatures — Mochi remembers what worked across runs. Verifier mutation check scoped to the task's <code>fileScope</code>; auto-detected test runners strengthen weak verification commands."},
-{v:"0.8.0",sum:"Multi-provider failover; missing-tool checks no longer fail correct work.",body:"<code>model.failover</code> accepts backup models tried in order when the primary errors before producing output; mid-stream failures are never replayed. Checks whose command isn't installed are recorded as skipped evidence instead of failures. Diff evidence lists real source files first."},
-{v:"0.7.0",sum:"CI pipeline; plan mode is actually safe now.",body:"GitHub Actions CI: typecheck + vitest + build + CLI smoke on Node 20/22. Plan-mode mutating-tool veto switched to a read-only allowlist; plan runs skip end-state verification. No dangling tool_call_ids (hook vetoes answer with a proper Blocked message). Mutation check targets real code, not test files or <code>.mochi</code> state."},
-{v:"0.6.1",sum:"Output-diff mutation detection.",body:"A mutation is killed when the test command's <em>output changes</em>, not just when it exits non-zero — print-style verification (<code>console.log</code> checks) now correctly count as kills instead of downgrading correct work to PARTIAL."},
-{v:"0.6.0",sum:"Todo planning; provider capability registry; agent skills; MCP; plan-then-act; subagent delegation.",body:"<strong>Todo tool</strong> — persistent, concurrency-safe checklist the model plans with mid-run. <strong>Provider registry</strong> — live <code>ok</code>/<code>cooldown</code>/<code>dead</code> health with probe-driven recovery. <strong>Agent Skills</strong> — full agentskills.io spec with a <code>skill</code> tool. <strong>MCP client</strong> — stdio JSON-RPC 2.0 with namespaced tools. <strong>Plan mode</strong> (<code>--plan</code>) — mutating tools disabled, model steered to return a plan. <strong>Subagent delegation</strong> — fresh child agents on well-scoped subtasks, depth-guarded."},
-{v:"0.5.5",sum:"Chameleon fully internal; Termix baked in; mock provider removed.",body:"<code>ChameleonEngine</code> generates synthetic-parameter reasoning via the agent's OWN provider — <code>mochi enhance</code> reports tokens/cost/strategies and no-ops gracefully on failure. <code>mochi termix</code> opens N parallel agent sessions (<code>--coms</code> broadcast / <code>--sep</code> isolated). The fake OpenAI test server exercises the REAL provider/router/stream path — no mock model anywhere."},
-{v:"0.5.4",sum:"Lazy Chameleon + Termix integration.",body:"<code>mochi enhance \"&lt;task&gt;\" [--mode]</code> synthesizes dense reasoning context (offline by default); auto-inject via <code>mochi goal --enhance</code> injects it as a leading system message so a cheap model reasons like a bigger one. <code>mochi termix</code> launches a lightweight GTK3+VTE multi-terminal — no Electron."},
-{v:"0.5.3",sum:"Per-task efficiency benchmark; budget-phase-aware routing.",body:"<code>bench/task.mjs</code> runs a real multi-turn agent task and reports tokens/cost/wall time (verified live: ~43k tokens / ~$0.006 / ~37s). Budget-phase routing falls back to the <code>fast</code> profile when the budget drops to <code>cheap</code>/<code>verify</code>. Compact-first context floor rolls up old turns at 60% of the budget."},
-{v:"0.5.2",sum:"Standalone native binary via Bun.",body:"<code>npm run build:bin</code> compiles the CLI into a standalone native executable — no Node, <code>node_modules</code>, or <code>package.json</code> at runtime; fully functional end to end. Tool schema payloads are memoized via WeakMap."},
-{v:"0.5.1",sum:"Efficiency pass: cached rules/memory; efficiency benchmark suite.",body:"<code>ContextEngine</code> caches project rules and memory reads across iterations with size+mtime fingerprints (behavior unchanged). <code>bench/efficiency.mjs</code> measures cold-start wall time and peak RSS: mochi (node) ~55ms/~47MB, mochi (bun) ~50ms/~41MB."},
-{v:"0.5.0",sum:"Usage tracking; plan/approve; known-good baselines; 20 providers.",body:"<code>UsageStore</code> persists per-provider calls, cost, tool calls, and time (<code>/usage</code>, <code>/cost</code>). <code>/plan</code> + <code>/approve</code>; <code>/known-good</code> snapshots a baseline, <code>/check</code> compares. 20 providers with <code>/login</code>. Feature-flagged tree-sitter symbol backend."},
-{v:"0.3.0",sum:"Performance pipeline and real TUI.",body:"Incremental SSE stream parser, compact high-frequency events, <code>FastEventBus</code> with batching, hot/cold state separation, dirty-region renderer with ANSI fallback, end-to-end <code>PerformancePipeline</code>, <code>mochi perf</code> benchmark. Real terminal UI: header, transcript, rounded input, command palette, status bar."},
-{v:"0.2.0",sum:"Tier-2 runtime layer.",body:"Agent profiles from <code>.mochi/agents/*.md</code>; independent verifier and evidence-based judge; budget engine (tokens/cost/time/tool calls); budget-aware fallback; lifecycle hooks with vetoes; intelligent retrieval across files/symbols/references/git history; speculative execution; curated project memory; model retries with compaction."},
-{v:"0.1.0",sum:"Initial rewrite from Pi baseline; provider-level prefix caching.",body:"Core runtime, event bus, workspace, config. Model-agnostic OpenAI-compatible provider with OpenCode aliases; model profiles (fast/coding/reasoning/review); tool bus (read/write/edit/shell/search/glob/git); permission system; context engine with compaction; agent loop with verification and recovery; persistent goals and task DAG scheduler; team orchestration; git checkpoint and rollback. <code>cache_control: ephemeral</code> on index-0 system messages for DeepSeek-class providers — multi-turn runs cache cleanly."},
+const CATEGORIES = [
+  { id: 'all', label: 'All Releases' },
+  { id: 'major', label: 'Major Milestones' },
+  { id: 'perf', label: 'Performance & Rust Core' },
+  { id: 'proto', label: 'Protocols & MCP' },
+  { id: 'rel', label: 'Reliability & Safety' },
 ];
 
-function Release({ r, isLatest, isOpen, onToggle }) {
-  return (
-    <div className={'rel' + (isOpen ? ' open' : '')}>
-      <button className="rel-head" onClick={onToggle} aria-expanded={isOpen}>
-        <span className="rel-v">v{r.v}</span>
-        <span className="rel-sum" dangerouslySetInnerHTML={{ __html: r.sum }} />
-        {isLatest && <span className="rel-badge">LATEST</span>}
-        <span className="rel-chevron">{isOpen ? '−' : '+'}</span>
-      </button>
-      {isOpen && (
-        <div className="rel-body" dangerouslySetInnerHTML={{ __html: r.body }} />
-      )}
-    </div>
-  );
-}
+const CURATED_RELEASES = [
+  {
+    v: '0.20.0',
+    date: 'October 2026',
+    title: 'Model Context Protocol (MCP) & Dual-Engine Architecture',
+    latest: true,
+    major: true,
+    cats: ['major', 'proto', 'perf'],
+    tags: [
+      { label: 'FEATURE', color: 'purple' },
+      { label: 'MCP', color: 'blue' },
+      { label: 'ARCHITECTURE', color: 'cyan' },
+    ],
+    highlights: [
+      {
+        title: 'Model Context Protocol (MCP) Client',
+        desc: 'Native stdio Model Context Protocol client support. Connect external tools, databases, and APIs configured in .mcp.json or config.mcpServers with automatic namespace isolation.',
+      },
+      {
+        title: 'Multi-Tier Context Digest',
+        desc: 'Intermediate summarization engine between mechanical tool shrinking and full compaction. Summarizes historic context while keeping current working buffers intact.',
+      },
+      {
+        title: 'Independent Acceptance Gate',
+        desc: 'Rigorous acceptance gate that verifies filesystem state and criteria independently of the agent’s own claims before checkpointing to git.',
+      },
+      {
+        title: 'Upgraded Model Routing Profile',
+        desc: 'Upgraded coding and reasoning primary profile to high-throughput specialized models with automatic fallback recovery.',
+      },
+    ],
+  },
+  {
+    v: '0.11.0',
+    date: 'September 2026',
+    title: 'Zero-Loop Circuit Breakers & Runtime Hardening',
+    major: true,
+    cats: ['major', 'rel'],
+    tags: [
+      { label: 'RELIABILITY', color: 'green' },
+      { label: 'SECURITY', color: 'orange' },
+    ],
+    highlights: [
+      {
+        title: 'Cumulative Repeated-Tool Breaker',
+        desc: 'Automatically cuts short repetitive tool calls when no working tree mutations occur, completely preventing token-draining agent loops.',
+      },
+      {
+        title: 'Silent Provider Stall Guard',
+        desc: 'Hard 3-minute provider race timer ensures silent API connection hangs cleanly fail over to healthy endpoints.',
+      },
+      {
+        title: 'Async Hard-Bounded File Walker',
+        desc: 'Re-engineered filesystem walker with depth budgets, directory exclusion, and non-blocking asynchronous traversal.',
+      },
+      {
+        title: 'Graceful Process Cleanup',
+        desc: 'Strict SIGKILL fallback ensures orphaned child tasks and build commands never block the host event loop.',
+      },
+    ],
+  },
+  {
+    v: '0.10.6',
+    date: 'August 2026',
+    title: 'Native Rust Runtime Core & 16 Specialist Swarms',
+    major: true,
+    cats: ['major', 'perf', 'arch'],
+    tags: [
+      { label: 'RUST CORE', color: 'orange' },
+      { label: 'PERFORMANCE', color: 'cyan' },
+    ],
+    highlights: [
+      {
+        title: 'Zero-Dependency Rust Core (native/mochi_core)',
+        desc: 'Compiled native crate handling BPE tokenization (0.28ms / 100k chars), compaction cut planning (0.12ms), and workspace indexing (50k files in 3.8ms).',
+      },
+      {
+        title: 'Expanded 16-Role Specialist Roster',
+        desc: 'Added specialized agent profiles for DevOps, DB Admin, QA Engineer, Performance Profiler, and Data Scientist.',
+      },
+      {
+        title: 'Formal Turn State Machine',
+        desc: 'Formalized LoopStateMachine walking every execution through preflight, model inference, tool execution, and regression verification.',
+      },
+    ],
+  },
+  {
+    v: '0.10.0',
+    date: 'July 2026',
+    title: 'Persistent Background Daemon & Agent Client Protocol',
+    major: true,
+    cats: ['major', 'proto'],
+    tags: [
+      { label: 'DAEMON', color: 'purple' },
+      { label: 'PROTOCOL', color: 'blue' },
+    ],
+    highlights: [
+      {
+        title: 'Headless HTTP Daemon (Port 8642)',
+        desc: 'Enables continuous execution without an attached TTY. Includes bearer token authentication and remote task resumption.',
+      },
+      {
+        title: 'Agent Client Protocol (ACP) v1',
+        desc: 'Standardized JSON-RPC stdio protocol enabling IDE extensions in VS Code, Zed, and JetBrains to drive Mochi directly.',
+      },
+      {
+        title: 'Autonomous Cron Scheduler',
+        desc: 'Persistent 5-field cron runner for recurring repository audits and automated maintenance routines.',
+      },
+    ],
+  },
+  {
+    v: '0.5.2',
+    date: 'June 2026',
+    title: 'Standalone Native Binary Compilation',
+    major: false,
+    cats: ['perf'],
+    tags: [
+      { label: 'BINARY', color: 'cyan' },
+      { label: 'ZERO-DEPS', color: 'green' },
+    ],
+    highlights: [
+      {
+        title: 'Standalone Executable Packaging',
+        desc: 'Compile Mochi into a self-contained binary requiring zero Node.js, Bun, or package manager dependencies on the host system.',
+      },
+      {
+        title: 'Tool Schema Memoization',
+        desc: 'WeakMap memoization of serialized tool schemas, eliminating redundant GC pressure during extended sessions.',
+      },
+    ],
+  },
+  {
+    v: '0.5.0',
+    date: 'May 2026',
+    title: 'Multi-Provider Failover & SQLite FTS5 Memory',
+    major: false,
+    cats: ['rel'],
+    tags: [
+      { label: 'MEMORY', color: 'purple' },
+      { label: 'RELIABILITY', color: 'green' },
+    ],
+    highlights: [
+      {
+        title: 'Dynamic Provider Pool & Key Rotation',
+        desc: 'Transparent key rotation across provider credentials with automatic cooldowns on 429 and rate-limit spikes.',
+      },
+      {
+        title: 'Persistent Session Memory Store',
+        desc: 'Full-text indexed transcript store allowing instant search and semantic context recall across historical projects.',
+      },
+    ],
+  },
+];
 
-function Changelog() {
-  const [open, setOpen] = useState('0.20.0');
+const ARCHIVE_RELEASES = [
+  { v: '0.10.5', date: 'Jul 2026', sum: 'Mouse copy/paste via OSC-52, GUI guard in shell tools, bounded stream handling.' },
+  { v: '0.10.4', date: 'Jul 2026', sum: 'ACP editor adapter, search_replace_multi and analyze_code native tools.' },
+  { v: '0.10.3', date: 'Jun 2026', sum: 'Credential rotation pool, scheduled cron jobs, background shell tasks.' },
+  { v: '0.10.2', date: 'Jun 2026', sum: 'Proportionate verification, baseline-aware check gating, instant per-file diagnostics.' },
+  { v: '0.10.1', date: 'Jun 2026', sum: 'Security hardening, ReDoS sanitizer updates, credential log redacting.' },
+  { v: '0.9.6', date: 'May 2026', sum: 'Mid-stream wire cancellation, concurrent team mode, structured stop reasons.' },
+  { v: '0.9.5', date: 'May 2026', sum: 'Content-addressed codegraph fingerprints, sensitive credential scrubbing.' },
+  { v: '0.9.4', date: 'May 2026', sum: 'Initial persistent HTTP agent daemon implementation.' },
+  { v: '0.9.3', date: 'Apr 2026', sum: 'Polyglot code indexing across 7 languages, strict plan-mode enforcement.' },
+  { v: '0.9.2', date: 'Apr 2026', sum: 'End-to-end integration test runner against live provider harnesses.' },
+  { v: '0.9.1', date: 'Apr 2026', sum: 'Scope-aware verification working directory, safe git diff filtering.' },
+  { v: '0.9.0', date: 'Mar 2026', sum: 'Verification autopsy records, failure diagnosis engine, procedural memory.' },
+  { v: '0.8.0', date: 'Mar 2026', sum: 'Multi-provider failover routing, missing-tool skip handling.' },
+  { v: '0.7.0', date: 'Feb 2026', sum: 'CI verification pipeline, read-only plan mode allowlist.' },
+  { v: '0.6.1', date: 'Feb 2026', sum: 'Output-diff mutation detection for test runners.' },
+  { v: '0.6.0', date: 'Jan 2026', sum: 'Todo planning tool, agent skills spec loader, subagent delegation.' },
+  { v: '0.5.5', date: 'Jan 2026', sum: 'Internal reasoning synthesis, multi-pane terminal workspace.' },
+  { v: '0.5.4', date: 'Jan 2026', sum: 'Lightweight multi-terminal integration, automated system prompts.' },
+  { v: '0.5.3', date: 'Dec 2025', sum: 'Per-task efficiency benchmark suite, budget-phase-aware routing.' },
+  { v: '0.5.1', date: 'Dec 2025', sum: 'Cached project rules and memory reads with size and mtime fingerprints.' },
+  { v: '0.3.0', date: 'Nov 2025', sum: 'Incremental SSE stream parser, FastEventBus, dirty-region ANSI renderer.' },
+  { v: '0.2.0', date: 'Nov 2025', sum: 'Agent profile definitions, budget enforcement, speculative execution.' },
+  { v: '0.1.0', date: 'Oct 2025', sum: 'Initial release: core runtime, tool bus, task DAG scheduler, git checkpointing.' },
+];
+
+export default function Changelog() {
+  const [activeCat, setActiveCat] = useState('all');
+  const [showArchive, setShowArchive] = useState(false);
+
+  const filteredReleases = CURATED_RELEASES.filter((r) => {
+    if (activeCat === 'all') return true;
+    return r.cats && r.cats.includes(activeCat);
+  });
+
   return (
     <>
       <div className="pagehead">
@@ -62,29 +208,87 @@ function Changelog() {
           <div className="pagehead-inner">
             <div className="hero-badge">
               <span className="badge-glow" />
-              <span className="badge-pill">CHANGELOG</span>
-              <span>31 Releases Shipped · Full Traceability</span>
+              <span className="badge-pill">RELEASE ARCHIVE</span>
+              <span>31 Releases Shipped · Continuous Delivery</span>
             </div>
             <h1 className="pagehead-title">Every release, on the record.</h1>
             <p className="pagehead-lede">
-              Continuous delivery from Day 1. Inspect architectural milestones, runtime hardening, and release notes across all 31 releases.
+              Curated product milestones, runtime hardening, and architecture upgrades. Clear technical notes without noise.
             </p>
           </div>
         </div>
       </div>
 
       <div className="wrap" style={{ padding: '0 24px 80px' }}>
-        <div className="rel-list">
-          {RELEASES.map((r, i) => (
-            <AnimatedContent key={r.v} direction="bottom" delay={Math.min(i * 0.04, 0.3)}>
-              <Release
-                r={r}
-                isLatest={i === 0}
-                isOpen={open === r.v}
-                onToggle={() => setOpen(open === r.v ? null : r.v)}
-              />
+        {/* Category Filters */}
+        <div className="changelog-filter-bar">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.id}
+              className={'c-filter-btn' + (activeCat === c.id ? ' active' : '')}
+              onClick={() => setActiveCat(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Curated Milestone Releases */}
+        <div className="changelog-timeline">
+          {filteredReleases.map((r, i) => (
+            <AnimatedContent key={r.v} direction="bottom" delay={i * 0.08}>
+              <div className={'release-card' + (r.latest ? ' is-latest' : '')}>
+                <div className="release-card-header">
+                  <div className="release-version-row">
+                    <span className="release-version-tag">v{r.v}</span>
+                    {r.latest && <span className="latest-pill">LATEST RELEASE</span>}
+                    <span className="release-date">{r.date}</span>
+                  </div>
+                  <h2 className="release-title">{r.title}</h2>
+                  <div className="release-tags">
+                    {r.tags.map((t) => (
+                      <span key={t.label} className={'tag-badge ' + t.color}>{t.label}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="release-highlights">
+                  {r.highlights.map((h) => (
+                    <div key={h.title} className="highlight-item">
+                      <div className="highlight-bullet" />
+                      <div className="highlight-content">
+                        <h4 className="highlight-title">{h.title}</h4>
+                        <p className="highlight-desc">{h.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </AnimatedContent>
           ))}
+        </div>
+
+        {/* Collapsible Complete Archive for All 31 Releases */}
+        <div className="archive-section">
+          <button
+            className="archive-toggle-btn"
+            onClick={() => setShowArchive(!showArchive)}
+          >
+            <span>{showArchive ? 'Hide Historical Releases' : 'View Full Historical Archive (All 31 Releases)'}</span>
+            <span className="archive-toggle-icon">{showArchive ? '▲' : '▼'}</span>
+          </button>
+
+          {showArchive && (
+            <div className="archive-list">
+              {ARCHIVE_RELEASES.map((ar) => (
+                <div key={ar.v} className="archive-row">
+                  <span className="archive-v">v{ar.v}</span>
+                  <span className="archive-date">{ar.date}</span>
+                  <span className="archive-sum">{ar.sum}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,4 +297,5 @@ function Changelog() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<Changelog />);
+const _root = document.getElementById('root');
+if (_root) createRoot(_root).render(<Changelog />);
