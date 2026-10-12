@@ -1280,7 +1280,7 @@ function BenchmarksSection() {
       </AnimatedContent>
 
       {/* Two-Column Responsive Chart Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 32, marginBottom: 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 24, marginBottom: 40 }}>
         <AnimatedContent direction="left" delay={0.2}>
           <div
             style={{

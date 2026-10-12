@@ -93,6 +93,8 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     ],
   },
   { name: 'acp', description: 'Agent Client Protocol server (--check verifies lifecycle)' },
+  { name: 'mcp-serve', description: 'MCP stdio server for editors' },
+  { name: 'perf', description: 'Performance diagnostics' },
   { name: 'onboard', description: 'Cozy first-run setup wizard', aliases: ['welcome'] },
   {
     name: 'setup', description: 'Setup wizard + editor installers',
@@ -104,8 +106,6 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     ],
   },
   { name: 'chameleon', description: 'Removed standalone — engine runs auto + via --enhance' },
-  { name: 'acp', description: 'Agent Client Protocol server' },
-    { name: 'mcp-serve', description: 'MCP stdio server for editors' },
   { name: 'self-train', description: 'Self-review loop', aliases: ['selftrain', 'train'] },
   { name: 'speculate', description: 'Speculative execution' },
   { name: 'usage', description: 'Token usage and cost' },

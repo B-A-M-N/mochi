@@ -29,7 +29,7 @@ function hereDir(): string {
   }
   return cachedHere;
 }
-const driverScript = (): string => resolve(hereDir(), '../../scripts/browser-driver.mjs');
+export const driverScript = (): string => resolve(hereDir(), '../../scripts/browser-driver.mjs');
 
 function runDriver(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolvePromise) => {

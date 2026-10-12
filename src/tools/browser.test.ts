@@ -1,12 +1,13 @@
 // Browser automation tool: driver path resolution + result summarization.
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
-import { DRIVER, summarizeResult } from './browser.js';
+import { driverScript, summarizeResult } from './browser.js';
 
 describe('browser tool driver', () => {
   it('resolves a real, existing driver script path', () => {
     // The driver is a plain-node script (no import of playwright) so the tool
     // can shell out to it without adding a runtime dep to the Bun binary.
+    const DRIVER = driverScript();
     expect(DRIVER.endsWith('scripts/browser-driver.mjs')).toBe(true);
     expect(existsSync(DRIVER)).toBe(true);
   });
