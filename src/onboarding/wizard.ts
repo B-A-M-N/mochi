@@ -57,16 +57,26 @@ export function stepFrame(step: OnboardStep, scan: OnboardScan): string[] {
       return lines;
     }
     case 'models': {
-      return [
+      const lines = [
         `${C.bold}${C.violet}─ models ─${C.reset}`,
         `${C.gray}  one model per job. mochi auto-fails over when a provider cools down.${C.reset}`,
         ``,
+      ];
+      if (scan.models?.length) {
+        lines.push(`${C.gray}  detected ${scan.models.length} model(s) configured across other agents:${C.reset}`);
+        for (const m of scan.models.slice(0, 5)) {
+          lines.push(`  ${C.lime}●${C.reset} ${m.agent.padEnd(12)} ${C.bold}${m.model}${C.reset}`);
+        }
+        lines.push(``);
+      }
+      lines.push(
         `  ${C.cyan}fast${C.reset}      quick edits + chat      ${C.dim}(default: flash-tier)${C.reset}`,
         `  ${C.cyan}coding${C.reset}    main implementation     ${C.dim}(default: same as fast)${C.reset}`,
         `  ${C.cyan}reasoning${C.reset} deep planning + review  ${C.dim}(raise via /reasoning)${C.reset}`,
         ``,
         `${C.dim}  change anytime: /model  or  mochi use <provider> [model]${C.reset}`,
-      ];
+      );
+      return lines;
     }
     case 'skills': {
       const lines = [

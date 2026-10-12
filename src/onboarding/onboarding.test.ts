@@ -1,7 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { detectProviders, detectSkillSources, detectMcpSources, scanForOnboarding, maskKey } from './detect.js';
+import {
+  detectProviders,
+  detectSkillSources,
+  detectMcpSources,
+  detectModels,
+  detectAgents,
+  detectMcpServerDefs,
+  scanForOnboarding,
+  maskKey,
+} from './detect.js';
 import { welcomeFrame, stepFrame, defaultChoices } from './wizard.js';
-import { isOnboarded } from './import.js';
+import {
+  isOnboarded,
+  importDetectedModels,
+  importMcpServerDefs,
+  injectAllAgentEcosystem,
+} from './import.js';
 
 describe('onboarding detect', () => {
   it('detects providers from env without leaking keys', () => {
@@ -26,7 +40,21 @@ describe('onboarding detect', () => {
   it('skill + mcp detectors never throw on missing homes', () => {
     expect(() => detectSkillSources()).not.toThrow();
     expect(() => detectMcpSources('/tmp')).not.toThrow();
+    expect(() => detectModels()).not.toThrow();
+    expect(() => detectAgents('/tmp')).not.toThrow();
+    expect(() => detectMcpServerDefs('/tmp')).not.toThrow();
     expect(() => scanForOnboarding('/tmp')).not.toThrow();
+  });
+
+  it('scan returns structured agent, model, provider, and mcp details', () => {
+    const scan = scanForOnboarding('/tmp');
+    expect(Array.isArray(scan.agents)).toBe(true);
+    expect(Array.isArray(scan.models)).toBe(true);
+    expect(Array.isArray(scan.providers)).toBe(true);
+    expect(Array.isArray(scan.skillSources)).toBe(true);
+    expect(typeof scan.mcpServerDefs).toBe('object');
+    expect(typeof scan.totalSkills).toBe('number');
+    expect(typeof scan.totalMcpServers).toBe('number');
   });
 
   it('isOnboarded returns boolean', () => {
@@ -34,9 +62,44 @@ describe('onboarding detect', () => {
   });
 });
 
+describe('universal injection', () => {
+  it('importDetectedModels configures model profiles', () => {
+    const models = [
+      { agent: 'hermes', model: 'glm-5.3-flash', role: 'fast' as const },
+      { agent: 'opencode', model: 'opencode/deepseek-v4-flash', role: 'coding' as const },
+      { agent: 'codex', model: 'opencode-zen-3.5', role: 'reasoning' as const },
+    ];
+    const res = importDetectedModels(models, { overwriteProfiles: true });
+    expect(res.profiles.fast).toBeTruthy();
+    expect(res.profiles.coding).toBeTruthy();
+    expect(res.profiles.reasoning).toBeTruthy();
+  });
+
+  it('importMcpServerDefs registers server configs non-destructively', () => {
+    const defs = {
+      testserver: {
+        name: 'testserver',
+        agent: 'claude',
+        sourceFile: '/tmp/test.json',
+        command: 'npx',
+        args: ['-y', 'test-mcp-server'],
+      },
+    };
+    const res = importMcpServerDefs(defs, { force: true });
+    expect(res.imported).toContain('testserver');
+  });
+
+  it('injectAllAgentEcosystem runs end-to-end without throwing', async () => {
+    const rep = await injectAllAgentEcosystem(undefined, { force: false });
+    expect(typeof rep.agentsCount).toBe('number');
+    expect(Array.isArray(rep.providersImported)).toBe(true);
+    expect(typeof rep.skillsImported).toBe('number');
+  });
+});
+
 describe('onboarding wizard frames', () => {
   it('welcome frame is cozy and mentions onboard', () => {
-    const frame = welcomeFrame('0.23.0').join('\n');
+    const frame = welcomeFrame('0.24.0').join('\n');
     expect(frame).toMatch(/welcome home/i);
     expect(frame).toContain('mochi onboard');
   });

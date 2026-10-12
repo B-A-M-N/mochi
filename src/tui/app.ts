@@ -87,6 +87,8 @@ const COMMANDS = [
   { name: '/help', hint: 'Show commands' },
   { name: '/onboard', hint: 'Cozy setup: import keys, models, skills, MCPs, editors' },
   { name: '/setup', hint: 'Interactive setup: import keys, models, skills, MCPs, editors' },
+  { name: '/inject', hint: 'Universal agent injection: adopt keys, models, skills & MCP tools' },
+  { name: '/adopt', hint: 'Adopt skills, models, keys & MCP tools from your other agents' },
   { name: '/welcome', hint: 'Show welcome screen and setup wizard' },
   { name: '/expand', hint: 'Inspect uncompressed code, hidden reasoning & tool output (or press Ctrl+O)' },
   { name: '/clear', hint: 'Clear transcript' },
@@ -1800,6 +1802,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/onboard' || line === '/setup' || line === '/welcome') {
       const { runInteractiveOnboarding } = await import('./onboard-flow.js');
       await runInteractiveOnboarding(runtime, openMenu, push, scheduleRender, pkg.version);
+      return;
+    }
+    if (line === '/inject' || line === '/adopt') {
+      const { runUniversalInjection } = await import('./onboard-flow.js');
+      await runUniversalInjection(runtime, push, scheduleRender);
       return;
     }
     if (line === '/model' || line.startsWith('/model ')) {

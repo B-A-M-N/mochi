@@ -43,10 +43,10 @@ describe('runInteractiveOnboarding', () => {
     const lines: string[] = [];
     const push = (_kind: any, text: string) => { lines.push(text); };
     const scheduleRender = vi.fn();
-    // Step 0: Step-by-step (1), Step 1: Skip (2), Step 2: Option 0 (glm), Step 3: Skip (3), Step 4: Skip (3)
+    // Step 0: Step-by-step (1), Step 1: Skip (-1), Step 2: Option 0 (glm), Step 3: Skip (3), Step 4: Skip (3)
     const openMenu = vi.fn()
       .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(-1)
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(3);

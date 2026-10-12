@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -70,6 +70,7 @@ describe('Runtime setMode', () => {
   });
   it('keeps the goal engine on the merged config when project settings exist', () => {
     const dir = makeRepo();
+    mkdirSync(resolve(dir, '.mochi'), { recursive: true });
     writeFileSync(resolve(dir, '.mochi', 'config.json'), JSON.stringify({ quiet: true }));
     const rt = Runtime.create({ cwd: dir });
     expect((rt.goals as any).config).toBe(rt.config);
