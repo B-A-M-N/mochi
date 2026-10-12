@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import '../assets/style.css';
 
 /* ═══════════════════════════════════════════════════════════
    MOCHI v5 — REACT BITS PORTS (zero-dependency)

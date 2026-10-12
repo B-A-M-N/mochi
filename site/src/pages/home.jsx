@@ -15,13 +15,13 @@ const STATS = [
   ['18.2 MB', 'PEAK RESIDENT RSS', '21.2× lighter than Claude Code'],
   ['38.2 ms', 'TIME TO FIRST INPUT', '4.5× faster cold-start'],
   ['16', 'SPECIALIST ROLES', 'Autonomous DAG swarms'],
-  ['31', 'RELEASES SHIPPED', '727 files & 1,200 tests passing'],
+  ['35', 'RELEASES SHIPPED', '727 files & 1,459 tests passing'],
 ];
 
 const TICKER_ITEMS = [
   '18.2 MB RESIDENT RSS', '38.2 MS TTFI', '21.2× LIGHTER',
   '4.5× FASTER START', 'BUBBLEWRAP SANDBOX', '16 SPECIALIST ROLES',
-  'ZERO DEPS RUNTIME', '727 FILES AUDITED', '1,200 TESTS PASSING',
+  'ZERO DEPS RUNTIME', '727 FILES AUDITED', '1,459 TESTS PASSING',
 ];
 
 const CAPABILITIES = [
@@ -283,63 +283,257 @@ function FlowSection() {
   );
 }
 
-function TerminalSection() {
+function ArchitectureSection() {
+  const [activeTab, setActiveTab] = useState('ast');
+
+  const tabs = [
+    { id: 'ast', label: 'Surgical AST Patch', badge: '12ms / Turn' },
+    { id: 'sandbox', label: 'Bubblewrap Sandbox', badge: 'Hardware Isolated' },
+    { id: 'recovery', label: 'Struggle Circuit Breaker', badge: 'Autonomous Escalate' },
+    { id: 'multitab', label: 'Multi-Tab TUI Matrix', badge: 'Pinned Sessions' },
+  ];
+
   return (
-    <section className="section" id="terminal" style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <section className="section" id="architecture" style={{ maxWidth: 1400, margin: '0 auto' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
-          INTERACTIVE DEMO
+          INTERACTIVE ARCHITECTURE
         </div>
       </AnimatedContent>
-      <h2 className="section-title" style={{ fontSize: 38, marginBottom: 28 }}>
-        Watch it think.
+      <h2 className="section-title" style={{ fontSize: 38, marginBottom: 16 }}>
+        Engineered for Precision. <span className="accent-title">Built for Speed.</span>
       </h2>
-      <AnimatedContent direction="bottom" delay={0.2}>
-        <div className="term" style={{ borderRadius: 24, border: '1.5px solid var(--line)', boxShadow: '0 12px 48px rgba(139, 117, 246, 0.14)' }}>
-          <div className="term-head" style={{ padding: '16px 22px' }}>
-            <div className="term-dot r" />
-            <div className="term-dot y" />
-            <div className="term-dot g" />
-            <span className="term-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>mochi — zsh</span>
-          </div>
-          <div className="term-body" style={{ padding: '24px 28px', fontSize: 14, lineHeight: 1.8 }}>
-            <div className="term-line">
-              <span className="term-prompt">$</span>
-              <span>mochi "fix off-by-one index error in sum.js and run tests"</span>
-            </div>
-            <div className="term-line">
-              <span className="term-comment"># [Spec Phase] Inspecting AST call graph & sum.js...</span>
-            </div>
-            <div className="term-line">
-              <span className="term-keyword">→</span>
-              <span>tree-sitter parse sum.js</span>
-              <span className="term-string">[found off-by-one: i &lt;= arr.length]</span>
-            </div>
-            <div className="term-line">
-              <span className="term-keyword">→</span>
-              <span>apply unified patch *** sum.js</span>
-              <span className="term-string">[i &lt; arr.length · 12ms]</span>
-            </div>
-            <div className="term-line">
-              <span className="term-keyword">→</span>
-              <span>bubblewrap bwrap shell: node run.js</span>
-              <span className="term-string">[prints 10 · exit 0]</span>
-            </div>
-            <div className="term-line">
-              <span className="term-keyword">→</span>
-              <span>git checkpoint commit</span>
-              <span className="term-string">[7a4cb3a clean pass]</span>
-            </div>
-            <div className="term-line" style={{ marginTop: 14 }}>
-              <span className="term-prompt">$</span>
-              <span style={{ color: '#34D399', fontWeight: 700 }}>
-                ✓ Task verified and complete — 1 file modified, 100% tests passing in 12.6s
+      <p className="section-desc" style={{ maxWidth: 760, marginBottom: 32 }}>
+        Inspect how Mochi’s Spec/Act dual-engine separation, AST surgical diffing, and unprivileged sandboxing outperform traditional AI agent wrappers.
+      </p>
+
+      {/* Interactive Tabs Bar */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              padding: '10px 18px',
+              borderRadius: 12,
+              border: activeTab === t.id ? '1.5px solid var(--purple)' : '1.5px solid var(--line)',
+              background: activeTab === t.id ? 'var(--purple-lighter)' : '#ffffff',
+              color: activeTab === t.id ? 'var(--purple-dark)' : 'var(--ink)',
+              fontWeight: 700,
+              fontSize: 13.5,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: activeTab === t.id ? '0 4px 14px rgba(139, 117, 246, 0.18)' : 'var(--shadow-card)',
+              transition: 'all 0.2s',
+            }}
+          >
+            <span>{t.label}</span>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontFamily: 'var(--font-mono)',
+                padding: '2px 6px',
+                borderRadius: 6,
+                background: activeTab === t.id ? 'var(--purple)' : '#EDE8F5',
+                color: activeTab === t.id ? '#ffffff' : 'var(--purple-dark)',
+                fontWeight: 600,
+              }}
+            >
+              {t.badge}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Active Tab Interactive Display */}
+      <div
+        style={{
+          background: '#ffffff',
+          borderRadius: 24,
+          border: '1.5px solid rgba(139, 92, 246, 0.20)',
+          boxShadow: 'var(--shadow-card)',
+          padding: 32,
+          overflow: 'hidden',
+        }}
+      >
+        {activeTab === 'ast' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: '#111116', margin: 0 }}>
+                  Tree-Sitter AST Surgical Mutation vs. Naive Rewriting
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+                  Modifies only the exact AST target node in 12ms. Never rewrites entire 400-line files or corrupts git blame.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#D1FAE5', color: '#065F46', padding: '4px 10px', borderRadius: 999, fontWeight: 700 }}>
+                ✓ 99.4% LESS TOKEN WASTE
               </span>
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div style={{ background: '#110F1D', borderRadius: 16, padding: 20, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#EDE9FE', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ color: '#F87171', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>✕ Conventional AI Coding Agents</span>
+                  <span style={{ fontSize: 10, background: 'rgba(239, 68, 68, 0.2)', padding: '2px 6px', borderRadius: 4 }}>Slow &amp; Risky</span>
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.4)', lineHeight: 1.7 }}>
+                  <div>// Rewrites entire 450-line file from scratch</div>
+                  <div>// 12,400 tokens spent on unchanged boilerplate</div>
+                  <div>// Destroys git blame across entire module</div>
+                  <div>// Truncates halfway through on context limit</div>
+                  <div style={{ color: '#F87171', marginTop: 8 }}>- export function calculateRates(req, res) &#123; ... 450 lines ... &#125;</div>
+                </div>
+              </div>
+
+              <div style={{ background: '#110F1D', borderRadius: 16, padding: 20, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#EDE9FE', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                <div style={{ color: '#34D399', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>✓ Mochi Surgical Diff Engine</span>
+                  <span style={{ fontSize: 10, background: 'rgba(52, 211, 153, 0.2)', padding: '2px 6px', borderRadius: 4 }}>Atomic &amp; Safe</span>
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.65)', lineHeight: 1.7 }}>
+                  <div style={{ color: '#818CF8' }}>@@ -42,2 +42,2 @@ AST Node: TokenRateLimiter</div>
+                  <div style={{ color: '#F87171' }}>-   const maxRps = currentTier === 'free' ? 10 : 100;</div>
+                  <div style={{ color: '#34D399' }}>+   const maxRps = currentTier === 'free' ? 25 : 250; // Surgical patch: 12ms</div>
+                  <div style={{ color: '#34D399', marginTop: 8 }}>✓ Invariant verified: tree-sitter AST matches post-edit shape</div>
+                  <div style={{ color: '#A78BFA' }}>✓ 100% git blame preserved for surrounding 448 lines</div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </AnimatedContent>
+        )}
+
+        {activeTab === 'sandbox' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: '#111116', margin: 0 }}>
+                  Bubblewrap Hardware Sandbox &amp; Policy Isolation
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+                  Commands execute within unprivileged user namespaces. Host filesystems and credentials remain completely masked.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE9FE', color: 'var(--purple-dark)', padding: '4px 10px', borderRadius: 999, fontWeight: 700 }}>
+                MOCHI_SANDBOX=bubblewrap
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 22, border: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                  🛡️ Read-Only System Mounts
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0, lineHeight: 1.6 }}>
+                  <code>/usr</code>, <code>/bin</code>, and <code>/lib</code> mounted read-only via unprivileged <code>bwrap</code>. System binaries cannot be replaced or infected.
+                </p>
+              </div>
+
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 22, border: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                  🔒 Credential Blackhole
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0, lineHeight: 1.6 }}>
+                  <code>~/.ssh</code>, <code>~/.aws</code>, and <code>~/.gnupg</code> masked with isolated empty tmpfs filesystems. Prompt injections cannot exfiltrate user keys.
+                </p>
+              </div>
+
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 22, border: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8 }}>
+                  🌐 Strict Egress Control
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0, lineHeight: 1.6 }}>
+                  Configurable <code>--unshare-net</code> isolates untrusted code from making rogue HTTP calls or reverse TCP shells during testing.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'recovery' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: '#111116', margin: 0 }}>
+                  Struggle-State Detection &amp; Auto-Escalation
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+                  Breaks infinite error loops autonomously. 3 consecutive verification failures escalate to high-tier reasoning models.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: 999, fontWeight: 700 }}>
+                ANTI-LOOP CIRCUIT BREAKER
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 18, border: '1px solid var(--line)', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--muted)', fontWeight: 700 }}>TURN 1</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#111116', margin: '6px 0 4px' }}>Fast Model Execution</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>glm-5.3-flash attempts rapid edit batch (140ms).</div>
+              </div>
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 18, border: '1px solid var(--line)', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#DC2626', fontWeight: 700 }}>TURN 2 (FAILED)</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#DC2626', margin: '6px 0 4px' }}>Stagnation Detected</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Compiler red test. 0 new files mutated. Breaker arms.</div>
+              </div>
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 18, border: '1.5px solid var(--purple)', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--purple-dark)', fontWeight: 700 }}>TURN 3 (ESCALATE)</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--purple-dark)', margin: '6px 0 4px' }}>Model Auto-Handoff</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Escalates to kimi-k2.7-code with handoff diagnosis.</div>
+              </div>
+              <div style={{ background: '#FAF8FC', borderRadius: 16, padding: 18, border: '1.5px solid #059669', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#059669', fontWeight: 700 }}>VERIFIED PASS</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#059669', margin: '6px 0 4px' }}>Git Checkpoint</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>100% tests green. Atomic commit with zero rollbacks.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'multitab' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: '#111116', margin: 0 }}>
+                  Multi-Tab Pinned Sessions (Mochi v0.22.0)
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
+                  Run multiple autonomous agents concurrently in isolated terminal tabs with dedicated budgets and abort controllers.
+                </p>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE9FE', color: 'var(--purple-dark)', padding: '4px 10px', borderRadius: 999, fontWeight: 700 }}>
+                ALT+T NEW · ALT+1-8 SWITCH
+              </span>
+            </div>
+
+            <div style={{ background: '#110F1D', borderRadius: 16, padding: '16px 20px', fontFamily: 'var(--font-mono)', fontSize: 13, border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+              {/* Tab bar header */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 12, marginBottom: 16 }}>
+                <div style={{ background: '#7C3AED', color: '#ffffff', padding: '5px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12 }}>
+                  1: auth-service [ACTIVE]
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'rgba(255, 255, 255, 0.6)', padding: '5px 12px', borderRadius: 6, fontSize: 12 }}>
+                  2: database-migration · 2 unread
+                </div>
+                <div style={{ background: 'transparent', color: 'var(--purple-light)', border: '1px dashed rgba(139, 92, 246, 0.4)', padding: '5px 12px', borderRadius: 6, fontSize: 12 }}>
+                  + New session
+                </div>
+              </div>
+
+              <div style={{ color: '#EDE9FE', lineHeight: 1.8 }}>
+                <div style={{ color: '#A78BFA' }}>$ mochi --tab 1 "refactor jwt verification into standalone middleware"</div>
+                <div style={{ color: '#34D399' }}>✓ Tab 1 runtime isolated — 18.2 MB RSS, own budget, background execution intact.</div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.5)', marginTop: 8 }}>[Tab 2 continues running database migration in background without transcript spam]</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -367,50 +561,58 @@ function BenchmarksSection() {
   ];
 
   return (
-    <section className="section" id="benchmarks" style={{ maxWidth: 1240, margin: '0 auto' }}>
+    <section className="section" id="benchmarks" style={{ maxWidth: 1400, margin: '0 auto' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag">
           <span className="sparkle" />
           MEASURED RECEIPTS
         </div>
       </AnimatedContent>
-      <h2 className="section-title" style={{ fontSize: 38, marginBottom: 28 }}>
+      <h2 className="section-title" style={{ fontSize: 38, marginBottom: 28, color: '#111116' }}>
         Measured. Verified. Repeated.
       </h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 36 }}>
         <AnimatedContent direction="left" delay={0.2}>
-          <div style={{
-            background: '#ffffff',
-            padding: '34px 30px',
-            borderRadius: 24,
-            border: '1.5px solid var(--line)',
-            boxShadow: 'var(--shadow-card)',
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20,
-            }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12.5,
-                color: 'var(--purple-dark)',
-                textTransform: 'uppercase',
-                letterSpacing: '.08em',
-                fontWeight: 700,
-              }}>
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '34px 30px',
+              borderRadius: 24,
+              border: '1.5px solid var(--line)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 20,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13,
+                  color: '#111116',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.08em',
+                  fontWeight: 800,
+                }}
+              >
                 Peak Resident RSS (MB)
               </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                background: 'var(--purple-lighter)',
-                color: 'var(--purple-dark)',
-                padding: '3px 8px',
-                borderRadius: 6,
-                fontWeight: 700,
-              }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  background: 'var(--purple-lighter)',
+                  color: 'var(--purple-dark)',
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  fontWeight: 800,
+                }}
+              >
                 21.2× LIGHTER
               </span>
             </div>
@@ -419,38 +621,46 @@ function BenchmarksSection() {
         </AnimatedContent>
 
         <AnimatedContent direction="right" delay={0.25}>
-          <div style={{
-            background: '#ffffff',
-            padding: '34px 30px',
-            borderRadius: 24,
-            border: '1.5px solid var(--line)',
-            boxShadow: 'var(--shadow-card)',
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20,
-            }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12.5,
-                color: 'var(--purple-dark)',
-                textTransform: 'uppercase',
-                letterSpacing: '.08em',
-                fontWeight: 700,
-              }}>
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '34px 30px',
+              borderRadius: 24,
+              border: '1.5px solid var(--line)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 20,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13,
+                  color: '#111116',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.08em',
+                  fontWeight: 800,
+                }}
+              >
                 Cold Start TTFI (ms)
               </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                background: 'var(--purple-lighter)',
-                color: 'var(--purple-dark)',
-                padding: '3px 8px',
-                borderRadius: 6,
-                fontWeight: 700,
-              }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  background: 'var(--purple-lighter)',
+                  color: 'var(--purple-dark)',
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  fontWeight: 800,
+                }}
+              >
                 4.5× FASTER
               </span>
             </div>
@@ -464,39 +674,96 @@ function BenchmarksSection() {
 
 function CodaSection() {
   const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
+  const [copied, setCopied] = useState(false);
+
+  const copyInstall = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText('curl -fsSL https://mochi.sh | sh');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="coda-wrap">
       <div className="coda-banner">
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560 }}>
-          <h2>Ready to Build with Mochi?</h2>
-          <p>
-            Experience the lightest, fastest autonomous coding intelligence for your terminal.
+        {/* Left Column: Black readable text and download options */}
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 580 }}>
+          <h2 style={{ color: '#111116', fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 800, marginBottom: 14 }}>
+            Ready to Build with Mochi?
+          </h2>
+          <p style={{ color: '#2D283E', fontSize: 16.5, lineHeight: 1.65, marginBottom: 24, fontWeight: 500 }}>
+            Experience the lightest, fastest autonomous coding intelligence for your terminal. Single standalone Bun binary, compiled Rust core, and 0 external dependencies.
           </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+
+          {/* Quick Install Snippet */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: '#FAF8FC',
+              border: '1.5px solid rgba(139, 92, 246, 0.22)',
+              borderRadius: 12,
+              padding: '6px 14px',
+              marginBottom: 24,
+              gap: 12,
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#111116', fontWeight: 700 }}>
+              curl -fsSL https://mochi.sh | sh
+            </span>
+            <button
+              onClick={copyInstall}
+              style={{
+                background: 'var(--purple)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {copied ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <a
               href="https://github.com/xanstomper/mochi/releases"
-              className="btn btn-purple"
+              className="btn btn-primary"
               target="_blank"
               rel="noopener"
+              style={{ textDecoration: 'none' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Download Mochi
+              Download Mochi (v0.22.0)
             </a>
             <a
               href={base + '/docs.html'}
-              className="btn btn-outline"
-              style={{ background: 'transparent', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }}
+              className="btn btn-secondary"
+              style={{ textDecoration: 'none', color: '#111116', border: '1.5px solid #111116' }}
             >
               Read the Docs →
             </a>
           </div>
         </div>
-        <div className="coda-peeking-mascot">
-          <Mochi size={220} />
+
+        {/* Right Column: User's GIF */}
+        <div className="coda-gif-wrap">
+          <img
+            src={base + '/IMG_3098.gif'}
+            alt="Mochi Autonomous Terminal Demo"
+            className="coda-gif"
+          />
+          <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
+            Live session playback: Mochi autonomous terminal execution
+          </div>
         </div>
       </div>
     </div>
@@ -511,7 +778,7 @@ export default function Home() {
       <CapabilitiesSection />
       <StatsSection />
       <FlowSection />
-      <TerminalSection />
+      <ArchitectureSection />
       <BenchmarksSection />
       <CodaSection />
       <Footer />
