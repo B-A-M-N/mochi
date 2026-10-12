@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# Push-cadence runs cancel each other (cancel-in-progress), which repeatedly
+# killed the slow Windows leg before it finished. Manual runs get their own
+# group so a dispatched run survives new pushes — it is the only way to get
+# that leg to a verdict.
+concurrency:
+  group: ci-${{ github.event_name == 'workflow_dispatch' && 'manual' || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
