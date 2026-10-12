@@ -3,249 +3,112 @@ import { createRoot } from 'react-dom/client';
 import Mochi from '../Mascot.jsx';
 import Footer from '../Footer.jsx';
 import { AnimatedContent } from '../anim.jsx';
-import { IconSearch, IconCheck, IconTerminal, IconShield, IconRocket } from '../icons.jsx';
+import { IconSearch } from '../icons.jsx';
+import { RELEASES } from '../changelog-data.js';
 
-const RELEASES = [
-  {
-    version: 'v0.5.2',
-    tag: 'LATEST',
-    date: 'Oct 11, 2026',
-    title: 'Bubblewrap Sandbox, MCP HTTP, Multimodal Vision, and Skill Packs',
-    categories: [
-      {
-        name: 'SECURITY & SANDBOXING',
-        items: [
-          'Hardware-isolated command sandbox via Bubblewrap (bwrap) with unprivileged user namespaces.',
-          'Read-only mounts for system binaries (/usr, /bin, /lib) with complete masking of credential directories (~/.ssh, ~/.aws).',
-          'Strict configurable network whitelist preventing prompt-injection payloads from exfiltrating data.',
-        ],
-      },
-      {
-        name: 'PROTOCOLS & MULTIMODAL',
-        items: [
-          'Full Model Context Protocol (MCP) HTTP transport with SSE streaming alongside standard stdio transport.',
-          'Native multimodal image support across 3 providers (OpenCode, Anthropic Claude 3.5 Sonnet, OpenAI GPT-4o).',
-          'TUI /image command for inspecting and feeding screenshot diagnostics directly to reasoning models.',
-        ],
-      },
-      {
-        name: 'EXTENSIBILITY & DIAGNOSTICS',
-        items: [
-          'Dynamic Skill Packs discovery and hot-reload from ~/.mochi/skills/ without restarting the session.',
-          'Integrated browser doctor probe with automatic Playwright binary detection and headless health checks.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.5.1',
-    tag: 'PERF',
-    date: 'Oct 8, 2026',
-    title: 'Anthropic Prompt Cache Breakpoints, Tool-Schema Diet, and Shell Autocompletion',
-    categories: [
-      {
-        name: 'PERFORMANCE & TOKEN ECONOMY',
-        items: [
-          'Anthropic Prompt Cache Breakpoints: automatically injects cache headers into static system prompts and tools, cutting repeat-turn latency and token costs by up to 90%.',
-          'Tool-Schema Diet: memoized JSON-RPC tool schemas, eliminating 14ms per-turn serialization overhead.',
-          'Daemon process rotation with automatic session state reconciliation on port 8642.',
-        ],
-      },
-      {
-        name: 'TERMINAL USER EXPERIENCE',
-        items: [
-          'Native shell autocompletions for zsh and bash with auto-discovery of slash commands and skills.',
-          'Cell-aware terminal line wrapping protecting ANSI CSI sequences and multi-width Unicode characters.',
-          'Standalone terminal launcher script ensuring instant keyboard focus across desktop and mobile.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.5.0',
-    tag: 'STABLE',
-    date: 'Oct 4, 2026',
-    title: 'Centralized Exec Policy, Struggle-State Autonomous Recovery, and Fast Env Probes',
-    categories: [
-      {
-        name: 'AUTONOMOUS SELF-HEALING',
-        items: [
-          'Struggle-State Detection: automatically detects repeated tool failures, identical loop diffs, or compiler errors and breaks stagnation by escalating to a higher-tier reasoning model.',
-          'Auto plan-mode escape: forces strategic reflection after two consecutive verification failures.',
-          'Exponential backoff and seamless failover to secondary model profiles on 429 rate limit triggers.',
-        ],
-      },
-      {
-        name: 'SPEED & EXECUTION POLICY',
-        items: [
-          'Fast environment probing cuts cold-start Time to First Chunk by 1.7 seconds (-1.7s TTFC).',
-          'Centralized execution policy (execPolicy) enforcing strict command confirmation rules and permission gates.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.4.9',
-    tag: 'RUST CORE',
-    date: 'Sep 28, 2026',
-    title: 'Compiled Native Rust Core Ops and Zero-Dependency N-API Bridge',
-    categories: [
-      {
-        name: 'NATIVE RUST ARCHITECTURE',
-        items: [
-          'Pure Rust crate (native/mochi_core) compiled with zero external crates in ~0.08 seconds.',
-          'Hand-rolled N-API shared library bindings (libmochi_core.so / mochi_core.node) for direct C-ABI memory access.',
-          'Rust ops for commandAvailable probe, classifyCommand shell risk analysis, foldOutput head/tail truncation, and budget decide per-turn allocation.',
-        ],
-      },
-      {
-        name: 'FAST ANSI PROCESSING',
-        items: [
-          'nativeStripAnsi op: full CSI escape sequence filtering executed in compiled machine code with sub-microsecond throughput.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.4.8',
-    tag: 'FEATURE',
-    date: 'Sep 22, 2026',
-    title: '400k Context Window Budget, Multimodal Parts, and Expanded Test Suite',
-    categories: [
-      {
-        name: 'CONTEXT SCALING',
-        items: [
-          'Expanded default context window budget to 400,000 tokens with 80 autonomous execution iterations.',
-          'Multimodal content parts mapping for structured tool responses.',
-          '1,428 core tests passing with zero skipped assertions.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.4.7',
-    tag: 'RUST CORE',
-    date: 'Sep 15, 2026',
-    title: 'Native Stream Assembly and Whole-History Stdio Token Estimation',
-    categories: [
-      {
-        name: 'STREAM ASSEMBLY',
-        items: [
-          'Native Rust accum stream assembly (Map-fold in Rust for chat), eliminating JSON array syntax corruption.',
-          'Batch tokens op over stdio for whole-history token estimation in a single round-trip (estimateTokensAsync).',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.4.6',
-    tag: 'PERF',
-    date: 'Sep 8, 2026',
-    title: 'Local Heuristic Review and Named Skill-Source Registry',
-    categories: [
-      {
-        name: 'PIPELINE SPEED',
-        items: [
-          'Local heuristic review replacing model rounds for simple script tasks (cuts task time by 65%).',
-          'isSimpleScriptTask auto-runs requested command after edit batches (arena b1 finding).',
-          'Named skill-source registry (MCH-94) in ~/.mochi/skills/.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.4.0',
-    tag: 'MILESTONE',
-    date: 'Aug 24, 2026',
-    title: 'Spec/Act Dual-Engine Separation, Tree-sitter AST, and SQLite Engine',
-    categories: [
-      {
-        name: 'CORE ARCHITECTURE',
-        items: [
-          'Spec and Act dual-engine architecture separating task blueprinting from atomic file execution.',
-          'Tree-sitter semantic symbol extraction and unified patch applicator.',
-          'Zero-loss SQLite checkpoint engine with instantaneous rollback capabilities.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.3.0',
-    tag: 'FEATURE',
-    date: 'Aug 15, 2026',
-    title: '16 Specialist Roles, DAG Task Scheduler, and Ripgrep Search',
-    categories: [
-      {
-        name: 'MULTI-AGENT SWARMS',
-        items: [
-          '16 specialist autonomous roles with directed acyclic graph (DAG) scheduler.',
-          'Ripgrep-accelerated sub-millisecond keyword and regex search engine.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.2.0',
-    tag: 'MILESTONE',
-    date: 'Aug 1, 2026',
-    title: 'Bun Standalone Binary, Zero Dependencies, and Efficiency Suite',
-    categories: [
-      {
-        name: 'STANDALONE BINARY',
-        items: [
-          'Single standalone binary build (dist/mochi-bin) via Bun compiler with zero runtime dependencies.',
-          'Locked-in 18.2 MB RSS and 38.2 ms cold-start baselines in bench/efficiency.mjs.',
-        ],
-      },
-    ],
-  },
-  {
-    version: 'v0.1.0',
-    tag: 'INITIAL',
-    date: 'Jul 15, 2026',
-    title: 'Initial Open-Source Release',
-    categories: [
-      {
-        name: 'CORE ENGINE',
-        items: [
-          'Initial public release with terminal REPL, multi-provider model routing, and deterministic tool suite.',
-        ],
-      },
-    ],
-  },
-];
+const FILTER_TAGS = ['All', 'LATEST', 'PERF', 'SECURITY', 'TUI', 'RUST CORE', 'MODELS & MCP', 'DAEMON'];
 
-const FILTER_TAGS = ['All', 'LATEST', 'PERF', 'SECURITY', 'RUST CORE', 'FEATURE', 'MILESTONE'];
+// Helper to format inline markdown code and bold
+function formatItem(text) {
+  const parts = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let match;
+  let lastIndex = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**')) {
+      parts.push(
+        <strong key={match.index} style={{ color: 'var(--ink)', fontWeight: 700 }}>
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith('`')) {
+      parts.push(
+        <code key={match.index} className="timeline-code">
+          {token.slice(1, -1)}
+        </code>
+      );
+    }
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length ? parts : text;
+}
 
 export default function Changelog() {
   const [activeTag, setActiveTag] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedVersions, setExpandedVersions] = useState({ 'v0.5.2': true, 'v0.5.1': true, 'v0.5.0': true });
-  const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
+  const [activeVersion, setActiveVersion] = useState(RELEASES[0]?.version || 'v0.22.1');
+  const [expandedVersions, setExpandedVersions] = useState({
+    'v0.22.1 (Current)': true,
+    'v0.22.1-pre2': true,
+    'v0.22.0': true,
+    'v0.21.0': true,
+    'v0.20.0': true,
+  });
 
   const toggleExpand = (ver) => {
-    setExpandedVersions(prev => ({ ...prev, [ver]: !prev[ver] }));
+    setExpandedVersions((prev) => ({ ...prev, [ver]: !prev[ver] }));
   };
 
-  const filteredReleases = RELEASES.filter(rel => {
-    const matchesTag = activeTag === 'All' || rel.tag === activeTag || (activeTag === 'SECURITY' && rel.version === 'v0.5.2');
-    const matchesSearch = !searchQuery ||
-      rel.version.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rel.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rel.categories.some(c => c.items.some(item => item.toLowerCase().includes(searchQuery.toLowerCase())));
+  const expandAll = () => {
+    const all = {};
+    RELEASES.forEach((r) => {
+      all[r.version] = true;
+    });
+    setExpandedVersions(all);
+  };
+
+  const collapseAll = () => {
+    setExpandedVersions({});
+  };
+
+  const filteredReleases = RELEASES.filter((rel) => {
+    const matchesTag =
+      activeTag === 'All' ||
+      rel.tag.toLowerCase().includes(activeTag.toLowerCase()) ||
+      rel.categories.some((c) => c.name.toLowerCase().includes(activeTag.toLowerCase()));
+
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !searchQuery ||
+      rel.version.toLowerCase().includes(q) ||
+      rel.title.toLowerCase().includes(q) ||
+      rel.categories.some(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.items.some((item) => item.toLowerCase().includes(q))
+      );
+
     return matchesTag && matchesSearch;
   });
+
+  const scrollToRelease = (ver) => {
+    setActiveVersion(ver);
+    const element = document.getElementById('rel-' + ver.replace(/[^a-zA-Z0-9]/g, '-'));
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   return (
     <>
       <div className="pagehead">
-        <div className="wrap">
+        <div className="wrap" style={{ maxWidth: 1440, width: '95vw' }}>
           <div className="pagehead-row">
             <div className="pagehead-col">
               <AnimatedContent direction="bottom" delay={0.1}>
                 <div className="hero-eyebrow">
                   <span className="sparkle" />
-                  RELEASE HISTORY & CHANGELOG
+                  FULL PRODUCTION RELEASE HISTORY
                 </div>
               </AnimatedContent>
 
@@ -254,8 +117,8 @@ export default function Changelog() {
               </h1>
 
               <AnimatedContent direction="bottom" delay={0.2}>
-                <p className="hero-sub" style={{ maxWidth: 640 }}>
-                  Every commit, architectural optimization, native Rust op, and security enhancement shipped across production releases. Zero fluff, complete engineering transparency.
+                <p className="hero-sub" style={{ maxWidth: 720 }}>
+                  Complete technical changelog documenting all 35 releases from v0.22 down to v0.1.0. Every architectural change, native Rust op, bwrap sandbox isolation, and memory reduction shipped in source.
                 </p>
               </AnimatedContent>
 
@@ -263,7 +126,7 @@ export default function Changelog() {
               <AnimatedContent direction="bottom" delay={0.3}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
                   <div className="filter-pills" style={{ margin: 0 }}>
-                    {FILTER_TAGS.map(tag => (
+                    {FILTER_TAGS.map((tag) => (
                       <button
                         key={tag}
                         onClick={() => setActiveTag(tag)}
@@ -273,15 +136,50 @@ export default function Changelog() {
                       </button>
                     ))}
                   </div>
+
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={expandAll}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono)',
+                        background: '#ffffff',
+                        border: '1px solid var(--line)',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        color: 'var(--purple-dark)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      onClick={collapseAll}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono)',
+                        background: '#ffffff',
+                        border: '1px solid var(--line)',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        color: 'var(--ink-soft)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Collapse All
+                    </button>
+                  </div>
                 </div>
 
                 <div className="doc-search-bar" style={{ marginTop: 20 }}>
                   <IconSearch size={18} className="text-muted" />
                   <input
                     type="text"
-                    placeholder="Search changelog by feature (e.g. bwrap, MCP, vision, cache, AST)..."
+                    placeholder="Search all 35 releases (e.g. bwrap, MCP, multi-tab, prompt cache, AST, PSS)..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   {searchQuery && (
                     <button
@@ -295,99 +193,166 @@ export default function Changelog() {
               </AnimatedContent>
             </div>
 
-            {/* Custom Changelog Mascot: Engineer Mochi with hardhat and release rocket */}
+            {/* Custom Changelog Mascot */}
             <AnimatedContent direction="right" delay={0.2}>
               <div className="subpage-mascot-wrap">
-                <div className="subpage-doodle">new stuff!</div>
+                <div className="subpage-doodle">35 releases documented!</div>
                 <Mochi variant="changelog" size={360} />
               </div>
             </AnimatedContent>
           </div>
 
-          {/* Full Interactive Release Timeline */}
-          <div className="timeline" style={{ marginTop: 48, maxWidth: 960, margin: '48px auto 0' }}>
-            {filteredReleases.map((rel, i) => {
-              const isExpanded = expandedVersions[rel.version] !== false;
-              return (
-                <AnimatedContent key={rel.version} direction="bottom" delay={i * 0.05}>
-                  <div className="timeline-entry" style={{ marginBottom: 28 }}>
-                    <div className="timeline-marker" />
-                    <div className="timeline-content" style={{ padding: '28px 32px' }}>
-                      <div className="timeline-head" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleExpand(rel.version)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <span className="timeline-version">{rel.version}</span>
-                          <span className="timeline-badge" style={{ background: rel.tag === 'LATEST' ? '#059669' : rel.tag === 'PERF' ? 'var(--purple-dark)' : 'var(--ink)' }}>
-                            {rel.tag}
-                          </span>
-                          <span className="timeline-date">{rel.date}</span>
-                        </div>
-                        <span style={{ fontSize: 20, color: 'var(--purple-dark)', fontWeight: 800 }}>
-                          {isExpanded ? '−' : '+'}
-                        </span>
-                      </div>
-
-                      <h3
-                        className="timeline-title"
-                        style={{ cursor: 'pointer', marginTop: 14, marginBottom: 14, fontSize: 20, fontWeight: 800 }}
-                        onClick={() => toggleExpand(rel.version)}
-                      >
-                        {rel.title}
-                      </h3>
-
-                      {isExpanded && (
-                        <div className="timeline-body" style={{ marginTop: 18 }}>
-                          {rel.categories.map(cat => (
-                            <div key={cat.name} style={{ marginBottom: 20 }}>
-                              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: 'var(--purple-dark)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                                {cat.name}
-                              </div>
-                              <ul style={{ margin: 0, paddingLeft: 20 }}>
-                                {cat.items.map((item, idx) => (
-                                  <li key={idx} style={{ fontSize: 14.5, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 6 }}>
-                                    {item}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+          {/* Left-Aligned Responsive 2-Column Changelog Layout */}
+          <div className="changelog-layout">
+            {/* Left Column: Sticky Version Quick-Jump Rail */}
+            <aside className="changelog-sidebar">
+              <div className="changelog-sidebar-title">
+                Jump to Version ({filteredReleases.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {filteredReleases.map((rel) => {
+                  const isActive = activeVersion === rel.version;
+                  return (
+                    <div
+                      key={rel.version}
+                      className={`changelog-nav-item ${isActive ? 'active' : ''}`}
+                      onClick={() => scrollToRelease(rel.version)}
+                    >
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700 }}>
+                        {rel.version}
+                      </span>
+                      <span style={{ fontSize: 11, color: isActive ? 'var(--purple-dark)' : 'var(--muted)' }}>
+                        {rel.date.split(',')[0]}
+                      </span>
                     </div>
-                  </div>
-                </AnimatedContent>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </aside>
 
-          {/* Stay Updated Card */}
-          <AnimatedContent direction="bottom" delay={0.2}>
-            <div className="stay-updated-card" style={{ marginTop: 52, maxWidth: 960, margin: '52px auto 0' }}>
-              <div>
-                <h4 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, color: 'var(--ink)' }}>Want to stay updated on new releases?</h4>
-                <p style={{ fontSize: 14.5, color: 'var(--ink-soft)', margin: 0 }}>
-                  Follow the project on X or star the repository on GitHub for instant release notifications.
-                </p>
+            {/* Right Column: Left-Aligned Timeline Cards */}
+            <main className="timeline-full" style={{ minWidth: 0 }}>
+              {filteredReleases.length === 0 ? (
+                <div style={{ background: '#ffffff', borderRadius: 20, padding: 48, textAlign: 'center', border: '1.5px solid var(--line)' }}>
+                  <h3 style={{ fontSize: 20, color: 'var(--ink)', marginBottom: 8 }}>No matching releases found</h3>
+                  <p style={{ color: 'var(--muted)' }}>Try adjusting your search query or tag filter.</p>
+                </div>
+              ) : (
+                filteredReleases.map((rel, i) => {
+                  const isExpanded = expandedVersions[rel.version] !== false;
+                  const anchorId = 'rel-' + rel.version.replace(/[^a-zA-Z0-9]/g, '-');
+                  return (
+                    <div
+                      key={rel.version}
+                      id={anchorId}
+                      className="timeline-entry"
+                      style={{ marginBottom: 28, paddingLeft: 0 }}
+                    >
+                      <div className="timeline-content" style={{ padding: '28px 32px' }}>
+                        <div
+                          className="timeline-head"
+                          style={{ cursor: 'pointer', userSelect: 'none' }}
+                          onClick={() => toggleExpand(rel.version)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                            <span className="timeline-version" style={{ fontSize: 14 }}>
+                              {rel.version}
+                            </span>
+                            <span
+                              className="timeline-badge"
+                              style={{
+                                background:
+                                  rel.tag === 'LATEST' || rel.tag === 'NEXT'
+                                    ? '#059669'
+                                    : rel.tag === 'SECURITY'
+                                    ? '#DC2626'
+                                    : rel.tag === 'RUST CORE'
+                                    ? '#D97706'
+                                    : 'var(--purple)',
+                              }}
+                            >
+                              {rel.tag}
+                            </span>
+                            <span className="timeline-date">{rel.date}</span>
+                          </div>
+                          <span style={{ fontSize: 20, color: 'var(--purple-dark)', fontWeight: 800, marginLeft: 'auto' }}>
+                            {isExpanded ? '−' : '+'}
+                          </span>
+                        </div>
+
+                        <h3
+                          className="timeline-title"
+                          style={{ cursor: 'pointer', marginTop: 14, marginBottom: 14, fontSize: 20, fontWeight: 800 }}
+                          onClick={() => toggleExpand(rel.version)}
+                        >
+                          {rel.title}
+                        </h3>
+
+                        {isExpanded && (
+                          <div className="timeline-body" style={{ marginTop: 18 }}>
+                            {rel.categories.map((cat) => (
+                              <div key={cat.name} style={{ marginBottom: 20 }}>
+                                <div
+                                  style={{
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    color: 'var(--purple-dark)',
+                                    marginBottom: 8,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '.08em',
+                                  }}
+                                >
+                                  {cat.name}
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                                  {cat.items.map((item, idx) => (
+                                    <li key={idx} style={{ fontSize: 14.5, color: 'var(--ink-soft)', lineHeight: 1.65, marginBottom: 8 }}>
+                                      {formatItem(item)}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {/* Stay Updated Card */}
+              <div className="stay-updated-card" style={{ marginTop: 32, width: '100%' }}>
+                <div>
+                  <h4 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, color: 'var(--ink)' }}>
+                    Want to stay updated on new releases?
+                  </h4>
+                  <p style={{ fontSize: 14.5, color: 'var(--ink-soft)', margin: 0 }}>
+                    Follow the project on X or star the repository on GitHub for instant notifications on every build.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <a
+                    href="https://x.com/xanstomper"
+                    target="_blank"
+                    rel="noopener"
+                    className="btn btn-primary"
+                  >
+                    Follow @xanstomper
+                  </a>
+                  <a
+                    href="https://github.com/xanstomper/mochi"
+                    target="_blank"
+                    rel="noopener"
+                    className="btn btn-secondary"
+                  >
+                    Star on GitHub
+                  </a>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <a
-                  href="https://x.com/xanstomper"
-                  target="_blank"
-                  rel="noopener"
-                  className="btn btn-primary"
-                >
-                  Follow @xanstomper
-                </a>
-                <a
-                  href="https://github.com/xanstomper/mochi"
-                  target="_blank"
-                  rel="noopener"
-                  className="btn btn-secondary"
-                >
-                  Star on GitHub
-                </a>
-              </div>
-            </div>
-          </AnimatedContent>
+            </main>
+          </div>
         </div>
       </div>
 

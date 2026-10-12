@@ -17,7 +17,8 @@
   "files": [
     "dist",
     "native/bin",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",

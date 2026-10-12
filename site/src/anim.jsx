@@ -473,11 +473,11 @@ export function BenchChart({ data, max, unit = '', rows }) {
             <div
               className={'bench-bar ' + (d.isMochi ? 'pink' : 'gray')}
               style={{ width: (d.value / chartMax * 100) + '%' }}
-            >
-              {d.display}
-            </div>
+            />
           </div>
-          <span className="bench-val">{d.display}</span>
+          <span className="bench-val" style={{ color: d.isMochi ? 'var(--purple-dark)' : '#111116', fontWeight: 800 }}>
+            {d.display}
+          </span>
         </div>
       ))}
     </div>
