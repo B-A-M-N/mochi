@@ -1,18 +1,35 @@
+<div align="center">
+
+<img src="docs/mochi-mascot.png" alt="Mochi mascot" width="420"/>
+
 # Mochi
 
-[![Version](https://img.shields.io/badge/version-0.23.0-8b5cf6?style=flat-square)](https://github.com/xanstomper/mochi/releases)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![Rust Core](https://img.shields.io/badge/core-rust--native-dea584?style=flat-square&logo=rust&logoColor=white)](native/mochi_core)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1494%20passing-3fb950?style=flat-square)](#testing)
-[![Runtime Deps](https://img.shields.io/badge/runtime%20deps-0-cf222e?style=flat-square)](#architecture)
-[![CI](https://img.shields.io/badge/CI-linux%20%7C%20macOS%20%7C%20Windows-2094d3?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/xanstomper/mochi/actions)
+### *Minimal Orchestrative Coding Harness Intelligence*
 
-[**Website**](https://xanstomper.github.io/mochi) · [**Documentation**](docs/ARCHITECTURE.md) · [**Benchmarks**](docs/BENCHMARKS.md) · [**CLI Reference**](docs/CLI_REFERENCE.md) · [**Changelog**](CHANGELOG.md) · [**Report a Bug**](https://github.com/xanstomper/mochi/issues)
+**A minimal, fast, autonomous coding agent for the terminal.**
+
+Goals · Task DAGs · Multi-agent Teams · Persistent Daemon · Deep Run Traces · Rust Native Core
+
+[![Version](https://img.shields.io/badge/version-0.23.0-8b5cf6?style=for-the-badge&labelColor=1c1233)](https://github.com/xanstomper/mochi/releases)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=for-the-badge&logo=nodedotjs&logoColor=white&labelColor=0d1f12)](https://nodejs.org)
+[![Rust Core](https://img.shields.io/badge/core-rust--native-dea584?style=for-the-badge&logo=rust&logoColor=white&labelColor=2b1a0e)](native/mochi_core)
+[![Tests](https://img.shields.io/badge/tests-1494%20passing-3fb950?style=for-the-badge&labelColor=0e2415)](#testing)
+[![Deps](https://img.shields.io/badge/runtime%20deps-0-cf222e?style=for-the-badge&labelColor=2b0d0d)](#architecture)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&labelColor=0d1b2e)](LICENSE)
+[![CI](https://img.shields.io/badge/CI-linux%20%C2%B7%20macOS%20%C2%B7%20windows-2094d3?style=for-the-badge&logo=githubactions&logoColor=white&labelColor=0a1d2b)](https://github.com/xanstomper/mochi/actions)
+
+[![Get Started](https://img.shields.io/badge/Quick_Start-8b5cf6?style=for-the-badge&labelColor=1c1233)](#quick-start)
+[![Docs](https://img.shields.io/badge/Documentation-2563eb?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=0d1b3e)](docs/ARCHITECTURE.md)
+[![Benchmarks](https://img.shields.io/badge/Benchmarks-f59e0b?style=for-the-badge&logo=speedtestbyookla&logoColor=white&labelColor=2e1e05)](docs/BENCHMARKS.md)
+[![CLI](https://img.shields.io/badge/CLI_Reference-10b981?style=for-the-badge&logo=terminal&logoColor=white&labelColor=05291c)](docs/CLI_REFERENCE.md)
+[![Changelog](https://img.shields.io/badge/Changelog-a855f7?style=for-the-badge&logo=keepachangelog&logoColor=white&labelColor=2a1140)](CHANGELOG.md)
+[![Issues](https://img.shields.io/badge/Report_a_Bug-da3633?style=for-the-badge&logo=github&logoColor=white&labelColor=2d0b0a)](https://github.com/xanstomper/mochi/issues)
 
 ---
 
-**Mochi** — *Minimal Orchestrative Coding Harness Intelligence* — is a minimal, fast, autonomous coding agent for the terminal. It is a from-scratch re-imagining of the terminal coding-agent harness: it keeps the best ideas from Pi (tools, sessions, context files, minimal TUI) and adds first-class support for **goals, task DAGs, teams, persistent state, checkpoints, verification, recovery, budgets, hooks, retrieval, memory, and local harness learning** — all on a **zero-dependency Rust runtime core** with a TypeScript frontend.
+</div>
+
+Mochi is a from-scratch re-imagining of the terminal coding-agent harness. It keeps the best ideas from Pi (tools, sessions, context files, minimal TUI) and adds first-class support for **goals, task DAGs, teams, persistent state, checkpoints, verification, recovery, budgets, hooks, retrieval, memory, and local harness learning** — all on a **zero-dependency Rust runtime core** with a TypeScript frontend.
 
 ```bash
 mochi "add a rate limiter to the auth service"   # one-shot agent run
@@ -24,7 +41,15 @@ mochi trace <goalId>                             # replay any run end to end
 
 Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a standalone native binary (`npm run build:bin`) that needs no runtime at all. The performance core is a zero-dependency Rust crate (`native/mochi_core`): tokenization, budget math, context compaction planning, and agent-loop decisions run natively — every native path has a parity-tested TypeScript fallback, so nothing breaks when the Rust binary is absent (CI, cold installs). The harness is polyglot: a 15-language registry, tree-sitter codegraph, and native Rust/C++ accelerators in the `edit`/`patch` hot paths.
 
+<div align="center">
+
 ---
+
+**[Website](https://xanstomper.github.io/mochi)** · **[Documentation](docs/ARCHITECTURE.md)** · **[Benchmarks](docs/BENCHMARKS.md)** · **[CLI Reference](docs/CLI_REFERENCE.md)** · **[TECHMAP](TECHMAP.md)** · **[Changelog](CHANGELOG.md)**
+
+---
+
+</div>
 
 ## Table of Contents
 
@@ -86,36 +111,63 @@ Most terminal agents are either thin wrappers around one model call, or heavywei
 
 ## Performance Highlights
 
-Reproducible cross-harness matrix — `bench/cli-matrix.mjs` measures cold-start wall time and kernel peak RSS for every installed coding-agent CLI (`--version`, N runs, p50/mean). Full methodology, PTY probe scripts, and the 9-agent comparison tables live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+<div align="center">
+
+**Reproducible cross-harness matrix** — `bench/cli-matrix.mjs` measures cold-start wall time and kernel peak RSS for every installed coding-agent CLI (`--version`, N runs, p50/mean).
+
+</div>
 
 | Benchmark Metric | Mochi (Rust Core) | jcode | Cursor Agent | Claude Code | OpenCode |
-| :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :---: | :---: | :---: | :---: | :---: |
 | **1 Active Session (PSS)** | **18.2 MB** [1st] | 27.8 MB | 214.9 MB | 386.6 MB | 371.5 MB |
 | **10 Active Sessions (PSS)** | **84.5 MB** [1st] | 117.0 MB | 1632.4 MB | 2300.6 MB | 3237.2 MB |
 | **Time to First Frame (TTFF)** | **11.2 ms** [1st] | 14.0 ms | 1949.7 ms | 3436.9 ms | 1035.9 ms |
 | **Time to First Input (TTFI)** | **38.2 ms** [1st] | 48.7 ms | 1978.7 ms | 3512.8 ms | 1047.9 ms |
 | **Compaction Cut Calculation** | **0.12 ms** (Rust) [1st] | 0.45 ms | 14.5 ms | 35.0 ms | 19.8 ms |
 
-Multi-round arena (6 standardized tasks, same model, same backend): **Mochi 12/12 PASS at a 21.7 s median** — the only harness with a perfect multi-round record in the comparison set. Token cost: ~15–21 K input / 0.8–3.7 K output per task.
+<div align="center">
+
+Full methodology, PTY probe scripts, and the 9-agent comparison tables live in **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)**.
+
+Multi-round arena (6 standardized tasks, same model, same backend):
+
+<br/>
+
+[![Mochi 12/12](https://img.shields.io/badge/Mochi-12%2F12%20PASS%20%C2%B7%2021.7s%20median-3fb950?style=for-the-badge&labelColor=0e2415)](docs/BENCHMARKS.md)
+[![jcode 11/12](https://img.shields.io/badge/jcode-11%2F12%20%C2%B7%2010.0s-8b949e?style=for-the-badge&labelColor=1c1f24)](docs/BENCHMARKS.md)
+
+*The only harness with a perfect multi-round record in the comparison set. Token cost: ~15–21 K input / 0.8–3.7 K output per task.*
+
+</div>
 
 ## Quick Start
 
 Requires Node 22+ (or Bun). No other toolchain needed — the Rust core ships as prebuilt binaries with a pure-TS fallback.
 
+**1 · Build**
+
 ```bash
-# 1. Build
 git clone https://github.com/xanstomper/mochi.git
 cd mochi
 npm install
 npm run build
+```
 
-# 2. Link globally (optional)
+**2 · Link globally (optional)**
+
+```bash
 ln -s $(pwd)/dist/cli.js ~/.local/bin/mochi
+```
 
-# 3. Set an API key (any OpenAI-compatible endpoint)
+**3 · Set an API key** (any OpenAI-compatible endpoint)
+
+```bash
 export OPENCODE_ZEN_API_KEY=sk-...
+```
 
-# 4. Run
+**4 · Run**
+
+```bash
 mochi                                   # interactive TUI
 mochi -p "list all TypeScript files"    # one-shot, print and exit
 mochi plan "refactor authentication"    # plan only, no edits
@@ -268,7 +320,8 @@ The runtime loop is `preflight → model → tools → verify → recover → pu
 
 Each op follows the same proven template: zero-dep Rust module → Rust unit tests → `lib.rs` C-ABI export → `napi.rs` JS binding (routed through the C-ABI as single source of truth) → TS wrapper (`core.ts`) with N-API + Bun FFI dual surface → caller-side native-first with TS fallback → differential parity tests (including adversarial cases: braces inside tool args, UTF-8 around keys, idempotency).
 
-Build it yourself:
+<details>
+<summary><strong>Build the native core yourself</strong></summary>
 
 ```bash
 npm run build:native   # or: cd native/mochi_core && cargo build --release
@@ -276,6 +329,8 @@ npm run build:native   # or: cd native/mochi_core && cargo build --release
 ```
 
 The stdio daemon is verified end to end: `echo '{"op":"ping"}' | ./native/bin/mochi-agent plan`.
+
+</details>
 
 **FFI honesty note (measured, do not re-learn):** for *cheap* ops the FFI round-trip is ~80× slower than pure TS (call overhead dominates). Native wins on heavy per-byte work and resident memory — the selection rule is *only port ops whose result is small relative to their input*. Bulk-text ops stay in TS on purpose.
 
@@ -716,10 +771,16 @@ npm run typecheck
 
 Read [MOCHI.md](MOCHI.md) for project conventions, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before touching the loop, and [TECHMAP.md](TECHMAP.md) so nothing is mystery meat. Issues and PRs welcome at [github.com/xanstomper/mochi](https://github.com/xanstomper/mochi).
 
+<div align="center">
+
+---
+
 ## License
 
-[MIT](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge&labelColor=1c1233)](LICENSE)
 
-## Star History
+---
 
 [![Star History Chart](https://api.star-history.com/svg?repos=xanstomper/mochi&type=Timeline)](https://star-history.com/#xanstomper/mochi&Timeline)
+
+</div>
