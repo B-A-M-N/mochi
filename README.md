@@ -111,6 +111,23 @@ Zero runtime JS dependencies. Runs under **Node 22** or **Bun**, and ships a sta
 </tr>
 </table>
 
+## More In Action
+
+<table>
+<tr>
+<td align="center"><b>Session search (FTS over transcripts)</b><br><img src="docs/assets/demo/s6.gif" alt="mochi session search" width="360"></td>
+<td align="center"><b>Trace replay</b><br><img src="docs/assets/demo/s7.gif" alt="mochi trace" width="360"></td>
+</tr>
+<tr>
+<td align="center"><b>Agent profiles (26 providers)</b><br><img src="docs/assets/demo/s8.gif" alt="mochi profiles" width="360"></td>
+<td align="center"><b>Security audit</b><br><img src="docs/assets/demo/s9.gif" alt="mochi audit" width="360"></td>
+</tr>
+<tr>
+<td align="center"><b>Diff review</b><br><img src="docs/assets/demo/s10.gif" alt="mochi review" width="360"></td>
+<td align="center"><b>Auto docgen (334 modules, 6684 symbols)</b><br><img src="docs/assets/demo/s11.gif" alt="mochi docgen" width="360"></td>
+</tr>
+</table>
+
 ## Why Mochi
 
 Most terminal agents are either thin wrappers around one model call, or heavyweight platforms that need a cloud account. Mochi takes a third path: a **complete harness** — every loop, guard, budget, and recovery path owned in-repo — that is deliberately *minimal* in surface and *maximal* in verified behavior.
