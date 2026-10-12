@@ -1,30 +1,69 @@
 # 🍡 Project Architecture & API Reference
 
 > Automatically generated architecture graph and API specification.
-> **Modules**: 298 | **Total Symbols**: 3105
+> **Modules**: 331 | **Total Symbols**: 6429
 
 ## 🏗️ Architecture Diagram
 
 ```mermaid
 graph TD;
-  src_acp_ts["src/acp.ts (11 symbols)"]
+  add_js["add.js (1 symbols)"]
+  calc_js["calc.js (1 symbols)"]
+  cart_js["cart.js (1 symbols)"]
+  cart_js --> util_js
+  inventory_js["inventory.js (2 symbols)"]
+  order_js["order.js (2 symbols)"]
+  order_js --> inventory_js
+  sum_js["sum.js (1 symbols)"]
+  util_js["util.js (1 symbols)"]
+  src_acp_ts["src/acp.ts (12 symbols)"]
   src_ambient_ts["src/ambient.ts (8 symbols)"]
-  src_budget_ts["src/budget.ts (16 symbols)"]
+  src_budget_ts["src/budget.ts (15 symbols)"]
   src_circle_ts["src/circle.ts (7 symbols)"]
   src_clarify_ts["src/clarify.ts (11 symbols)"]
-  src_cli_ts["src/cli.ts (12 symbols)"]
+  src_cli_ts["src/cli.ts (14 symbols)"]
   src_completion_ts["src/completion.ts (8 symbols)"]
   src_config_ts["src/config.ts (8 symbols)"]
-  src_context_ts["src/context.ts (39 symbols)"]
-  src_contract_ts["src/contract.ts (6 symbols)"]
-  src_discord_ts["src/discord.ts (4 symbols)"]
-  src_docgen_ts["src/docgen.ts (5 symbols)"]
-  src_doctor_ts["src/doctor.ts (12 symbols)"]
-  src_dox_ts["src/dox.ts (6 symbols)"]
-  src_events_ts["src/events.ts (11 symbols)"]
 ```
 
 ## 📦 Modules & API Reference
+
+### `add.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 1 | `function` | `export function add(a, b)` |
+
+### `calc.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 1 | `function` | `export function computeCartTotal(items)` |
+
+### `cart.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 3 | `function` | `export function renderCart(items)` |
+
+### `inventory.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 7 | `function` | `export function getPrice(item)` |
+| 11 | `function` | `export function getQuantity(item)` |
+
+### `order.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 3 | `function` | `export function calculateOrderTotal(order)` |
+| 13 | `function` | `export function processOrder(order)` |
+
+### `sum.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 1 | `function` | `export function sum(a, b)` |
+
+### `util.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 1 | `function` | `export function formatPrice(cents)` |
 
 ### `src/acp.ts`
 | Line | Kind | Signature |
@@ -39,7 +78,8 @@ graph TD;
 | 158 | `function` | `const genMessageId = () => ...` |
 | 160 | `function` | `const handleEvent = (e: MochiEvent) => ...` |
 | 340 | `function` | `export async function serverLoop(cwd: string): Promise<void>` |
-| 343 | `function` | `const send = (msg: unknown) => ...` |
+| 348 | `function` | `const send = (msg: unknown) => ...` |
+| 401 | `function` | `export async function acpCheck(cwd: string): Promise<` |
 
 ### `src/ambient.ts`
 | Line | Kind | Signature |
@@ -59,19 +99,18 @@ graph TD;
 | 3 | `interface` | `export interface BudgetLimits` |
 | 12 | `type` | `export type BudgetPhase` |
 | 14 | `interface` | `export interface BudgetSnapshot` |
-| 54 | `function` | `export function estimateCostUsd(tokens: number \|` |
-| 78 | `class` | `export class BudgetEngine` |
-| 131 | `method` | `remainingTokens(): number` |
-| 135 | `method` | `remainingCostUsd(): number` |
-| 139 | `method` | `remainingDurationMs(): number` |
-| 144 | `method` | `ratio(): number` |
-| 175 | `method` | `phase(): BudgetPhase` |
-| 186 | `method` | `phaseCode(): number` |
-| 195 | `method` | `snapshot(_model: string): BudgetSnapshot` |
-| 215 | `method` | `canUseTokens(tokens: number): boolean` |
-| 219 | `method` | `canMakeModelCall(): boolean` |
-| 225 | `method` | `canExecuteTool(): boolean` |
-| 229 | `method` | `shouldUseCheaperModel(): boolean` |
+| 40 | `class` | `export class BudgetEngine` |
+| 100 | `method` | `remainingTokens(): number` |
+| 104 | `method` | `remainingCostUsd(): number` |
+| 108 | `method` | `remainingDurationMs(): number` |
+| 113 | `method` | `ratio(): number` |
+| 144 | `method` | `phase(): BudgetPhase` |
+| 155 | `method` | `phaseCode(): number` |
+| 164 | `method` | `snapshot(_model: string): BudgetSnapshot` |
+| 184 | `method` | `canUseTokens(tokens: number): boolean` |
+| 188 | `method` | `canMakeModelCall(): boolean` |
+| 194 | `method` | `canExecuteTool(): boolean` |
+| 201 | `method` | `shouldUseCheaperModel(): boolean` |
 
 ### `src/circle.ts`
 | Line | Kind | Signature |
@@ -102,30 +141,32 @@ graph TD;
 ### `src/cli.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 39 | `function` | `function logCrash(kind: string, err: unknown): void` |
-| 90 | `function` | `function parseArgs(argv: string[]):` |
-| 124 | `interface` | `export interface FlagOverrides extends Partial<MochiConfig>` |
-| 129 | `function` | `function configFromFlags(flags: Record<string, string \| boolean>): FlagOverrides` |
-| 187 | `function` | `function printHelp()` |
-| 269 | `function` | `function cliDirname(): string` |
-| 274 | `function` | `function srcFileNewer(dir: string, mtime: number): boolean` |
-| 291 | `function` | `async function main()` |
-| 486 | `function` | `const post = async (action2: string, extra: Record<string, unknown> = {}) => ...` |
-| 1496 | `function` | `const onData = (c: Buffer) => ...` |
-| 1615 | `function` | `const files = (() => ...` |
-| 1674 | `function` | `async function interactive(runtime: import('./runtime.js').Runtime, initialPrompt?: string)` |
+| 31 | `type` | `type RepoModule` |
+| 51 | `function` | `function logCrash(kind: string, err: unknown): void` |
+| 102 | `function` | `function parseArgs(argv: string[]):` |
+| 136 | `interface` | `export interface FlagOverrides extends Partial<MochiConfig>` |
+| 144 | `function` | `function configFromFlags(flags: Record<string, string \| boolean>): FlagOverrides` |
+| 204 | `function` | `function printHelp()` |
+| 283 | `function` | `function cliDirname(): string` |
+| 288 | `function` | `function srcFileNewer(dir: string, mtime: number): boolean` |
+| 305 | `function` | `async function main()` |
+| 508 | `function` | `const post = async (action2: string, extra: Record<string, unknown> = {}) => ...` |
+| 1449 | `function` | `const onData = (c: Buffer) => ...` |
+| 1654 | `function` | `const onData = (c: Buffer) => ...` |
+| 1774 | `function` | `const files = (() => ...` |
+| 1833 | `function` | `async function interactive(runtime: import('./runtime.js').Runtime, initialPrompt?: string)` |
 
 ### `src/completion.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 5 | `interface` | `export interface CompletionCommand` |
-| 122 | `function` | `export function completionNames(): string[]` |
-| 130 | `function` | `export function subcommandNames(cmd: string): string[]` |
-| 135 | `function` | `function bashEscape(s: string): string` |
-| 139 | `function` | `export function completionBash(): string` |
-| 163 | `function` | `export function completionZsh(): string` |
-| 186 | `function` | `export function completionFish(): string` |
-| 199 | `function` | `export function completionFor(shell: string): string` |
+| 146 | `function` | `export function completionNames(): string[]` |
+| 154 | `function` | `export function subcommandNames(cmd: string): string[]` |
+| 159 | `function` | `function bashEscape(s: string): string` |
+| 163 | `function` | `export function completionBash(): string` |
+| 187 | `function` | `export function completionZsh(): string` |
+| 210 | `function` | `export function completionFish(): string` |
+| 223 | `function` | `export function completionFor(shell: string): string` |
 
 ### `src/config.ts`
 | Line | Kind | Signature |
@@ -134,10 +175,10 @@ graph TD;
 | 61 | `function` | `function envModelConfig(): Partial<MochiConfig['model']>` |
 | 80 | `function` | `export function loadEnvFiles(): void` |
 | 110 | `function` | `export function loadConfig(overrides: Partial<MochiConfig> =` |
-| 131 | `function` | `function isPlaceholderKey(key: string \| undefined): boolean` |
-| 252 | `function` | `function merge(target: Record<string, unknown>, source: Record<string, unknown>)` |
-| 267 | `function` | `export function loadProjectConfig(projectDir: string): Partial<MochiConfig>` |
-| 277 | `function` | `export function validateConfig(config: MochiConfig): string[]` |
+| 158 | `function` | `function isPlaceholderKey(key: string \| undefined): boolean` |
+| 294 | `function` | `function merge(target: Record<string, unknown>, source: Record<string, unknown>)` |
+| 309 | `function` | `export function loadProjectConfig(projectDir: string): Partial<MochiConfig>` |
+| 319 | `function` | `export function validateConfig(config: MochiConfig): string[]` |
 
 ### `src/context.ts`
 | Line | Kind | Signature |
@@ -212,18 +253,21 @@ graph TD;
 ### `src/doctor.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 14 | `interface` | `export interface SkillHealthEntry` |
-| 20 | `interface` | `export interface DoctorReport` |
-| 44 | `function` | `export async function doctorReport(opts:` |
-| 60 | `function` | `const tsAvailable = (() => ...` |
-| 133 | `function` | `const checkFile = (skillPath: string, name: string) => ...` |
-| 139 | `function` | `const size = (() => ...` |
-| 150 | `function` | `const walk = (dir: string) => ...` |
-| 233 | `function` | `export function currentThemeInfo():` |
-| 245 | `function` | `export function formatDoctor(r: DoctorReport): string` |
-| 246 | `function` | `const ok = (b: boolean) => ...` |
-| 270 | `interface` | `export interface RepairItem` |
-| 277 | `function` | `export async function repairDoctor(opts:` |
+| 17 | `interface` | `export interface SkillHealthEntry` |
+| 23 | `interface` | `export interface DoctorReport` |
+| 50 | `function` | `export async function doctorReport(opts:` |
+| 66 | `function` | `const tsAvailable = (() => ...` |
+| 139 | `function` | `const checkFile = (skillPath: string, name: string) => ...` |
+| 145 | `function` | `const size = (() => ...` |
+| 156 | `function` | `const walk = (dir: string) => ...` |
+| 242 | `function` | `async function acpHealth(): Promise<` |
+| 253 | `function` | `function editorHealth():` |
+| 277 | `function` | `function onboardingHealth():` |
+| 288 | `function` | `export function currentThemeInfo():` |
+| 300 | `function` | `export function formatDoctor(r: DoctorReport): string` |
+| 301 | `function` | `const ok = (b: boolean) => ...` |
+| 329 | `interface` | `export interface RepairItem` |
+| 336 | `function` | `export async function repairDoctor(opts:` |
 
 ### `src/dox.ts`
 | Line | Kind | Signature |
@@ -306,6 +350,17 @@ graph TD;
 | 86 | `function` | `export function markLessonUsed(workspaceDir: string, id: string, succeeded: boolean): void` |
 | 97 | `function` | `export function lessonsToPrompt(lessons: Lesson[]): string` |
 
+### `src/mcp-server.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 19 | `interface` | `export interface McpCall` |
+| 25 | `interface` | `export interface McpResponse` |
+| 31 | `interface` | `interface ServerState` |
+| 67 | `function` | `function getRuntime(state: ServerState): Runtime` |
+| 73 | `function` | `export async function handleMcp(` |
+| 136 | `function` | `export async function mcpServerLoop(cwd: string): Promise<void>` |
+| 139 | `function` | `const write = (msg: unknown) => ...` |
+
 ### `src/modes.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -313,9 +368,9 @@ graph TD;
 | 15 | `interface` | `export interface ModeSpec` |
 | 75 | `function` | `export function modeSpec(mode: AgentMode): ModeSpec` |
 | 79 | `function` | `export function isMode(s: string): s is AgentMode` |
-| 84 | `function` | `export function applyMode(config: MochiConfig, mode: AgentMode): MochiConfig` |
-| 94 | `function` | `export function modeInstruction(mode: AgentMode): string` |
-| 101 | `function` | `export function formatModes(current: AgentMode): string` |
+| 86 | `function` | `export function applyMode(config: MochiConfig, mode: AgentMode): MochiConfig` |
+| 107 | `function` | `export function modeInstruction(mode: AgentMode): string` |
+| 114 | `function` | `export function formatModes(current: AgentMode): string` |
 
 ### `src/pipeline.ts`
 | Line | Kind | Signature |
@@ -334,32 +389,38 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 14 | `interface` | `export interface PluginManifest` |
-| 24 | `interface` | `export interface PluginRecord` |
-| 40 | `function` | `export function isHookName(s: string): s is HookName` |
-| 45 | `function` | `export function readManifest(dir: string): PluginManifest` |
-| 55 | `function` | `function defaultUserPluginsDir(): string` |
-| 60 | `class` | `export class PluginRegistry` |
-| 67 | `method` | `list(): PluginRecord[]` |
-| 93 | `method` | `has(name: string): boolean` |
-| 98 | `method` | `isProjectScoped(name: string): boolean` |
-| 108 | `method` | `install(sourceDir: string, opts:` |
-| 126 | `method` | `remove(name: string): boolean` |
-| 136 | `method` | `mergedHooks(): HookConfig` |
-| 150 | `method` | `syncToHooksFile(hooksFile: string, existing: HookConfig =` |
-| 162 | `method` | `get dir()` |
-| 166 | `method` | `private ensureUserDir(): string` |
-| 173 | `function` | `function toArray(v: string \| string[] \| undefined): string[]` |
+| 29 | `interface` | `export interface PluginRecord` |
+| 46 | `function` | `export function isHookName(s: string): s is HookName` |
+| 51 | `function` | `export function readManifest(dir: string): PluginManifest` |
+| 61 | `function` | `function defaultUserPluginsDir(): string` |
+| 66 | `class` | `export class PluginRegistry` |
+| 73 | `method` | `list(): PluginRecord[]` |
+| 100 | `method` | `has(name: string): boolean` |
+| 105 | `method` | `isProjectScoped(name: string): boolean` |
+| 115 | `method` | `install(sourceDir: string, opts:` |
+| 133 | `method` | `remove(name: string): boolean` |
+| 143 | `method` | `setEnabled(name: string, enabled: boolean): boolean` |
+| 159 | `method` | `info(name: string): string` |
+| 174 | `method` | `static validateDir(dir: string): string[]` |
+| 191 | `method` | `static lintSandbox(dir: string): string[]` |
+| 224 | `method` | `search(query: string): PluginRecord[]` |
+| 237 | `method` | `pack(name: string, outDir: string): string` |
+| 248 | `method` | `mergedHooks(): HookConfig` |
+| 263 | `method` | `syncToHooksFile(hooksFile: string, existing: HookConfig =` |
+| 281 | `method` | `get dir()` |
+| 285 | `method` | `private ensureUserDir(): string` |
+| 292 | `function` | `function toArray(v: string \| string[] \| undefined): string[]` |
 
 ### `src/pr.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 8 | `interface` | `export interface Issue` |
 | 16 | `interface` | `export interface PrOptions` |
-| 27 | `interface` | `export interface PrResult` |
-| 35 | `function` | `function run(cmd: string, args: string[], cwd: string): Promise<string>` |
-| 45 | `function` | `export async function fetchIssue(issueNumber: number, ghBin = 'gh'): Promise<Issue>` |
-| 58 | `function` | `export async function defaultBranch(cwd: string): Promise<string>` |
-| 71 | `function` | `export async function runIssueToPr(opts: PrOptions): Promise<PrResult>` |
+| 33 | `interface` | `export interface PrResult` |
+| 41 | `function` | `function run(cmd: string, args: string[], cwd: string): Promise<string>` |
+| 51 | `function` | `export async function fetchIssue(issueNumber: number, ghBin = 'gh'): Promise<Issue>` |
+| 64 | `function` | `export async function defaultBranch(cwd: string): Promise<string>` |
+| 77 | `function` | `export async function runIssueToPr(opts: PrOptions): Promise<PrResult>` |
 
 ### `src/rules.ts`
 | Line | Kind | Signature |
@@ -391,33 +452,33 @@ graph TD;
 | 196 | `method` | `newSession(): string` |
 | 204 | `method` | `branchSession(title?: string): string` |
 | 229 | `method` | `resetSession(): void` |
-| 234 | `method` | `listTools(): Array<` |
-| 245 | `method` | `getToolNames(): string[]` |
-| 254 | `method` | `async inspect(query: string)` |
-| 260 | `method` | `steer(text: string): number` |
-| 264 | `method` | `async goal(objective: string, constraints: string[] = [], opts?:` |
-| 273 | `method` | `async runGoal(objective: string, constraints: string[] = [], opts?:` |
-| 309 | `method` | `async autoImprove(prompt: string, runs: number, opts?:` |
-| 413 | `method` | `async selfTrain(opts:` |
-| 453 | `method` | `private composeImprovementTask(cycle: number, total: number, focus?: string):` |
-| 480 | `method` | `async team(objective: string, opts?:` |
-| 497 | `method` | `async plan(objective: string): Promise<string>` |
-| 511 | `method` | `async approvePlan(): Promise<string>` |
-| 525 | `method` | `async resumeGoal(goalId: string): Promise<string>` |
-| 561 | `method` | `async enhance(task: string, mode?: import('./chameleon.js').ChameleonMode, budget?: import('./budget.js').BudgetEngine)` |
-| 567 | `method` | `async runPrompt(prompt: string, opts?:` |
-| 575 | `method` | `async runPromptDetailed(prompt: string, opts?:` |
-| 629 | `method` | `async review(input: string): Promise<string>` |
-| 650 | `method` | `async fix(input: string): Promise<string>` |
-| 665 | `method` | `private recordUsage(goal: string, result:` |
-| 678 | `method` | `providerInfo(): string` |
-| 682 | `method` | `modelList(): string[]` |
-| 686 | `method` | `async useProvider(providerId: string, model?: string)` |
-| 696 | `method` | `async loginProvider(provider: string, apiKey: string, model?: string)` |
-| 711 | `method` | `private syncEngines()` |
-| 734 | `method` | `async recordGood(): Promise<string>` |
-| 738 | `method` | `return (lines.length ? lines.join('\n') : '  (no checks configured)') + '\nRecorded as known-good baseline.';` |
-| 741 | `method` | `async knownGood(): Promise<string>` |
+| 237 | `method` | `listTools(): Array<` |
+| 248 | `method` | `getToolNames(): string[]` |
+| 257 | `method` | `async inspect(query: string)` |
+| 263 | `method` | `steer(text: string): number` |
+| 267 | `method` | `async goal(objective: string, constraints: string[] = [], opts?:` |
+| 276 | `method` | `async runGoal(objective: string, constraints: string[] = [], opts?:` |
+| 312 | `method` | `async autoImprove(prompt: string, runs: number, opts?:` |
+| 428 | `method` | `async selfTrain(opts:` |
+| 469 | `method` | `private composeImprovementTask(cycle: number, total: number, focus?: string):` |
+| 496 | `method` | `async team(objective: string, opts?:` |
+| 513 | `method` | `async plan(objective: string): Promise<string>` |
+| 527 | `method` | `async approvePlan(): Promise<string>` |
+| 541 | `method` | `async resumeGoal(goalId: string): Promise<string>` |
+| 577 | `method` | `async enhance(task: string, mode?: import('./chameleon.js').ChameleonMode, budget?: import('./budget.js').BudgetEngine)` |
+| 583 | `method` | `async runPrompt(prompt: string, opts?:` |
+| 591 | `method` | `async runPromptDetailed(prompt: string, opts?:` |
+| 645 | `method` | `async review(input: string): Promise<string>` |
+| 666 | `method` | `async fix(input: string): Promise<string>` |
+| 681 | `method` | `private recordUsage(goal: string, result:` |
+| 704 | `method` | `providerInfo(): string` |
+| 708 | `method` | `modelList(): string[]` |
+| 712 | `method` | `async useProvider(providerId: string, model?: string)` |
+| 722 | `method` | `async loginProvider(provider: string, apiKey: string, model?: string)` |
+| 737 | `method` | `private syncEngines()` |
+| 764 | `method` | `async recordGood(): Promise<string>` |
+| 768 | `method` | `return (lines.length ? lines.join('\n') : '  (no checks configured)') + '\nRecorded as known-good baseline.';` |
+| 771 | `method` | `async knownGood(): Promise<string>` |
 
 ### `src/sdk.ts`
 | Line | Kind | Signature |
@@ -479,9 +540,9 @@ graph TD;
 | 58 | `function` | `function ensureReady(): Promise<void>` |
 | 71 | `function` | `export async function sqliteDriverAsync(): Promise<DbCtor \| null>` |
 | 84 | `function` | `function syncProbe(): void` |
-| 103 | `function` | `export function sqliteSource(): SqliteSource` |
-| 114 | `function` | `export function hasSqlite(): boolean` |
-| 137 | `function` | `export function openDb(path: string): SqliteDb` |
+| 118 | `function` | `export function sqliteSource(): SqliteSource` |
+| 129 | `function` | `export function hasSqlite(): boolean` |
+| 152 | `function` | `export function openDb(path: string): SqliteDb` |
 
 ### `src/types.ts`
 | Line | Kind | Signature |
@@ -536,20 +597,22 @@ graph TD;
 ### `src/verification.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 15 | `function` | `function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string>` |
-| 19 | `type` | `export type VerificationStatus` |
-| 21 | `interface` | `export interface VerificationEvidence` |
-| 30 | `interface` | `export interface VerificationResult` |
-| 39 | `interface` | `export interface VerifierOptions` |
-| 50 | `class` | `export class VerifierEngine` |
-| 69 | `method` | `async verify(task: Task, agentSummary: string): Promise<VerificationResult>` |
-| 217 | `method` | `private ruleBased(task: Task, evidence: VerificationEvidence[]): VerificationResult` |
-| 253 | `method` | `private build(` |
-| 282 | `function` | `const inScope = (f: string) => ...` |
-| 355 | `interface` | `export interface VerificationBaseline` |
-| 364 | `function` | `export function failureSignature(output: string): string` |
-| 391 | `function` | `export async function captureBaseline(` |
-| 418 | `function` | `export function matchesBaseline(baseline: VerificationBaseline \| undefined, command: string, output: string): boolean` |
+| 16 | `function` | `function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string>` |
+| 20 | `type` | `export type VerificationStatus` |
+| 22 | `interface` | `export interface VerificationEvidence` |
+| 31 | `interface` | `export interface VerificationResult` |
+| 40 | `interface` | `export interface VerifierOptions` |
+| 51 | `class` | `export class VerifierEngine` |
+| 70 | `method` | `async verify(task: Task, agentSummary: string): Promise<VerificationResult>` |
+| 241 | `method` | `private ruleBased(task: Task, evidence: VerificationEvidence[]): VerificationResult` |
+| 292 | `method` | `private build(` |
+| 321 | `function` | `const inScope = (f: string) => ...` |
+| 394 | `interface` | `export interface VerificationBaseline` |
+| 403 | `function` | `export function failureSignature(output: string): string` |
+| 430 | `function` | `export async function captureBaseline(` |
+| 459 | `function` | `function commandEvidenceList(evidence: VerificationEvidence[]): VerificationEvidence[]` |
+| 466 | `function` | `export function normalizeCommandKey(cmd: string): string` |
+| 472 | `function` | `export function matchesBaseline(baseline: VerificationBaseline \| undefined, command: string, output: string): boolean` |
 
 ### `src/wiki.ts`
 | Line | Kind | Signature |
@@ -570,10 +633,10 @@ graph TD;
 | 85 | `method` | `loadTasks(goalId: string): Task[]` |
 | 93 | `method` | `loadState(): AgentState` |
 | 121 | `method` | `loadCheckpoint(goalId?: string):` |
-| 129 | `method` | `loadTodos(): import('./types.js').TodoItem[]` |
-| 156 | `method` | `async appendCompletedTask(title: string): Promise<boolean>` |
-| 166 | `method` | `loadWorkspaceState(): WorkspaceState` |
-| 174 | `method` | `listGoals(): string[]` |
+| 130 | `method` | `loadTodos(): import('./types.js').TodoItem[]` |
+| 157 | `method` | `async appendCompletedTask(title: string): Promise<boolean>` |
+| 167 | `method` | `loadWorkspaceState(): WorkspaceState` |
+| 175 | `method` | `listGoals(): string[]` |
 
 ### `src/utils/http-error.ts`
 | Line | Kind | Signature |
@@ -595,7 +658,7 @@ graph TD;
 | 60 | `function` | `export function buildLaunchArgs(` |
 | 95 | `function` | `export function resolveSelfCommand(execPath: string, argv: string[]): string[]` |
 | 101 | `interface` | `export interface LaunchResult` |
-| 111 | `function` | `export async function launchInNewTerminal(` |
+| 114 | `function` | `export async function launchInNewTerminal(` |
 
 ### `src/tui/ansi-hygiene.ts`
 | Line | Kind | Signature |
@@ -608,95 +671,96 @@ graph TD;
 ### `src/tui/app.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 60 | `type` | `type LineKind` |
-| 62 | `interface` | `interface Line` |
-| 78 | `interface` | `interface TaskView` |
-| 141 | `function` | `export async function launchTui(runtime: Runtime, initialPrompt?: string): Promise<void>` |
-| 240 | `type` | `type AppState` |
-| 258 | `function` | `function tabBarRow(w: number): string` |
-| 287 | `function` | `function tabBarClick(col: number): void` |
-| 308 | `function` | `function switchTab(index: number): void` |
-| 323 | `function` | `function newTab(title?: string): void` |
-| 342 | `function` | `function freshTabState(): AppState` |
-| 396 | `function` | `function closeActiveTab(): void` |
-| 424 | `function` | `function subscribeTab(tabId: string, rt: Runtime): void` |
-| 450 | `function` | `const width = () => ...` |
-| 451 | `function` | `const height = () => ...` |
-| 453 | `function` | `const pushTo = (target: AppState, kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => ...` |
-| 464 | `function` | `const push = (kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => ...` |
-| 469 | `function` | `const scheduleRender = () => ...` |
-| 481 | `function` | `const startSpinner = () => ...` |
-| 512 | `function` | `const stopSpinner = () => ...` |
-| 520 | `function` | `function prettifyToolCall(text: string): string \| undefined` |
-| 524 | `function` | `const get = (key: string) => ...` |
-| 546 | `function` | `async function refreshGitStats(force = false)` |
-| 555 | `function` | `function transcriptLines(maxWidth: number): string[]` |
-| 602 | `function` | `function wrapAnsi(line: string, max: number): string[]` |
-| 652 | `function` | `function wrapLine(line: Line, maxWidth: number): string[]` |
-| 768 | `function` | `function transcriptGeometry(w: number):` |
-| 777 | `function` | `function applySelection(content: string, row: number, indent: number): string` |
-| 791 | `function` | `const inc = (c: number) => ...` |
-| 818 | `function` | `function selectedText(): string` |
-| 837 | `function` | `const sliceEnd = (c: number) => ...` |
-| 867 | `function` | `function copyToClipboard(text: string): 'osc52' \| 'x11' \| 'wayland' \| 'pbcopy' \| 'failed'` |
-| 881 | `function` | `const feed = (p: ReturnType<typeof spawn> \| null) => ...` |
-| 917 | `function` | `function beginSelection(row: number, col: number)` |
-| 926 | `function` | `function selectWord(row: number, col: number)` |
-| 952 | `function` | `function selectLine(row: number)` |
-| 967 | `function` | `function updateSelection(row: number, col: number)` |
-| 974 | `function` | `function endSelection()` |
-| 1002 | `function` | `function clearSelection()` |
-| 1008 | `function` | `function currentDropItems()` |
-| 1018 | `function` | `function render()` |
-| 1045 | `function` | `function safeWrite(payload: string): void` |
-| 1059 | `function` | `function renderFrame()` |
-| 1174 | `function` | `const fmt = (n: number) => ...` |
-| 1428 | `function` | `function stripAnsi(s: string): string` |
-| 1432 | `function` | `async function handleCommand(raw: string)` |
-| 1452 | `function` | `const lastAssistantIdx = (() => ...` |
-| 1458 | `function` | `const lastErrorIdx = (() => ...` |
-| 1537 | `method` | `push('system', `🍡 Modular Project Rules ($` |
-| 1785 | `function` | `const runSearch = async (query: string) => ...` |
-| 2232 | `function` | `async function run(fn: () => Promise<string>, echo = true): Promise<string>` |
-| 2292 | `function` | `async function reviewPlan(objective: string, planText: string)` |
-| 2325 | `function` | `function ask(question: string): Promise<string>` |
-| 2336 | `function` | `function openMenu(title: string, items: string[], mark?: Set<number>): Promise<number>` |
-| 2350 | `function` | `function closeMenu(index: number)` |
-| 2374 | `function` | `async function runShell(cmd: string)` |
-| 2385 | `function` | `async function runTest(extra: string)` |
-| 2397 | `function` | `async function loginFlow()` |
-| 2423 | `function` | `async function providerMenu()` |
-| 2439 | `function` | `async function modelMenu()` |
-| 2474 | `function` | `async function reasoningMenu()` |
-| 2499 | `function` | `async function themeMenu()` |
-| 2520 | `function` | `async function skillsMenu()` |
-| 2558 | `function` | `async function renderSourcePacks(sourceName: string)` |
-| 2595 | `function` | `function formatTimeAgo(ts: number): string` |
-| 2607 | `function` | `async function historySessionMenu()` |
-| 2676 | `function` | `function openUncompressedViewer(title: string, fullContent: string)` |
-| 2685 | `function` | `function closeUncompressedViewer()` |
-| 2695 | `function` | `async function openUncompressedInspectorMenu()` |
-| 2696 | `interface` | `interface InspectableItem` |
-| 2816 | `function` | `async function exportSession()` |
-| 2826 | `function` | `async function importFlow()` |
-| 2831 | `function` | `function listTasks(): string` |
-| 2848 | `function` | `function pushHelp()` |
-| 2870 | `function` | `function exit()` |
-| 2888 | `function` | `function onKey(buf: Buffer)` |
-| 3435 | `function` | `function handleEscape(seq: string)` |
-| 3471 | `function` | `function scrollPageSize(): number` |
-| 3475 | `function` | `function historyPrev()` |
-| 3483 | `function` | `function historyNext()` |
-| 3499 | `function` | `function scrollTranscript(delta: number)` |
-| 3518 | `function` | `function onRuntimeEventFor(tabId: string, event: MochiEvent)` |
-| 3537 | `function` | `function onRuntimeEvent(event: MochiEvent)` |
-| 3565 | `function` | `function start()` |
-| 3582 | `function` | `const keyListener = (buf: Buffer) => ...` |
-| 3584 | `function` | `const resizeListener = () => ...` |
-| 3591 | `function` | `const exitListener = () => ...` |
-| 3605 | `function` | `const signalExit = () => ...` |
-| 3641 | `function` | `async function gitBranch(cwd: string): Promise<string>` |
-| 3653 | `function` | `async function gitDiffStats(cwd: string): Promise<` |
+| 59 | `type` | `type LineKind` |
+| 61 | `interface` | `interface Line` |
+| 77 | `interface` | `interface TaskView` |
+| 149 | `function` | `export async function launchTui(runtime: Runtime, initialPrompt?: string): Promise<void>` |
+| 248 | `type` | `type AppState` |
+| 268 | `function` | `function tabBarRow(w: number): string` |
+| 314 | `function` | `function tabBarClick(col: number): void` |
+| 335 | `function` | `function switchTab(index: number): void` |
+| 350 | `function` | `function newTab(title?: string): void` |
+| 375 | `function` | `function freshTabState(): AppState` |
+| 429 | `function` | `function closeTab(index: number): void` |
+| 466 | `function` | `function closeActiveTab(): void` |
+| 472 | `function` | `function subscribeTab(tabId: string, rt: Runtime): void` |
+| 501 | `function` | `const width = () => ...` |
+| 502 | `function` | `const height = () => ...` |
+| 504 | `function` | `const pushTo = (target: AppState, kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => ...` |
+| 515 | `function` | `const push = (kind: LineKind, text: string, fullContent?: string, metadata?: Line['metadata']) => ...` |
+| 520 | `function` | `const scheduleRender = () => ...` |
+| 532 | `function` | `const startSpinner = () => ...` |
+| 578 | `function` | `const stopSpinner = (force = false) => ...` |
+| 590 | `function` | `function anyTabBusy(): boolean` |
+| 596 | `function` | `function prettifyToolCall(text: string): string \| undefined` |
+| 600 | `function` | `const get = (key: string) => ...` |
+| 622 | `function` | `async function refreshGitStats(force = false)` |
+| 631 | `function` | `function transcriptLines(maxWidth: number): string[]` |
+| 678 | `function` | `function wrapAnsi(line: string, max: number): string[]` |
+| 728 | `function` | `function wrapLine(line: Line, maxWidth: number): string[]` |
+| 844 | `function` | `function transcriptGeometry(w: number):` |
+| 853 | `function` | `function applySelection(content: string, row: number, indent: number): string` |
+| 867 | `function` | `const inc = (c: number) => ...` |
+| 894 | `function` | `function selectedText(): string` |
+| 913 | `function` | `const sliceEnd = (c: number) => ...` |
+| 943 | `function` | `function copyToClipboard(text: string): 'osc52' \| 'x11' \| 'wayland' \| 'pbcopy' \| 'failed'` |
+| 976 | `function` | `function beginSelection(row: number, col: number)` |
+| 985 | `function` | `function selectWord(row: number, col: number)` |
+| 1011 | `function` | `function selectLine(row: number)` |
+| 1026 | `function` | `function updateSelection(row: number, col: number)` |
+| 1033 | `function` | `function endSelection()` |
+| 1061 | `function` | `function clearSelection()` |
+| 1067 | `function` | `function currentDropItems()` |
+| 1077 | `function` | `function render()` |
+| 1104 | `function` | `function safeWrite(payload: string): void` |
+| 1118 | `function` | `function renderFrame()` |
+| 1482 | `function` | `function stripAnsi(s: string): string` |
+| 1486 | `function` | `async function handleCommand(raw: string)` |
+| 1506 | `function` | `const lastAssistantIdx = (() => ...` |
+| 1512 | `function` | `const lastErrorIdx = (() => ...` |
+| 1860 | `function` | `const runSearch = async (query: string) => ...` |
+| 2329 | `function` | `async function run(fn: () => Promise<string>, echo = true): Promise<string>` |
+| 2401 | `function` | `async function reviewPlan(objective: string, planText: string)` |
+| 2434 | `function` | `function ask(question: string): Promise<string>` |
+| 2452 | `function` | `function openMenu(title: string, items: string[], mark?: Set<number>): Promise<number>` |
+| 2476 | `function` | `function closeMenu(index: number)` |
+| 2500 | `function` | `async function runShell(cmd: string)` |
+| 2511 | `function` | `async function runTest(extra: string)` |
+| 2523 | `function` | `async function loginFlow()` |
+| 2549 | `function` | `async function providerMenu()` |
+| 2565 | `function` | `async function modelMenu()` |
+| 2600 | `function` | `async function reasoningMenu()` |
+| 2625 | `function` | `async function themeMenu()` |
+| 2646 | `function` | `async function skillsMenu()` |
+| 2684 | `function` | `async function renderSourcePacks(sourceName: string)` |
+| 2721 | `function` | `function formatTimeAgo(ts: number): string` |
+| 2733 | `function` | `async function historySessionMenu()` |
+| 2807 | `function` | `function openUncompressedViewer(title: string, fullContent: string)` |
+| 2816 | `function` | `function closeUncompressedViewer()` |
+| 2826 | `function` | `async function openUncompressedInspectorMenu()` |
+| 2827 | `interface` | `interface InspectableItem` |
+| 2947 | `interface` | `interface ExportedLine` |
+| 2948 | `interface` | `interface ExportedSession` |
+| 2950 | `function` | `async function exportSession()` |
+| 2972 | `function` | `async function importFlow()` |
+| 3003 | `function` | `function listTasks(): string` |
+| 3020 | `function` | `function pushHelp()` |
+| 3043 | `function` | `function exit()` |
+| 3079 | `function` | `function onKey(buf: Buffer)` |
+| 3644 | `function` | `function handleEscape(seq: string)` |
+| 3680 | `function` | `function scrollPageSize(): number` |
+| 3684 | `function` | `function historyPrev()` |
+| 3692 | `function` | `function historyNext()` |
+| 3708 | `function` | `function scrollTranscript(delta: number)` |
+| 3727 | `function` | `function onRuntimeEventFor(tabId: string, event: MochiEvent)` |
+| 3749 | `function` | `function onRuntimeEvent(event: MochiEvent)` |
+| 3783 | `function` | `async function start()` |
+| 3800 | `function` | `const keyListener = (buf: Buffer) => ...` |
+| 3802 | `function` | `const resizeListener = () => ...` |
+| 3809 | `function` | `const exitListener = () => ...` |
+| 3823 | `function` | `const signalExit = () => ...` |
+| 3923 | `function` | `async function gitBranch(cwd: string): Promise<string>` |
+| 3935 | `function` | `async function gitDiffStats(cwd: string): Promise<` |
 
 ### `src/tui/cards.ts`
 | Line | Kind | Signature |
@@ -794,29 +858,31 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 6 | `interface` | `export interface TabInfo` |
-| 22 | `function` | `export function defaultTabTitle(n: number): string` |
-| 26 | `function` | `export function slugTitle(prompt: string): string` |
-| 31 | `class` | `export class TabManager` |
-| 40 | `method` | `list(): TabInfo[]` |
-| 44 | `method` | `activeTab(): TabInfo` |
-| 48 | `method` | `activeIndex(): number` |
-| 52 | `method` | `count(): number` |
-| 56 | `method` | `get(id: string): TabInfo \| undefined` |
-| 61 | `method` | `create(title?: string): TabInfo` |
-| 83 | `method` | `close(idOrIndex: string \| number): TabInfo` |
-| 114 | `method` | `next(): TabInfo` |
-| 118 | `method` | `prev(): TabInfo` |
-| 122 | `method` | `rename(id: string, title: string): TabInfo` |
-| 132 | `method` | `autoTitle(id: string, prompt: string): boolean` |
-| 139 | `method` | `setBusy(id: string, busy: boolean): void` |
-| 145 | `method` | `markUnread(id: string): void` |
-| 150 | `method` | `clearUnread(id: string): void` |
-| 164 | `interface` | `export interface TabBarCell` |
-| 179 | `interface` | `export interface TabBarLayout` |
-| 198 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
-| 200 | `function` | `const unreadOf = (t: TabInfo) => ...` |
-| 204 | `function` | `const fixedOf = (t: TabInfo) => ...` |
-| 237 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 24 | `function` | `export function defaultTabTitle(n: number): string` |
+| 28 | `function` | `export function slugTitle(prompt: string): string` |
+| 33 | `class` | `export class TabManager` |
+| 42 | `method` | `list(): TabInfo[]` |
+| 46 | `method` | `activeTab(): TabInfo` |
+| 50 | `method` | `activeIndex(): number` |
+| 54 | `method` | `count(): number` |
+| 58 | `method` | `get(id: string): TabInfo \| undefined` |
+| 63 | `method` | `create(title?: string): TabInfo` |
+| 85 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 116 | `method` | `next(): TabInfo` |
+| 120 | `method` | `prev(): TabInfo` |
+| 124 | `method` | `rename(id: string, title: string): TabInfo` |
+| 134 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 141 | `method` | `setStatus(id: string, status: 'idle' \| 'running' \| 'done' \| 'error', statusText?: string): void` |
+| 149 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 158 | `method` | `markUnread(id: string): void` |
+| 163 | `method` | `clearUnread(id: string): void` |
+| 177 | `interface` | `export interface TabBarCell` |
+| 196 | `interface` | `export interface TabBarLayout` |
+| 217 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 219 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 220 | `function` | `const iconOf = (t: TabInfo) => ...` |
+| 228 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 298 | `function` | `export function tabBarHit(` |
 
 ### `src/tui/termix.ts`
 | Line | Kind | Signature |
@@ -925,6 +991,9 @@ graph TD;
 | 1155 | `function` | `export function transcriptIndent(termWidth: number): number` |
 | 1196 | `function` | `export function splashFrame(tick: number, width: number, version: string, progress = 1, burstMode = 0): string[]` |
 | 1199 | `function` | `const center = (s: string, vis?: number) => ...` |
+| 1300 | `interface` | `export interface FarewellModel` |
+| 1312 | `function` | `export function formatDuration(ms: number): string` |
+| 1320 | `function` | `export function farewellFrame(m: FarewellModel, width: number): string[]` |
 
 ### `src/tui/wrap.ts`
 | Line | Kind | Signature |
@@ -973,10 +1042,11 @@ graph TD;
 ### `src/tools/browser.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 22 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
-| 30 | `function` | `const finish = (code: number \| null) => ...` |
-| 72 | `method` | `async execute(args, ctx)` |
-| 119 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 25 | `function` | `function hereDir(): string` |
+| 34 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 42 | `function` | `const finish = (code: number \| null) => ...` |
+| 84 | `method` | `async execute(args, ctx)` |
+| 131 | `function` | `export function summarizeResult(command: string, raw: string): string` |
 
 ### `src/tools/chameleon.ts`
 | Line | Kind | Signature |
@@ -1232,7 +1302,7 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 15 | `function` | `function nativeBin(): string \| undefined` |
-| 29 | `function` | `export function fuzzyFindUniqueNative(text: string, needle: string): FuzzyMatch \| null` |
+| 31 | `function` | `export function fuzzyFindUniqueNative(text: string, needle: string): FuzzyMatch \| null` |
 
 ### `src/tools/notes.ts`
 | Line | Kind | Signature |
@@ -1416,23 +1486,23 @@ graph TD;
 ### `src/tools/tool-factory.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 27 | `function` | `export function toolsRoot(projectDir: string): string` |
-| 30 | `function` | `export function toolsArchiveRoot(projectDir: string): string` |
-| 36 | `interface` | `export interface AuthoredToolManifest` |
-| 70 | `function` | `export function validateManifest(m: AuthoredToolManifest): string \| null` |
-| 95 | `function` | `function manifestPath(projectDir: string, name: string): string` |
-| 99 | `interface` | `export interface WriteResult` |
-| 106 | `function` | `export function writeAuthoredTool(projectDir: string, m: AuthoredToolManifest): WriteResult` |
-| 120 | `function` | `export function readAuthoredManifest(projectDir: string, name: string): AuthoredToolManifest \| null` |
-| 129 | `function` | `export function removeAuthoredTool(projectDir: string, name: string): WriteResult` |
-| 142 | `function` | `export function listAuthoredTools(projectDir: string): AuthoredToolManifest[]` |
-| 160 | `function` | `export function runAuthoredCommand(m: AuthoredToolManifest, args: Record<string, unknown>, projectDir: string): Promise<` |
-| 211 | `function` | `function manifestToTool(m: AuthoredToolManifest, projectDir: string): Tool` |
-| 225 | `method` | `async execute(args, _ctx: ToolContext)` |
-| 238 | `function` | `export function loadAuthoredTools(projectDir: string): Map<string, Tool>` |
-| 251 | `function` | `function fingerprint(projectDir: string): string` |
-| 270 | `function` | `export function refreshAuthoredTools(tools: Map<string, Tool>, projectDir: string, isReserved: (name: string) => boolean): boolean` |
-| 321 | `method` | `async execute(args, ctx)` |
+| 28 | `function` | `export function toolsRoot(projectDir: string): string` |
+| 31 | `function` | `export function toolsArchiveRoot(projectDir: string): string` |
+| 37 | `interface` | `export interface AuthoredToolManifest` |
+| 71 | `function` | `export function validateManifest(m: AuthoredToolManifest): string \| null` |
+| 96 | `function` | `function manifestPath(projectDir: string, name: string): string` |
+| 100 | `interface` | `export interface WriteResult` |
+| 107 | `function` | `export function writeAuthoredTool(projectDir: string, m: AuthoredToolManifest): WriteResult` |
+| 121 | `function` | `export function readAuthoredManifest(projectDir: string, name: string): AuthoredToolManifest \| null` |
+| 130 | `function` | `export function removeAuthoredTool(projectDir: string, name: string): WriteResult` |
+| 143 | `function` | `export function listAuthoredTools(projectDir: string): AuthoredToolManifest[]` |
+| 161 | `function` | `export function runAuthoredCommand(m: AuthoredToolManifest, args: Record<string, unknown>, projectDir: string): Promise<` |
+| 214 | `function` | `function manifestToTool(m: AuthoredToolManifest, projectDir: string): Tool` |
+| 228 | `method` | `async execute(args, _ctx: ToolContext)` |
+| 241 | `function` | `export function loadAuthoredTools(projectDir: string): Map<string, Tool>` |
+| 254 | `function` | `function fingerprint(projectDir: string): string` |
+| 273 | `function` | `export function refreshAuthoredTools(tools: Map<string, Tool>, projectDir: string, isReserved: (name: string) => boolean): boolean` |
+| 324 | `method` | `async execute(args, ctx)` |
 
 ### `src/tools/tool-usage.ts`
 | Line | Kind | Signature |
@@ -1478,7 +1548,7 @@ graph TD;
 ### `src/tools/verify.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 22 | `method` | `async execute(args, ctx)` |
+| 25 | `method` | `async execute(args, ctx)` |
 
 ### `src/tools/web-crawl.ts`
 | Line | Kind | Signature |
@@ -1505,11 +1575,11 @@ graph TD;
 | :--- | :--- | :--- |
 | 23 | `interface` | `export interface FakeScriptToolCall` |
 | 29 | `interface` | `export interface FakeScriptResponse` |
-| 60 | `function` | `function toSSEToolCall(tc: FakeScriptToolCall): SSEToolCall` |
-| 64 | `interface` | `export interface FakeOpenAI` |
-| 68 | `method` | `append(responses: FakeScriptResponse[]): void;` |
-| 70 | `method` | `close(): Promise<void>;` |
-| 81 | `function` | `export async function startFakeOpenAI(script?: FakeScriptResponse[]): Promise<FakeOpenAI>` |
+| 67 | `function` | `function toSSEToolCall(tc: FakeScriptToolCall): SSEToolCall` |
+| 71 | `interface` | `export interface FakeOpenAI` |
+| 75 | `method` | `append(responses: FakeScriptResponse[]): void;` |
+| 77 | `method` | `close(): Promise<void>;` |
+| 88 | `function` | `export async function startFakeOpenAI(script?: FakeScriptResponse[]): Promise<FakeOpenAI>` |
 
 ### `src/teams/roles.ts`
 | Line | Kind | Signature |
@@ -1604,10 +1674,11 @@ graph TD;
 | 9 | `interface` | `export interface NamedCheckpoint` |
 | 18 | `function` | `function getCheckpointsDir(cwd: string): string` |
 | 24 | `function` | `function runGit(cwd: string, args: string[]): string` |
-| 30 | `function` | `export async function saveNamedCheckpoint(` |
-| 62 | `function` | `export function listNamedCheckpoints(cwd: string): NamedCheckpoint[]` |
-| 81 | `function` | `export async function restoreNamedCheckpoint(` |
-| 122 | `function` | `export function deleteNamedCheckpoint(cwd: string, name: string): boolean` |
+| 32 | `function` | `function runGitChecked(cwd: string, args: string[]):` |
+| 40 | `function` | `export async function saveNamedCheckpoint(` |
+| 72 | `function` | `export function listNamedCheckpoints(cwd: string): NamedCheckpoint[]` |
+| 91 | `function` | `export async function restoreNamedCheckpoint(` |
+| 153 | `function` | `export function deleteNamedCheckpoint(cwd: string, name: string): boolean` |
 
 ### `src/state/read-cache-store.ts`
 | Line | Kind | Signature |
@@ -1653,36 +1724,36 @@ graph TD;
 ### `src/skills/skill-curator.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 21 | `interface` | `export interface CuratorConfig` |
-| 29 | `function` | `export function defaultCuratorConfig(): CuratorConfig` |
-| 41 | `interface` | `export interface SkillOpportunity` |
-| 52 | `function` | `export function detectSkillOpportunities(` |
-| 81 | `function` | `export function opportunitiesToPrompt(opps: SkillOpportunity[]): string \| null` |
-| 97 | `interface` | `export interface SkillSnapshot` |
-| 107 | `function` | `export function scanSkills(projectDir: string, cfg: CuratorConfig):` |
-| 113 | `function` | `const visit = (p: string, category?: string) => ...` |
-| 146 | `interface` | `export interface CuratorOutput` |
-| 162 | `function` | `export function skillSimilarity(a: string, b: string): number` |
-| 179 | `function` | `export function consolidateSkills(` |
-| 213 | `function` | `function projectDirFor(skillPath: string): string` |
-| 219 | `function` | `export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutput` |
-| 262 | `interface` | `export interface CuratorState` |
-| 270 | `function` | `function statePath(projectDir: string): string` |
-| 273 | `function` | `export function loadCuratorState(projectDir: string): CuratorState` |
-| 277 | `function` | `export function saveCuratorState(projectDir: string, s: CuratorState): void` |
-| 284 | `function` | `export function shouldRunCurator(projectDir: string, cfg: CuratorConfig): boolean` |
-| 292 | `function` | `export function recordCuratorRun(projectDir: string, summary: string): void` |
-| 306 | `function` | `export function autoDraftSkill(` |
-| 373 | `function` | `export async function draftSkillFromToolRoutes(` |
-| 411 | `interface` | `export interface SkillDoctorFailure` |
-| 420 | `interface` | `export interface SkillDoctorReport` |
-| 428 | `interface` | `export interface SkillDoctorHistory` |
-| 436 | `function` | `function doctorHistoryPath(projectDir: string): string` |
-| 440 | `function` | `export function loadDoctorHistory(projectDir: string): SkillDoctorHistory` |
-| 448 | `function` | `export function saveDoctorHistory(projectDir: string, hist: SkillDoctorHistory): void` |
-| 453 | `interface` | `export interface SkillDoctorOptions` |
-| 460 | `function` | `export function extractVerificationSnippet(rawText: string): string \| null` |
-| 488 | `function` | `export function runSkillDoctor(` |
+| 22 | `interface` | `export interface CuratorConfig` |
+| 30 | `function` | `export function defaultCuratorConfig(): CuratorConfig` |
+| 42 | `interface` | `export interface SkillOpportunity` |
+| 53 | `function` | `export function detectSkillOpportunities(` |
+| 82 | `function` | `export function opportunitiesToPrompt(opps: SkillOpportunity[]): string \| null` |
+| 98 | `interface` | `export interface SkillSnapshot` |
+| 108 | `function` | `export function scanSkills(projectDir: string, cfg: CuratorConfig):` |
+| 114 | `function` | `const visit = (p: string, category?: string) => ...` |
+| 147 | `interface` | `export interface CuratorOutput` |
+| 163 | `function` | `export function skillSimilarity(a: string, b: string): number` |
+| 180 | `function` | `export function consolidateSkills(` |
+| 214 | `function` | `function projectDirFor(skillPath: string): string` |
+| 220 | `function` | `export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutput` |
+| 263 | `interface` | `export interface CuratorState` |
+| 271 | `function` | `function statePath(projectDir: string): string` |
+| 274 | `function` | `export function loadCuratorState(projectDir: string): CuratorState` |
+| 278 | `function` | `export function saveCuratorState(projectDir: string, s: CuratorState): void` |
+| 285 | `function` | `export function shouldRunCurator(projectDir: string, cfg: CuratorConfig): boolean` |
+| 293 | `function` | `export function recordCuratorRun(projectDir: string, summary: string): void` |
+| 307 | `function` | `export function autoDraftSkill(` |
+| 374 | `function` | `export async function draftSkillFromToolRoutes(` |
+| 412 | `interface` | `export interface SkillDoctorFailure` |
+| 421 | `interface` | `export interface SkillDoctorReport` |
+| 429 | `interface` | `export interface SkillDoctorHistory` |
+| 437 | `function` | `function doctorHistoryPath(projectDir: string): string` |
+| 441 | `function` | `export function loadDoctorHistory(projectDir: string): SkillDoctorHistory` |
+| 449 | `function` | `export function saveDoctorHistory(projectDir: string, hist: SkillDoctorHistory): void` |
+| 454 | `interface` | `export interface SkillDoctorOptions` |
+| 461 | `function` | `export function extractVerificationSnippet(rawText: string): string \| null` |
+| 489 | `function` | `export function runSkillDoctor(` |
 
 ### `src/skills/skill-lint.ts`
 | Line | Kind | Signature |
@@ -1900,6 +1971,59 @@ graph TD;
 | 678 | `method` | `private renderHighTierPrompt(spec: CompiledPromptSpecification): string` |
 | 708 | `method` | `private renderMaxTierPrompt(spec: CompiledPromptSpecification): string` |
 
+### `src/ops/update-check.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 13 | `function` | `export function currentVersion(): string` |
+| 22 | `function` | `function cachePath(): string` |
+| 26 | `function` | `function cacheFresh(): boolean` |
+| 36 | `function` | `function readCachedLatest(): string \| undefined` |
+| 45 | `function` | `function writeCache(latest: string): void` |
+| 52 | `function` | `export function isNewer(latest: string, current: string): boolean` |
+| 53 | `function` | `const parse = (v: string) => ...` |
+| 59 | `function` | `async function fetchLatest(): Promise<string \| undefined>` |
+| 78 | `function` | `export async function maybeCheckUpdate(): Promise<void>` |
+
+### `src/onboarding/detect.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 11 | `interface` | `export interface DetectedProvider` |
+| 20 | `interface` | `export interface DetectedSkillSource` |
+| 26 | `interface` | `export interface DetectedMcpSource` |
+| 32 | `interface` | `export interface OnboardScan` |
+| 58 | `function` | `function parseDotEnvFile(path: string): Record<string, string>` |
+| 77 | `function` | `function loadEnvPool(): Record<string, string>` |
+| 93 | `function` | `function isRealKey(v: string \| undefined): boolean` |
+| 102 | `function` | `export function maskKey(key: string): string` |
+| 107 | `function` | `function fileKeyPool(): Record<string, string>` |
+| 130 | `function` | `export function detectProviders(env?: Record<string, string>): DetectedProvider[]` |
+| 144 | `function` | `function countSkills(dir: string): number` |
+| 164 | `function` | `export function detectSkillSources(): DetectedSkillSource[]` |
+| 187 | `function` | `function extractMcpServerNames(file: string): string[]` |
+| 223 | `function` | `export function detectMcpSources(cwd = process.cwd()): DetectedMcpSource[]` |
+| 249 | `function` | `export function scanForOnboarding(cwd = process.cwd()): OnboardScan` |
+
+### `src/onboarding/import.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 12 | `interface` | `export interface OnboardedState` |
+| 20 | `function` | `export function onboardedPath(): string` |
+| 25 | `function` | `export function isOnboarded(): boolean` |
+| 34 | `function` | `export function markOnboarded(state: Omit<OnboardedState, 'version' \| 'at'> & Partial<Pick<OnboardedState, 'at'>>): OnboardedState` |
+| 50 | `function` | `function readEnvPool(): Record<string, string>` |
+| 76 | `function` | `export function importProviderKeys(opts:` |
+| 133 | `function` | `export async function importSkillSources(dirs: string[], opts:` |
+| 153 | `function` | `export function importMcpSources(files: string[]):` |
+
+### `src/onboarding/wizard.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 10 | `type` | `export type OnboardStep` |
+| 25 | `function` | `export function welcomeFrame(version: string): string[]` |
+| 42 | `function` | `export function stepFrame(step: OnboardStep, scan: OnboardScan): string[]` |
+| 122 | `interface` | `export interface OnboardChoices` |
+| 131 | `function` | `export function defaultChoices(scan: OnboardScan): OnboardChoices` |
+
 ### `src/observability/autopsy.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -2112,12 +2236,12 @@ graph TD;
 | 4 | `interface` | `export interface ProviderSelection` |
 | 11 | `function` | `export function currentConfig(): MochiConfig` |
 | 15 | `function` | `export function setProvider(config: MochiConfig, selection: ProviderSelection): MochiConfig` |
-| 39 | `function` | `export function login(config: MochiConfig, providerId: string, apiKey: string, model?: string): MochiConfig` |
-| 50 | `function` | `export function selectProviderById(config: MochiConfig, providerId: string, model?: string): MochiConfig` |
-| 60 | `function` | `export function listProviderIds(): string[]` |
-| 64 | `function` | `export function listModelsForProvider(providerId: string): string[]` |
-| 69 | `function` | `export function describeConfig(config: MochiConfig): string` |
-| 78 | `function` | `export function maskApiKey(key: string): string` |
+| 45 | `function` | `export function login(config: MochiConfig, providerId: string, apiKey: string, model?: string): MochiConfig` |
+| 56 | `function` | `export function selectProviderById(config: MochiConfig, providerId: string, model?: string): MochiConfig` |
+| 66 | `function` | `export function listProviderIds(): string[]` |
+| 70 | `function` | `export function listModelsForProvider(providerId: string): string[]` |
+| 75 | `function` | `export function describeConfig(config: MochiConfig): string` |
+| 84 | `function` | `export function maskApiKey(key: string): string` |
 
 ### `src/model/model-router.ts`
 | Line | Kind | Signature |
@@ -2142,8 +2266,8 @@ graph TD;
 | 68 | `function` | `function rotateCredentials(err: unknown): void` |
 | 87 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
 | 179 | `function` | `const onAbort = () => ...` |
-| 331 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
-| 378 | `type` | `type ToolCallAccum` |
+| 348 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 395 | `type` | `type ToolCallAccum` |
 
 ### `src/model/provider-failure.ts`
 | Line | Kind | Signature |
@@ -2156,32 +2280,34 @@ graph TD;
 | :--- | :--- | :--- |
 | 6 | `type` | `export type ProviderKind` |
 | 8 | `interface` | `export interface Provider` |
-| 46 | `function` | `export function configFilePath(): string` |
-| 52 | `function` | `export function loadConfigFile(): MochiConfig` |
-| 62 | `function` | `export function saveConfigFile(cfg: MochiConfig): void` |
+| 51 | `function` | `export function configFilePath(): string` |
+| 57 | `function` | `export function loadConfigFile(): MochiConfig` |
+| 67 | `function` | `export function saveConfigFile(cfg: MochiConfig): void` |
 
 ### `src/model/rate-limit.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 15 | `interface` | `export interface RetryOptions` |
-| 36 | `function` | `const sleep = (ms: number) => ...` |
-| 55 | `class` | `class TokenBucket` |
-| 68 | `method` | `private refill(): void` |
-| 78 | `method` | `async acquire(): Promise<void>` |
-| 93 | `class` | `class Semaphore` |
-| 111 | `method` | `private wait(): Promise<void>` |
-| 119 | `method` | `private release(): void` |
-| 129 | `function` | `function readThrottleConfig():` |
-| 143 | `function` | `function throttle():` |
-| 148 | `function` | `export function resetThrottleForTests(): void` |
-| 158 | `function` | `export async function throttled<T>(fn: () => Promise<T>): Promise<T>` |
-| 161 | `function` | `const run = async () => ...` |
-| 168 | `interface` | `export interface RateLimitInfo` |
-| 189 | `function` | `function causeCodes(err: unknown): string[]` |
-| 204 | `function` | `export function isAbort(err: unknown): boolean` |
-| 212 | `function` | `export function classifyError(err: unknown): RateLimitInfo` |
-| 233 | `function` | `function applyJitter(base: number, jitter: number): number` |
-| 241 | `function` | `export async function withRetries<T>(fn: () => Promise<T>, opts: RetryOptions =` |
+| 40 | `function` | `const sleep = (ms: number, signal?: AbortSignal) => ...` |
+| 49 | `function` | `const onAbort = () => ...` |
+| 73 | `class` | `class TokenBucket` |
+| 86 | `method` | `private refill(): void` |
+| 97 | `method` | `async acquire(signal?: AbortSignal): Promise<void>` |
+| 113 | `class` | `class Semaphore` |
+| 131 | `method` | `private wait(): Promise<void>` |
+| 139 | `method` | `private release(): void` |
+| 149 | `function` | `function readThrottleConfig():` |
+| 164 | `function` | `function throttleKey(): string` |
+| 168 | `function` | `function throttle():` |
+| 174 | `function` | `export function resetThrottleForTests(): void` |
+| 184 | `function` | `export async function throttled<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T>` |
+| 188 | `function` | `const run = () => ...` |
+| 192 | `interface` | `export interface RateLimitInfo` |
+| 213 | `function` | `function causeCodes(err: unknown): string[]` |
+| 228 | `function` | `export function isAbort(err: unknown): boolean` |
+| 236 | `function` | `export function classifyError(err: unknown): RateLimitInfo` |
+| 257 | `function` | `function applyJitter(base: number, jitter: number): number` |
+| 265 | `function` | `export async function withRetries<T>(fn: () => Promise<T>, opts: RetryOptions =` |
 
 ### `src/model/router.ts`
 | Line | Kind | Signature |
@@ -2199,22 +2325,23 @@ graph TD;
 | 155 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
 | 156 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
 | 170 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
-| 221 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
-| 239 | `function` | `function isPermanent(err: unknown): boolean` |
-| 251 | `function` | `export function resetCapabilityRegistry()` |
+| 223 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 241 | `function` | `function isPermanent(err: unknown): boolean` |
+| 253 | `function` | `export function resetCapabilityRegistry()` |
 
 ### `src/model/usage.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 6 | `interface` | `export interface UsageRecord` |
-| 15 | `interface` | `export interface UsageEntry` |
-| 21 | `interface` | `export interface UsageStoreData` |
-| 25 | `class` | `export class UsageStore` |
-| 44 | `method` | `private save()` |
-| 50 | `method` | `record(model: string, goal: string, usage: Partial<UsageRecord>): void` |
-| 69 | `method` | `total(): UsageRecord` |
-| 82 | `method` | `summary(): string` |
-| 94 | `method` | `recent(n = 5): string` |
+| 5 | `interface` | `export interface UsageRecord` |
+| 21 | `interface` | `export interface UsageEntry` |
+| 32 | `interface` | `export interface UsageStoreData` |
+| 36 | `class` | `export class UsageStore` |
+| 68 | `method` | `private save()` |
+| 74 | `method` | `record(model: string, goal: string, usage: Partial<UsageRecord>): void` |
+| 96 | `method` | `total(): UsageRecord` |
+| 111 | `method` | `lastContextUsed(): number` |
+| 119 | `method` | `summary(): string` |
+| 139 | `method` | `recent(n = 5): string` |
 
 ### `src/memory/consolidate.ts`
 | Line | Kind | Signature |
@@ -2343,13 +2470,13 @@ graph TD;
 | :--- | :--- | :--- |
 | 16 | `interface` | `export interface McpOAuthConfig` |
 | 25 | `interface` | `interface CachedToken` |
-| 31 | `function` | `function expandEnv(s: string): string` |
-| 35 | `function` | `function storePath(storeDir?: string): string` |
-| 41 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
-| 50 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
-| 58 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
-| 79 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
-| 130 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 33 | `function` | `function expandEnv(s: string): string` |
+| 47 | `function` | `function storePath(storeDir?: string): string` |
+| 53 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 62 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 70 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 91 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 142 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
 
 ### `src/mcp/tools.ts`
 | Line | Kind | Signature |
@@ -2368,18 +2495,17 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 20 | `interface` | `export interface GoalResult` |
-| 36 | `class` | `export class GoalEngine` |
-| 57 | `method` | `private rotateFailover(config: import('../types.js').ModelConfig, index?: number): import('../types.js').ModelConfig` |
-| 78 | `method` | `private noteGoalFiles(files: readonly string[] \| undefined): void` |
-| 86 | `method` | `steerActive(text: string): number` |
-| 104 | `method` | `async createGoal(objective: string, constraints: string[] = []): Promise<Goal>` |
-| 124 | `method` | `async decompose(goal: Goal): Promise<Task[]>` |
-| 224 | `method` | `async runGoal(goal: Goal, tasks?: Task[], extraContext: string[] = [], signal?: AbortSignal, sessionId?: string): Promise<GoalResult>` |
-| 301 | `function` | `const externalAbort = () => ...` |
-| 394 | `method` | `private recordSave(goal: Goal, task: Task, result:` |
-| 406 | `method` | `private runningCount(scheduler: TaskScheduler): number` |
-| 410 | `method` | `private agentId(task: Task): string` |
-| 420 | `method` | `private startReadyBatch(` |
+| 48 | `class` | `export class GoalEngine` |
+| 69 | `method` | `private rotateFailover(config: import('../types.js').ModelConfig, index?: number): import('../types.js').ModelConfig` |
+| 90 | `method` | `private noteGoalFiles(files: readonly string[] \| undefined): void` |
+| 98 | `method` | `steerActive(text: string): number` |
+| 116 | `method` | `async createGoal(objective: string, constraints: string[] = []): Promise<Goal>` |
+| 136 | `method` | `async decompose(goal: Goal): Promise<Task[]>` |
+| 236 | `method` | `async runGoal(goal: Goal, tasks?: Task[], extraContext: string[] = [], signal?: AbortSignal, sessionId?: string): Promise<GoalResult>` |
+| 314 | `function` | `const externalAbort = () => ...` |
+| 416 | `method` | `private recordSave(goal: Goal, task: Task, result:` |
+| 428 | `method` | `private runningCount(scheduler: TaskScheduler): number` |
+| 432 | `method` | `private agentId(task: Task): string` |
 
 ### `src/goals/scheduler.ts`
 | Line | Kind | Signature |
@@ -2412,19 +2538,19 @@ graph TD;
 | 58 | `function` | `export function resolveSkillSource(spec: string): string \| null` |
 | 70 | `function` | `export function originForSource(resolvedPath: string, sourceSpec?: string): string` |
 | 81 | `function` | `export function isGitSourceSpec(spec: string): boolean` |
-| 91 | `function` | `export function repoCacheDir(): string` |
-| 96 | `function` | `function repoNameFromSpec(spec: string): string` |
-| 110 | `function` | `export async function resolveSourceDir(spec: string,` |
-| 120 | `function` | `const git = (args: string[], cwd = cache) => ...` |
-| 141 | `interface` | `export interface DiscoveredSkill` |
-| 152 | `function` | `export function discoverSourceSkills(sourceDir: string):` |
-| 157 | `function` | `const walk = (dir: string, depth: number) => ...` |
-| 197 | `function` | `export function installedSkillNames(targetDirs: string[]): Set<string>` |
-| 206 | `function` | `function findSkillNames(dir: string, out: Set<string>, depth: number): void` |
-| 241 | `function` | `export async function importSkills(opts:` |
-| 320 | `interface` | `export interface SkillPackManifest` |
-| 327 | `interface` | `export interface SkillPackResult` |
-| 340 | `function` | `export function packSkills(names: string[], searchDirs: string[], outDir: string, origin = 'pack'): SkillPackResult` |
+| 92 | `function` | `export function repoCacheDir(): string` |
+| 97 | `function` | `function repoNameFromSpec(spec: string): string` |
+| 111 | `function` | `export async function resolveSourceDir(spec: string,` |
+| 121 | `function` | `const git = (args: string[], cwd = cache) => ...` |
+| 142 | `interface` | `export interface DiscoveredSkill` |
+| 153 | `function` | `export function discoverSourceSkills(sourceDir: string):` |
+| 158 | `function` | `const walk = (dir: string, depth: number) => ...` |
+| 198 | `function` | `export function installedSkillNames(targetDirs: string[]): Set<string>` |
+| 207 | `function` | `function findSkillNames(dir: string, out: Set<string>, depth: number): void` |
+| 242 | `function` | `export async function importSkills(opts:` |
+| 321 | `interface` | `export interface SkillPackManifest` |
+| 328 | `interface` | `export interface SkillPackResult` |
+| 341 | `function` | `export function packSkills(names: string[], searchDirs: string[], outDir: string, origin = 'pack'): SkillPackResult` |
 
 ### `src/features/skill-registry.ts`
 | Line | Kind | Signature |
@@ -2446,13 +2572,22 @@ graph TD;
 ### `src/daemon/background-tasks.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 12 | `interface` | `export interface BackgroundTask` |
-| 27 | `function` | `function prune()` |
-| 37 | `function` | `export function startBackgroundTask(` |
-| 95 | `function` | `export function killTask(id: string): boolean` |
-| 117 | `function` | `export function getTask(id: string): BackgroundTask \| undefined` |
-| 121 | `function` | `export function listTasks(): BackgroundTask[]` |
-| 126 | `function` | `export function describeTask(t: BackgroundTask, maxOutput = 1500): string` |
+| 20 | `interface` | `export interface BackgroundTask` |
+| 42 | `function` | `function statePathFor(cwd: string): string` |
+| 46 | `function` | `function writeLedger(dir: string \| undefined, list: BackgroundTask[]): void` |
+| 65 | `function` | `function persist(): void` |
+| 69 | `function` | `function prune()` |
+| 79 | `function` | `function isPidAlive(pid?: number): boolean` |
+| 90 | `function` | `export function startBackgroundTask(` |
+| 118 | `function` | `const flush = (force = false) => ...` |
+| 168 | `function` | `export function killTask(id: string): boolean` |
+| 191 | `function` | `export function getTask(id: string): BackgroundTask \| undefined` |
+| 195 | `function` | `export function listTasks(): BackgroundTask[]` |
+| 201 | `function` | `function readLedger(cwd: string): BackgroundTask[]` |
+| 216 | `function` | `export function listPersistedTasks(cwd: string): BackgroundTask[]` |
+| 233 | `function` | `export function getPersistedTask(id: string, cwd: string): BackgroundTask \| undefined` |
+| 240 | `function` | `export function killPersistedTask(id: string, cwd: string): boolean` |
+| 267 | `function` | `export function describeTask(t: BackgroundTask, maxOutput = 1500): string` |
 
 ### `src/daemon/cron.ts`
 | Line | Kind | Signature |
@@ -2483,26 +2618,26 @@ graph TD;
 | 37 | `interface` | `export interface DaemonAuth` |
 | 42 | `function` | `export function isTokenExpired(auth: Pick<DaemonAuth, 'expiresAt'>, now = Date.now()): boolean` |
 | 47 | `function` | `export function rotateAuth(auth: DaemonAuth, now = Date.now()):` |
-| 55 | `function` | `export function daemonInfoPath(workspaceDir: string): string` |
-| 59 | `function` | `export function readDaemonInfo(workspaceDir: string): DaemonInfo \| undefined` |
-| 78 | `function` | `function pidAlive(pid: number): boolean` |
-| 88 | `function` | `function timingSafeEqualStr(a: string, b: string): boolean` |
-| 96 | `function` | `export function daemonRunning(workspaceDir: string): boolean` |
-| 101 | `function` | `function writeInfo(workspaceDir: string, info: DaemonInfo): void` |
-| 116 | `function` | `export async function startDaemon(opts:` |
-| 149 | `function` | `export async function startDaemonInProcess(opts:` |
-| 164 | `function` | `const persist = () => ...` |
-| 195 | `function` | `const runDue = async () => ...` |
-| 228 | `function` | `function getDashboardHtml(token: string): string` |
-| 320 | `function` | `async function sendGoal()` |
-| 368 | `function` | `function sendQuick(cmd)` |
-| 373 | `function` | `function addMsg(text, type)` |
-| 387 | `function` | `async function handleRequest(` |
-| 394 | `function` | `const send = (code: number, body: unknown) => ...` |
-| 541 | `function` | `const sse = (event: string, data: unknown) => ...` |
-| 547 | `function` | `const onAbort = () => ...` |
-| 578 | `function` | `export async function serverMain(argv: string[]): Promise<void>` |
-| 586 | `function` | `const persist = (port: number) => ...` |
+| 53 | `function` | `export function daemonInfoPath(workspaceDir: string): string` |
+| 57 | `function` | `export function readDaemonInfo(workspaceDir: string): DaemonInfo \| undefined` |
+| 76 | `function` | `function pidAlive(pid: number): boolean` |
+| 86 | `function` | `function timingSafeEqualStr(a: string, b: string): boolean` |
+| 94 | `function` | `export function daemonRunning(workspaceDir: string): boolean` |
+| 99 | `function` | `function writeInfo(workspaceDir: string, info: DaemonInfo): void` |
+| 114 | `function` | `export async function startDaemon(opts:` |
+| 154 | `function` | `export async function startDaemonInProcess(opts:` |
+| 169 | `function` | `const persist = () => ...` |
+| 200 | `function` | `const runDue = async () => ...` |
+| 233 | `function` | `function getDashboardHtml(token: string): string` |
+| 325 | `function` | `async function sendGoal()` |
+| 373 | `function` | `function sendQuick(cmd)` |
+| 378 | `function` | `function addMsg(text, type)` |
+| 392 | `function` | `async function handleRequest(` |
+| 399 | `function` | `const send = (code: number, body: unknown) => ...` |
+| 546 | `function` | `const sse = (event: string, data: unknown) => ...` |
+| 552 | `function` | `const onAbort = () => ...` |
+| 583 | `function` | `export async function serverMain(argv: string[]): Promise<void>` |
+| 591 | `function` | `const persist = (port: number) => ...` |
 
 ### `src/daemon/scheduler.ts`
 | Line | Kind | Signature |
@@ -2612,6 +2747,12 @@ graph TD;
 | 202 | `method` | `stats():` |
 | 213 | `method` | `private trimCompleted(): void` |
 
+### `src/core/greenfield.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 19 | `function` | `export function expectsFileOutput(` |
+| 35 | `function` | `export function isGreenfieldTask(` |
+
 ### `src/core/mutation.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -2628,7 +2769,7 @@ graph TD;
 | 10 | `interface` | `interface ClassifyInput` |
 | 17 | `type` | `export type OneShotKind` |
 | 49 | `function` | `export function classifyOneShot(input: ClassifyInput):` |
-| 95 | `function` | `export function classifyContentOnly(input: ClassifyInput): boolean` |
+| 97 | `function` | `export function classifyContentOnly(input: ClassifyInput): boolean` |
 
 ### `src/core/output-condenser.ts`
 | Line | Kind | Signature |
@@ -2670,10 +2811,10 @@ graph TD;
 | :--- | :--- | :--- |
 | 6 | `type` | `export type TaskKind` |
 | 19 | `function` | `export function classifyTaskKind(task: Pick<Task, 'title' \| 'description' \| 'role'>): TaskKind` |
-| 60 | `function` | `export function resolveAutoReasoning(kind: TaskKind): 'low' \| 'medium' \| 'high' \| 'max'` |
-| 79 | `function` | `export function isSimpleScriptTask(task: Task): boolean` |
-| 93 | `function` | `export function isTrivialWriteTask(task: Task): boolean` |
-| 100 | `function` | `export function kindHint(kind: TaskKind): string` |
+| 67 | `function` | `export function resolveAutoReasoning(kind: TaskKind): 'low' \| 'medium' \| 'high' \| 'max'` |
+| 86 | `function` | `export function isSimpleScriptTask(task: Task): boolean` |
+| 100 | `function` | `export function isTrivialWriteTask(task: Task): boolean` |
+| 107 | `function` | `export function kindHint(kind: TaskKind): string` |
 
 ### `src/core/test-density.ts`
 | Line | Kind | Signature |
@@ -2690,9 +2831,9 @@ graph TD;
 | 25 | `function` | `function hasProjectMarker(dir: string): boolean` |
 | 38 | `function` | `function nearestProjectRoot(dir: string): string \| undefined` |
 | 47 | `function` | `export function autoTestCommand(cwd: string, fileScope: string[] \| undefined): string \| null` |
-| 150 | `function` | `export function isWeakVerification(command: string \| undefined): boolean` |
-| 171 | `function` | `export function cwdForScope(cwd: string, fileScope: string[] \| undefined): string \| undefined` |
-| 199 | `function` | `export function withCwd(cmd: string, dir: string \| undefined): string` |
+| 163 | `function` | `export function isWeakVerification(command: string \| undefined): boolean` |
+| 187 | `function` | `export function cwdForScope(cwd: string, fileScope: string[] \| undefined): string \| undefined` |
+| 215 | `function` | `export function withCwd(cmd: string, dir: string \| undefined): string` |
 
 ### `src/core/tool-dispatcher.ts`
 | Line | Kind | Signature |
@@ -2821,7 +2962,7 @@ graph TD;
 | 71 | `method` | `private loadUserProfiles()` |
 | 107 | `method` | `get(role: string): AgentProfile \| undefined` |
 | 111 | `method` | `list(): AgentProfile[]` |
-| 116 | `function` | `export function loadDefaultProfiles(): AgentProfile[]` |
+| 119 | `function` | `export function loadDefaultProfiles(): AgentProfile[]` |
 
 ### `src/agent/error-diagnostics.ts`
 | Line | Kind | Signature |
@@ -2847,62 +2988,63 @@ graph TD;
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
 | 79 | `function` | `export function stripThinkTags(text: string): string` |
-| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
-| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
-| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
-| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
-| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
-| 257 | `interface` | `export interface AgentOptions` |
-| 282 | `type` | `export type AgentStopReason` |
-| 293 | `interface` | `export interface AgentResult` |
-| 306 | `class` | `export class Agent` |
-| 430 | `method` | `private stallKey(): string` |
-| 437 | `method` | `private syncStallBudget(): void` |
-| 442 | `method` | `private bumpStallRetries(): void` |
-| 514 | `method` | `private resolveReasoning(task: Task): 'off' \| 'low' \| 'medium' \| 'high' \| 'max'` |
-| 534 | `method` | `async run(task: Task): Promise<AgentResult>` |
-| 1027 | `function` | `const newCallController = () => ...` |
-| 1029 | `function` | `const innerAbort = () => ...` |
-| 1035 | `function` | `const gatherStream = async (messages: any) => ...` |
-| 1052 | `function` | `const maybeSpecExec = (tcIndex: number) => ...` |
-| 1092 | `function` | `const suppressReasoning = () => ...` |
-| 1400 | `function` | `const boundedGather = async (messages: any) => ...` |
-| 1402 | `function` | `const stall = (resolve: (v: { __timedOut: true }) => ...` |
-| 1773 | `function` | `const isMutating = (c: ToolCall) => ...` |
-| 2252 | `method` | `private pickProvider(): ReturnType<typeof createProvider>` |
-| 2291 | `function` | `const est = () => ...` |
-| 2401 | `function` | `const gen = (async () => ...` |
-| 2442 | `method` | `private pickAlternateModel(): string \| undefined` |
-| 2460 | `method` | `private setActiveModel(modelId: string): void` |
-| 2470 | `method` | `private switchToNextProvider(): boolean` |
-| 2499 | `method` | `private isReadOnly(name: string): boolean` |
-| 2514 | `method` | `private vetoToolCall(c: ToolCall, reason: string)` |
-| 2519 | `method` | `private trackFileChange(name: string, args: Record<string, unknown>, toolResult?:` |
-| 2548 | `method` | `private trackToolResultHash(toolName: string, output: string): void` |
-| 2711 | `method` | `steer(text: string): void` |
-| 2718 | `method` | `private drainSteerQueue(): boolean` |
-| 2912 | `method` | `private fanoutConfig(config: import('../types.js').ModelConfig, index?: number): import('../types.js').ModelConfig` |
-| 3365 | `method` | `private parseArgs(raw: string): Record<string, unknown>` |
-| 3426 | `method` | `private extractToolCallsFromText(text: string): Array<` |
-| 3500 | `method` | `private sanitizeVerify(cmd: string): string` |
-| 3599 | `method` | `private checkArtifactCriteria(task: Task): string \| null` |
-| 3636 | `method` | `private specPreflightEnabled(): boolean` |
-| 3692 | `method` | `private maybeSuggestSkill(): void` |
-| 3709 | `method` | `private pulse(iteration: number, _task: Task):` |
-| 3729 | `method` | `private addAttempt(task: Task, strategy: string, actions: string[], result: Attempt['result'], failureReason?: string)` |
-| 3864 | `method` | `private injectStruggleState(iter: number): void` |
-| 3955 | `method` | `private totalToolErrors(): number` |
-| 3969 | `method` | `private injectAutoPlanEscape(failureText: string): void` |
-| 3995 | `method` | `private maybeSelfCritique(task: Task, failureText: string): void` |
-| 4056 | `method` | `private recordDurableState(task: Task): void` |
-| 4068 | `method` | `private recordSuccess(task: Task, _repo: ReturnType<typeof detectRepo>): void` |
-| 4109 | `method` | `private recordFailure(task: Task, summary: string): void` |
-| 4157 | `method` | `private extractTaskRunCommand(task: Task): string \| null` |
-| 4200 | `method` | `private isGitWorkspace(): boolean` |
-| 4236 | `method` | `private shouldSelfReview(_task: Task): boolean` |
-| 4280 | `function` | `const narrativeTimeoutMs = (() => ...` |
-| 4289 | `function` | `const call = async () => ...` |
-| 4562 | `function` | `export function synthesizeSubagentResults(results: string[]): string[]` |
+| 106 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 147 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 172 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 193 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 241 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 273 | `interface` | `export interface AgentOptions` |
+| 298 | `type` | `export type AgentStopReason` |
+| 309 | `interface` | `export interface AgentResult` |
+| 330 | `class` | `export class Agent` |
+| 466 | `method` | `private stallKey(): string` |
+| 473 | `method` | `private syncStallBudget(): void` |
+| 478 | `method` | `private bumpStallRetries(): void` |
+| 550 | `method` | `private resolveReasoning(task: Task): 'off' \| 'low' \| 'medium' \| 'high' \| 'max'` |
+| 570 | `method` | `async run(task: Task): Promise<AgentResult>` |
+| 1068 | `function` | `const newCallController = () => ...` |
+| 1070 | `function` | `const innerAbort = () => ...` |
+| 1079 | `function` | `const cleanupCallController = () => ...` |
+| 1085 | `function` | `const gatherStream = async (messages: any) => ...` |
+| 1102 | `function` | `const maybeSpecExec = (tcIndex: number) => ...` |
+| 1142 | `function` | `const suppressReasoning = () => ...` |
+| 1450 | `function` | `const boundedGather = async (messages: any) => ...` |
+| 1452 | `function` | `const stall = (resolve: (v: { __timedOut: true }) => ...` |
+| 1855 | `function` | `const isMutating = (c: ToolCall) => ...` |
+| 2356 | `method` | `private pickProvider(): ReturnType<typeof createProvider>` |
+| 2395 | `function` | `const est = () => ...` |
+| 2505 | `function` | `const gen = (async () => ...` |
+| 2546 | `method` | `private pickAlternateModel(): string \| undefined` |
+| 2564 | `method` | `private setActiveModel(modelId: string): void` |
+| 2576 | `method` | `private switchToNextProvider(): boolean` |
+| 2607 | `method` | `private isReadOnly(name: string): boolean` |
+| 2622 | `method` | `private vetoToolCall(c: ToolCall, reason: string)` |
+| 2627 | `method` | `private trackFileChange(name: string, args: Record<string, unknown>, toolResult?:` |
+| 2656 | `method` | `private trackToolResultHash(toolName: string, output: string): void` |
+| 2819 | `method` | `steer(text: string): void` |
+| 2826 | `method` | `private drainSteerQueue(): boolean` |
+| 3020 | `method` | `private fanoutConfig(config: import('../types.js').ModelConfig, index?: number): import('../types.js').ModelConfig` |
+| 3479 | `method` | `private parseArgs(raw: string): Record<string, unknown>` |
+| 3540 | `method` | `private extractToolCallsFromText(text: string): Array<` |
+| 3614 | `method` | `private sanitizeVerify(cmd: string): string` |
+| 3728 | `method` | `private checkArtifactCriteria(task: Task): string \| null` |
+| 3765 | `method` | `private specPreflightEnabled(): boolean` |
+| 3821 | `method` | `private maybeSuggestSkill(): void` |
+| 3838 | `method` | `private pulse(iteration: number, _task: Task):` |
+| 3856 | `method` | `private addAttempt(task: Task, strategy: string, actions: string[], result: Attempt['result'], failureReason?: string)` |
+| 3991 | `method` | `private injectStruggleState(iter: number): void` |
+| 4082 | `method` | `private totalToolErrors(): number` |
+| 4096 | `method` | `private injectAutoPlanEscape(failureText: string): void` |
+| 4122 | `method` | `private maybeSelfCritique(task: Task, failureText: string): void` |
+| 4183 | `method` | `private recordDurableState(task: Task): void` |
+| 4195 | `method` | `private recordSuccess(task: Task, _repo: ReturnType<typeof detectRepo>): void` |
+| 4236 | `method` | `private recordFailure(task: Task, summary: string): void` |
+| 4286 | `method` | `private extractTaskRunCommand(task: Task): string \| null` |
+| 4329 | `method` | `private isGitWorkspace(): boolean` |
+| 4365 | `method` | `private shouldSelfReview(_task: Task): boolean` |
+| 4409 | `function` | `const narrativeTimeoutMs = (() => ...` |
+| 4418 | `function` | `const call = async () => ...` |
+| 4695 | `function` | `export function synthesizeSubagentResults(results: string[]): string[]` |
 
 ### `src/agent/speculative.ts`
 | Line | Kind | Signature |
@@ -2919,6 +3061,31 @@ graph TD;
 | 102 | `function` | `export function predictNextFiles(workspaceDir: string, recentlyTouched: string[], limit = 5): string[]` |
 | 132 | `class` | `export class SpeculativeEngine` |
 | 139 | `method` | `async speculate(question: string, context?:` |
+
+### `site/src/CRTWarp.jsx`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 126 | `function` | `export default function CRTWarp(` |
+| 216 | `function` | `const resize = () => ...` |
+| 233 | `function` | `const render = now => ...` |
+| 248 | `function` | `const onPointerMove = event => ...` |
+| 255 | `function` | `const onPointerLeave = () => ...` |
+
+### `site/src/CRTWarpBackground.jsx`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 4 | `function` | `export default function CRTWarpBackground()` |
+
+### `site/src/EngineeringGrid.jsx`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 8 | `function` | `export default function EngineeringGrid(` |
+| 19 | `function` | `const onPointerMove = (e) => ...` |
+
+### `site/src/EngineeringGridBackground.jsx`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 4 | `function` | `export default function EngineeringGridBackground()` |
 
 ### `site/src/Features.jsx`
 | Line | Kind | Signature |
@@ -2996,26 +3163,28 @@ graph TD;
 ### `site/src/anim.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 12 | `function` | `export function SplitText(` |
-| 62 | `function` | `export function BlurText(` |
-| 104 | `function` | `export function AnimatedContent(` |
-| 147 | `function` | `export function CountUp(` |
-| 163 | `function` | `const tick = (now) => ...` |
-| 187 | `function` | `export function ScrollFloat(` |
-| 197 | `function` | `const onScroll = () => ...` |
-| 226 | `function` | `export function ShinyText(` |
-| 231 | `function` | `export function Magnetic(` |
-| 262 | `function` | `export function TiltCard(` |
-| 294 | `function` | `export function GooeyBorder(` |
-| 324 | `function` | `export function Marquee2(` |
-| 342 | `function` | `export function ScrollProgress()` |
-| 345 | `function` | `const onScroll = () => ...` |
-| 364 | `function` | `export function ScrollVelocity(` |
-| 376 | `function` | `const onScroll = () => ...` |
-| 382 | `function` | `const loop = () => ...` |
-| 410 | `function` | `export function Marquee(` |
-| 428 | `function` | `export function DitherBlock(` |
-| 470 | `function` | `export function BenchChart(` |
+| 13 | `function` | `export function SplitText(` |
+| 63 | `function` | `export function BlurText(` |
+| 105 | `function` | `export function AnimatedContent(` |
+| 195 | `function` | `export function EditorialReveal(` |
+| 248 | `function` | `export function StaggerGroup(` |
+| 262 | `function` | `export function CountUp(` |
+| 278 | `function` | `const tick = (now) => ...` |
+| 302 | `function` | `export function ScrollFloat(` |
+| 312 | `function` | `const onScroll = () => ...` |
+| 341 | `function` | `export function ShinyText(` |
+| 346 | `function` | `export function Magnetic(` |
+| 377 | `function` | `export function TiltCard(` |
+| 409 | `function` | `export function GooeyBorder(` |
+| 439 | `function` | `export function Marquee2(` |
+| 457 | `function` | `export function ScrollProgress()` |
+| 460 | `function` | `const onScroll = () => ...` |
+| 479 | `function` | `export function ScrollVelocity(` |
+| 491 | `function` | `const onScroll = () => ...` |
+| 497 | `function` | `const loop = () => ...` |
+| 525 | `function` | `export function Marquee(` |
+| 543 | `function` | `export function DitherBlock(` |
+| 585 | `function` | `export function BenchChart(` |
 
 ### `site/src/icons.jsx`
 | Line | Kind | Signature |
@@ -3096,52 +3265,77 @@ graph TD;
 ### `site/src/pages/benchmarks.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 124 | `function` | `export default function Benchmarks()` |
+| 171 | `function` | `export default function Benchmarks()` |
 
 ### `site/src/pages/changelog.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 12 | `function` | `function formatItem(text)` |
-| 46 | `function` | `export default function Changelog()` |
-| 60 | `function` | `const toggleExpand = (ver) => ...` |
-| 64 | `function` | `const expandAll = () => ...` |
-| 72 | `function` | `const collapseAll = () => ...` |
-| 96 | `function` | `const scrollToRelease = (ver) => ...` |
+| 13 | `function` | `function formatItem(text)` |
+| 47 | `function` | `export default function Changelog()` |
+| 61 | `function` | `const toggleExpand = (ver) => ...` |
+| 68 | `function` | `const expandAll = () => ...` |
+| 76 | `function` | `const collapseAll = () => ...` |
+| 104 | `function` | `const scrollToRelease = (ver) => ...` |
 
 ### `site/src/pages/docs.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 110 | `function` | `export default function Docs()` |
+| 213 | `function` | `export default function Docs()` |
 
 ### `site/src/pages/home.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 119 | `function` | `function HeroSection()` |
-| 181 | `function` | `function StatsTicker()` |
-| 196 | `function` | `function CapabilitiesSection()` |
-| 238 | `function` | `function SpecialistRolesSection()` |
-| 372 | `function` | `function ArchitectureSection()` |
-| 630 | `function` | `function MascotFamilySection()` |
-| 774 | `function` | `function BenchmarksSection()` |
-| 1014 | `function` | `function CodaSection()` |
-| 1018 | `function` | `const copyInstall = () => ...` |
-| 1148 | `function` | `export default function Home()` |
+| 121 | `function` | `function HeroInstallBar()` |
+| 125 | `function` | `const handleCopy = (e) => ...` |
+| 139 | `function` | `const fallbackCopy = () => ...` |
+| 198 | `function` | `function HeroSection()` |
+| 262 | `function` | `function StatsTicker()` |
+| 277 | `function` | `function CapabilitiesSection()` |
+| 500 | `function` | `function SpecialistRolesSection()` |
+| 644 | `function` | `function ArchitectureSection()` |
+| 912 | `function` | `function AutonomousEcosystemSection()` |
+| 1235 | `function` | `function BenchmarksSection()` |
+| 1481 | `function` | `function CodaSection()` |
+| 1485 | `function` | `const copyInstall = () => ...` |
+| 1619 | `function` | `export default function Home()` |
 
 ### `site/src/pages/source.jsx`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 37 | `function` | `export default function Source()` |
+| 38 | `function` | `export default function Source()` |
+
+### `site/public/site.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 100 | `function` | `function openDrawer()` |
+| 107 | `function` | `function closeDrawer()` |
+| 134 | `function` | `function updateScrollState()` |
+| 174 | `function` | `function updateIndicator(target)` |
 
 ### `site/assets/site.js`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 53 | `function` | `function updateIndicator(target)` |
+| 100 | `function` | `function openDrawer()` |
+| 107 | `function` | `function closeDrawer()` |
+| 134 | `function` | `function updateScrollState()` |
+| 174 | `function` | `function updateIndicator(target)` |
 
-### `site/assets/sky.js`
+### `scripts/generate_mascot_gifs.py`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 7 | `function` | `function rand(a, b)` |
-| 8 | `function` | `function pick(arr)` |
+| 16 | `function` | `def draw_speech_bubble(draw, text, tag="MOCHI", tag_bg="#8B67F6", y=70, alpha=1.0)` |
+| 65 | `function` | `def draw_sparkle(draw, cx, cy, radius, color=(168, 85, 247, 220))` |
+| 79 | `function` | `def compile_gif(frame_dir, out_path)` |
+| 93 | `function` | `def generate_docs_gif()` |
+| 165 | `function` | `def generate_benchmarks_gif()` |
+| 243 | `function` | `def generate_changelog_gif()` |
+| 325 | `function` | `def generate_source_gif()` |
+| 402 | `function` | `def generate_home_gif()` |
+
+### `scripts/generate_perfect_mascot_gif.py`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 8 | `function` | `def main()` |
 
 ### `scripts/tui-pty-smoke.ts`
 | Line | Kind | Signature |
@@ -3163,6 +3357,13 @@ graph TD;
 | 51 | `function` | `fn extract_outline(path: &Path) -> String` |
 | 110 | `function` | `fn walk_and_search(` |
 | 203 | `function` | `fn main()` |
+
+### `native/mochi_core/build.rs`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 16 | `function` | `fn main()` |
+| 50 | `function` | `fn find_node_lib_dir() -> Option<String>` |
+| 74 | `function` | `fn find_node_lib_dir() -> Option<String>` |
 
 ### `native/mochi_core/src/acp.rs`
 | Line | Kind | Signature |
@@ -3660,6 +3861,110 @@ graph TD;
 | 22 | `function` | `std::istringstream in(line);` |
 | 61 | `function` | `int main()` |
 
+### `editors/vscode/src/extension.ts`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 8 | `type` | `export type RpcId` |
+| 10 | `interface` | `export interface RpcError` |
+| 15 | `interface` | `export interface RpcMessage` |
+| 27 | `interface` | `interface InitializeResult` |
+| 36 | `interface` | `interface NewSessionResult` |
+| 41 | `interface` | `interface PromptResult` |
+| 45 | `function` | `export function missingBinaryMessage(binary: string): string` |
+| 53 | `function` | `function cfg<T>(key: string, fallback: T): T` |
+| 57 | `function` | `function configBinaryPath(): string` |
+| 62 | `function` | `function configTimeoutMs(): number` |
+| 68 | `function` | `function configMaxHistory(): number` |
+| 74 | `function` | `function configNotifications(): boolean` |
+| 79 | `function` | `export function rpcKey(id: RpcId): string` |
+| 84 | `function` | `export function acpTimeoutMessage(method: string, timeoutMs: number): string` |
+| 89 | `class` | `export class AcpClient` |
+| 103 | `method` | `private constructor(private readonly proc: ChildProcess)` |
+| 138 | `function` | `const onSpawn = () => ...` |
+| 142 | `function` | `const onError = (err: Error) => ...` |
+| 152 | `method` | `private key(id: RpcId): string` |
+| 156 | `method` | `private handleData(chunk: string): void` |
+| 178 | `method` | `private route(msg: RpcMessage): void` |
+| 241 | `method` | `notify(method: string, params?: Record<string, unknown>): void` |
+| 247 | `method` | `async initialize(): Promise<InitializeResult>` |
+| 261 | `method` | `newSession(cwd: string, additionalDirectories?: string[]): Promise<NewSessionResult>` |
+| 268 | `method` | `prompt(sessionId: string, text: string): Promise<PromptResult>` |
+| 275 | `method` | `setMode(sessionId: string, modeId: string): Promise<` |
+| 279 | `method` | `cancel(sessionId: string): void` |
+| 283 | `method` | `close(sessionId: string): Promise<unknown>` |
+| 287 | `method` | `async shutdown(): Promise<void>` |
+| 297 | `method` | `dispose(): void` |
+| 310 | `type` | `type ChatRole` |
+| 312 | `interface` | `interface ChatMessage` |
+| 317 | `function` | `export function escapeHtml(s: string): string` |
+| 321 | `class` | `class MochiChatProvider implements vscode.WebviewViewProvider` |
+| 330 | `method` | `resolveWebviewView(view: vscode.WebviewView): void` |
+| 352 | `method` | `push(message: ChatMessage): void` |
+| 358 | `method` | `appendAssistantChunk(text: string): void` |
+| 368 | `method` | `setModeBadge(mode: string): void` |
+| 372 | `method` | `private trim(): void` |
+| 379 | `method` | `private post(message: Record<string, unknown>): void` |
+| 383 | `method` | `private renderHtml(): string` |
+| 484 | `function` | `function configWorkspaceTrust(): boolean` |
+| 488 | `function` | `async function workspaceRoot(): Promise<string \| undefined>` |
+| 499 | `function` | `function shortSession(id: string): string` |
+| 503 | `function` | `function updateStatusBar(): void` |
+| 520 | `function` | `function notify(kind: 'info' \| 'warn' \| 'error', message: string): void` |
+| 527 | `function` | `function showError(err: unknown): void` |
+| 533 | `function` | `function handleAgentUpdate(sid: string, update: Record<string, unknown>): void` |
+| 580 | `function` | `async function ensureClient(): Promise<AcpClient>` |
+| 622 | `function` | `async function ensureSession(): Promise<string>` |
+| 638 | `function` | `async function cmdNewSession(): Promise<void>` |
+| 667 | `function` | `export function selectionContext(maxChars = 4000): string` |
+| 676 | `function` | `async function sendPrompt(prefill?: string): Promise<void>` |
+| 729 | `function` | `async function cmdPromptSelection(): Promise<void>` |
+| 743 | `function` | `async function cmdToggleMode(): Promise<void>` |
+| 758 | `function` | `async function cmdCancel(): Promise<void>` |
+| 771 | `function` | `async function cmdCheckHealth(): Promise<void>` |
+| 788 | `function` | `async function cmdShowDiff(): Promise<void>` |
+| 814 | `function` | `async function cmdOpenTerminal(): Promise<void>` |
+| 831 | `function` | `export function activate(context: vscode.ExtensionContext): void` |
+| 867 | `function` | `export function deactivate(): void` |
+
+### `editors/vscode/out/extension.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 49 | `function` | `function missingBinaryMessage(binary)` |
+| 54 | `function` | `function cfg(key, fallback)` |
+| 57 | `function` | `function configBinaryPath()` |
+| 61 | `function` | `function configTimeoutMs()` |
+| 67 | `function` | `function configMaxHistory()` |
+| 73 | `function` | `function configNotifications()` |
+| 77 | `function` | `function rpcKey(id)` |
+| 81 | `function` | `function acpTimeoutMessage(method, timeoutMs)` |
+| 85 | `class` | `class AcpClient` |
+| 127 | `function` | `const onSpawn = () => ...` |
+| 131 | `function` | `const onError = (err) => ...` |
+| 239 | `method` | `async initialize()` |
+| 271 | `method` | `async shutdown()` |
+| 295 | `function` | `function escapeHtml(s)` |
+| 298 | `class` | `class MochiChatProvider` |
+| 454 | `function` | `function configWorkspaceTrust()` |
+| 457 | `function` | `async function workspaceRoot()` |
+| 466 | `function` | `function shortSession(id)` |
+| 469 | `function` | `function updateStatusBar()` |
+| 487 | `function` | `function notify(kind, message)` |
+| 497 | `function` | `function showError(err)` |
+| 502 | `function` | `function handleAgentUpdate(sid, update)` |
+| 556 | `function` | `async function ensureClient()` |
+| 599 | `function` | `async function ensureSession()` |
+| 616 | `function` | `async function cmdNewSession()` |
+| 644 | `function` | `function selectionContext(maxChars = 4000)` |
+| 653 | `function` | `async function sendPrompt(prefill)` |
+| 706 | `function` | `async function cmdPromptSelection()` |
+| 720 | `function` | `async function cmdToggleMode()` |
+| 735 | `function` | `async function cmdCancel()` |
+| 748 | `function` | `async function cmdCheckHealth()` |
+| 765 | `function` | `async function cmdShowDiff()` |
+| 796 | `function` | `async function cmdOpenTerminal()` |
+| 813 | `function` | `function activate(context)` |
+| 835 | `function` | `function deactivate()` |
+
 ### `dogfood/addition.ts`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -3668,24 +3973,504 @@ graph TD;
 ### `docs/site.js`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 53 | `function` | `function updateIndicator(target)` |
-
-### `docs/sky.js`
-| Line | Kind | Signature |
-| :--- | :--- | :--- |
-| 7 | `function` | `function rand(a, b)` |
-| 8 | `function` | `function pick(arr)` |
+| 100 | `function` | `function openDrawer()` |
+| 107 | `function` | `function closeDrawer()` |
+| 134 | `function` | `function updateScrollState()` |
+| 174 | `function` | `function updateIndicator(target)` |
 
 ### `docs/assets/site.js`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 53 | `function` | `function updateIndicator(target)` |
+| 100 | `function` | `function openDrawer()` |
+| 107 | `function` | `function closeDrawer()` |
+| 134 | `function` | `function updateScrollState()` |
+| 174 | `function` | `function updateIndicator(target)` |
 
-### `docs/assets/sky.js`
+### `docs/assets/source-0Y3xZOkG.js`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
-| 7 | `function` | `function rand(a, b)` |
-| 8 | `function` | `function pick(arr)` |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-AuR3tyW7.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
 
 ### `docs/assets/source-B6TwvHHt.js`
 | Line | Kind | Signature |
@@ -3700,6 +4485,249 @@ graph TD;
 | 172 | `method` | `private send(msg: any)` |
 | 182 | `function` | `export function readPss(pid)` |
 | 192 | `function` | `export async function measureColdStartup()` |
+
+### `docs/assets/source-BERdsDTL.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
 
 ### `docs/assets/source-BJgQk2I_.js`
 | Line | Kind | Signature |
@@ -3958,6 +4986,978 @@ graph TD;
 | 182 | `function` | `export function readPss(pid)` |
 | 192 | `function` | `export async function measureColdStartup()` |
 
+### `docs/assets/source-BZlwLczV.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-BZod_rKi.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-BoYul75H.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-C8dn13dk.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
 ### `docs/assets/source-CDJ8S8sj.js`
 | Line | Kind | Signature |
 | :--- | :--- | :--- |
@@ -3971,6 +5971,249 @@ graph TD;
 | 172 | `method` | `private send(msg: any)` |
 | 182 | `function` | `export function readPss(pid)` |
 | 192 | `function` | `export async function measureColdStartup()` |
+
+### `docs/assets/source-CdSLnqyJ.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
 
 ### `docs/assets/source-CnVR6x7P.js`
 | Line | Kind | Signature |
@@ -4242,6 +6485,1221 @@ graph TD;
 | 172 | `method` | `private send(msg: any)` |
 | 182 | `function` | `export function readPss(pid)` |
 | 192 | `function` | `export async function measureColdStartup()` |
+
+### `docs/assets/source-DPnyiMM9.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-D__W0oqB.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-Dc-ZdRDH.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-Ddh5Vmwq.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
+
+### `docs/assets/source-DfuZkRw6.js`
+| Line | Kind | Signature |
+| :--- | :--- | :--- |
+| 79 | `function` | `export function stripThinkTags(text: string): string` |
+| 104 | `function` | `function commandAvailable(command: string, cwd: string): boolean` |
+| 145 | `function` | `export function sanitizeVerifyCommand(cmd: string): string` |
+| 170 | `function` | `export function isPlanShaped(text: string): boolean` |
+| 191 | `function` | `export function extractPathsFromCriterion(criterion: string): string[]` |
+| 236 | `function` | `export function isComplexRewritingTask(title: string, description = ''): boolean` |
+| 257 | `interface` | `export interface AgentOptions` |
+| 296 | `type` | `export type LoopPhase` |
+| 299 | `interface` | `export interface IterationTrace` |
+| 324 | `interface` | `export interface TransitionViolation` |
+| 339 | `class` | `export class LoopStateMachine` |
+| 352 | `method` | `beginIteration(i: number): void` |
+| 364 | `method` | `enter(next: LoopPhase): void` |
+| 372 | `method` | `recordToolCalls(n: number): void` |
+| 376 | `method` | `addStreamBytes(n: number): void` |
+| 385 | `method` | `flush(stopReason?: AgentStopReason \| string): IterationTrace \| undefined` |
+| 408 | `interface` | `export interface CodeDiagnostic` |
+| 424 | `function` | `export function parseCompilerDiagnostics(text: string, cwd: string): CodeDiagnostic[]` |
+| 547 | `function` | `export function renderCompilerAdvisory(diagnostics: CodeDiagnostic[]): string` |
+| 592 | `function` | `function opencodeBase(baseUrl: string): boolean` |
+| 596 | `function` | `function resolveModelForBase(baseUrl: string, model: string): string` |
+| 611 | `function` | `export function resolveProvider(config: ModelConfig): ProviderConfig` |
+| 619 | `function` | `export function selectModel(config: ModelConfig, profile: ModelProfile): string` |
+| 623 | `function` | `export function createProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 647 | `function` | `export function withFailover(chain: RawProvider[], primaryName: string): RawProvider` |
+| 675 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 699 | `function` | `function createRawProvider(config: ModelConfig, profile?: ModelProfile)` |
+| 711 | `function` | `function kindOf(id: string): 'openai' \| 'anthropic' \| 'gemini' \| undefined` |
+| 717 | `interface` | `interface RawProvider` |
+| 718 | `method` | `streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 719 | `method` | `chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 733 | `function` | `function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved: ProviderConfig)` |
+| 784 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], opts?:` |
+| 802 | `function` | `function isPermanent(err: unknown): boolean` |
+| 814 | `function` | `export function resetCapabilityRegistry()` |
+| 823 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 828 | `function` | `export function createAnthropicProvider(config: ProviderConfig)` |
+| 837 | `function` | `const sysText = (msgs: ChatMessage[]) => ...` |
+| 838 | `function` | `const sysMsg = (msgs: ChatMessage[]) => ...` |
+| 843 | `function` | `const bodyMsg = (m: ChatMessage) => ...` |
+| 893 | `function` | `async function chat(messages: ChatMessage[], tools: ToolDefinition[], options?:` |
+| 957 | `function` | `function logBackoff(attempt: number, delayMs: number, err: unknown): void` |
+| 962 | `interface` | `export interface ProviderConfig` |
+| 969 | `function` | `function toOpenAITools(tools: ToolDefinition[])` |
+| 995 | `function` | `function openAITools(tools: ToolDefinition[])` |
+| 1004 | `function` | `export function createOpenAIProvider(config: ProviderConfig)` |
+| 1016 | `function` | `function rotateCredentials(err: unknown): void` |
+| 1035 | `function` | `function mapMessages(messages: ChatMessage[]): Record<string, unknown>[]` |
+| 1127 | `function` | `const onAbort = () => ...` |
+| 1238 | `function` | `function trimIndent(text: string): string` |
+| 1255 | `function` | `export function stripLineNumberGutter(text: string): string` |
+| 1264 | `function` | `export function normalizeRelaxedLine(line: string): string` |
+| 1272 | `function` | `export function findRelaxedUnique(text: string, needle: string):` |
+| 1316 | `method` | `async execute(args, ctx)` |
+| 1424 | `interface` | `interface HunkLine` |
+| 1429 | `interface` | `interface FilePatch` |
+| 1436 | `function` | `export function parsePatch(patch: string): FilePatch[]` |
+| 1482 | `function` | `function applyHunk(fileLines: string[], hunk: HunkLine[]): string[]` |
+| 1507 | `function` | `export function applyFilePatch(source: string, fp: FilePatch): string` |
+| 1535 | `method` | `async execute(args, ctx)` |
+| 1618 | `method` | `async execute(args, ctx)` |
+| 1668 | `function` | `export function desktopGuiReason(command: string): string \| null` |
+| 1695 | `method` | `async execute(args, ctx)` |
+| 1836 | `function` | `function runDriver(args: string[], timeoutMs: number): Promise<string>` |
+| 1844 | `function` | `const finish = (code: number \| null) => ...` |
+| 1886 | `method` | `async execute(args, ctx)` |
+| 1933 | `function` | `export function summarizeResult(command: string, raw: string): string` |
+| 1968 | `interface` | `interface LangStat` |
+| 1973 | `interface` | `interface DirSummary` |
+| 2024 | `interface` | `export interface CodebaseMapResult` |
+| 2036 | `function` | `export function generateCodebaseMap(` |
+| 2088 | `function` | `function countLines(content: string): number` |
+| 2096 | `function` | `function extractExports(content: string): string[]` |
+| 2123 | `function` | `function scanDir(dir: string, depth: number)` |
+| 2224 | `function` | `export function formatCodebaseMap(res: CodebaseMapResult, detailLevel: 'compact' \| 'standard' \| 'deep' = 'standard'): string` |
+| 2248 | `interface` | `export interface BuiltinMcpServer` |
+| 2361 | `function` | `function yamlSnippet(server: BuiltinMcpServer): string` |
+| 2373 | `interface` | `export interface McpSearchHit` |
+| 2382 | `function` | `export function searchMcpServers(query: string, limit = 8): McpSearchHit[]` |
+| 2422 | `interface` | `export interface McpAddResult` |
+| 2433 | `function` | `export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult` |
+| 2481 | `method` | `async execute(args, ctx)` |
+| 2532 | `function` | `function getTsCompiler(): typeof import('typescript') \| null` |
+| 2541 | `interface` | `export interface ASTDiagnosticError` |
+| 2548 | `interface` | `export interface ASTDiagnosticResult` |
+| 2555 | `function` | `export function validateTypeScriptSyntax(filePath: string, content: string): ASTDiagnosticResult` |
+| 2607 | `function` | `export function validateRelativeImports(filePath: string, content: string): ASTDiagnosticResult` |
+| 2659 | `function` | `export function validateJSON(content: string): ASTDiagnosticResult` |
+| 2683 | `function` | `export function validateBalancedStructure(content: string, language: string): ASTDiagnosticResult` |
+| 2809 | `interface` | `export interface HygieneFinding` |
+| 2819 | `function` | `function isTestLike(file: string): boolean` |
+| 2823 | `function` | `function codeFile(file: string): boolean` |
+| 2827 | `interface` | `interface Rule` |
+| 2846 | `function` | `export function scanDiffForHygiene(diff: string): HygieneFinding[]` |
+| 2885 | `function` | `export function renderHygieneFindings(f: HygieneFinding[]): string` |
+| 2906 | `interface` | `export interface ExecutionRequest` |
+| 2914 | `type` | `export type ExecutionStatus` |
+| 2916 | `interface` | `export interface ExecutionRecord` |
+| 2929 | `interface` | `export interface RegistryOptions` |
+| 2941 | `function` | `export function argsKey(args: Record<string, unknown>): string` |
+| 2950 | `function` | `function stableStringify(value: unknown): string` |
+| 2960 | `class` | `export class ExecutionRegistry` |
+| 2981 | `method` | `register(request: ExecutionRequest): ExecutionRecord` |
+| 3034 | `method` | `markCompleted(executionId: string, result: unknown): void` |
+| 3045 | `method` | `markFailed(executionId: string, error: unknown): void` |
+| 3056 | `method` | `markCanceled(executionId: string): void` |
+| 3069 | `method` | `cancelAll(reason?: string): number` |
+| 3083 | `method` | `get(executionId: string): ExecutionRecord \| undefined` |
+| 3087 | `method` | `isRunning(executionId: string): boolean` |
+| 3091 | `method` | `stats():` |
+| 3102 | `method` | `private trimCompleted(): void` |
+| 3129 | `interface` | `export interface ToolCallSpec` |
+| 3135 | `class` | `export class ToolDispatcher` |
+| 3143 | `method` | `private canceledResponse(call: ToolCallSpec, reason: string): CapabilityExecutionResponse` |
+| 3157 | `method` | `private duplicateResponse(call: ToolCallSpec, executionId: string, cached: unknown): CapabilityExecutionResponse` |
+| 3179 | `method` | `async dispatchBatch(` |
+| 3318 | `interface` | `export interface TabInfo` |
+| 3334 | `function` | `export function defaultTabTitle(n: number): string` |
+| 3338 | `function` | `export function slugTitle(prompt: string): string` |
+| 3343 | `class` | `export class TabManager` |
+| 3352 | `method` | `list(): TabInfo[]` |
+| 3356 | `method` | `activeTab(): TabInfo` |
+| 3360 | `method` | `activeIndex(): number` |
+| 3364 | `method` | `count(): number` |
+| 3368 | `method` | `get(id: string): TabInfo \| undefined` |
+| 3373 | `method` | `create(title?: string): TabInfo` |
+| 3395 | `method` | `close(idOrIndex: string \| number): TabInfo` |
+| 3426 | `method` | `next(): TabInfo` |
+| 3430 | `method` | `prev(): TabInfo` |
+| 3434 | `method` | `rename(id: string, title: string): TabInfo` |
+| 3444 | `method` | `autoTitle(id: string, prompt: string): boolean` |
+| 3451 | `method` | `setBusy(id: string, busy: boolean): void` |
+| 3457 | `method` | `markUnread(id: string): void` |
+| 3462 | `method` | `clearUnread(id: string): void` |
+| 3476 | `interface` | `export interface TabBarCell` |
+| 3491 | `interface` | `export interface TabBarLayout` |
+| 3510 | `function` | `export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number): TabBarLayout` |
+| 3512 | `function` | `const unreadOf = (t: TabInfo) => ...` |
+| 3516 | `function` | `const fixedOf = (t: TabInfo) => ...` |
+| 3549 | `function` | `export function tabBarHit(layout: TabBarLayout, col: number):` |
+| 3617 | `function` | `export function setTheme(themeId: string): MochiTheme` |
+| 3627 | `function` | `export function rgb(r: number, g: number, b: number): string` |
+| 3632 | `function` | `export function lerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number]` |
+| 3633 | `function` | `const c = (x: number, y: number) => ...` |
+| 3650 | `function` | `export function ellipsize(s: string, max: number): string` |
+| 3655 | `function` | `export function padEnd(s: string, n: number): string` |
+| 3672 | `function` | `export function spinnerFrame(i: number): string` |
+| 3676 | `function` | `export function spinnerColored(i: number): string` |
+| 3683 | `function` | `export function spinnerSweep(i: number, width = 18): string` |
+| 3696 | `function` | `export function thinkingLine(frame: number, note = ''): string` |
+| 3708 | `interface` | `export interface GradientBar` |
+| 3721 | `function` | `function rampColor(pct: number): [number, number, number]` |
+| 3733 | `function` | `export function gradientContextBar(used: number, total: number \| undefined, width = 12, tick = 0): GradientBar` |
+| 3754 | `function` | `export function gradientCacheBar(hitRate: number, width = 10, tick = 0): GradientBar` |
+| 3775 | `interface` | `export interface ContextBar` |
+| 3781 | `function` | `export function contextBar(used: number, total: number \| undefined, width = 6): ContextBar` |
+| 3797 | `function` | `export function formatCost(cost: number): string` |
+| 3804 | `function` | `export function usageText(totalTokens: number, totalCost: number): string` |
+| 3810 | `interface` | `export interface StatusBarModel` |
+| 3829 | `function` | `function modeColor(mode: string): string` |
+| 3862 | `interface` | `export interface ThemeColors` |
+| 3886 | `interface` | `export interface RoleColors` |
+| 3936 | `interface` | `export interface MochiTheme` |
+| 3948 | `function` | `function rgbTo256(r: number, g: number, b: number): number` |
+| 3949 | `function` | `const cube = (v: number) => ...` |
+| 3957 | `function` | `const comp = (x: number) => ...` |
+| 3960 | `function` | `const dist = (a: [number, number, number]) => ...` |
+| 3969 | `function` | `export function parseThemeRgb(s: string, code: 38 \| 48): [number, number, number] \| null` |
+| 3974 | `function` | `function relativeLuminance([r, g, b]: [number, number, number]): number` |
+| 3975 | `function` | `const f = (v: number) => ...` |
+| 3983 | `function` | `export function themeIsDark(t: MochiTheme): boolean` |
+| 3992 | `function` | `export function themeContrastRatio(t: MochiTheme): number \| null` |
+| 4001 | `function` | `function downgradeColorCodes(s: string): string` |
+| 4012 | `function` | `export function canvasBg(): string` |
+| 4020 | `function` | `export function supportsTruecolor(): boolean` |
+| 4029 | `function` | `export function honorsNoColor(): boolean` |
+| 4035 | `function` | `export function prefersReducedMotion(): boolean` |
+| 4044 | `function` | `export function stripThemeColors(t: MochiTheme): MochiTheme` |
+| 4045 | `function` | `const blank = (obj: Record<string, unknown>) => ...` |
+| 4060 | `function` | `export function adaptThemeColors(t: MochiTheme): MochiTheme` |
+| 4063 | `function` | `const downgradeEntries = (obj: Record<string, unknown>) => ...` |
+| 4130 | `interface` | `export interface ChromeLayout` |
+| 4144 | `function` | `export function chromeLayout(opts:` |
+| 4204 | `function` | `export function stripAllAnsi(s: string): string` |
+| 4213 | `function` | `export function scrubAnsiFragments(s: string): string` |
+| 4223 | `function` | `export function terminateRow(line: string): string` |
+| 4241 | `function` | `export function paintCanvasBg(line: string, bg: string): string` |
+| 4267 | `interface` | `export interface McpOAuthConfig` |
+| 4276 | `interface` | `interface CachedToken` |
+| 4282 | `function` | `function expandEnv(s: string): string` |
+| 4286 | `function` | `function storePath(storeDir?: string): string` |
+| 4292 | `function` | `function loadStore(storeDir?: string): Record<string, CachedToken>` |
+| 4301 | `function` | `function saveStore(store: Record<string, CachedToken>, storeDir?: string): void` |
+| 4309 | `function` | `async function exchangeToken(cfg: McpOAuthConfig, params: Record<string, string>): Promise<` |
+| 4330 | `function` | `export async function getOAuthToken(serverId: string, cfg: McpOAuthConfig, storeDir?: string): Promise<string>` |
+| 4381 | `function` | `export async function oauthHeaders(serverId: string, cfg?: McpOAuthConfig, storeDir?: string): Promise<Record<string, string>>` |
+| 4408 | `function` | `async function wikiSummary(query: string, lang: string): Promise<string>` |
+| 4422 | `function` | `function respond(id: number \| string \| null, result: unknown): void` |
+| 4426 | `function` | `function respondError(id: number \| string \| null, code: number, message: string): void` |
+| 4509 | `type` | `export type EpistemicClass` |
+| 4511 | `interface` | `export interface EpistemicClaim` |
+| 4519 | `interface` | `export interface OperationalCheckpoint` |
+| 4532 | `class` | `export class AnchorEngine` |
+| 4541 | `method` | `recordClaim(text: string, classification: EpistemicClass, source?: string): EpistemicClaim` |
+| 4557 | `method` | `verifyClaim(id: string, evidence: string): boolean` |
+| 4569 | `method` | `rejectApproach(approach: string, reason: string): void` |
+| 4573 | `method` | `isApproachRejected(approach: string): boolean` |
+| 4580 | `method` | `createCheckpoint(data: Partial<OperationalCheckpoint> =` |
+| 4600 | `method` | `renderContinuityContext(): string` |
+| 4639 | `type` | `export type ChameleonMode` |
+| 4651 | `type` | `export type StallStrategy` |
+| 4669 | `interface` | `export interface EnhanceOptions` |
+| 4680 | `interface` | `export interface EnhanceResult` |
+| 4734 | `function` | `function tierFor(mode: ChameleonMode): number` |
+| 4761 | `function` | `export function getCachedScaffold(task: string, cwd = process.cwd()): string \| undefined` |
+| 4775 | `function` | `export async function primeScaffold(task: string, cwd = process.cwd(), _unused?: unknown, langs?: readonly string[]): Promise<string>` |
+| 4792 | `function` | `export function synthesizeDeterministicContext(task: string, cwd = process.cwd()): string` |
+| 4814 | `class` | `export class ChameleonEngine` |
+| 4821 | `method` | `async enhance(opts: EnhanceOptions): Promise<EnhanceResult>` |
+| 4911 | `type` | `export type SispisMode` |
+| 4913 | `interface` | `export interface SispisAssessment` |
+| 4925 | `function` | `export function evaluateSispis(prompt: string, upstreamSignalsWeight = 0): SispisAssessment` |
+| 5001 | `interface` | `export interface SandboxOptions` |
+| 5011 | `interface` | `export interface ExecOptions` |
+| 5029 | `interface` | `export interface ExecResult` |
+| 5041 | `function` | `function finishSpawn(` |
+| 5055 | `function` | `const done = (code: number \| null, extra?: { timedOut?: boolean; cancelled?: boolean }) => ...` |
+| 5080 | `function` | `const killTree = (sig: NodeJS.Signals) => ...` |
+| 5090 | `function` | `const onAbort = () => ...` |
+| 5129 | `function` | `export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions =` |
+| 5145 | `function` | `export function runShellString(command: string, opts: ExecOptions &` |
+| 5160 | `function` | `export function execArgvText(cmd: string, args: readonly string[], opts:` |
+| 5177 | `function` | `function defaultSandboxWritable(cwd?: string): string[]` |
+| 5194 | `function` | `export function detectBubblewrap(pathEnv = process.env.PATH ?? ''): string \| null` |
+| 5211 | `function` | `export function buildBubblewrapArgs(` |
+| 5237 | `function` | `export function maybeSandbox(` |
+| 5579 | `function` | `function measureTime(cmd, args, cwd)` |
+| 5586 | `function` | `function measureMem(cmd, args, cwd)` |
+| 5594 | `function` | `function bench(target)` |
 
 ### `docs/assets/source-DkZEuRij.js`
 | Line | Kind | Signature |
