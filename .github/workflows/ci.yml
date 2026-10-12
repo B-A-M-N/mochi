@@ -39,26 +39,21 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             # MSVC links N-API symbols against node.lib at build time (see
             # build.rs). Toolcache node ships WITHOUT node.lib and none exists
-            # anywhere on PATH — fetch the official dist zip for the EXACT
-            # node version (same ABI) and point MOCHI_NODE_LIB_DIR at it.
-            # git-bash tar is GNU tar (no zip support) → PowerShell extracts.
+            # on PATH — fetch the official dist zip for the EXACT node version
+            # (same ABI). Download + extract + locate all happen inside one
+            # PowerShell invocation so the result path is authoritative (a
+            # prior bash-side find on the extracted tree silently saw nothing).
             NODE_VERSION="$(node -v)"
-            mkdir -p /tmp/node-dist
-            if curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip" -o /tmp/node-dist.zip; then
-              echo "win: zip downloaded ($(wc -c < /tmp/node-dist.zip) bytes)"
-              if powershell.exe -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w /tmp/node-dist.zip)' -DestinationPath '$(cygpath -w /tmp/node-dist)'" >/dev/null 2>&1; then
-                NODE_LIB="$(find /tmp/node-dist -name node.lib | head -n 1)"
-                if [ -n "$NODE_LIB" ]; then
-                  export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$NODE_LIB")")"
-                fi
-              else
-                echo "win: Expand-Archive failed"
-              fi
-            else
-              echo "win: node dist download failed"
+            curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip" -o /tmp/node-dist.zip || echo "win: download failed"
+            NODE_LIB_W=$(powershell.exe -NoProfile -Command "
+              Add-Type -AssemblyName System.IO.Compression.FileSystem;
+              [System.IO.Compression.ZipFile]::ExtractToDirectory('$(cygpath -w /tmp/node-dist.zip)', '$(cygpath -w /tmp/node-dist)');
+              (Get-ChildItem -Recurse '$(cygpath -w /tmp/node-dist)' -Filter node.lib | Select-Object -First 1).FullName
+            " 2>&1 | tr -d '\r' | grep -a 'node\.lib' | tail -n 1)
+            if [ -n "$NODE_LIB_W" ]; then
+              export MOCHI_NODE_LIB_DIR="$(cygpath -m "$(dirname "$NODE_LIB_W")")"
             fi
-            echo "win preflight: MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
-            ls "${MOCHI_NODE_LIB_DIR:-/nonexistent}/node.lib" 2>&1 | head -n 1 || true
+            echo "win preflight: NODE_LIB=${NODE_LIB_W:-<none>} MOCHI_NODE_LIB_DIR=${MOCHI_NODE_LIB_DIR:-<unset>}"
           fi
           if command -v rustc >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
             npm run build:native
