@@ -203,14 +203,14 @@ header.site > * {
 .hero {
   min-height: calc(100vh - 40px);
   display: grid;
-  grid-template-columns: 1fr 1.05fr;
+  grid-template-columns: 0.9fr 1.35fr;
   align-items: center;
   position: relative;
   z-index: 1;
-  padding: 120px 4vw 40px;
-  max-width: 1560px;
+  padding: 100px 3.5vw 40px;
+  max-width: 1680px;
   margin: 0 auto;
-  gap: 30px;
+  gap: 20px;
 }
 
 .hero-copy {
@@ -367,71 +367,22 @@ header.site > * {
 .hero-mascot {
   position: relative;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
-  min-height: 480px;
+  min-height: 540px;
   width: 100%;
-}
-
-.hero-mascot-blob {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-42%, -50%);
-  width: 115%;
-  height: 115%;
-  background: radial-gradient(ellipse 65% 58% at 56% 46%, #EBE3FC 0%, #E2D7FA 65%, rgba(226, 215, 250, 0) 100%);
-  border-radius: 46% 54% 50% 50% / 45% 45% 55% 55%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.hero-mascot-dot {
-  position: absolute;
-  top: 14%;
-  right: 6%;
-  width: 36px;
-  height: 36px;
-  background: #D8C9FA;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-  animation: floatGentle 4s ease-in-out infinite;
-}
-
-.hero-mascot-sparkle-left {
-  position: absolute;
-  left: 6%;
-  top: 50%;
-  color: #8A67F6;
-  font-size: 26px;
-  z-index: 3;
-  pointer-events: none;
-  line-height: 1;
 }
 
 .hero-mascot img {
   width: 100%;
-  max-width: 760px;
+  max-width: 980px;
   height: auto;
   display: block;
   position: relative;
   z-index: 2;
-  filter: drop-shadow(0 14px 28px rgba(138, 103, 246, 0.12));
+  filter: drop-shadow(0 14px 32px rgba(138, 103, 246, 0.12));
 }
 
-.hero-mascot-shadow {
-  position: absolute;
-  bottom: 6%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 72%;
-  height: 28px;
-  background: rgba(138, 103, 246, 0.22);
-  border-radius: 50%;
-  filter: blur(14px);
-  z-index: 1;
-}
 
 .mascot-doodle {
   position: absolute;

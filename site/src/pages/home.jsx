@@ -164,13 +164,9 @@ function HeroSection() {
       </div>
 
       <div className="hero-mascot">
-        <div className="hero-mascot-blob" />
-        <div className="hero-mascot-dot" />
-        <div className="hero-mascot-sparkle-left">✦</div>
-        <div className="hero-mascot-shadow" />
         <AnimatedContent direction="right" delay={0.25} duration={0.8}>
           <div style={{ position: 'relative' }}>
-            <Mochi size={740} />
+            <Mochi size={960} />
           </div>
         </AnimatedContent>
       </div>
