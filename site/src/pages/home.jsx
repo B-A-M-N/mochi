@@ -624,145 +624,267 @@ function ArchitectureSection() {
   );
 }
 
-function MascotFamilySection() {
-  const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/mochi') ? '/mochi' : '';
+function AutonomousEcosystemSection() {
+  const [activeStep, setActiveStep] = useState(0);
 
-  const mascots = [
+  const steps = [
     {
-      title: 'Docs Scholar Mochi',
-      role: 'Documentation & Guides',
-      badge: '02 / Docs',
-      href: base + '/docs.html',
-      img: base + '/assets/docs-mascot.gif',
-      desc: 'Wearing tiny round glasses and holding an open purple guidebook. Master of flags, CLI commands, and setup.',
+      id: 'decompose',
+      num: '01',
+      title: 'Task Decomposition',
+      role: 'Lead Orchestrator',
+      tool: 'dag_dispatch',
+      badge: 'TOKEN BUDGET LOCKED',
+      desc: 'Parses ambiguous natural language prompts into a formal dependency DAG. Allocates token quotas per role and locks execution timeouts.',
+      trace: [
+        '$ mochi "add ed25519 jwt verification with redis cache & patch all call sites"',
+        '-> [Lead] Decomposing objective into formal 3-phase execution DAG...',
+        '-> [Lead] Phase 1: architect_slice · Phase 2: ast_patch · Phase 3: test_runner',
+        '-> [Lead] Token budget locked: 8,000 tokens · Abort timeout: 60s',
+      ],
+      metrics: ['1 Objective', '3 DAG Nodes', '0 Ambiguity'],
     },
     {
-      title: 'Speed Racer Mochi',
-      role: 'Benchmarks & Telemetry',
-      badge: '03 / Benchmarks',
-      href: base + '/benchmarks.html',
-      img: base + '/assets/benchmarks-mascot.gif',
-      desc: 'Holding a glowing lightning bolt with pure kinetic energy. 18.2 MB resident RSS and 38.2 ms cold-start TTFI.',
+      id: 'slice',
+      num: '02',
+      title: 'Monorepo AST Slicing',
+      role: 'System Architect',
+      tool: 'ripgrep + ast_slicer',
+      badge: '4.2MS RECONNAISSANCE',
+      desc: 'Uses tree-sitter AST queries and ripgrep searches to build call graphs, identifying exact mutation targets and read-only consumers across monorepos.',
+      trace: [
+        '-> [Architect] Scanning codebase for JwtValidator symbol references...',
+        '-> [Architect] Ripgrep returned 14 candidate files in 4.2ms',
+        '-> [Architect] AST Callgraph: 2 mutation targets, 12 read-only consumers',
+        '-> [Architect] Zero breaking signature changes detected. Handoff to Coder.',
+      ],
+      metrics: ['14 Files Indexed', '2 Targets', '0 Breaking Diffs'],
     },
     {
-      title: 'Builder Release Mochi',
-      role: 'Changelog & Releases',
-      badge: '04 / Changelog',
-      href: base + '/changelog.html',
-      img: base + '/assets/changelog-mascot.gif',
-      desc: 'Wearing a purple builder hardhat celebrating 35 releases shipped, from v0.1.0 bootstrap to v0.22.0 swarms.',
+      id: 'patch',
+      num: '03',
+      title: 'Surgical AST Patching',
+      role: 'Core Coder',
+      tool: 'apply_ast_patch',
+      badge: 'WHITESPACE-TOLERANT',
+      desc: 'Applies whitespace-tolerant unified diffs without dropping imports or surrounding comments. Preserves 100% git blame integrity.',
+      trace: [
+        '-> [Coder] Slicing AST scope: JwtValidator.verifyToken in src/auth/jwt.ts',
+        '-> [Coder] Applying unified diff (+18 lines, -4 lines)',
+        '-> [Coder] Tree-sitter grammar validated: 0 syntax errors, 0 lost imports',
+        '-> [Coder] Atomic working tree patch applied in 8.4ms',
+      ],
+      metrics: ['18 Insertions', '4 Deletions', '100% Blame Preserved'],
     },
     {
-      title: 'Open Source Heart Mochi',
-      role: 'Repository & AST Engine',
-      badge: '05 / Source',
-      href: base + '/source.html',
-      img: base + '/assets/source-mascot.gif',
-      desc: 'Holding an open-source heart with git branch sparkles. 1,600+ authentic files browseable directly in the web UI.',
+      id: 'jail',
+      num: '04',
+      title: 'Sandboxed Verification',
+      role: 'QA Tester',
+      tool: 'bwrap_spawn',
+      badge: 'HARDWARE USER NAMESPACES',
+      desc: 'Compiles and runs test suites inside unprivileged Linux Bubblewrap containers with network egress blocked and host credentials masked.',
+      trace: [
+        '-> [Tester] Spawning ephemeral bwrap container: ~/.ssh & ~/.aws masked (tmpfs)',
+        '-> [Tester] Executing test suite inside container: bun test src/auth/jwt.test.ts',
+        '-> [Tester] Test runner: 28/28 assertions passing (142ms)',
+        '-> [Tester] Zero memory leaks, exit code 0. Handoff to Release Lead.',
+      ],
+      metrics: ['28/28 Passing', '0 Key Leakage', '142ms Duration'],
+    },
+    {
+      id: 'commit',
+      num: '05',
+      title: 'Atomic Git Checkpoint',
+      role: 'Release Lead',
+      tool: 'checkpoint_commit',
+      badge: '12MS ROLLBACK SNAPSHOT',
+      desc: 'Approved passes commit with clean conventional changelog metadata and an instant 12ms rollback snapshot for one-click recovery.',
+      trace: [
+        '-> [Git] Creating commit: "feat(auth): ed25519 jwt verification with redis caching"',
+        '-> [Git] Checkpoint #82f1b4 created · 12ms revert snapshot active',
+        '-> [Git] 100% mechanical verification green. Ready for pull request merge.',
+      ],
+      metrics: ['1 Commit', '1 Checkpoint', '0 Rollback Ghost Files'],
     },
   ];
 
+  const current = steps[activeStep];
+
   return (
-    <section className="section" id="family" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
+    <section className="section" id="pipeline" style={{ maxWidth: 1560, margin: '0 auto', padding: '60px 4vw' }}>
       <AnimatedContent direction="bottom">
         <div className="section-tag-pill">
           <span className="tag-sparkle">✦</span>
           <span className="tag-part-dark">SECTION 05 /</span>
-          <span className="tag-part-purple">MASCOT UNIVERSE</span>
+          <span className="tag-part-purple">AUTONOMOUS SWARM DAG</span>
         </div>
       </AnimatedContent>
 
       <div className="section-head-huge">
         <h2 className="section-title-huge">
-          THE MOCHI <span className="accent-title">MASCOT FAMILY</span>
+          THE SWARM EXECUTION <span className="accent-title">DAG PIPELINE</span>
         </h2>
         <span className="section-arrow-diag-huge">↗</span>
       </div>
 
-      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 640 }}>
-        Each major section of Mochi features its own distinct mascot companion, embodying our softer kind of developer intelligence.
+      <p className="section-desc" style={{ fontSize: 17, color: 'var(--ink-soft)', marginBottom: 40, maxWidth: 700 }}>
+        From ambiguous objective to verified atomic git commit: follow how Mochi coordinates multi-role subagent swarms across directed acyclic graphs.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-        {mascots.map((m, i) => (
-          <AnimatedContent key={m.title} direction="bottom" delay={i * 0.1}>
-            <a
-              href={m.href}
-              style={{
-                textDecoration: 'none',
-                display: 'block',
-                background: '#ffffff',
-                borderRadius: 24,
-                border: '1.5px solid rgba(138, 103, 246, 0.2)',
-                padding: '28px 24px',
-                textAlign: 'center',
-                boxShadow: 'var(--shadow-card)',
-                transition: 'all 0.3s ease',
-              }}
-              className="mascot-family-card"
-            >
-              <div
-                style={{
-                  height: 200,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  marginBottom: 16,
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    width: 140,
-                    height: 140,
-                    borderRadius: '50%',
-                    background: 'radial-gradient(circle, #EAE3FC 0%, rgba(234, 227, 252, 0) 70%)',
-                    zIndex: 0,
-                  }}
-                />
-                <img
-                  src={m.img}
-                  alt={m.title}
-                  style={{
-                    maxHeight: 180,
-                    maxWidth: '100%',
-                    height: 'auto',
-                    position: 'relative',
-                    zIndex: 1,
-                    filter: 'drop-shadow(0 10px 20px rgba(138, 103, 246, 0.15))',
-                    transition: 'transform 0.3s ease',
-                  }}
-                  className="mascot-family-img"
-                />
-              </div>
-
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  background: '#F4EFFE',
-                  color: '#8A67F6',
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  fontWeight: 700,
-                  display: 'inline-block',
-                  marginBottom: 10,
-                }}
-              >
-                {m.badge}
+      {/* Stepper Navigation */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
+        {steps.map((s, idx) => (
+          <button
+            key={s.id}
+            onClick={() => setActiveStep(idx)}
+            style={{
+              padding: '16px 18px',
+              borderRadius: 18,
+              border: activeStep === idx ? '1.5px solid var(--purple)' : '1px solid var(--line)',
+              background: activeStep === idx ? '#1A1633' : '#ffffff',
+              color: activeStep === idx ? '#ffffff' : 'var(--ink)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              transition: 'all 0.25s ease',
+              boxShadow: activeStep === idx ? '0 6px 20px rgba(138, 103, 246, 0.22)' : 'var(--shadow-card)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: activeStep === idx ? '#A78BFA' : '#8A67F6' }}>
+                STAGE {s.num}
               </span>
-
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 6 }}>
-                {m.title}
-              </h3>
-
-              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.55, margin: 0 }}>
-                {m.desc}
-              </p>
-            </a>
-          </AnimatedContent>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', borderRadius: 4, background: activeStep === idx ? 'rgba(255, 255, 255, 0.15)' : '#F4EFFE', color: activeStep === idx ? '#ffffff' : '#8A67F6' }}>
+                {s.role.split(' ')[0]}
+              </span>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>
+              {s.title}
+            </div>
+          </button>
         ))}
+      </div>
+
+      {/* Active Stage Detailed Display */}
+      <div
+        style={{
+          background: '#ffffff',
+          borderRadius: 28,
+          border: '1.5px solid rgba(138, 103, 246, 0.2)',
+          padding: '36px 32px',
+          boxShadow: 'var(--shadow-card)',
+          marginBottom: 40,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, color: '#8A67F6' }}>
+                STAGE {current.num} / {current.title.toUpperCase()}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#F4EFFE', color: '#6D28D9', padding: '3px 10px', borderRadius: 999, fontWeight: 700 }}>
+                {current.role}
+              </span>
+            </div>
+            <p style={{ fontSize: 15, color: 'var(--ink-soft)', margin: 0, maxWidth: 640, lineHeight: 1.6 }}>
+              {current.desc}
+            </p>
+          </div>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#EDE9FE', color: 'var(--purple-dark)', padding: '6px 14px', borderRadius: 999, fontWeight: 700 }}>
+            {current.badge}
+          </span>
+        </div>
+
+        {/* Live Terminal Output Block */}
+        <div style={{ background: '#110F1D', borderRadius: 18, padding: '20px 24px', fontFamily: 'var(--font-mono)', fontSize: 13, border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: 20 }}>
+          <div style={{ color: 'rgba(255, 255, 255, 0.4)', marginBottom: 12, borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <span>mochi-session · agent_trace.log</span>
+            <span style={{ color: '#34D399' }}>● LIVE EXECUTION</span>
+          </div>
+          {current.trace.map((line, i) => (
+            <div
+              key={i}
+              style={{
+                color: line.startsWith('$') ? '#A78BFA' : line.includes('PASS') || line.includes('passing') || line.includes('green') ? '#34D399' : '#E2E8F0',
+                lineHeight: 1.8,
+              }}
+            >
+              {line}
+            </div>
+          ))}
+        </div>
+
+        {/* Metrics Bar */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {current.metrics.map((m, i) => (
+            <span
+              key={i}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                fontWeight: 700,
+                background: '#FAF8FC',
+                color: '#111116',
+                border: '1px solid var(--line)',
+                padding: '6px 14px',
+                borderRadius: 10,
+              }}
+            >
+              ✓ {m}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 6-Card Ecosystem Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>01 / PROTOCOL</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Model Context Protocol (MCP)</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Connects seamlessly to any external MCP tool server over stdio and SSE protocols, enabling custom database, browser, and enterprise tools.
+          </p>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>02 / INFERENCE</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Multi-Provider Router</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Hot-swap OpenCode Zen, Anthropic Claude 3.5 Sonnet, GPT-4o, DeepSeek, and local Ollama mid-session with automatic 429 backoff.
+          </p>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>03 / SECURITY</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Bubblewrap Jail</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Hardware unprivileged namespaces mask your SSH keys, AWS credentials, and environment variables from rogue prompts.
+          </p>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>04 / SYNTAX</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Tree-sitter AST Differ</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Real-time semantic syntax tree parsing across TypeScript, Rust, Python, Go, and C for surgical token-level patch applications.
+          </p>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>05 / VERIFICATION</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Mechanical Gate</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Zero unverified code reaches disk; strict compiler diagnostics, test runners, and static analyzers gate every commit.
+          </p>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: 24, border: '1.5px solid rgba(138, 103, 246, 0.2)', padding: '28px 24px', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#8A67F6', fontWeight: 700, marginBottom: 8 }}>06 / RUNTIME</div>
+          <h4 style={{ fontSize: 18, fontWeight: 800, color: '#111116', marginBottom: 8 }}>Zero-Dep Bun Binary</h4>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+            Compiled into a single self-contained native executable with 18.2 MB peak resident RSS and 38.2 ms cold start.
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -1151,7 +1273,7 @@ export default function Home() {
       <CapabilitiesSection />
       <SpecialistRolesSection />
       <ArchitectureSection />
-      <MascotFamilySection />
+      <AutonomousEcosystemSection />
       <BenchmarksSection />
       <CodaSection />
       <Footer />
