@@ -10,7 +10,7 @@ import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
 import { terminateRow, paintCanvasBg } from './ansi-hygiene.js';
 import { prefersReducedMotion, applyTheme, canvasBg } from './themes.js';
-import { TabManager, tabBarCells, tabBarHit, slugTitle, TAB_HINT_PLAIN } from './tabs.js';
+import { TabManager, tabBarCells, tabBarHit, slugTitle } from './tabs.js';
 import { chromeLayout } from './chrome.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { kvCache } from '../model/kv-cache.js';
@@ -284,12 +284,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const activeIdx = layout.cells.findIndex((c) => c.tabId === activeTabId);
     lastActiveTabRange = (activeIdx >= 0 && layout.ranges[activeIdx]) ? layout.ranges[activeIdx] : null;
 
-    const ACTIVE_BG = '\x1b[48;2;34;28;48m';
-    const PLUS_BG = '\x1b[48;2;38;38;38m';
+    const ACTIVE_BG = '\x1b[48;2;36;30;52m';
+    const PLUS_BG = '\x1b[48;2;30;26;42m';
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
-        return `${PLUS_BG}\x1b[1m\x1b[38;2;220;220;230m${c.plain}${T.reset}`;
+        return `${PLUS_BG}\x1b[1m\x1b[38;2;167;139;250m${c.plain}${T.reset}`;
       }
       const isActive = c.tabId === activeTabId;
       const tab = tabList.find((t) => t.id === c.tabId);
@@ -310,26 +310,54 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         iconColored = isActive ? `${T.act}•` : `${T.grayDark}•`;
       }
 
-      const unread = c.unread ? ` \x1b[38;2;244;63;94m•` : '';
+      const unread = c.unread ? ` \x1b[38;2;251;113;133m●` : '';
 
       if (isActive) {
-        const titleText = `\x1b[1m\x1b[38;2;245;245;250m${c.title}`;
-        const closeText = tabList.length > 1 ? `\x1b[38;2;140;130;165m×` : ' ';
+        const titleText = `\x1b[1m\x1b[38;2;250;250;255m${c.title}`;
+        const closeText = tabList.length > 1 ? `\x1b[38;2;150;140;175m×` : ' ';
         return `${ACTIVE_BG} ${iconColored}${ACTIVE_BG} ${titleText}${unread}${ACTIVE_BG} ${closeText}${T.reset} `;
       } else {
-        const titleText = `\x1b[38;2;140;135;165m${c.title}`;
-        const closeText = tabList.length > 1 ? `\x1b[38;2;85;80;105m×` : ' ';
+        const titleText = `\x1b[38;2;130;125;155m${c.title}`;
+        const closeText = tabList.length > 1 ? `\x1b[38;2;80;75;100m×` : ' ';
         return ` ${iconColored} ${titleText}${unread} ${closeText}${T.reset} `;
       }
     });
 
     const rendered = styled.join('');
     const remaining = Math.max(0, w - layout.width);
-    const hint = TAB_HINT_PLAIN;
-    const hintSuffix = remaining >= hint.length + 3
-      ? `${' '.repeat(remaining - hint.length)}${T.grayDark}${hint}${T.reset}`
+
+    // Dynamic right-aligned context indicators (git branch, active model, and version)
+    // replacing the noisy static keyboard shortcut hints.
+    let rightBadge = '';
+    let rightBadgeLen = 0;
+
+    const branchPart = branch ? `\x1b[38;2;167;139;250m⎇ \x1b[38;2;180;175;205m${branch}\x1b[0m` : '';
+    const branchLen = branch ? 2 + branch.length : 0;
+    const modelPart = modelShort ? `\x1b[38;2;140;135;165m${modelShort}\x1b[0m` : '';
+    const modelLen = modelShort ? modelShort.length : 0;
+    const verPart = `\x1b[38;2;105;100;125mv${pkg.version}\x1b[0m`;
+    const verLen = 1 + pkg.version.length;
+    const dotSep = `\x1b[38;2;85;80;105m · \x1b[0m`;
+
+    if (branchPart && modelPart && verPart && remaining >= branchLen + 3 + modelLen + 3 + verLen + 4) {
+      rightBadge = `${branchPart}${dotSep}${modelPart}${dotSep}${verPart}`;
+      rightBadgeLen = branchLen + 3 + modelLen + 3 + verLen;
+    } else if (branchPart && modelPart && remaining >= branchLen + 3 + modelLen + 4) {
+      rightBadge = `${branchPart}${dotSep}${modelPart}`;
+      rightBadgeLen = branchLen + 3 + modelLen;
+    } else if (modelPart && remaining >= modelLen + 4) {
+      rightBadge = modelPart;
+      rightBadgeLen = modelLen;
+    } else if (branchPart && remaining >= branchLen + 4) {
+      rightBadge = branchPart;
+      rightBadgeLen = branchLen;
+    }
+
+    const rightSuffix = rightBadge && remaining >= rightBadgeLen + 2
+      ? `${' '.repeat(remaining - rightBadgeLen - 1)}${rightBadge} `
       : ' '.repeat(remaining);
-    return `${rendered}${hintSuffix}${T.reset}`;
+
+    return `${rendered}${rightSuffix}${T.reset}`;
   }
 
   /** Click handling for the tab bar (screen row 0, 0-based column). */
@@ -2714,6 +2742,20 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     const apiKey = envKey || storedKey || await ask(`${prov.name} API Key:`);
     if (!apiKey && prov.envKey) { push('error', `No API key for ${prov.id}. Set $${prov.envKey} or enter one.`); return; }
     if (!apiKey) { push('error', 'No API key provided.'); return; }
+    // Real auth: prove keyed credentials before storing. Rejected keys are
+    // never persisted; unreachable endpoints store with a warning.
+    if (prov.envKey) {
+      const { verifyApiKey } = await import('../model/auth-verify.js');
+      const v = await verifyApiKey({ provider: prov.id, baseUrl: prov.baseUrl, apiKey, kind: prov.kind });
+      if (!v.ok && v.reason === 'auth') {
+        push('error', `Key rejected by ${prov.name}: ${v.message} Not stored — check the key and try again.`);
+        scheduleRender();
+        return;
+      }
+      if (!v.ok) push('system', `Warning: could not verify the key (${v.message}) — storing anyway.`);
+      else push('system', `Verified key with ${prov.name}.`);
+      scheduleRender();
+    }
     await run(async () => runtime.loginProvider(prov.id, apiKey, model || prov.defaultModel));
   }
 

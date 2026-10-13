@@ -1,6 +1,7 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Real auth for every provider** — `mochi login` and `/login` now live-probe the key before storing (rejected keys are never persisted; unreachable endpoints store with a warning, never a refusal). New `mochi auth status [--probe]` shows key sources across all 27 providers without ever printing key material, plus `auth logout`. Shipped a tested-but-unwired RFC 8628 device-flow engine for future OAuth (wiring without registered app IDs would be fake — documented as such).
 
 ## [0.25.0] - 2026-10-14
 - **Clean OpenCode-style braille spinner** — restored the classic, rock-solid braille spinner dot with theme-native harmonic breathing glow, eliminating star jitter and outline flicker.

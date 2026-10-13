@@ -1584,10 +1584,81 @@ async function main() {
       console.log(`Set ${p.envKey} or run 'mochi tui' and use /login to input an API key interactively.`);
       return;
     }
+    // Real auth: prove keyed credentials with a live probe before storing.
+    // A rejected key is never persisted (no fake logins); an unreachable
+    // endpoint stores with a warning instead of refusing a good key.
+    if (key && p.envKey) {
+      const { verifyApiKey } = await import('./model/auth-verify.js');
+      const v = await verifyApiKey({ provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind });
+      if (!v.ok && v.reason === 'auth') {
+        console.error(`Key rejected by ${p.name}: ${v.message}. Not stored — check the key and try again.`);
+        process.exit(1);
+      }
+      if (!v.ok) console.error(`Warning: could not verify the key (${v.message}) — storing anyway.`);
+      else console.log(`Verified key with ${p.name}.`);
+    }
     const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel) : await runtime.useProvider(p.id, model || p.defaultModel);
     const { redact } = await import('./security/security.js');
     console.log(redact(info));
     return;
+  }
+  if (first === 'auth') {
+    // mochi auth [status [--probe] | logout [provider]] — credential visibility
+    // across all providers (authenticate with: mochi login <provider>).
+    // Never prints key material: sources only (env/file/local/missing).
+    const { PROVIDERS, providerById } = await import('./model/providers.js');
+    const { isKeyUsable } = await import('./model/startup-check.js');
+    const sub = positional[1] ?? 'status';
+    const activeId = runtime.config.model.provider;
+    const keySource = (p: { id: string; envKey: string }): 'env' | 'file' | 'local' | 'missing' => {
+      if (!p.envKey) return 'local';
+      const envKey = process.env[p.envKey];
+      if (isKeyUsable(envKey)) return 'env';
+      if (p.id === activeId && isKeyUsable(runtime.config.model.apiKey)) return 'file';
+      return 'missing';
+    };
+    if (sub === 'status') {
+      const probing = !!flags.probe;
+      const { verifyApiKey } = await import('./model/auth-verify.js');
+      const rows: string[] = [];
+      const checks = await Promise.all(PROVIDERS.map(async (p) => {
+        const src = keySource(p);
+        const mark = p.id === activeId ? '*' : ' ';
+        let state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
+        if (probing && (src === 'env' || src === 'file')) {
+          const key = src === 'env' ? String(process.env[p.envKey]) : String(runtime.config.model.apiKey);
+          try {
+            const v = await verifyApiKey({ provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind, timeoutMs: 8000 });
+            state += v.ok ? ' · verified' : v.reason === 'auth' ? ' · REJECTED' : ' · unreachable';
+          } catch {
+            state += ' · unreachable';
+          }
+        }
+        return `${mark}${p.id.padEnd(16)} ${state}`;
+      }));
+      for (const r of checks) rows.push(r);
+      console.log(rows.join('\n'));
+      console.log(`\n* = active. Authenticate with: mochi login <provider> (keys are live-probed before storing).${probing ? '' : ' Add --probe to live-verify configured keys.'}`);
+      return;
+    }
+    if (sub === 'logout') {
+      const target = positional[2] ?? activeId;
+      const p = providerById(target);
+      if (!p) { console.error(`Unknown provider: ${target}`); process.exit(1); }
+      if (runtime.config.model.provider !== p.id || !runtime.config.model.apiKey) {
+        console.log(`No stored key for ${p.id} (only the active provider holds a stored key).`);
+        return;
+      }
+      const { loadConfigFile, saveConfigFile } = await import('./model/providers.js');
+      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+      if (cfg.model) delete cfg.model.apiKey;
+      saveConfigFile(cfg as never);
+      runtime.config.model.apiKey = undefined;
+      console.log(`Cleared stored key for ${p.id}. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
+      return;
+    }
+    console.error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider]] (authenticate with: mochi login <provider>)`);
+    process.exit(1);
   }
   if (first === 'models') {
     console.log(runtime.modelList().join('\n') || 'No models listed for ' + runtime.config.model.provider);

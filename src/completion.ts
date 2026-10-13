@@ -62,6 +62,13 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'init', description: 'Create MOCHI.md' },
   { name: 'config', description: 'Show effective configuration' },
   { name: 'login', description: 'Authenticate a provider' },
+  {
+    name: 'auth', description: 'Credential status across providers',
+    subcommands: [
+      { name: 'status', description: 'Show key sources (env/file/missing), --probe live-verifies' },
+      { name: 'logout', description: 'Clear the stored key for a provider' },
+    ],
+  },
   { name: 'models', description: 'List models' },
   { name: 'providers', description: 'List providers' },
   { name: 'model', description: 'Select model' },
