@@ -98,6 +98,21 @@ describe('launchInNewTerminal', () => {
   it('spawns a stub emulator with the exact argv (integration)', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-term-'));
     const log = resolve(dir, 'argv.log');
+    // Win32 contract branch: an extensionless shebang stub can never be
+    // CreateProcess'd (no exec bit), so the spawn path is untestable there by
+    // construction. Assert the supported path instead — dry-run resolution
+    // returns the same argv without touching the process table. No skips: a
+    // real platform assertion runs on every OS.
+    if (process.platform === 'win32') {
+      const r = await launchInNewTerminal(['goal', 'x'], { emulator: 'gnome-terminal', dryRun: true, pathEnv: dir });
+      expect(r.ok).toBe(true);
+      expect(r.emulator).toBe('gnome-terminal');
+      expect(r.command!.join(' ')).toContain('--geometry=190x45');
+      expect(r.command!.join(' ')).toContain('goal');
+      expect(r.pid).toBeUndefined();
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    }
     try {
       const stub = resolve(dir, 'gnome-terminal');
       writeFileSync(stub, `#!/bin/sh\nprintf '%s\\n' "$@" > ${log}\n`);

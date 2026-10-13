@@ -128,7 +128,11 @@ export const createPrTool: Tool = {
     const prUrl = await run('gh', ghArgs, cwd, 60_000);
 
     if (!/https?:\/\/|\.\.\.\/|pull\//i.test(prUrl)) {
-      return `Pushed origin/${branch} (commit ${head}) but gh could not open the PR — is \`gh\` installed and authenticated?\ngh: ${prUrl.slice(0, 300)}`;
+      // Graceful fallback (unauthenticated gh, no network): the git work is
+      // real and pushed — report branch → base so the user can open the PR by
+      // hand. The win32 shard asserts exactly this contract (no exe-level gh
+      // fake is possible there, so the URL branch is unreachable).
+      return `Pushed origin/${branch} (commit ${head}) but gh could not open the PR — is \`gh\` installed and authenticated?\nBranch: ${branch} → ${base}\ngh: ${prUrl.slice(0, 300)}`;
     }
 
     return `Opened PR → ${prUrl}\nBranch: ${branch} → ${base}\nTitle: ${title}\nCommit: ${head}`;

@@ -52,7 +52,10 @@ describe('chatbox ownership (only the user writes user lines)', () => {
   it("only TUI chrome may push('user' transcript lines (composer, command echo, history restore)", () => {
     const offenders: string[] = [];
     for (const f of listTsFiles(srcDir)) {
-      if (f.includes('/tui/')) continue;
+      // Separator-aware chrome detection: win32 reports D:\…\tui\app.ts, so a
+      // literal '/tui/' never matches there and every composer push trips the
+      // guard. Match the segment on either separator.
+      if (/[/\\]tui[/\\]/.test(f)) continue;
       const body = stripComments(readFileSync(f, 'utf8'));
       if (/push\(\s*['"]user['"]/.test(body)) {
         offenders.push(f.replace(srcDir + '/', ''));

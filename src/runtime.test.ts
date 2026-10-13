@@ -352,6 +352,7 @@ describe('Runtime approvePlan', () => {
       expect((rt.goals as any).config.planMode).toBe(true);
     } finally {
       await fake.close();
+      try { rt.close(); } catch { /* best-effort: release SQLite handles (win32 EBUSY) */ }
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);
@@ -420,6 +421,7 @@ describe('Runtime approvePlan', () => {
       expect(saved.some((t) => t.description.includes('do NOT modify anything'))).toBe(false);
     } finally {
       await fake.close();
+      try { rt.close(); } catch { /* best-effort: release SQLite handles (win32 EBUSY) */ }
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);

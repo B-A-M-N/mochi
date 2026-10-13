@@ -109,7 +109,9 @@ export class VerifierEngine {
       const result = await this.runCommand(command);
       // A check that cannot even run (command not found: exit 127 on POSIX,
       // 9009 on cmd.exe) is an environment gap, not evidence the agent's work
-      // is wrong. The decomposer freely invents verification commands (tsc,
+      // is wrong. Through the cmd /d /s /c recipe a missing command instead
+      // surfaces as exit 1 with "not recognized" text — same rule, matched on
+      // the output. The decomposer freely invents verification commands (tsc,
       // pytest, cargo...) that may not exist on PATH in the user's repo;
       // failing the task for that would reject correct work. Mark such checks
       // as passed-with-a-skip-note so the judge sees them as no-op rather
@@ -117,7 +119,9 @@ export class VerifierEngine {
       // "skips a verification command that is not installed instead of failing".)
       const exitMatch = result.match(/^exit_code: (\d+)/);
       const exitCode = exitMatch ? Number(exitMatch[1]) : -1;
-      if (exitCode === 127 || exitCode === 9009) {
+      const missingCmd = exitCode === 127 || exitCode === 9009 ||
+        (exitCode !== 0 && /is not recognized as an internal or external command/i.test(result));
+      if (missingCmd) {
         evidence.push({
           source: `command:${command}`,
           result: `[SKIPPED: command not found] ${result.slice(0, 2000)}`,

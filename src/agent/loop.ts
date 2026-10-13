@@ -59,7 +59,7 @@ import {
   type Lesson,
 } from '../lessons.js';
 import { HookManager } from '../hooks.js';
-import { resolve, extname } from 'node:path';
+import { resolve, extname, sep } from 'node:path';
 import { statSync, existsSync, readFileSync } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { condenseOutput } from '../core/output-condenser.js';
@@ -461,17 +461,20 @@ export class Agent {
 
   /** True when `path` resolves inside one of the fileScope roots. Glob
    *  patterns are honoured when the segment count matches; plain dirs prefix-
-   *  match; relative paths resolve against cwd. Unknown = out of scope. */
+   *  match; relative paths resolve against cwd. Unknown = out of scope.
+   *  Separator-aware: splitting/joining on literal '/' breaks win32, where
+   *  resolve() yields `D:\…` segments (an in-scope retry then vetoes as
+   *  out-of-scope and the deliverable is never written). */
   private pathInScope(path: string, fileScope: string[]): boolean {
     try {
       const abs = resolve(this.cwd, path);
       for (const pattern of fileScope) {
         const absPattern = resolve(this.cwd, pattern);
-        if (abs === absPattern || abs.startsWith(absPattern + '/')) return true;
+        if (abs === absPattern || abs.startsWith(absPattern.endsWith(sep) ? absPattern : absPattern + sep)) return true;
         // Glob support without pulling in minimatch: '*'/'**' segments match
         // any path segments in the same position count.
-        const pSegs = absPattern.split('/');
-        const tSegs = abs.split('/');
+        const pSegs = absPattern.split(sep);
+        const tSegs = abs.split(sep);
         if (pSegs.some((s) => s.includes('*'))) {
           let ok = true;
           let ti = 0;
