@@ -3,12 +3,38 @@ import {
   renderToolCard,
   formatToolInvocationCard,
   formatToolCompletedCard,
+  formatToolDetails,
   describeToolArgs,
   describeToolOutcome,
   renderTurnSummaryCard,
 } from './cards.js';
 
 describe('tool cards', () => {
+  describe('formatToolDetails', () => {
+    it('renders name, permission, description, and the arg table', () => {
+      const text = formatToolDetails({
+        name: 'shell',
+        description: 'Run a shell command.',
+        parameters: [
+          { name: 'command', type: 'string', description: 'The command.', required: true },
+          { name: 'timeout', type: 'number', description: 'Seconds.', required: false },
+        ],
+        permission: 'shell',
+        dangerous: true,
+      });
+      expect(text).toContain('tool: shell [dangerous] (permission: shell)');
+      expect(text).toContain('Run a shell command.');
+      expect(text).toContain('- command (string, required) — The command.');
+      expect(text).toContain('- timeout (number) — Seconds.');
+    });
+
+    it('handles tools with no args', () => {
+      const text = formatToolDetails({ name: 'x', description: 'Does x.', parameters: [] });
+      expect(text).toContain('tool: x');
+      expect(text).toContain('args: none');
+    });
+  });
+
   describe('describeToolArgs', () => {
     it('shows path for file tools', () => {
       expect(describeToolArgs('read', { path: 'src/foo.ts' })).toBe('src/foo.ts');

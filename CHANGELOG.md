@@ -1,6 +1,7 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Interactive /tools browser** — `/tools` opens a menu of every agent tool: inspect any schema, or run it with prompted JSON args through the real executor (cards, audit, and permission checks included). Bare `/` no longer dumps the whole command list or dispatches `/` to the agent.
 - **Real auth for every provider** — `mochi login` and `/login` now live-probe the key before storing (rejected keys are never persisted; unreachable endpoints store with a warning, never a refusal). New `mochi auth status [--probe]` shows key sources across all 27 providers without ever printing key material, plus `auth logout`. Shipped a tested-but-unwired RFC 8628 device-flow engine for future OAuth (wiring without registered app IDs would be fake — documented as such).
 
 ## [0.25.0] - 2026-10-14

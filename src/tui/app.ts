@@ -146,7 +146,7 @@ const COMMANDS = [
   { name: '/test', hint: 'Run the detected repo test command [extra args]' },
   { name: '/checkpoint', hint: 'Save a named git snapshot of the workspace' },
   { name: '/rollback', hint: 'Restore the last checkpoint' },
-  { name: '/tools', hint: 'List available agent tools' },
+  { name: '/tools', hint: 'Browse, inspect & run agent tools' },
   { name: '/branch', hint: 'Branch the current session (forks the transcript, keeps lineage) [title]' },
   { name: '/skip', hint: 'Skip/interrupt current in-flight task' },
   { name: '/stop', hint: 'Interrupt current in-flight task' },
@@ -1135,6 +1135,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   function currentDropItems() {
     const head = state.input.split(' ')[0];
     if (!head.startsWith('/')) return [];
+    // Bare `/`: no popup. Dumping the entire command list on a lone slash
+    // is noise; the dropdown appears once there's a partial to filter by.
+    if (head === '/') return [];
     return COMMANDS.filter((c) => c.name.startsWith(head));
   }
 
@@ -2424,9 +2427,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       });
       return;
     }
-    if (line === '/tools') {
-      const toolNames = runtime.getToolNames?.() ?? ['read', 'write', 'edit', 'delete', 'search', 'glob', 'shell', 'git', 'inspect', 'memory', 'skill', 'todo'];
-      push('system', `${toolNames.length} tools: ${toolNames.join(', ')}`);
+    if (line === '/tools' || line.startsWith('/tools ')) {
+      await toolsMenu(line);
       return;
     }
 
@@ -2759,6 +2761,74 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const out = `exit code: ${r.code ?? (r.timedOut ? 124 : 1)}\n` + String(r.stdout ?? '').slice(0, 6000) + String(r.stderr ?? '').slice(0, 3000);
       return out;
     });
+  }
+
+  /** /tools browser: pick a tool, inspect its schema, or run it with
+   *  prompted JSON args. Runs through the real executor, so cards, audit,
+   *  and permission checks behave exactly like agent-issued calls. */
+  async function toolsMenu(line: string): Promise<void> {
+    const { buildTools, executeTool } = await import('../tools/index.js');
+    const { formatToolDetails } = await import('./cards.js');
+    const tools = buildTools(runtime.config);
+    const names = [...tools.keys()].sort();
+    const arg = (line.length > 6 ? line.slice(6) : '').trim().toLowerCase();
+    const showDetails = (name: string): void => {
+      const t = tools.get(name);
+      if (!t) { push('error', `No tool '${name}'.`); scheduleRender(); return; }
+      push('system', formatToolDetails(t.def));
+      scheduleRender();
+    };
+    const tryTool = async (name: string): Promise<void> => {
+      if (!tools.has(name)) { push('error', `No tool '${name}'.`); scheduleRender(); return; }
+      const raw = await ask(`Args for ${name} as JSON ({} for none, Esc cancels):`);
+      if (!raw.trim()) { push('system', 'Tool run cancelled.'); scheduleRender(); return; }
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('need an object');
+      } catch {
+        push('error', 'Args must be a JSON object, e.g. {"path": "src/x.ts"}.');
+        scheduleRender();
+        return;
+      }
+      const tcId = `tui-${Date.now().toString(36)}`;
+      runtime.events.emit({ type: 'tool:called', tool: name, args: parsed, agentId: 'tui', tool_call_id: tcId });
+      scheduleRender();
+      const r = await executeTool(name, parsed, {
+        cwd: projectRoot,
+        workspace: runtime.workspace,
+        config: runtime.config,
+        events: runtime.events,
+        agentId: 'tui',
+        abortSignal: runtime.signal,
+        callerEmittedEvent: true,
+      }, tools);
+      runtime.events.emit({
+        type: 'tool:completed',
+        tool: name,
+        result: { toolCallId: tcId, name, output: r.output, error: r.error, durationMs: r.durationMs },
+        agentId: 'tui',
+      });
+      scheduleRender();
+    };
+    let pool = names;
+    if (arg) {
+      if (tools.has(arg)) { showDetails(arg); return; }
+      pool = names.filter((n) => n.includes(arg));
+      if (!pool.length) { push('error', `No tools match "${arg}".`); scheduleRender(); return; }
+      if (pool.length === 1) { showDetails(pool[0]); return; }
+    }
+    const items = pool.map((n) => {
+      const desc = String(tools.get(n)!.def.description).split('\n')[0].slice(0, 56);
+      return `${T.cyan}${n.padEnd(22)}${T.reset}  ${T.grayDark}${desc}${T.reset}`;
+    });
+    state.menuSelected = 0;
+    const idx = await openMenu(`Agent Tools (${pool.length})`, items);
+    if (idx < 0 || idx >= pool.length) return;
+    const chosen = pool[idx];
+    const act = await openMenu(`Tool: ${chosen}`, ['Show details', 'Try it (prompt for args)', 'Back']);
+    if (act === 0) showDetails(chosen);
+    else if (act === 1) await tryTool(chosen);
   }
 
   async function loginFlow() {
@@ -3672,6 +3742,14 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         continue;
       }
       if (c === '\r' || c === '\n') {
+        // Bare `/`: nothing to send (the full-list popup is gone by design).
+        // Swallow it in the composer so a stray Enter doesn't dispatch "/"
+        // to the agent — unless a prompt/menu/inspector owns this keystroke.
+        if (state.input.trim() === '/' && !state.menuActive && !state.promptActive && !state.inspectorActive) {
+          i++;
+          scheduleRender();
+          continue;
+        }
         if (state.dropActive) {
           const items = currentDropItems();
           const pick = items[Math.min(state.dropSelected, items.length - 1)];
