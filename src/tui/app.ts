@@ -2699,12 +2699,17 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
     // Step 2: select a model from the chosen provider
     const activeModel = runtime.config.model.model;
+    // Compare bare ids: configured ids are often prefixed (opencode/…) while
+    // provider lists are bare — without stripping, the ACTIVE badge never
+    // highlights and preselect jumps to row 0 even when set correctly.
+    const { bareModelId } = await import('../model/startup-check.js');
+    const activeBare = bareModelId(activeModel);
     const modelItems = prov.models.map((m) => {
-      const active = prov.id === curProvider && m === activeModel;
+      const active = prov.id === curProvider && (m === activeModel || m === activeBare);
       const badge = active ? `${T.lime}[ACTIVE]${T.reset} ` : '        ';
       return `${m.padEnd(36)}  ${badge}`;
     });
-    const curModelIdx = prov.models.indexOf(activeModel);
+    const curModelIdx = prov.models.findIndex((m) => m === activeModel || m === activeBare);
     state.menuSelected = Math.max(0, curModelIdx >= 0 ? curModelIdx : 0);
     const midx = await openMenu(`${prov.name} · Select Model`, modelItems);
     if (midx < 0 || midx >= prov.models.length) return;

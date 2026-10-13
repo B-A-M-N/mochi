@@ -132,8 +132,7 @@ describe('approval gate on the execution path', () => {
     }
   }, 60_000);
 
-  it('read-only tools never prompt even in strict', async () => {
-    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-read-'));
+  it('read-only tools never prompt even in strict', async () => {    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-read-'));
     const fake = await startFakeOpenAI([
       { content: 'Reading.', toolCalls: [{ id: 'r1', type: 'function', function: { name: 'read', arguments: JSON.stringify({ path: 'package.json' }) } }], finishReason: 'tool_calls' },
       { content: 'Read it.', finishReason: 'stop' },
@@ -152,6 +151,41 @@ describe('approval gate on the execution path', () => {
       });
       await agent.run(createTask('Inspect the package manifest and report', 'Read package.json and report its name.'));
       expect(prompts).toBe(0);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('allow-always memory survives across runs sharing one session set', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-session-'));
+    const fake = await startFakeOpenAI([
+      { content: 'First.', toolCalls: [shellCall('s1', 'echo one')], finishReason: 'tool_calls' },
+      { content: 'Done once.', finishReason: 'stop' },
+      { content: 'Again.', toolCalls: [shellCall('s2', 'echo one')], finishReason: 'tool_calls' },
+      { content: 'Done twice.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      let prompts = 0;
+      const handler = async () => { prompts++; return 'allow-always' as const; };
+      // One shared set = one tab session (GoalEngine hands the same set to
+      // every agent it spawns); two separate runs must prompt only once.
+      const shared = new Set<string>();
+      for (const title of ['Run the echo probe and report', 'Run the echo probe again and report']) {
+        const context = new ContextEngine(config, dir);
+        context.setGoal('run echoes');
+        const agent = new Agent({
+          role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context,
+          permPolicy: 'strict', approvalHandler: handler, approvedAlways: shared,
+        });
+        const result = await agent.run(createTask(title, 'Run echo one via shell and report.'));
+        expect(result.success).toBe(true);
+      }
+      expect(prompts).toBe(1);
+      expect(shared.size).toBe(1);
     } finally {
       await fake.close();
       rmSync(dir, { recursive: true, force: true });

@@ -86,6 +86,9 @@ export class GoalEngine {
    *  Set by the host via Runtime.setApprovalHandler / setPermPolicy. */
   approvalHandler?: import('../security/approval.js').ApprovalHandler;
   permPolicy?: string;
+  /** Session "allow always" memory, shared by every agent this engine spawns:
+   *  an approval remembered for the tab session, not just one task run. */
+  readonly approvedAlways = new Set<string>();
 
   /** MCH-81: per-task token/cost attribution, filled as tasks finish. */
   private taskCosts: Array<{ title: string; tokens: number; costUsd: number }> = [];
@@ -615,6 +618,7 @@ Return ONLY the JSON array, no markdown.`;
           promptUser: this.promptUser,
           approvalHandler: this.approvalHandler,
           permPolicy: this.permPolicy,
+          approvedAlways: this.approvedAlways,
         });
         const reviewResult = await this.runAgentWithAutoResume(reviewAgent, goal, task, reviewContext, abortSignal);
         this.goalStats.tokens += reviewResult.tokensUsed;
@@ -800,6 +804,7 @@ Return ONLY the JSON array, no markdown.`;
       promptUser: this.promptUser,
       approvalHandler: this.approvalHandler,
       permPolicy: this.permPolicy,
+      approvedAlways: this.approvedAlways,
     });
     // MCH-74: register as a steer target for the lifetime of the run.
     this.liveAgents.set(task.id, agent);

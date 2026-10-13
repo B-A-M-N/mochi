@@ -308,6 +308,9 @@ export interface AgentOptions {
   /** Permission tier ('yolo' | 'workspace-safe' | 'strict'). Undefined =
    *  strict; headless runs without a handler still allow (audit-only). */
   permPolicy?: string;
+  /** Session "allow always" memory, shared across runs by the host
+   *  (GoalEngine). Defaults to a private set (single-run memory). */
+  approvedAlways?: Set<string>;
 }
 
 export type AgentStopReason =
@@ -359,8 +362,9 @@ export class Agent {
   private promptUser?: PromptUserFn;
   private approvalHandler?: ApprovalHandler;
   private permPolicy?: string;
-  /** Session "allow always" memory: exact (tool, args) keys approved this run. */
-  private approvedAlways = new Set<string>();
+  /** Session "allow always" memory: exact (tool, args) keys approved this run.
+   *  Host-shared (GoalEngine) across runs; private single-run set by default. */
+  private approvedAlways: Set<string>;
   /** Cached PermissionManager, rebuilt when the tier changes (/yolo mid-run). */
   private permMgr?: { policy: PermissionPolicy; mgr: PermissionManager };
   private tools: Map<string, import('../tools/types.js').Tool>;
@@ -583,6 +587,7 @@ export class Agent {
     this.promptUser = opts.promptUser;
     this.approvalHandler = opts.approvalHandler;
     this.permPolicy = opts.permPolicy;
+    this.approvedAlways = opts.approvedAlways ?? new Set<string>();
     this.verifyBaseline = opts.verifyBaseline;
     // A shared run-wide cache is preferred so parallel agents that read the same
     // source file don't each re-read it from disk; the cache is keyed on
