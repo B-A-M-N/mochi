@@ -398,7 +398,7 @@ describe('thinking spinner (radiant star spinner only)', () => {
     const a = thinkingLine(0);
     const b = thinkingLine(3);
     expect(a).not.toBe(b); // still animates
-    expect(plain(a)).toMatch(/[✦✧✶✷✸✹✵★]/); // celestial star
+    expect(plain(a)).toMatch(/[✦✧⟡⟢◈⟣◇]/); // quantum morphic star core
     expect(plain(a)).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // no braille spinning dot
     expect(a).toContain('Thinking');
     expect(plain(a)).not.toContain('━'); // no bar rail
@@ -406,7 +406,7 @@ describe('thinking spinner (radiant star spinner only)', () => {
     const noted = thinkingLine(2, 'running tests');
     expect(noted).toContain('Thinking');
     expect(noted).toContain('running tests');
-    expect(plain(noted)).toMatch(/[✦✧✶✷✸✹✵★]/);
+    expect(plain(noted)).toMatch(/[✦✧⟡⟢◈⟣◇]/);
     expect(plain(noted)).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
   });
 

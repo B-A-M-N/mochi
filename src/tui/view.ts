@@ -105,7 +105,7 @@ export function padEnd(s: string, n: number): string {
 // is selected (e.g. Mochi violet/lavender/white for Mochi Purple, electric cyan
 // for Cyber Void, green/yellow for Matrix). Zero spinning braille dots, zero bars.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const CELESTIAL_STARS = ['✦', '✧', '✶', '✧'];
+const CELESTIAL_STARS = ['✦', '✧', '⟡', '⟢', '◈', '⟣', '◇'];
 
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
