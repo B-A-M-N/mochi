@@ -1,0 +1,72 @@
+// Pure, testable core of `mochi auth` (status/logout). The cli.ts branch
+// stays a thin adapter over these so the coverage ratchet keeps meaning
+// something — untested CLI glue is how gates silently rot.
+
+import type { Provider } from './providers.js';
+import type { verifyApiKey } from './auth-verify.js';
+
+export type KeySource = 'env' | 'file' | 'local' | 'missing';
+
+/** Where does this provider's credential come from (never the key itself). */
+export function keySource(
+  p: Pick<Provider, 'id' | 'envKey'>,
+  activeId: string,
+  envKeyValue: string | undefined,
+  storedKey: string | undefined,
+  usable: (key: string | undefined) => boolean,
+): KeySource {
+  if (!p.envKey) return 'local';
+  if (usable(envKeyValue)) return 'env';
+  if (p.id === activeId && usable(storedKey)) return 'file';
+  return 'missing';
+}
+
+/** One status row per provider (no probing — fast, offline). */
+export function authStatusLines(
+  providers: Array<Pick<Provider, 'id' | 'envKey'>>,
+  activeId: string,
+  lookup: (envKey: string) => string | undefined,
+  storedKey: string | undefined,
+  usable: (key: string | undefined) => boolean,
+): string[] {
+  return providers.map((p) => {
+    const src = keySource(p, activeId, p.envKey ? lookup(p.envKey) : undefined, storedKey, usable);
+    const mark = p.id === activeId ? '*' : ' ';
+    const state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
+    return `${mark}${p.id.padEnd(16)} ${state}`;
+  });
+}
+
+/** Live-verify one configured credential (stubbed in tests, real in CLI). */
+export async function probeKeyState(
+  verify: typeof verifyApiKey,
+  opts: { provider: string; baseUrl: string; apiKey: string; kind: 'openai' | 'anthropic' | 'gemini' },
+): Promise<'verified' | 'REJECTED' | 'unreachable'> {
+  try {
+    const v = await verify({ ...opts, timeoutMs: 8000 });
+    return v.ok ? 'verified' : v.reason === 'auth' ? 'REJECTED' : 'unreachable';
+  } catch {
+    return 'unreachable';
+  }
+}
+
+export interface LogoutOutcome {
+  ok: boolean;
+  message: string;
+  /** True when the caller should persist the cleared config. */
+  cleared: boolean;
+}
+
+/** Decide a logout without touching disk (caller persists on cleared). */
+export function decideLogout(
+  targetId: string,
+  knownProvider: boolean,
+  activeId: string,
+  storedKey: string | undefined,
+): LogoutOutcome {
+  if (!knownProvider) return { ok: false, message: `Unknown provider: ${targetId}`, cleared: false };
+  if (activeId !== targetId || !storedKey) {
+    return { ok: false, message: `No stored key for ${targetId} (only the active provider holds a stored key).`, cleared: false };
+  }
+  return { ok: true, message: `Cleared stored key for ${targetId}.`, cleared: true };
+}

@@ -1608,45 +1608,34 @@ async function main() {
     // Never prints key material: sources only (env/file/local/missing).
     const { PROVIDERS, providerById } = await import('./model/providers.js');
     const { isKeyUsable } = await import('./model/startup-check.js');
+    const { authStatusLines, probeKeyState, decideLogout } = await import('./model/auth-cli.js');
     const sub = positional[1] ?? 'status';
     const activeId = runtime.config.model.provider;
-    const keySource = (p: { id: string; envKey: string }): 'env' | 'file' | 'local' | 'missing' => {
-      if (!p.envKey) return 'local';
-      const envKey = process.env[p.envKey];
-      if (isKeyUsable(envKey)) return 'env';
-      if (p.id === activeId && isKeyUsable(runtime.config.model.apiKey)) return 'file';
-      return 'missing';
-    };
     if (sub === 'status') {
       const probing = !!flags.probe;
       const { verifyApiKey } = await import('./model/auth-verify.js');
-      const rows: string[] = [];
-      const checks = await Promise.all(PROVIDERS.map(async (p) => {
-        const src = keySource(p);
-        const mark = p.id === activeId ? '*' : ' ';
-        let state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
-        if (probing && (src === 'env' || src === 'file')) {
+      const lookup = (k: string): string | undefined => process.env[k];
+      const rows = authStatusLines(PROVIDERS, activeId, lookup, runtime.config.model.apiKey, isKeyUsable);
+      if (probing) {
+        const probed = await Promise.all(PROVIDERS.map(async (p, i) => {
+          const src = rows[i].includes('set (env)') ? 'env' : rows[i].includes('set (file)') ? 'file' : null;
+          if (!src) return rows[i];
           const key = src === 'env' ? String(process.env[p.envKey]) : String(runtime.config.model.apiKey);
-          try {
-            const v = await verifyApiKey({ provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind, timeoutMs: 8000 });
-            state += v.ok ? ' · verified' : v.reason === 'auth' ? ' · REJECTED' : ' · unreachable';
-          } catch {
-            state += ' · unreachable';
-          }
-        }
-        return `${mark}${p.id.padEnd(16)} ${state}`;
-      }));
-      for (const r of checks) rows.push(r);
-      console.log(rows.join('\n'));
+          return `${rows[i]} · ${await probeKeyState(verifyApiKey, { provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind })}`;
+        }));
+        console.log(probed.join('\n'));
+      } else {
+        console.log(rows.join('\n'));
+      }
       console.log(`\n* = active. Authenticate with: mochi login <provider> (keys are live-probed before storing).${probing ? '' : ' Add --probe to live-verify configured keys.'}`);
       return;
     }
     if (sub === 'logout') {
       const target = positional[2] ?? activeId;
-      const p = providerById(target);
-      if (!p) { console.error(`Unknown provider: ${target}`); process.exit(1); }
-      if (runtime.config.model.provider !== p.id || !runtime.config.model.apiKey) {
-        console.log(`No stored key for ${p.id} (only the active provider holds a stored key).`);
+      const out = decideLogout(target, !!providerById(target), activeId, runtime.config.model.apiKey);
+      if (!out.cleared) {
+        if (target && !providerById(target)) process.exit(1);
+        console.log(out.message);
         return;
       }
       const { loadConfigFile, saveConfigFile } = await import('./model/providers.js');
@@ -1654,7 +1643,8 @@ async function main() {
       if (cfg.model) delete cfg.model.apiKey;
       saveConfigFile(cfg as never);
       runtime.config.model.apiKey = undefined;
-      console.log(`Cleared stored key for ${p.id}. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
+      const p = providerById(target)!;
+      console.log(`${out.message} Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
       return;
     }
     console.error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider]] (authenticate with: mochi login <provider>)`);
