@@ -100,50 +100,49 @@ export function padEnd(s: string, n: number): string {
 }
 
 // ---- Thinking spinner ------------------------------------------------------
-// Celestial star + live braille spinner in Mochi purple beside "Thinking…".
-// No ugly bar or sweep rail — just the clean glittering star, loading braille dots,
-// and thinking text.
+// Celestial star spinner beside "Thinking…".
+// Bold, radiant celestial star with high-contrast chromatic glow and specular
+// flashes. Zero spinning braille dots, zero bars.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const SPARKLES = ['✦', '✧', '⋆', '✵', '✶', '✹', '✷', '✸', '✻', '✼'];
-const HARMONIC_STOPS: Array<[number, number, number]> = [
-  [255, 110, 199], // Y2K hot pink
+const CELESTIAL_STARS = ['✦', '✧', '✶', '✷', '✸', '✹', '✵', '★'];
+const STAR_STOPS: Array<[number, number, number]> = [
+  [255, 215, 0],   // vibrant stellar gold
+  [255, 255, 255], // pure specular white-hot flash
+  [255, 110, 199], // Y2K neon hot pink
   [199, 146, 234], // cyber violet
   [170, 150, 255], // neon lavender
-  [121, 184, 255], // periwinkle
   [86, 212, 221],  // electric cyan
-  [100, 235, 200], // ice mint
-  [163, 230, 53],  // acid cyber lime
   [255, 130, 180], // electric rose
-  [180, 140, 255], // deep violet
-  [255, 170, 220], // bubblegum
+  [100, 235, 200], // ice mint glow
 ];
-
-/** Mochi purple (matches the active-tab dot): the primary accent of the line. */
-const THINK_SPIN = '\x1b[38;2;167;139;250m';
 
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
 }
 
 export function sparkleFrame(i: number): string {
-  return SPARKLES[Math.abs(i) % SPARKLES.length];
+  return CELESTIAL_STARS[Math.abs(i) % CELESTIAL_STARS.length];
 }
 
 /**
- * Loading & star spinner beside Thinking:
- * Rotating braille spinner paired with a glittering celestial star.
+ * Luminous celestial star spinner beside Thinking:
+ * High-impact, radiant star animation with specular flashes on supernova states.
  */
 export function spinnerColored(i: number): string {
-  const dot = spinnerFrame(i);
-  const spark = sparkleFrame(i);
-  const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  return `${rgb(c[0], c[1], c[2])}${T.bold}${spark}${T.reset} ${THINK_SPIN}${T.bold}${dot}${T.reset}`;
+  const idx = Math.abs(i);
+  const spark = sparkleFrame(idx);
+  const c = STAR_STOPS[idx % STAR_STOPS.length];
+  const isSupernova = spark === '✸' || spark === '✹';
+  const color = isSupernova ? [255, 255, 255] : c;
+  return `${rgb(color[0], color[1], color[2])}${T.bold}${spark}${T.reset}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
   const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
   const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
-  return `${spinnerColored(frame)} ${T.bold}Thinking…${T.reset}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  const cText = STAR_STOPS[(Math.abs(frame) + 3) % STAR_STOPS.length];
+  const thinkingGlow = `${rgb(cText[0], cText[1], cText[2])}${T.bold}Thinking…${T.reset}`;
+  return `${spinnerColored(frame)} ${thinkingGlow}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
