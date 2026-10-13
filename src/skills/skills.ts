@@ -364,11 +364,12 @@ export function staleSkills(skills: Skill[], now = Date.now()): string[] {
 /** Conflicts: two skills whose name+description overlap >0.8 tokenOverlap —
  *  the model can't choose between near-twins, so surface them for merge. */
 export function skillConflicts(skills: Skill[]): Array<{ a: string; b: string; score: number }> {
+  const active = skills.filter((s) => !s.disableModelInvocation);
   const out: Array<{ a: string; b: string; score: number }> = [];
-  for (let i = 0; i < skills.length; i++) {
-    for (let j = i + 1; j < skills.length; j++) {
-      const score = skillConflictScore(skills[i], skills[j]);
-      if (score > 0.8) out.push({ a: skills[i].name, b: skills[j].name, score: Math.round(score * 100) / 100 });
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      const score = skillConflictScore(active[i], active[j]);
+      if (score > 0.8) out.push({ a: active[i].name, b: active[j].name, score: Math.round(score * 100) / 100 });
     }
   }
   return out;
@@ -384,10 +385,10 @@ function skillConflictScore(a: Skill, b: Skill): number {
   };
   const A = tok(a.name + ' ' + a.description);
   const B = tok(b.name + ' ' + b.description);
-  if (A.size === 0 || B.size === 0) return 0;
+  if (A.size < 4 || B.size < 4) return 0;
   let inter = 0;
   for (const t of A) if (B.has(t)) inter++;
-  return inter / Math.min(A.size, B.size);
+  return (2 * inter) / (A.size + B.size);
 }
 
 function esc(s: string): string {

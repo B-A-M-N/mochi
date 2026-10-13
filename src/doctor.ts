@@ -65,7 +65,10 @@ export async function doctorReport(opts: {
   // Detect toolchain the agent hot paths use.
   const tsAvailable = (() => {
     try {
-      return !!(resolve(process.cwd(), 'node_modules', 'typescript') && existsSync(resolve(process.cwd(), 'node_modules', 'typescript')));
+      if (existsSync(resolve(process.cwd(), 'node_modules', 'typescript'))) return true;
+      if (existsSync(resolve(homedir(), '.npm-global', 'bin', 'tsc'))) return true;
+      execFileSync('tsc', ['--version'], { timeout: 2000, stdio: 'ignore' });
+      return true;
     } catch { return false; }
   })();
   const pyAvailable = ['/usr/bin/python3', '/usr/bin/python', '/opt/homebrew/bin/python3'].some((p) => existsSync(p));
@@ -252,25 +255,32 @@ async function acpHealth(): Promise<{ ok: boolean; detail: string }> {
   }
 }
 
-/** Editor integration health: VS Code CLI present? JetBrains plugin sources shipped? */
+/** Editor integration health: VS Code/Cursor CLI present? JetBrains plugin sources shipped? */
 function editorHealth(): { vscodeInstalled: boolean; jetbrainsPluginPresent: boolean; vscodeCli: boolean } {
   let vscodeCli = false;
-  try {
-    execFileSync('code', ['--version'], { timeout: 5000, stdio: 'ignore' });
-    vscodeCli = true;
-  } catch {
-    vscodeCli = false;
+  for (const bin of ['code', 'cursor']) {
+    try {
+      execFileSync(bin, ['--version'], { timeout: 3000, stdio: 'ignore' });
+      vscodeCli = true;
+      break;
+    } catch { /* try next */ }
   }
   // This build ships editor sources under <root>/editors (npm tarball may exclude them).
   let jetbrainsPluginPresent = false;
   let vscodeInstalled = false;
   try {
-    vscodeInstalled = existsSync(resolve(process.cwd(), 'editors', 'vscode', 'package.json'));
-    jetbrainsPluginPresent = existsSync(resolve(process.cwd(), 'editors', 'jetbrains', 'build.gradle.kts'));
-    if (!vscodeInstalled || !jetbrainsPluginPresent) {
+    const candidates = [
+      resolve(process.cwd(), 'editors'),
+      resolve(homedir(), 'mochi', 'editors'),
+      resolve(dirname(process.execPath), '..', 'editors'),
+    ];
+    try {
       const here = dirname(fileURLToPath(import.meta.url));
-      if (!vscodeInstalled) vscodeInstalled = existsSync(resolve(here, '..', '..', 'editors', 'vscode', 'package.json'));
-      if (!jetbrainsPluginPresent) jetbrainsPluginPresent = existsSync(resolve(here, '..', '..', 'editors', 'jetbrains', 'build.gradle.kts'));
+      candidates.push(resolve(here, '..', '..', 'editors'));
+    } catch { /* virtual fs */ }
+    for (const c of candidates) {
+      if (!vscodeInstalled && existsSync(resolve(c, 'vscode', 'package.json'))) vscodeInstalled = true;
+      if (!jetbrainsPluginPresent && existsSync(resolve(c, 'jetbrains', 'build.gradle.kts'))) jetbrainsPluginPresent = true;
     }
   } catch { /* best-effort */ }
   return { vscodeInstalled, jetbrainsPluginPresent, vscodeCli };
@@ -320,7 +330,7 @@ export function formatDoctor(r: DoctorReport): string {
     `  browser       ${r.browser.driver && r.browser.browsers.length > 0 ? `ok    playwright + ${r.browser.browsers.join(', ')}` : r.browser.driver ? 'MISS  playwright present but no browser binaries (npx playwright install)' : 'MISS  browser driver unavailable (npm i -g playwright)'}`,
     `  skills        ${ok(r.skills.degraded.length === 0)} ${skillLine}`,
     `  acp           ${r.acp ? (r.acp.ok ? 'ok    bridge verified (editors will work)' : `MISS  ${r.acp.detail.slice(0, 90)}`) : 'n/a'}`,
-    `  vscode        ${r.editors ? (r.editors.vscodeCli ? 'ok    `code` CLI on PATH' : r.editors.vscodeInstalled ? 'ok    extension sources shipped (`mochi setup vscode`)' : 'MISS  no `code` CLI and no shipped sources') : 'n/a'}`,
+    `  vscode        ${r.editors ? (r.editors.vscodeCli ? 'ok    `code`/`cursor` CLI on PATH' : r.editors.vscodeInstalled ? 'ok    extension sources shipped (`mochi setup vscode`)' : 'MISS  no editor CLI and no shipped sources') : 'n/a'}`,
     `  jetbrains     ${r.editors ? (r.editors.jetbrainsPluginPresent ? 'ok    plugin sources shipped (`mochi setup jetbrains`)' : 'MISS  plugin sources not in this install') : 'n/a'}`,
     `  onboard       ${r.onboarding ? (r.onboarding.done ? 'ok    first-run setup completed' : 'MISS  run `mochi onboard --yes`') : 'n/a'}`,
     `  theme         ${r.theme.id} (${r.theme.name})${r.theme.stuck ? '  STUCK — relaunch the TUI to pick up theming fixes' : ''}`,
