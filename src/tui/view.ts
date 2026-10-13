@@ -105,16 +105,16 @@ export function padEnd(s: string, n: number): string {
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SPARKLES = ['✦', '✧', '⋆', '✵', '✶', '✹', '✷', '✸', '✻', '✼'];
 const HARMONIC_STOPS: Array<[number, number, number]> = [
-  [199, 146, 234], // soft violet
-  [170, 150, 245], // lavender
-  [140, 165, 255], // periwinkle
-  [121, 184, 255], // act blue
-  [95, 205, 245],  // sky cyan
-  [86, 212, 221],  // turquoise
-  [100, 225, 190], // mint
-  [130, 230, 130], // soft lime
-  [180, 215, 180], // sage
-  [195, 175, 225], // orchid
+  [255, 110, 199], // Y2K hot pink
+  [199, 146, 234], // cyber violet
+  [170, 150, 255], // neon lavender
+  [121, 184, 255], // periwinkle
+  [86, 212, 221],  // electric cyan
+  [100, 235, 200], // ice mint
+  [163, 230, 53],  // acid cyber lime
+  [255, 130, 180], // electric rose
+  [180, 140, 255], // deep violet
+  [255, 170, 220], // bubblegum
 ];
 
 export function spinnerFrame(i: number): string {
@@ -130,39 +130,45 @@ export function spinnerColored(i: number): string {
 }
 
 /**
- * Animated kinetic plasma beam: a glowing quantum laser pulse with
- * harmonic sinusoidal easing that glides smoothly back and forth between
- * two twinkling celestial stars.
+ * Animated Y2K cyber dither wave: liquid chrome pulse with harmonic
+ * sinusoidal easing glides through a dithered matrix (░▒▓━▓▒░) framed
+ * by cyber brackets and twinkling cosmic stars.
  */
 export function spinnerSweep(i: number, width = 8): string {
   const w = Math.max(4, width);
-  const phase = (i * 0.22) % (Math.PI * 2);
+  const phase = (i * 0.28) % (Math.PI * 2);
   const pos = Math.round((Math.sin(phase) * 0.5 + 0.5) * (w - 1));
   const sparkLeft = SPARKLES[Math.abs(i) % SPARKLES.length];
   const sparkRight = SPARKLES[(Math.abs(i) + 5) % SPARKLES.length];
   const cLeft = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  const cRight = HARMONIC_STOPS[(Math.abs(i) + 5) % HARMONIC_STOPS.length];
+  const cRight = HARMONIC_STOPS[(Math.abs(i) + 4) % HARMONIC_STOPS.length];
+  const cBracket = HARMONIC_STOPS[(Math.abs(i) + 2) % HARMONIC_STOPS.length];
 
   const cells: string[] = [];
   for (let x = 0; x < w; x++) {
     const dist = Math.abs(x - pos);
     if (dist === 0) {
-      const c = HARMONIC_STOPS[(Math.abs(i) + x) % HARMONIC_STOPS.length];
-      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}━${T.reset}`);
+      // Blazing illuminated chrome core
+      cells.push(`${rgb(255, 255, 255)}${T.bold}━${T.reset}`);
     } else if (dist === 1) {
-      const c = lerp([70, 80, 110], [121, 184, 255], 0.7);
-      cells.push(`${rgb(c[0], c[1], c[2])}╍${T.reset}`);
+      // Saturated dithered shoulder (75% density)
+      const c = HARMONIC_STOPS[(Math.abs(i) + x) % HARMONIC_STOPS.length];
+      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}▓${T.reset}`);
     } else if (dist === 2) {
-      const c = lerp([50, 55, 75], [199, 146, 234], 0.5);
-      cells.push(`${rgb(c[0], c[1], c[2])}╌${T.reset}`);
+      // Soft dithered falloff (50% density)
+      const c = HARMONIC_STOPS[(Math.abs(i) + x + 2) % HARMONIC_STOPS.length];
+      cells.push(`${rgb(c[0], c[1], c[2])}▒${T.reset}`);
     } else {
-      cells.push(`${TRACK}─${T.reset}`);
+      // Ambient cyber grid background (25% dither)
+      cells.push(`${TRACK}░${T.reset}`);
     }
   }
 
   const left = `${rgb(cLeft[0], cLeft[1], cLeft[2])}${T.bold}${sparkLeft}${T.reset}`;
   const right = `${rgb(cRight[0], cRight[1], cRight[2])}${T.bold}${sparkRight}${T.reset}`;
-  return `${left} ${cells.join('')} ${right}`;
+  const bLeft = `${rgb(cBracket[0], cBracket[1], cBracket[2])}«${T.reset}`;
+  const bRight = `${rgb(cBracket[0], cBracket[1], cBracket[2])}»${T.reset}`;
+  return `${left} ${bLeft}${cells.join('')}${bRight} ${right}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
