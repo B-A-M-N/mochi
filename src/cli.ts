@@ -1606,49 +1606,15 @@ async function main() {
     // mochi auth [status [--probe] | logout [provider]] — credential visibility
     // across all providers (authenticate with: mochi login <provider>).
     // Never prints key material: sources only (env/file/local/missing).
-    const { PROVIDERS, providerById } = await import('./model/providers.js');
-    const { isKeyUsable } = await import('./model/startup-check.js');
-    const { authStatusLines, probeKeyState, decideLogout } = await import('./model/auth-cli.js');
-    const sub = positional[1] ?? 'status';
-    const activeId = runtime.config.model.provider;
-    if (sub === 'status') {
-      const probing = !!flags.probe;
-      const { verifyApiKey } = await import('./model/auth-verify.js');
-      const lookup = (k: string): string | undefined => process.env[k];
-      const rows = authStatusLines(PROVIDERS, activeId, lookup, runtime.config.model.apiKey, isKeyUsable);
-      if (probing) {
-        const probed = await Promise.all(PROVIDERS.map(async (p, i) => {
-          const src = rows[i].includes('set (env)') ? 'env' : rows[i].includes('set (file)') ? 'file' : null;
-          if (!src) return rows[i];
-          const key = src === 'env' ? String(process.env[p.envKey]) : String(runtime.config.model.apiKey);
-          return `${rows[i]} · ${await probeKeyState(verifyApiKey, { provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind })}`;
-        }));
-        console.log(probed.join('\n'));
-      } else {
-        console.log(rows.join('\n'));
-      }
-      console.log(`\n* = active. Authenticate with: mochi login <provider> (keys are live-probed before storing).${probing ? '' : ' Add --probe to live-verify configured keys.'}`);
-      return;
-    }
-    if (sub === 'logout') {
-      const target = positional[2] ?? activeId;
-      const out = decideLogout(target, !!providerById(target), activeId, runtime.config.model.apiKey);
-      if (!out.cleared) {
-        if (target && !providerById(target)) process.exit(1);
-        console.log(out.message);
-        return;
-      }
-      const { loadConfigFile, saveConfigFile } = await import('./model/providers.js');
-      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
-      if (cfg.model) delete cfg.model.apiKey;
-      saveConfigFile(cfg as never);
-      runtime.config.model.apiKey = undefined;
-      const p = providerById(target)!;
-      console.log(`${out.message} Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
-      return;
-    }
-    console.error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider]] (authenticate with: mochi login <provider>)`);
-    process.exit(1);
+    // Unit in ./cli-auth.js (scripted deps); this stays a thin adapter.
+    const { runAuthCommand } = await import('./cli-auth.js');
+    await runAuthCommand({
+      positional, flags, runtime,
+      log: (s: string) => console.log(s),
+      error: (s: string) => console.error(s),
+      exit: (code: number): never => process.exit(code),
+    });
+    return;
   }
   if (first === 'models') {
     console.log(runtime.modelList().join('\n') || 'No models listed for ' + runtime.config.model.provider);
