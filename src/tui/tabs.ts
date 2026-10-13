@@ -208,7 +208,7 @@ export interface TabBarLayout {
 }
 
 /** Plain key-hint suffix (styled by the renderer; measured here). */
-export const TAB_HINT_PLAIN = 'Alt+T new · Alt+W close · Alt+1-8 switch';
+export const TAB_HINT_PLAIN = '';
 
 /** Build the tab-bar cells for a terminal width, truncating titles only as
  *  much as needed so bar + `+ New session` ALWAYS fit (no ellipsize-and-guess).
@@ -282,7 +282,7 @@ export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number
   closeRanges.push(null);
   x += plusW;
 
-  const showHint = x + 1 + visibleCells(TAB_HINT_PLAIN) <= w;
+  const showHint = false;
   return {
     cells,
     ranges,
