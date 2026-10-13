@@ -280,7 +280,7 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 ## Comprehensive Documentation
 
 - **[Technical Architecture Blueprint](docs/ARCHITECTURE.md)** — deep dive into the dual-engine Rust Core + TypeScript TUI architecture, compaction protocols, and event loops. Auto-generated coverage of 298 modules / 3105 symbols via `mochi docgen`.
-- **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 30+ native tools, 73 skills, and MCP/ACP protocols.
+- **[Complete Capabilities Reference](docs/CAPABILITIES.md)** — the 16 specialized agent roles, 70+ native tools, 84 skills, and MCP/ACP protocols.
 - **[Empirical Benchmarks](docs/BENCHMARKS.md)** — standardized PSS memory, TTFF, TTFI, and compaction latency vs jcode, Claude Code, Cursor, Copilot, and OpenCode, with reproducible probe scripts.
 - **[CLI & Interface Reference](docs/CLI_REFERENCE.md)** — complete flags, daemon endpoints, slash commands, and keybindings.
 - **[Editor Integrations](docs/EDITORS.md)** — VS Code, Cursor, JetBrains, Zed, Neovim, Claude Desktop via MCP/ACP stdio servers.
@@ -307,7 +307,7 @@ Mochi
 │   ├── ContextEngine (token budget, compaction, freshness)
 │   ├── RetrievalEngine (files, symbols, references, git history)
 │   ├── Model provider / router / failover
-│   ├── Tool bus (30+ tools, tiered advertising)
+│   ├── Tool bus (70+ tools, tiered advertising)
 │   ├── BudgetEngine
 │   └── Verification / Recovery / Pulse
 ├── Memory
@@ -332,8 +332,8 @@ Mochi
 The runtime loop is `preflight → model → tools → verify → recover → pulse`, with every stage owned in-repo:
 
 1. **Preflight** — context packet built in ~325 ms cold (batched binary probing, fingerprint-cached rules/memory so multi-hundred-iteration tasks don't re-read disk every call).
-2. **Model** — tiered tool advertising (20 lean tools / ~2.6 K tokens on the first call, 56 on demand via `load_tools` recovery), speculative preflight on hard tasks, streaming with mid-stream Ctrl-C abort on the wire.
-3. **Tools** — 30+ tools through a permission-gated bus; every shell command risk-classified (17 destructive + 16 network patterns); output folded head/tail through the Rust core; secrets redacted on every output, trace line, and disk write.
+2. **Model** — tiered tool advertising (21 lean tools / ~3K tokens on the first call, 7 for chat, 16 for research, 65 on demand via `load_tools` recovery), speculative preflight on hard tasks, streaming with mid-stream Ctrl-C abort on the wire.
+3. **Tools** — 70+ tools through a permission-gated bus; every shell command risk-classified (17 destructive + 16 network patterns); output folded head/tail through the Rust core; secrets redacted on every output, trace line, and disk write.
 4. **Verify** — baseline + proportionate verification, independent verifier, outcome judge with rule-based veto on contradictory PASSes.
 5. **Recover** — provider failover, key rotation, model auto-escalation, checkpoint/rollback, warm-start resume.
 6. **Pulse / Struggle injection** — consecutive tool errors, repeated identical tool results (3+ reads of the same content), empty responses, and verification loops are surfaced to the model as a STRUGGLE STATE system message plus an escape-plan directive, so a struggling model never starts its next turn blind to its own failure history. Healthy runs pay nothing (zero-cost no-op).
@@ -438,7 +438,7 @@ Global: `~/.config/mochi/config.json` · Project: `.mochi/config.json`
 | `MOCHI_LIGHT=1` | Disable embedded SQLite index + WASM parser |
 | `FREEINFERENCE_API_KEY=...` | Provider key (or any OpenAI-compatible env) |
 
-**26 built-in providers** — OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Azure, AWS Bedrock, GitHub Models, DeepInfra, Cloudflare Workers AI, HuggingFace, Perplexity, SambaNova, SiliconFlow, Ollama, LM Studio, llama.cpp, OpenCode Zen/Go, FreeInference — all with failover, key-pool rotation, and capability-tier routing. Adding one is a single registry entry plus tests (see the `provider-registration` skill).
+**32 built-in providers** — OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Azure, AWS Bedrock, GitHub Models, DeepInfra, Cloudflare Workers AI, HuggingFace, Perplexity, SambaNova, SiliconFlow, Moonshot/Kimi, MiniMax, Zhipu, Z.AI, Cohere, Alibaba Qwen, Ollama, LM Studio, llama.cpp, OpenCode Zen/Go, FreeInference — all with failover, key-pool rotation, and capability-tier routing. Adding one is a single registry entry plus tests (see the `provider-registration` skill).
 
 Unknown values for `MOCHI_SAFETY` / `MOCHI_SANDBOX` / `MOCHI_REASONING` warn at startup rather than being silently ignored.
 
@@ -548,11 +548,12 @@ The bucket only delays up to the configured refill pace and is a no-op when neit
 
 `mcpServers` entries are stdio MCP servers (spawned per run) or HTTP servers (`{ "url": "https://…", "headers": {...} }` for Streamable-HTTP). Each handshakes over JSON-RPC and its tools register natively as `serverName__toolName` with `network` permission. Failed servers are logged and skipped; a crashed server rejects its pending calls instead of hanging the run. Servers exposing MCP **resources** also get `serverName__resources_list` / `serverName__resources_read` tools.
 
-Skip the JSON hand-editing:
+Skip the JSON hand-editing (24 built-in servers: filesystem, GitHub, Postgres, Brave, Playwright, Context7, Tavily, Firecrawl, Exa, Supabase, Neon, Kubernetes, and more):
 
 ```bash
 mochi mcp search <keywords>    # discover servers (also /mcp search in the TUI)
 mochi mcp add <server-id>      # write .mcp.json for you
+mochi mcp test [id]            # live handshake check before you rely on it
 ```
 
 OAuth for servers needing bearer tokens uses pre-registered client credentials (no browser flow) — `${ENV}` refs keep secrets out of the file; tokens cache under `~/.mochi/mcp-oauth.json` (0600) and refresh automatically.
@@ -711,7 +712,7 @@ Git-backed snapshots, so rollback composes with your normal workflow.
 
 ## Skills
 
-73 built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
+84 built-in skills with a lifecycle (install, enable, curate, pack). Skills are loadable procedure libraries the agent consults on demand; a self-checking catalog test keeps the registry honest.
 
 ### Skill Marketplace
 

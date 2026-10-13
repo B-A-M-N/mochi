@@ -45,6 +45,9 @@ import {
   doneLine,
   resolveVerb,
   getThemeSpinnerColors,
+  renderTopRightBadge,
+  type TopNotification,
+  type TopNotificationType,
   ellipsize,
 } from './view.js';
 
@@ -277,6 +280,53 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
    *  green check for completed tabs, red cross for errors, soft purple dot for idle,
    *  and clickable close button on each tab + `+` button. */
   let lastActiveTabRange: [number, number] | null = null;
+  let activeNotification: TopNotification | null = null;
+  let notificationTimer: NodeJS.Timeout | undefined = undefined;
+
+  function triggerNotification(type: TopNotificationType, title: string, detail?: string, durationMs?: number) {
+    if (notificationTimer) {
+      clearTimeout(notificationTimer);
+      notificationTimer = undefined;
+    }
+    const now = Date.now();
+    const expiresAt = durationMs ? now + durationMs : undefined;
+    activeNotification = {
+      type,
+      title,
+      detail,
+      createdAt: now,
+      expiresAt,
+    };
+
+    // Sound terminal bell + send OSC 9 desktop notifications
+    try {
+      const notifyTitle = `Mochi: ${title}`;
+      const notifyBody = detail || (type === 'done' ? 'Task completed' : type === 'error' ? 'Task failed' : 'Response required');
+      safeWrite(`\x07\x1b]9;${notifyTitle} - ${notifyBody}\x07`);
+    } catch { /* ignore */ }
+
+    if (durationMs) {
+      notificationTimer = setTimeout(() => {
+        if (activeNotification && activeNotification.expiresAt && Date.now() >= activeNotification.expiresAt) {
+          activeNotification = null;
+          scheduleRender();
+        }
+      }, durationMs + 50);
+    }
+    scheduleRender();
+  }
+
+  function clearNotification(type?: TopNotificationType) {
+    if (!activeNotification) return;
+    if (!type || activeNotification.type === type) {
+      activeNotification = null;
+      if (notificationTimer) {
+        clearTimeout(notificationTimer);
+        notificationTimer = undefined;
+      }
+      scheduleRender();
+    }
+  }
 
   function tabBarRow(w: number): string {
     const tabList = tabs.list();
@@ -326,35 +376,23 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const rendered = styled.join('');
     const remaining = Math.max(0, w - layout.width);
 
-    // Dynamic right-aligned context indicators (git branch, active model, and version)
-    // replacing the noisy static keyboard shortcut hints.
-    let rightBadge = '';
-    let rightBadgeLen = 0;
+    const elapsedSec = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
+    const verb = resolveVerb(state.currentTool, state.currentTask);
+    const topRight = renderTopRightBadge({
+      width: remaining,
+      notification: activeNotification,
+      busy: state.busy,
+      spinner: state.spinner,
+      verb,
+      currentTool: state.currentTool,
+      elapsed: elapsedSec,
+      branch,
+      modelShort,
+      version: pkg.version,
+    });
 
-    const branchPart = branch ? `\x1b[38;2;167;139;250m⎇ \x1b[38;2;180;175;205m${branch}\x1b[0m` : '';
-    const branchLen = branch ? 2 + branch.length : 0;
-    const modelPart = modelShort ? `\x1b[38;2;140;135;165m${modelShort}\x1b[0m` : '';
-    const modelLen = modelShort ? modelShort.length : 0;
-    const verPart = `\x1b[38;2;105;100;125mv${pkg.version}\x1b[0m`;
-    const verLen = 1 + pkg.version.length;
-    const dotSep = `\x1b[38;2;85;80;105m · \x1b[0m`;
-
-    if (branchPart && modelPart && verPart && remaining >= branchLen + 3 + modelLen + 3 + verLen + 4) {
-      rightBadge = `${branchPart}${dotSep}${modelPart}${dotSep}${verPart}`;
-      rightBadgeLen = branchLen + 3 + modelLen + 3 + verLen;
-    } else if (branchPart && modelPart && remaining >= branchLen + 3 + modelLen + 4) {
-      rightBadge = `${branchPart}${dotSep}${modelPart}`;
-      rightBadgeLen = branchLen + 3 + modelLen;
-    } else if (modelPart && remaining >= modelLen + 4) {
-      rightBadge = modelPart;
-      rightBadgeLen = modelLen;
-    } else if (branchPart && remaining >= branchLen + 4) {
-      rightBadge = branchPart;
-      rightBadgeLen = branchLen;
-    }
-
-    const rightSuffix = rightBadge && remaining >= rightBadgeLen + 2
-      ? `${' '.repeat(remaining - rightBadgeLen - 1)}${rightBadge} `
+    const rightSuffix = topRight.length > 0 && remaining >= topRight.length + 1
+      ? `${' '.repeat(remaining - topRight.length - 1)}${topRight.text} `
       : ' '.repeat(remaining);
 
     return `${rendered}${rightSuffix}${T.reset}`;
@@ -1306,7 +1344,6 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const roles = activeSubs.map((s) => `#${s.role}`).join(', ');
       extra.push(`⚡ ${activeSubs.length} subagents (${roles})`);
     }
-    const isDone = Boolean(state.doneAt && Date.now() - state.doneAt < 2500);
     const statusModel = {
       modelId: modelShort,
       totalTokens: state.inTokens + state.outTokens + state.cacheTokens,
@@ -1321,13 +1358,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       autoApprove: state.autoApprove,
       extra,
       tokenVelocity: state.tokenVelocity,
+      // Live run state for the row-1 busy/done indicators (same doneAt window
+      // as the follow-row Done line so both agree).
       busy: state.busy,
       spinner: state.spinner,
       verb,
-      currentTool: toolKey || undefined,
-      currentTask: !isEcho ? state.currentTask : undefined,
-      elapsed: elapsedSec,
-      done: isDone,
+      currentTool: state.currentTool,
+      elapsed: state.busy ? ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's' : '',
+      done: !state.busy && state.doneAt > 0 && Date.now() - state.doneAt < 8000,
       doneElapsed: state.lastDoneElapsed,
     };
 
@@ -1370,9 +1408,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
           // Only the FIRST visible row carries the prompt glyph; wrapped
           // continuation rows render without it so a long input doesn't stack
           // symbols and corrupt the box edge.
-          rows[r] = composerRow(shownRows[i], w, i === 0, state.busy && i === 0, state.spinner);
+          rows[r] = composerRow(shownRows[i], w, i === 0, state.busy, state.spinner);
         } else {
-          rows[r] = composerRow('', w, i === 0);
+          rows[r] = composerRow('', w, i === 0, state.busy, state.spinner);
         }
       }
     }
@@ -2478,6 +2516,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   const pendingImages: string[] = [];
 
   async function run(fn: () => Promise<string>, echo = true): Promise<string> {
+    clearNotification();
     // Origin capture: the tab that STARTED the run owns its transcript and
     // busy flag even if the user switches tabs mid-run (background runs
     // continue; their events badge the tab unread via onRuntimeEventFor).
@@ -2495,6 +2534,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       out = result;
       tabs.setStatus(tabId, 'done');
       if (echo) pushTo(rs, 'assistant', result);
+      const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
+      triggerNotification('done', 'Task Complete', elapsed, 5000);
     } catch (e) {
       // Provider failures get a clean one-liner instead of a raw error dump,
       // and transient ones (cooldown/network/rate-limit) auto-retry ONCE after
@@ -2511,15 +2552,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           tabs.setStatus(tabId, 'done');
           if (echo) pushTo(rs, 'assistant', result);
           pushTo(rs, 'system', '✓ recovered');
+          const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
+          triggerNotification('done', 'Task Complete', elapsed, 5000);
         } catch (e2) {
           tabs.setStatus(tabId, 'error');
           const raw2 = e2 instanceof Error ? e2.message : String(e2);
           const pf2 = describeProviderFailure(e2);
           pushTo(rs, 'error', pf2.kind === 'transient' ? `${pf2.headline} (still degraded — raw: ${raw2.slice(0, 160)})` : raw2.slice(0, 400));
+          triggerNotification('error', 'Task Failed', (pf2.headline || raw2).slice(0, 36), 8000);
         }
       } else {
         tabs.setStatus(tabId, 'error');
         pushTo(rs, 'error', raw.length > 200 ? `${pf.headline} (raw: ${raw.slice(0, 160)})` : raw);
+        triggerNotification('error', 'Task Failed', (pf.headline || raw).slice(0, 36), 8000);
       }
     } finally {
       rs.busy = false;
@@ -2598,12 +2643,17 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       if (pendingResolver) {
         const old = pendingResolver;
         pendingResolver = undefined;
+        clearNotification('action_required');
         old('');
       }
       state.promptActive = true;
-      pendingResolver = res;
+      pendingResolver = (val: string) => {
+        clearNotification('action_required');
+        res(val);
+      };
       state.input = '';
       state.cursor = 0;
+      triggerNotification('action_required', 'Input Required', question.slice(0, 40));
       push('system', `? ${question}`);
       scheduleRender();
     });
@@ -2665,13 +2715,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
    *  where the user is looking rather than hijacking tab focus. */
   async function tuiPromptUser(req: import('../tools/user-prompt.js').UserPromptRequest): Promise<import('../tools/user-prompt.js').UserPromptResponse> {
     const { tuiPromptUser } = await import('./prompt-menus.js');
-    return tuiPromptUser({
-      openMenu,
-      ask,
-      push,
-      scheduleRender,
-      setMenuSelected: (i: number) => { state.menuSelected = i; },
-    }, req);
+    const qText = req.questions?.[0]?.question || 'Question';
+    triggerNotification('action_required', 'Response Needed', qText.slice(0, 40));
+    try {
+      return await tuiPromptUser({
+        openMenu,
+        ask,
+        push,
+        scheduleRender,
+        setMenuSelected: (i: number) => { state.menuSelected = i; },
+      }, req);
+    } finally {
+      clearNotification('action_required');
+    }
   }
 
   /** Interactive approval gate (Claude Code parity): allow once / allow
@@ -2679,13 +2735,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
    *  tuiPromptUser above; unit in ./prompt-menus.js. */
   async function tuiRequestApproval(req: import('../security/approval.js').ApprovalRequest): Promise<import('../security/approval.js').ApprovalDecision> {
     const { tuiRequestApproval } = await import('./prompt-menus.js');
-    return tuiRequestApproval({
-      openMenu,
-      ask,
-      push,
-      scheduleRender,
-      setMenuSelected: (i: number) => { state.menuSelected = i; },
-    }, req);
+    const detail = req.summary || req.tool || '';
+    triggerNotification('action_required', 'Approval Needed', detail.slice(0, 40));
+    try {
+      return await tuiRequestApproval({
+        openMenu,
+        ask,
+        push,
+        scheduleRender,
+        setMenuSelected: (i: number) => { state.menuSelected = i; },
+      }, req);
+    } finally {
+      clearNotification('action_required');
+    }
   }
 
 

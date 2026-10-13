@@ -1,6 +1,6 @@
-# Show HN draft — Mochi v0.24.0
+# Show HN draft — Mochi v0.25.0
 
-**Title:** Show HN: Mochi – open-source coding agent with 73 bundled deep-procedure skills
+**Title:** Show HN: Mochi – open-source coding agent with 84 bundled deep-procedure skills
 
 **Post:**
 
@@ -8,10 +8,10 @@ Hi HN — I built Mochi, an open-source terminal coding agent: Node 22+, zero ru
 
 What makes it different from Claude Code / OpenCode / Aider:
 
-- **73 bundled deep-procedure skills** (vs ~10 for most agents). Each is a full workflow — real commands, numbers, pitfalls, verification loops — not a one-line description. `mochi skills search <query>` finds and loads them on demand; community skills publish to a marketplace repo.
-- **Adaptive token budgeting.** Tool schemas are advertised per task kind: coding tasks get a ~20-tool lean tier, chat tasks get 4. A trivial question costs ~3.9k tokens end-to-end, not 13k. The model can pull any deferred tool back mid-run via `load_tools`.
+- **84 bundled deep-procedure skills** (vs ~10 for most agents). Each is a full workflow — real commands, numbers, pitfalls, verification loops — not a one-line description. `mochi skills search <query>` finds and loads them on demand; community skills publish to a marketplace repo.
+- **Adaptive token budgeting.** Tool schemas are advertised per task kind: coding tasks get a ~20-tool lean tier, chat tasks get 7, research a 16-tool read tier. A trivial question costs ~3.9k tokens end-to-end, not 13k. The model can pull any deferred tool back mid-run via `load_tools`.
 - **`mochi apply`** — atomic multi-file patch application. Parses a unified diff, validates every hunk against the working tree, applies all-or-nothing with rollback. Never trusts partial application.
-- **26 model providers** out of the box (OpenAI, Anthropic, Bedrock, free endpoints, local llama.cpp/vLLM...), with failover and per-provider cooldowns.
+- **32 model providers** out of the box (OpenAI, Anthropic, Moonshot/Kimi, Cohere, Alibaba Qwen, Bedrock, free endpoints, local llama.cpp...), with failover and per-provider cooldowns.
 - **Persistent goals** — `mochi` runs multi-step tasks as resumable goals with checkpoints, `mochi rollback` restores any snapshot, `mochi trace` replays the run.
 
 Cold start: 0.11s. One-shot task end-to-end: ~3s including the model round trip.

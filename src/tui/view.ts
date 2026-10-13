@@ -376,6 +376,16 @@ export interface StatusBarModel {
   maxInputTokens?: number;
   /** plan/act mode */
   mode: 'plan' | 'act';
+  /** busy state: spinner frame + verb + current tool + elapsed (row1 shows
+   *  `⠋ Working · bash · 3.2s` while a run is in flight). */
+  busy?: boolean;
+  spinner?: number;
+  verb?: string;
+  currentTool?: string;
+  elapsed?: string;
+  /** recently completed: `✓ Done · 1.8s` for a few seconds after a run. */
+  done?: boolean;
+  doneElapsed?: string;
   /** active execution mode (normal/spec/security/codemod/chaos) */
   agentMode?: string;
   /** active reasoning effort (low/medium/high/max) */
@@ -387,15 +397,6 @@ export interface StatusBarModel {
   /** extra mochi badges: kv-cache, queued tasks */
   extra?: string[];
   tokenVelocity?: number;
-  /** Active busy/spinner state for bottom spinner */
-  busy?: boolean;
-  spinner?: number;
-  verb?: string;
-  currentTool?: string;
-  currentTask?: string;
-  elapsed?: string;
-  done?: boolean;
-  doneElapsed?: string;
 }
 
 function modeColor(mode: string): string {
@@ -466,52 +467,42 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
 
   const extra = m.extra?.length && width >= 90 ? ` ${T.grayDark}· ${m.extra.join(' · ')}${T.reset}` : '';
 
-  let spinnerBadge = '';
-  if (m.busy && m.spinner !== undefined) {
-    const sGlyph = spinnerColored(m.spinner);
-    const verb = m.verb || 'Thinking';
-    const dots = movingDots(m.spinner);
-    let verbColor = R.thinkingLabel || T.act;
-    if (verb === 'Searching') verbColor = T.cyan ?? T.act;
-    else if (verb === 'Working') verbColor = T.pink ?? T.violet ?? T.act;
-
-    const timeStr = m.elapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.elapsed}${T.reset}` : '';
-    const toolPart = m.currentTool ? ` ${T.grayDark}·${T.reset} ${T.cyan}${m.currentTool}${T.reset}` : '';
-
-    if (width >= 80) {
-      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb}${dots}${T.reset}${toolPart}${timeStr}  `;
-    } else if (width >= 58) {
-      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb}${dots}${T.reset}${timeStr}  `;
-    } else {
-      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb[0]}${dots}${T.reset} `;
-    }
+  // Live run state leads the row: busy shows `⠋ Working · tool · elapsed`,
+  // a recent completion shows `✓ Done · elapsed`. Sticky by design (never
+  // dropped by the overflow cascade below); the model name shrinks first.
+  let statusSeg = '';
+  if (m.busy) {
+    const dot = spinnerFrame(Math.abs(m.spinner ?? 0));
+    const verb = m.verb || 'Working';
+    const tool = m.currentTool ? ` ${T.grayDark}·${T.reset} ${T.cyan}${m.currentTool}${T.reset}` : '';
+    const time = m.elapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.elapsed}${T.reset}` : '';
+    statusSeg = `${T.act}${T.bold}${dot}${T.reset} ${T.bold}${verb}${T.reset}${tool}${time}  `;
   } else if (m.done) {
-    const doneTime = m.doneElapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.doneElapsed}${T.reset}` : '';
-    spinnerBadge = `${T.lime}${T.bold}✓ Done${T.reset}${doneTime}  `;
+    const time = m.doneElapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.doneElapsed}${T.reset}` : '';
+    statusSeg = `${T.success ?? T.lime}${T.bold}✓ Done${T.reset}${time}  `;
   }
 
   const togglePart = toggle ? `  ${toggle}` : '';
   const togglePartLen = visibleLen(togglePart);
-  const spinnerBadgeLen = visibleLen(spinnerBadge);
-  const fixedLen = spinnerBadgeLen + visibleLen(reasoningBadge) + visibleLen(velocityBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
+  const fixedLen = visibleLen(statusSeg) + visibleLen(reasoningBadge) + visibleLen(velocityBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
   const availForModel = Math.max(4, width - fixedLen);
   const modelMax = Math.min(28, availForModel);
   const modelText = `${T.fg}${T.bold}${ellipsize(m.modelId, modelMax)}${T.reset}`;
 
   // Plan/act toggle sits directly beside the token usage/bar on the left, not right-padded.
-  let line = `${spinnerBadge}${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
+  let line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
   if (visibleLen(line) > width) {
-    line = `${spinnerBadge}${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+    line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
     if (visibleLen(line) > width) {
-      line = `${spinnerBadge}${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+      line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
       if (visibleLen(line) > width) {
-        line = `${spinnerBadge}${modelText}${modeBadge}${barText}${togglePart}`;
+        line = `${modelText}${modeBadge}${barText}${togglePart}`;
         if (visibleLen(line) > width) {
-          line = `${spinnerBadge}${modelText}${barText}${togglePart}`;
+          line = `${modelText}${barText}${togglePart}`;
           if (visibleLen(line) > width) {
-            line = `${spinnerBadge}${modelText}${togglePart}`;
+            line = `${modelText}${togglePart}`;
             if (visibleLen(line) > width) {
-              line = `${spinnerBadge}${ellipsize(modelText, Math.max(4, width - spinnerBadgeLen - togglePartLen))}${togglePart}`;
+              line = `${ellipsize(modelText, Math.max(4, width - togglePartLen))}${togglePart}`;
             }
           }
         }
@@ -519,6 +510,7 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
     }
   }
 
+  if (statusSeg) line = statusSeg + line;
   return padEnd(visibleLen(line) > width ? ellipsize(line, width) : line, width);
 }
 
@@ -569,6 +561,113 @@ export function statusBarRow2(m: StatusBarModel, width: number): string {
 
   const combined = `${T.fg}${shownPath}${T.reset}${activeMiddle}${suffix}`;
   return padEnd(visibleLen(combined) > width ? ellipsize(combined, width) : combined, width);
+}
+
+// ---- Top notification & header badges ---------------------------------------
+export type TopNotificationType = 'done' | 'error' | 'action_required';
+
+export interface TopNotification {
+  type: TopNotificationType;
+  title: string;
+  detail?: string;
+  createdAt: number;
+  expiresAt?: number;
+}
+
+export interface TopRightBadgeOptions {
+  width: number;
+  notification?: TopNotification | null;
+  busy?: boolean;
+  spinner?: number;
+  verb?: string;
+  currentTool?: string;
+  elapsed?: string;
+  branch?: string | null;
+  modelShort?: string;
+  version?: string;
+}
+
+export function renderTopRightBadge(opts: TopRightBadgeOptions): { text: string; length: number } {
+  const { width, notification, busy, spinner = 0, verb, currentTool, elapsed, branch, modelShort, version } = opts;
+
+  // 1. High priority: Active notification (done, error, action_required)
+  if (notification) {
+    if (notification.type === 'action_required') {
+      const title = notification.title || 'Response Needed';
+      const detailStr = notification.detail ? ` · ${notification.detail}` : '';
+      const fullText = `\x1b[48;2;60;45;10m\x1b[38;2;250;204;21m\x1b[1m ⚡ ${title}${detailStr} \x1b[0m`;
+      const compactText = `\x1b[48;2;60;45;10m\x1b[38;2;250;204;21m\x1b[1m ⚡ ${title} \x1b[0m`;
+      const miniText = `\x1b[48;2;60;45;10m\x1b[38;2;250;204;21m\x1b[1m ⚡ Action \x1b[0m`;
+      const chosen = visibleLen(fullText) <= width ? fullText : visibleLen(compactText) <= width ? compactText : visibleLen(miniText) <= width ? miniText : `\x1b[48;2;60;45;10m\x1b[38;2;250;204;21m\x1b[1m ⚡ \x1b[0m`;
+      return { text: chosen, length: visibleLen(chosen) };
+    }
+
+    if (notification.type === 'done') {
+      const title = notification.title || 'Task Complete';
+      const detailStr = notification.detail ? ` · ${notification.detail}` : '';
+      const fullText = `\x1b[48;2;20;55;25m\x1b[38;2;74;222;128m\x1b[1m ✓ ${title}${detailStr} \x1b[0m`;
+      const compactText = `\x1b[48;2;20;55;25m\x1b[38;2;74;222;128m\x1b[1m ✓ ${title} \x1b[0m`;
+      const miniText = `\x1b[48;2;20;55;25m\x1b[38;2;74;222;128m\x1b[1m ✓ Done \x1b[0m`;
+      const chosen = visibleLen(fullText) <= width ? fullText : visibleLen(compactText) <= width ? compactText : visibleLen(miniText) <= width ? miniText : `\x1b[48;2;20;55;25m\x1b[38;2;74;222;128m\x1b[1m ✓ \x1b[0m`;
+      return { text: chosen, length: visibleLen(chosen) };
+    }
+
+    if (notification.type === 'error') {
+      const title = notification.title || 'Task Failed';
+      const detailStr = notification.detail ? ` · ${notification.detail}` : '';
+      const fullText = `\x1b[48;2;65;20;25m\x1b[38;2;248;113;113m\x1b[1m ✗ ${title}${detailStr} \x1b[0m`;
+      const compactText = `\x1b[48;2;65;20;25m\x1b[38;2;248;113;113m\x1b[1m ✗ ${title} \x1b[0m`;
+      const miniText = `\x1b[48;2;65;20;25m\x1b[38;2;248;113;113m\x1b[1m ✗ Failed \x1b[0m`;
+      const chosen = visibleLen(fullText) <= width ? fullText : visibleLen(compactText) <= width ? compactText : visibleLen(miniText) <= width ? miniText : `\x1b[48;2;65;20;25m\x1b[38;2;248;113;113m\x1b[1m ✗ \x1b[0m`;
+      return { text: chosen, length: visibleLen(chosen) };
+    }
+  }
+
+  // 2. Active run: Sleek top spinner in the top right
+  if (busy) {
+    const sGlyph = spinnerColored(spinner);
+    const vName = verb || 'Thinking';
+    const dots = movingDots(spinner);
+    let verbColor = R.thinkingLabel || T.act;
+    if (vName === 'Searching') verbColor = T.cyan ?? T.act;
+    else if (vName === 'Working') verbColor = T.pink ?? T.violet ?? T.act;
+
+    const timeStr = elapsed ? ` (${elapsed})` : '';
+    const toolPart = currentTool ? ` · ${currentTool}` : '';
+
+    const fullSpinner = `\x1b[48;2;30;26;42m ${sGlyph} ${verbColor}${T.bold}${vName}${dots}${T.reset}\x1b[48;2;30;26;42m\x1b[38;2;180;175;205m${toolPart}\x1b[0m\x1b[48;2;30;26;42m\x1b[38;2;140;135;165m${timeStr}\x1b[0m \x1b[0m`;
+    const mediumSpinner = `\x1b[48;2;30;26;42m ${sGlyph} ${verbColor}${T.bold}${vName}${dots}${T.reset}\x1b[48;2;30;26;42m\x1b[38;2;140;135;165m${timeStr}\x1b[0m \x1b[0m`;
+    const compactSpinner = `${sGlyph} ${verbColor}${T.bold}${vName}${dots}${T.reset}`;
+
+    const chosen = visibleLen(fullSpinner) <= width ? fullSpinner : visibleLen(mediumSpinner) <= width ? mediumSpinner : visibleLen(compactSpinner) <= width ? compactSpinner : sGlyph;
+    return { text: chosen, length: visibleLen(chosen) };
+  }
+
+  // 3. Idle: branch · model · version context pills
+  const branchPart = branch ? `\x1b[38;2;167;139;250m⎇ \x1b[38;2;180;175;205m${branch}\x1b[0m` : '';
+  const branchLen = branch ? 2 + branch.length : 0;
+  const modelPart = modelShort ? `\x1b[38;2;140;135;165m${modelShort}\x1b[0m` : '';
+  const modelLen = modelShort ? modelShort.length : 0;
+  const verPart = version ? `\x1b[38;2;105;100;125mv${version}\x1b[0m` : '';
+  const verLen = version ? 1 + version.length : 0;
+  const dotSep = `\x1b[38;2;85;80;105m · \x1b[0m`;
+
+  if (branchPart && modelPart && verPart && width >= branchLen + 3 + modelLen + 3 + verLen + 2) {
+    const text = `${branchPart}${dotSep}${modelPart}${dotSep}${verPart}`;
+    return { text, length: branchLen + 3 + modelLen + 3 + verLen };
+  }
+  if (branchPart && modelPart && width >= branchLen + 3 + modelLen + 2) {
+    const text = `${branchPart}${dotSep}${modelPart}`;
+    return { text, length: branchLen + 3 + modelLen };
+  }
+  if (modelPart && width >= modelLen + 2) {
+    return { text: modelPart, length: modelLen };
+  }
+  if (branchPart && width >= branchLen + 2) {
+    return { text: branchPart, length: branchLen };
+  }
+
+  return { text: '', length: 0 };
 }
 
 // ---- Transcript entries ----------------------------------------------------
@@ -1268,21 +1367,23 @@ export function composerTopRule(width: number): string {
 export function composerRow(text: string, width: number, isFirst = true, busy = false, spinner = 0): string {
   const inner = Math.max(1, width - 6);
   const shown = visibleLen(text) > inner ? ellipsize(text, inner) : text;
-  // First row: `│ ❯ <text> │` (or `│ ⠋ <text> │` when busy); continuation rows: `│    <text> │`.
+  // First row: `│ ❯ <text> │`; continuation rows: `│    <text> │`.
   // Skeleton per row is `│ ` + prompt + padEnd + ` │` = prompt + pad + 4 cells.
-  // First prompt is 2 wide, so pad to `inner`; the continuation prompt is
+  // First prompt `❯ ` is 2 wide, so pad to `inner`; the continuation prompt is
   // 3 spaces so pad to `inner - 1` — both sum to `inner + 6 == width`, keeping
   // the right border `│` at a fixed column and the box perfectly square.
-  const glyph = busy ? spinnerColored(spinner) : `${T.act}${T.bold}❯${T.reset}`;
-  const prompt = isFirst ? `${glyph} ` : '   ';
+  // While busy the prompt glyph becomes the braille spinner (same 2-cell
+  // width, so geometry is untouched).
+  const glyph = busy ? `${T.act}${T.bold}${spinnerFrame(Math.abs(spinner))}${T.reset} ` : `${T.act}${T.bold}❯${T.reset} `;
+  const prompt = isFirst ? glyph : '   ';
   const padLen = isFirst ? inner : inner - 1;
   return `${T.rule}│${T.reset} ${prompt}${T.fg}${padEnd(shown, padLen)}${T.reset} ${T.rule}│${T.reset}`;
 }
 
 export function composerPlaceholderRow(placeholder: string, width: number, busy = false, spinner = 0): string {
   const inner = Math.max(1, width - 6);
-  const glyph = busy ? spinnerColored(spinner) : `${T.act}${T.bold}❯${T.reset}`;
-  return `${T.rule}│${T.reset} ${glyph} ${T.grayDark}${padEnd(placeholder, inner)}${T.reset} ${T.rule}│${T.reset}`;
+  const glyph = busy ? `${T.act}${T.bold}${spinnerFrame(Math.abs(spinner))}${T.reset} ` : `${T.act}${T.bold}❯${T.reset} `;
+  return `${T.rule}│${T.reset} ${glyph}${T.grayDark}${padEnd(placeholder, inner)}${T.reset} ${T.rule}│${T.reset}`;
 }
 
 export function composerBottomRule(width: number): string {
