@@ -282,11 +282,9 @@ function modeColor(mode: string): string {
   }
 }
 
-/** Row 1: model + [REASON: LEVEL] + [mode] + context … (MCH-70: plan/act toggle moved to the in/out bars row) */
+/** Row 1: model + [REASON: LEVEL] + [mode] + context … plan/act toggle */
 export function statusBarRow1(m: StatusBarModel, width: number): string {
-  // MCH-70: at full width the plan/act toggle renders on the in/out bars row
-  // (app.ts). Narrow layouts keep it here on row 1.
-  const fullToggle = '';
+  const fullToggle = `${m.mode === 'plan' ? `${T.plan}● Plan` : `${T.act}● Act`}${T.reset}`;
   const compactToggle = `${m.mode === 'plan' ? `${T.plan}● Plan` : `${T.act}● Act`}${T.reset} ${T.grayDark}(Tab)${T.reset}`;
   const miniToggle = `${m.mode === 'plan' ? `${T.plan}● P` : `${T.act}● A`}${T.reset}`;
 

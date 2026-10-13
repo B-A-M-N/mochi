@@ -31,8 +31,6 @@ import {
   farewellFrame,
   statusBarRow1,
   statusBarRow2,
-  gradientContextBar,
-  gradientCacheBar,
   renderMarkdown,
   renderDropdown,
 
@@ -40,7 +38,6 @@ import {
   composerPlaceholderRow,
   composerTopRule,
   composerBottomRule,
-  composerHintRow,
   transcriptIndent,
   thinkingLine,
   ellipsize,
@@ -1225,60 +1222,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     rows[s1] = statusBarRow1(statusModel, w);
     let cTop = s1 + 1;
 
-    // Composer hint with the plan/act dots inlined beside the key legend,
-    // color-coded by mode (plan=violet, act=act color).
-    const hintWithMode = (width: number): string => {
-      const base = ' ⏎ send · Tab plan/act · ESC stop · / for commands';
-      if (width < 60) return base;
-      const dot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.act}● Act${T.reset}`;
-      const dim = `${T.grayDark}${base.slice(1)}${T.reset}`;
-      return ` ${dot} ${T.grayDark}·${T.reset} ${dim}`;
-    };
-    
-    if (statusRows === 3) {
-      const promptTotal = state.inTokens + state.cacheTokens;
-      const cacheRate = promptTotal > 0 ? Math.min(1, state.cacheTokens / promptTotal) : 0;
-      const ctxLen = w >= 80 ? 12 : (w >= 60 ? 8 : 5);
-      const cacheLen = w >= 80 ? 10 : (w >= 60 ? 6 : 4);
-      const ctx = gradientContextBar(state.inTokens + state.outTokens, runtime.config.safety.contextBudgetTokens, ctxLen, state.busy ? state.spinner + 1 : 0);
-      const cache = gradientCacheBar(cacheRate, cacheLen, state.busy ? state.spinner + 1 : 0);
-      const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
-      // Cache segment only when there IS cache — an empty `cache ───────── 0`
-      // track at rest reads as a broken gauge (screenshot artifact, 2026-10-04).
-      let cacheSeg = '';
-      if (state.cacheTokens > 0) {
-        cacheSeg = w >= 70
-          ? `  ${T.gray}cache${T.reset} ${cache.text} ${T.lime}${fmt(state.cacheTokens)}${T.reset} ${T.gray}(${Math.round(cacheRate * 100)}%)${T.reset}`
-          : `  ${T.gray}cache${T.reset} ${T.lime}${fmt(state.cacheTokens)}${T.reset}`;
-      }
-      // Plan/act toggle sits BESIDE the in/out text + bars (left-aligned
-      // after them), not right-aligned — reads as one continuous row.
-      const planDot = state.uiMode === 'plan' ? `${T.plan}● Plan${T.reset}` : `${T.grayDark}○ Plan${T.reset}`;
-      const actDot = state.uiMode === 'act' ? `${T.act}● Act${T.reset}` : `${T.grayDark}○ Act${T.reset}`;
-      const toggle = `${planDot} ${actDot} ${T.grayDark}(Tab)${T.reset}`;
-      const miniToggle = `${planDot} ${actDot}`;
-      const barsRowFull = ` ${T.gray}in${T.reset} ${T.cyan}${fmt(state.inTokens)}${T.reset} ${T.gray}out${T.reset} ${T.orange}${fmt(state.outTokens)}${T.reset}  ${ctx.text} ${T.gray}${Math.round(ctx.pct * 100)}%${T.reset}${cacheSeg}`;
-      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
-      const baseLen = visibleLen(barsRowFull);
-      let rowContent: string;
-      if (baseLen + visibleLen(toggle) + 2 <= w) {
-        rowContent = `${barsRowFull}  ${toggle}`;
-      } else if (baseLen + visibleLen(miniToggle) + 2 <= w) {
-        rowContent = `${barsRowFull}  ${miniToggle}`;
-      } else {
-        rowContent = barsRowFull;
-      }
-      // Clamp: this row had no width budget and hard-wrapped in windowed mode.
-      const barsRow = visibleLen(rowContent) > w ? ellipsize(rowContent, w) : rowContent;
-
-      rows[s1 + 1] = barsRow;
-      rows[s1 + 2] = statusBarRow2(statusModel, w);
-      rows[s1 + 3] = composerHintRow(hintWithMode(w), w);
-      cTop = s1 + 4;
-    } else {
+    if (statusRows >= 2) {
       rows[s1 + 1] = statusBarRow2(statusModel, w);
-      rows[s1 + 2] = composerHintRow(hintWithMode(w), w);
-      cTop = s1 + 3;
+      cTop = s1 + 2;
     }
 
     rows[cTop] = composerTopRule(w);
@@ -1300,10 +1246,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const r = cTop + 1 + i;
       if (r < h) {
         if (i === 0 && !state.input) {
-          // Empty composer: the opencode-style placeholder (this branch used
-          // to sit AFTER the shownRows check, where wrap('') === [''] made it
-          // unreachable dead code — no placeholder ever rendered).
-          rows[r] = composerPlaceholderRow('Message mochi… (type / for commands)', w);
+          const placeholder = w >= 65
+            ? 'Message mochi… (Tab: plan/act · /: commands · ⏎: send)'
+            : 'Message mochi… (/ for commands)';
+          rows[r] = composerPlaceholderRow(placeholder, w);
         } else if (i < shownRows.length) {
           // Only the FIRST visible row carries the `❯` prompt glyph; wrapped
           // continuation rows render without it so a long input doesn't stack
