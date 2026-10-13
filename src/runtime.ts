@@ -783,6 +783,10 @@ export class Runtime {
   }
 
   async useProvider(providerId: string, model?: string) {
+    try {
+      const { resetCapabilityRegistry } = await import('./model/router.js');
+      resetCapabilityRegistry();
+    } catch { /* best effort */ }
     const saved = currentConfig();
     this.config = selectProviderById(saved, providerId, model);
     if (!this.config.reasoning) {
@@ -793,6 +797,10 @@ export class Runtime {
   }
 
   async loginProvider(provider: string, apiKey: string, model?: string) {
+    try {
+      const { resetCapabilityRegistry } = await import('./model/router.js');
+      resetCapabilityRegistry();
+    } catch { /* best effort */ }
     const saved = currentConfig();
     this.config = doLogin(saved, provider, apiKey, model);
     if (!this.config.reasoning) {

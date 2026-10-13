@@ -28,7 +28,7 @@ export interface ProviderConfig {
 }
 
 function toOpenAITools(tools: ToolDefinition[]) {
-  return tools.map((t, idx) => {
+  return tools.map((t) => {
     const fn: any = {
       type: 'function' as const,
       function: {
@@ -41,9 +41,6 @@ function toOpenAITools(tools: ToolDefinition[]) {
         },
       },
     };
-    if (idx === tools.length - 1) {
-      fn.cache_control = { type: 'ephemeral' };
-    }
     return fn;
   });
 }
@@ -126,18 +123,13 @@ export function createOpenAIProvider(config: ProviderConfig) {
         out.push({ role: 'user', content: `[system notice] ${contentText(m)}` });
         continue;
       }
-      const mapped: { role: string; content: unknown; cache_control?: unknown } = { role: m.role, content: contentText(m) };
+      const mapped: { role: string; content: unknown } = { role: m.role, content: contentText(m) };
       // MCH-109: multimodal user messages pass content parts through verbatim
       // (OpenAI wire format: [{type:'text'},{type:'image_url'}]).
       if (Array.isArray(m.content)) {
         out.push({ role: m.role, content: m.content });
         continue;
       }
-      if (m.role === 'system') mapped.cache_control = { type: 'ephemeral' };
-      // MCH-38 (speed): mark the LAST message so every turn's prefix is a
-      // cache breakpoint — with an append-only transcript, turns N+1 reuse
-      // turns 1..N from the provider prompt cache at ~10% of input cost.
-      if (i === messages.length - 1) mapped.cache_control = { type: 'ephemeral' };
       out.push(mapped);
     }
     lastMapped = { src: messages.slice(), out };

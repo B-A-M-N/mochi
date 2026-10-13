@@ -50,6 +50,11 @@ export function describeProviderFailure(err: unknown): ProviderFailure {
     return { kind: 'transient', headline: 'provider rate-limited — backing off' };
   }
 
+  // Context limit exceeded: transient, automatically compacted by loop.
+  if (/context.*length|maximum context|prompt is too long|token.*limit|too many tokens|context_length_exceeded/i.test(msg)) {
+    return { kind: 'transient', headline: 'context window limit reached — compacting history' };
+  }
+
   // Auth/bad request: failover chain already exhausted; do not spin.
   const auth = /\b40[13]\b|unauthorized|invalid api key|forbidden/i.test(msg);
   return {

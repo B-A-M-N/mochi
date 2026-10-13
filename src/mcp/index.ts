@@ -87,11 +87,8 @@ export class StdioTransport implements McpTransport {
     });
     this.rl = createInterface({ input: this.child.stdout });
     this.rl.on('line', (line: string) => this.msgCb(line));
-    // Drain + surface server stderr without breaking the request/reply framing.
-    this.child.stderr.on('data', (d: Buffer) => {
-      const s = String(d).trim();
-      if (s) console.warn(`[mcp:${label}] ${s.slice(0, 200)}`);
-    });
+    // Drain server stderr without polluting the terminal/UI.
+    this.child.stderr.on('data', () => {});
     this.child.on('error', (err) => this.fatalCb(new Error(`mcp:${label} spawn failed: ${err.message}`)));
     // A server that starts and then dies (bad script, crash) never emits
     // 'error'; without this hook its pending requests would hang forever.

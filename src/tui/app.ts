@@ -546,6 +546,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   let exited = false;
   let spinnerTimer: NodeJS.Timeout | undefined;
   let cleanupFns: Array<() => void> = [];
+  let restoreConsole: (() => void) | null = null;
   /** Incremental transcript cache: stores the wrapped output per source line,
    *  so each frame only re-wraps lines whose text changed (the newly appended
    *  tail + the actively-streaming last line) instead of the whole 500-line
@@ -898,21 +899,21 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   /** Recompute the same transcript window renderFrame uses, so selection and
    *  scroll clamping agree with what is actually on screen. Delegates to the
    *  shared chromeLayout (single source of truth — see chrome.ts). */
-  function transcriptGeometry(w: number): { chatMw: number; availableH: number } {
+  function transcriptGeometry(w: number): { chatMw: number; availableH: number; contentH: number } {
     const h = height();
-    const { chatMw, availableH } = chromeLayout({ w, h, inputText: state.input, busy: state.busy, topRows: TAB_BAR_ROWS, indent: transcriptIndent(w) });
-    return { chatMw, availableH };
+    const { chatMw, availableH, contentH } = chromeLayout({ w, h, inputText: state.input, busy: state.busy, topRows: TAB_BAR_ROWS, indent: transcriptIndent(w) });
+    return { chatMw, availableH, contentH };
   }
 
-  /** Apply the active selection to one rendered transcript content row. `row`
-   *  is the terminal row index (0-based) within the chat area; `indent` is the
+  /** Apply the active selection to one rendered transcript content row. `lineIdx`
+   *  is the global line index (0-based) within chatLines/splash; `indent` is the
    *  leading spacing applied at render. Returns the transformed content. */
-  function applySelection(content: string, row: number, indent: number): string {
+  function applySelection(content: string, lineIdx: number, indent: number): string {
     if (!state.selActive || !state.selStart || !state.selEnd) return content;
     const isStartTop = state.selStart.row <= state.selEnd.row;
     const top = Math.min(state.selStart.row, state.selEnd.row);
     const bottom = Math.max(state.selStart.row, state.selEnd.row);
-    if (row < top || row > bottom) return content;
+    if (lineIdx < top || lineIdx > bottom) return content;
 
     const len = visibleLen(content);
     // The +1 makes the end column INCLUSIVE: SGR mouse reports the column
@@ -934,12 +935,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const startCol = isStartTop ? state.selStart.col : state.selEnd.col;
     const endCol = isStartTop ? state.selEnd.col : state.selStart.col;
 
-    if (row === top) {
+    if (lineIdx === top) {
       const from = Math.max(0, startCol - indent);
       if (from >= len) return content;
       return highlightRange(content, from, len);
     }
-    if (row === bottom) {
+    if (lineIdx === bottom) {
       const to = Math.min(len, inc(endCol));
       if (to <= 0) return content;
       return highlightRange(content, 0, to);
@@ -951,10 +952,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   function selectedText(): string {
     if (!state.selActive || !state.selStart || !state.selEnd) return '';
     const w = width();
-    const { chatMw, availableH } = transcriptGeometry(w);
+    const { chatMw } = transcriptGeometry(w);
     const indent = transcriptIndent(w);
     const chatLines = transcriptLines(chatMw);
-    const windowStart = Math.max(0, chatLines.length - availableH - state.scroll);
+    const showSplash = !state.splashDismissed && state.lines.length === 0;
+    const linesSource = showSplash
+      ? splashFrame(state.splashTick, w, pkg.version, state.splashProgress, state.splashBurst)
+      : chatLines;
+
     const isStartTop = state.selStart.row <= state.selEnd.row;
     const topRow = Math.min(state.selStart.row, state.selEnd.row);
     const bottomRow = Math.max(state.selStart.row, state.selEnd.row);
@@ -969,20 +974,19 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     // cell the cursor touched is silently dropped.
     const sliceEnd = (c: number) => Math.max(0, c - indent + 1);
     const lines: string[] = [];
-    for (let r = topRow; r <= bottomRow; r++) {
-      const idx = windowStart + r;
-      if (idx < 0 || idx >= chatLines.length) continue;
-      const bare = stripAnsi(chatLines[idx]);
+    for (let idx = topRow; idx <= bottomRow; idx++) {
+      if (idx < 0 || idx >= linesSource.length) continue;
+      const bare = stripAnsi(linesSource[idx]);
       if (topRow === bottomRow) {
         const minCol = Math.min(state.selStart.col, state.selEnd.col);
         const maxCol = Math.max(state.selStart.col, state.selEnd.col);
         const from = Math.max(0, minCol - indent);
         const to = Math.min(bare.length, sliceEnd(maxCol));
         lines.push(from < to ? bare.slice(from, to) : '');
-      } else if (r === topRow) {
+      } else if (idx === topRow) {
         const from = Math.max(0, startCol - indent);
         lines.push(bare.slice(from));
-      } else if (r === bottomRow) {
+      } else if (idx === bottomRow) {
         const to = Math.min(bare.length, sliceEnd(endCol));
         lines.push(bare.slice(0, to));
       } else {
@@ -1038,15 +1042,18 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     scheduleRender();
   }
 
-  /** Double-click: select the word under the cursor on the clicked transcript row. */
-  function selectWord(row: number, col: number) {
+  /** Double-click: select the word under the cursor on the clicked transcript line. */
+  function selectWord(lineIdx: number, col: number) {
     const w = width();
     const { chatMw } = transcriptGeometry(w);
     const indent = transcriptIndent(w);
     const chatLines = transcriptLines(chatMw);
+    const showSplash = !state.splashDismissed && state.lines.length === 0;
+    const linesSource = showSplash
+      ? splashFrame(state.splashTick, w, pkg.version, state.splashProgress, state.splashBurst)
+      : chatLines;
     const contentCol = col - indent;
-    const idx = row; // transcript row index within the visible window
-    const line = chatLines[idx];
+    const line = linesSource[lineIdx];
     if (!line) return;
     const bare = stripAnsi(line);
     if (contentCol < 0 || contentCol > bare.length) return;
@@ -1056,8 +1063,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     let end = contentCol;
     while (end < bare.length && !/\s/.test(bare[end])) end++;
     if (end <= start) end = start + 1;
-    state.selStart = { row, col: start + indent };
-    state.selEnd = { row, col: end + indent };
+    state.selStart = { row: lineIdx, col: start + indent };
+    state.selEnd = { row: lineIdx, col: end + indent };
     state.selActive = true;
     lastFrame = [];
     scheduleRender();
@@ -1065,16 +1072,20 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
   /** Triple-click: select the ENTIRE chat line under the cursor, so a long
    *  wrapped message copies in one clean gesture instead of an exact drag. */
-  function selectLine(row: number) {
+  function selectLine(lineIdx: number) {
     const w = width();
     const { chatMw } = transcriptGeometry(w);
     const indent = transcriptIndent(w);
     const chatLines = transcriptLines(chatMw);
-    const line = chatLines[row];
+    const showSplash = !state.splashDismissed && state.lines.length === 0;
+    const linesSource = showSplash
+      ? splashFrame(state.splashTick, w, pkg.version, state.splashProgress, state.splashBurst)
+      : chatLines;
+    const line = linesSource[lineIdx];
     if (!line) return;
     const bare = stripAnsi(line);
-    state.selStart = { row, col: indent };
-    state.selEnd = { row, col: indent + Math.max(1, bare.length) };
+    state.selStart = { row: lineIdx, col: indent };
+    state.selEnd = { row: lineIdx, col: indent + Math.max(1, bare.length) };
     state.selActive = true;
     lastFrame = [];
     scheduleRender();
@@ -1206,13 +1217,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       for (let i = 0; i < splash.length && i < contentH; i++) {
         // Apply selection to splash rows too so drag-select works from the
         // very first frame (before any chat lines exist).
-        const rendered = lead + applySelection(splash[i], top + i - TAB_BAR_ROWS, indent);
+        const rendered = lead + applySelection(splash[i], i, indent);
         rows[top + i] = visibleLen(rendered) > w ? ellipsize(rendered, w) : rendered;
       }
     } else {
+      const windowStart = Math.max(0, chatLines.length - availableH - state.scroll);
       for (let i = 0; i < availableH && i < contentH; i++) {
         const r = TAB_BAR_ROWS + i;
-        const rendered = lead + applySelection(visible[i] ?? '', i, indent);
+        const lineIdx = windowStart + i;
+        const rendered = lead + applySelection(visible[i] ?? '', lineIdx, indent);
         rows[r] = visibleLen(rendered) > w ? ellipsize(rendered, w) : rendered;
       }
     }
@@ -1227,8 +1240,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       }
     }
 
-    if (state.busy) {
-      const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
+    const followRow = TAB_BAR_ROWS + Math.min(contentH - 1, visible.length);
+
+    if (state.busy && state.scroll === 0) {
+      const r = followRow;
       const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
       const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
       const toolKey = state.currentTool;
@@ -1244,8 +1259,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const verb = resolveVerb(state.currentTool, state.currentTask);
       const busyStr = lead + thinkingLine(state.spinner, note, elapsedSec, verb);
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
-    } else if (state.doneAt && Date.now() - state.doneAt < 3000) {
-      const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
+    } else if (state.doneAt && Date.now() - state.doneAt < 2500 && state.scroll === 0) {
+      const r = followRow;
       const doneStr = lead + doneLine(state.lastDoneElapsed);
       rows[r] = visibleLen(doneStr) > w ? ellipsize(doneStr, w) : doneStr;
     }
@@ -2481,8 +2496,11 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       stopSpinner();
       scheduleRender();
       setTimeout(() => {
-        scheduleRender();
-      }, 3100);
+        if (rs.doneAt && Date.now() - rs.doneAt >= 2500) {
+          rs.doneAt = 0;
+          scheduleRender();
+        }
+      }, 2600);
       // Drain the message queue: messages typed mid-run send now, in order.
       // Sequential (not parallel) so each queued message gets a full run.
       // Per-item try/catch: one throwing drain item must not strand the rest
@@ -3271,6 +3289,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // an unguarded throw here aborts the restore midway and the terminal is
     // left raw + cursor-hidden + alt-screen = permanently frozen. A failing
     // restore must never win over finishing the restore.
+    try { restoreConsole?.(); } catch { /* ignore */ }
     try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
     try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}`); } catch { /* EPIPE */ }
     // Goodbye card (opencode-style): printed AFTER the alt-screen teardown
@@ -3410,7 +3429,21 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
         if (btn === 64 || btn === 65) {
           // Wheel: 64 = scroll up, 65 = scroll down.
-          if (isPress) scrollTranscript(btn === 64 ? 3 : -3);
+          if (isPress) {
+            scrollTranscript(btn === 64 ? 3 : -3);
+            if (state.selActive && state.selStart) {
+              const trow = row - 1 - TAB_BAR_ROWS;
+              const w = width();
+              const { availableH, contentH, chatMw } = transcriptGeometry(w);
+              if (trow >= 0 && trow < contentH) {
+                const chatLines = transcriptLines(chatMw);
+                const showSplash = !state.splashDismissed && state.lines.length === 0;
+                const curWindowStart = showSplash ? 0 : Math.max(0, chatLines.length - availableH - state.scroll);
+                const lineIdx = showSplash ? trow : Math.max(0, Math.min(chatLines.length - 1, curWindowStart + trow));
+                updateSelection(lineIdx, Number(sgrMouse[2]) - 1);
+              }
+            }
+          }
           continue;
         }
 
@@ -3430,14 +3463,28 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           // it, so convert to window-relative rows (never negative).
           const trow = row - 1 - TAB_BAR_ROWS;
           if (trow < 0 && !isMotion) continue;
+
+          const w = width();
+          const { availableH, contentH, chatMw } = transcriptGeometry(w);
+          const chatLines = transcriptLines(chatMw);
+          const showSplash = !state.splashDismissed && state.lines.length === 0;
+
           if (isMotion) {
-            updateSelection(Math.max(0, trow), col - 1);
+            if (trow < 0) {
+              scrollTranscript(1);
+            } else if (trow >= contentH) {
+              scrollTranscript(-1);
+            }
+            const clampedTrow = Math.max(0, Math.min(contentH - 1, Math.max(0, trow)));
+            const curWindowStart = showSplash ? 0 : Math.max(0, chatLines.length - availableH - state.scroll);
+            const lineIdx = showSplash ? clampedTrow : Math.max(0, Math.min(chatLines.length - 1, curWindowStart + clampedTrow));
+            updateSelection(lineIdx, col - 1);
           } else {
-            // Click-count detection for double (word) / triple (whole line)
-            // selection. A click within 500ms of the last one on the same row
-            // increments the count; otherwise it resets to a fresh drag start.
+            if (trow < 0 || trow >= contentH) continue;
+            const curWindowStart = showSplash ? 0 : Math.max(0, chatLines.length - availableH - state.scroll);
+            const lineIdx = showSplash ? trow : Math.max(0, Math.min(chatLines.length - 1, curWindowStart + trow));
             const now = Date.now();
-            const r0 = trow;
+            const r0 = lineIdx;
             if (state.lastClickRow === r0 && now - state.lastClickAt < 500) {
               state.clickCount += 1;
             } else {
@@ -4022,6 +4069,36 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   async function start() {
+    // Shield the TUI from any rogue background logs, MCP debug stderr, or child processes
+    // leaking into the active raw screen / composer input line.
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origError = console.error;
+    const origInfo = console.info;
+    const origDebug = console.debug;
+    const origStderrWrite = process.stderr.write.bind(process.stderr);
+
+    restoreConsole = () => {
+      console.log = origLog;
+      console.warn = origWarn;
+      console.error = origError;
+      console.info = origInfo;
+      console.debug = origDebug;
+      try { (process.stderr as any).write = origStderrWrite; } catch { /* ignore */ }
+    };
+
+    const noop = () => {};
+    console.log = noop;
+    console.warn = noop;
+    console.error = noop;
+    console.info = noop;
+    console.debug = noop;
+    (process.stderr as any).write = (_chunk: any, encoding?: any, cb?: any) => {
+      if (typeof encoding === 'function') encoding();
+      else if (typeof cb === 'function') cb();
+      return true;
+    };
+
     // Enable SGR mouse reporting. The three modes do different things:
     //   ?1000  — basic press/release (needed for click)
     //   ?1002  — button-event tracking: forwards MOTION events while a button
@@ -4053,6 +4130,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       // the user's terminal is left broken ("frozen") after any crash.
       // Individually guarded: on a dead tty (errno 5 / EPIPE) a throw here
       // skips the remaining resets and the terminal stays frozen.
+      try { restoreConsole?.(); } catch { /* ignore */ }
       try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
       try {
         process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}\x1b[?1000l\x1b[?1002l\x1b[?1006l` + BRACKET_PASTE_OFF);
@@ -4102,6 +4180,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       }
     } catch { /* health check is best-effort */ }
     cleanupFns = [
+      () => { try { restoreConsole?.(); } catch { /* ignore */ } },
       () => process.stdin.off('data', keyListener),
       () => process.stdout.off('resize', resizeListener),
       () => process.off('exit', exitListener),
@@ -4136,8 +4215,11 @@ if (line === '/branch' || line.startsWith('/branch ')) {
           stopSpinner();
           scheduleRender();
           setTimeout(() => {
-            scheduleRender();
-          }, 3100);
+            if (state.doneAt && Date.now() - state.doneAt >= 2500) {
+              state.doneAt = 0;
+              scheduleRender();
+            }
+          }, 2600);
         });
     }
   }

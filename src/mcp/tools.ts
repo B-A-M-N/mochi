@@ -60,9 +60,16 @@ export async function buildMcpTools(
             permission: 'network',
           },
           async execute(args, ctx) {
-            const resultText = await client.callTool(rt.name, args as Record<string, unknown>);
-            ctx.events.emit({ type: 'tool:completed', tool: fullName, result: { toolCallId: '', name: fullName, output: resultText, durationMs: 0 }, agentId: ctx.agentId });
-            return resultText;
+            try {
+              const resultText = await client.callTool(rt.name, args as Record<string, unknown>);
+              ctx.events.emit({ type: 'tool:completed', tool: fullName, result: { toolCallId: '', name: fullName, output: resultText, durationMs: 0 }, agentId: ctx.agentId });
+              return resultText;
+            } catch (err) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              const failText = `MCP tool ${fullName} failed: ${errMsg}`;
+              ctx.events.emit({ type: 'tool:completed', tool: fullName, result: { toolCallId: '', name: fullName, output: failText, durationMs: 0, error: errMsg }, agentId: ctx.agentId });
+              return failText;
+            }
           },
         });
       }

@@ -12,6 +12,25 @@ export function currentConfig(): MochiConfig {
   return loadConfigFile();
 }
 
+export function modelContextBudget(model: string, provider?: string): number {
+  const m = (model || '').toLowerCase();
+  const p = (provider || '').toLowerCase();
+  if (m.includes('gemini') || p.includes('gemini')) return 400_000;
+  if (m.includes('claude') || p.includes('anthropic') || m.includes('kimi') || m.includes('moonshot')) return 160_000;
+  if (
+    m.includes('gpt-4') || m.includes('gpt-5') || m.includes('o3') || m.includes('o4') ||
+    m.includes('deepseek') || m.includes('glm') || m.includes('qwen') ||
+    m.includes('minimax') || m.includes('llama-3') || m.includes('codestral') ||
+    m.includes('mistral') || m.includes('grok')
+  ) {
+    return 110_000;
+  }
+  if (p === 'ollama' || p === 'llamacpp' || p === 'lmstudio' || m.includes('local') || m.includes('8b')) {
+    return 32_000;
+  }
+  return 110_000;
+}
+
 export function setProvider(config: MochiConfig, selection: ProviderSelection): MochiConfig {
   const cfg = { ...config };
   // Tolerate a missing/empty config file (fresh install): loadConfigFile()
@@ -20,17 +39,27 @@ export function setProvider(config: MochiConfig, selection: ProviderSelection): 
   // "Cannot read properties of undefined", making `mochi login/use/model`
   // fatal before anything was saved.
   const base = cfg.model ?? ({} as MochiConfig['model']);
+  const p = providerById(selection.provider);
+  const envKey = p?.envKey ? process.env[p.envKey] : undefined;
+  // Only inherit base.apiKey if switching models on the SAME provider;
+  // never send Provider A's key to Provider B!
+  const sameProvider = base.provider === selection.provider;
+  const apiKey = selection.apiKey || (sameProvider ? base.apiKey : (envKey || undefined));
+
   cfg.model = {
     ...base,
     provider: selection.provider,
     baseUrl: selection.baseUrl,
     model: selection.model,
-    apiKey: selection.apiKey || base.apiKey,
+    apiKey,
   };
   if (!cfg.reasoning) {
     cfg.reasoning = 'max';
   }
-  const p = providerById(selection.provider);
+  cfg.safety = {
+    ...(cfg.safety ?? {}),
+    contextBudgetTokens: modelContextBudget(selection.model, selection.provider),
+  };
   if (p && (p.kind === 'openai' || p.kind === 'anthropic' || p.kind === 'gemini')) {
     cfg.model.profiles = cfg.model.profiles ?? ({} as Record<ModelProfile, string>);
     cfg.model.profiles.fast = selection.model;

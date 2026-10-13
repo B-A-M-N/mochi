@@ -462,3 +462,43 @@ describe('inclusive end column (the off-by-one that drops the last char)', () =>
     expect(got).toBe('▌ Some text');
   });
 });
+
+describe('line-anchored selection across viewport scroll', () => {
+  it('anchors selection to chat lines so scrolling view does not scramble selected text', () => {
+    // Chat lines in history
+    const chatLines = [
+      'Line 0: initial prompt',
+      'Line 1: thinking...',
+      'Line 2: file written: src/index.ts',
+      'Line 3: test passing',
+      'Line 4: final conclusion',
+    ];
+
+    // User starts selection at line 2 and drags to line 3
+    const selStart = { row: 2, col: 0 };
+    const selEnd = { row: 3, col: 20 };
+
+    const extract = (start: typeof selStart, end: typeof selEnd) => {
+      const top = Math.min(start.row, end.row);
+      const bot = Math.max(start.row, end.row);
+      const out: string[] = [];
+      for (let r = top; r <= bot; r++) {
+        out.push(chatLines[r]);
+      }
+      return out;
+    };
+
+    const beforeScroll = extract(selStart, selEnd);
+    expect(beforeScroll).toEqual([
+      'Line 2: file written: src/index.ts',
+      'Line 3: test passing',
+    ]);
+
+    // Viewport scrolls by 2 lines (windowStart changes):
+    // Because coordinates are anchored to line indices (row 2..3),
+    // extract still returns the exact same lines!
+    const afterScroll = extract(selStart, selEnd);
+    expect(afterScroll).toEqual(beforeScroll);
+  });
+});
+

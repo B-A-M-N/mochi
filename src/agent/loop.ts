@@ -1742,6 +1742,18 @@ Continue from 'Next:', do not redo completed progress.`,
             return this.finish(task, false, 'Rate limit ceiling reached after retries. Work checkpointed — resume with "mochi resume".', 'model_error');
           }
 
+          // Context limit exceeded: compact history immediately and retry seamlessly.
+          if (/context.*length|maximum context|prompt is too long|token.*limit|too many tokens|context_length_exceeded/i.test(rMsg)) {
+            this.events.emit({
+              type: 'agent:log',
+              agentId: this.id,
+              message: `[context-limit] Model context window reached (${rMsg.slice(0, 80)}). Auto-compacting history and retrying...`,
+            });
+            await this.checkpointAndCompact('floor');
+            i = Math.max(0, i - 1);
+            continue;
+          }
+
           // Transient transport aborts ("The operation was aborted",
           // ECONNRESET, ETIMEDOUT, socket hang up, ...) used to die right
           // here as model_error — 5 of 12 recent user traces ended this way
