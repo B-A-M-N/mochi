@@ -6,8 +6,6 @@ import {
   getAllThemes,
   gradientContextBar,
   gradientCacheBar,
-  spinnerColored,
-  spinnerSweep,
   splashFrame,
   SPLASH_PHASES,
   contextBar,
@@ -22,6 +20,8 @@ import {
   renderDropdown,
   transcriptIndent,
   spinnerFrame,
+  spinnerColored,
+  spinnerSweep,
   thinkingLine,
   farewellFrame,
   formatDuration,
@@ -393,7 +393,7 @@ describe('gradient bars (jcode-style)', () => {
 });
 
 describe('animated spinner', () => {
-  it('cycles colored frames', () => {
+  it('cycles colored frames with braille spinner beside thinking', () => {
     const a = spinnerColored(0);
     const b = spinnerColored(3);
     expect(a).not.toBe(b);
@@ -401,18 +401,20 @@ describe('animated spinner', () => {
     expect(b).toMatch(/⠸/);
   });
 
-  it('sweep line animates', () => {
-    const a = spinnerSweep(0, 12);
-    const b = spinnerSweep(5, 12);
+  it('sweep line animates diamond laser tracer', () => {
+    const a = spinnerSweep(0, 7);
+    const b = spinnerSweep(3, 7);
     expect(a).not.toBe(b);
     expect(a).toContain('━');
+    expect(a).toContain('◈');
   });
 
-  it('thinking line includes the sweep and note', () => {
+  it('thinking line includes the loading spinner, sweep and note', () => {
     const line = thinkingLine(2, 'running tests');
     expect(line).toContain('Thinking');
     expect(line).toContain('running tests');
     expect(line).toContain('━');
+    expect(line).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
   });
 });
 

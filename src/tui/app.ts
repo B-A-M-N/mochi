@@ -266,7 +266,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   /** Render the pinned top tab-bar row from the shared layout (tabs.ts), so
    *  styled columns match hit-test columns EXACTLY (ANSI is zero-width).
   /** Tab bar row for the top of the terminal:
-   *  opencode-style surface pills: elevated surface, live braille spinner for running tabs,
+   *  opencode-style surface pills: breathing purple dot for running tabs,
    *  green check for completed tabs, red cross for errors, soft purple dot for idle,
    *  and clickable close button on each tab + `+` button. */
   function tabBarRow(w: number): string {
@@ -274,7 +274,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const layout = tabBarCells(tabList, activeTabId, w);
     const ACTIVE_BG = '\x1b[48;2;34;28;48m';
     const PLUS_BG = '\x1b[48;2;38;38;38m';
-    const TAB_ORIGAMI_FACETS = ['▞', '▚', '▛', '▟', '◰', '◳', '▜', '▙', '◢', '◣', '◤', '◥', '◈', '◇'];
+    const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
@@ -287,8 +287,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        const frame = TAB_ORIGAMI_FACETS[state.spinner % TAB_ORIGAMI_FACETS.length];
-        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live metamorphic origami facet
+        const frame = BRAILLE[state.spinner % BRAILLE.length];
+        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live braille spinner
       } else if (status === 'done') {
         iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
       } else if (status === 'error') {

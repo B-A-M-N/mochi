@@ -1,6 +1,6 @@
 // mcp-manage: universal spec parsing, .mcp.json round-trips, live connect test.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
@@ -44,6 +44,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const proj = (name: string): string => {
   const d = resolve(dir, name);
   rmSync(d, { recursive: true, force: true });
+  mkdirSync(d, { recursive: true });
   return d;
 };
 
