@@ -77,11 +77,11 @@ describe('tabBarCells + tabBarHit (clickable + button)', () => {
     m.create('api');
     const layout = tabBarCells(listOf(m), m.activeTab().id, 100);
     expect(layout.cells.length).toBe(3); // 2 tabs + plus
-    expect(layout.cells[2].plain).toBe('+ New session');
+    expect(layout.cells[2].plain).toBe(' + ');
     expect(layout.cells[2].tabId).toBeNull();
     // Ranges tile with zero separators (cells carry their own padding).
     const [ps, pe] = layout.plusRange;
-    expect(pe - ps).toBe(13);
+    expect(pe - ps).toBe(3);
     expect(layout.width).toBe(pe);
     // Every column inside a cell hit-tests to that cell (or close button).
     for (const [i, cell] of layout.cells.entries()) {

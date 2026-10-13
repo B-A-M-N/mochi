@@ -227,7 +227,7 @@ export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number
   // ` ` (1) + icon (1) + ` ` (1) + title + unread + ` ` (1) + `×` (1) + ` ` (1) = 6 + unread
   const fixedOf = (t: TabInfo) => 6 + unreadOf(t).length;
   const fixedSum = list.reduce((n, t) => n + fixedOf(t), 0);
-  const plusWidth = visibleCells('+ New session');
+  const plusWidth = visibleCells(' + ');
   let titleBudget = Math.floor((w - plusWidth - fixedSum) / Math.max(1, list.length));
   titleBudget = Math.max(0, titleBudget);
 
@@ -265,7 +265,7 @@ export function tabBarCells(list: TabInfo[], _activeId: string, maxWidth: number
     };
   });
 
-  const plusPlain = '+ New session';
+  const plusPlain = ' + ';
   const plusW = visibleCells(plusPlain);
   cells.push({
     tabId: null,

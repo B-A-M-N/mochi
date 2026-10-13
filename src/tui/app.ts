@@ -52,7 +52,7 @@ const AUTOWRAP = '\x1b[?7h';
 const BRACKET_PASTE_ON = '\x1b[?2004h';
 const BRACKET_PASTE_OFF = '\x1b[?2004l';
 const RESET = '\x1b[0m';
-const OSC_BG_BLACK = '\x1b]11;#0a0a0a\x07';
+const OSC_BG_BLACK = '\x1b]11;#1a1a1a\x07';
 const OSC_BG_RESET = '\x1b]111\x07';
 
 type LineKind = 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'task' | 'goal' | 'plain' | 'thought' | 'summary';
@@ -267,17 +267,17 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   /** Tab bar row for the top of the terminal:
    *  opencode-style surface pills: elevated surface, live braille spinner for running tabs,
    *  green check for completed tabs, red cross for errors, soft purple dot for idle,
-   *  and clickable close button on each tab + `+ New session` button. */
+   *  and clickable close button on each tab + `+` button. */
   function tabBarRow(w: number): string {
     const tabList = tabs.list();
     const layout = tabBarCells(tabList, activeTabId, w);
     const ACTIVE_BG = '\x1b[48;2;34;28;48m';
-    const PLUS_BG = '\x1b[48;2;30;30;30m';
+    const PLUS_BG = '\x1b[48;2;38;38;38m';
     const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
-        return `${PLUS_BG}\x1b[38;2;230;230;235m${c.plain}${T.reset}`;
+        return `${PLUS_BG}\x1b[1m\x1b[38;2;220;220;230m${c.plain}${T.reset}`;
       }
       const isActive = c.tabId === activeTabId;
       const tab = tabList.find((t) => t.id === c.tabId);
