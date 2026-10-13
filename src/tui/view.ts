@@ -99,26 +99,10 @@ export function padEnd(s: string, n: number): string {
   return s + ' '.repeat(n - vis);
 }
 
-// ---- Thinking spinner ------------------------------------------------------
-// Celestial star spinner beside "Thinking…".
-// Dynamically inherits the active theme's palette so it matches whichever theme
-// is selected (e.g. Mochi violet/lavender/white for Mochi Purple, electric cyan
-// for Cyber Void, green/yellow for Matrix). Zero spinning braille dots, zero bars.
+// ---- Thinking spinner (OpenCode braille spinner) ---------------------------
+// Classic OpenCode/OpenTUI braille spinner ('⠋', '⠙', '⠹', ...) with smooth
+// theme-native harmonic breathing glow. Clean, lightweight, professional.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
-/**
- * Radiant celestial star core: heavy, bold, high-contrast solid stars (★, ✶, ✷, ✸, ✹).
- * 100% solid filled glyphs with zero thin outlines (✧) and zero tiny dots (·).
- * Invariant cell width, rock-solid font metrics, zero jitter.
- */
-export const CELESTIAL_CORE: Array<[string, string, string]> = [
-  ['✦', '★', '✦'], // core anchor: solid 4-point satellites with heavy 5-point star
-  ['✶', '✷', '✶'], // expansion: 6-point satellites with heavy 8-point star
-  ['✷', '✸', '✷'], // bloom: heavy 8-point satellites with dense starburst
-  ['✸', '✹', '✸'], // apex supernova: dense starbursts with 12-point radiant core
-  ['✷', '✸', '✷'], // contraction: settling back to heavy 8-point
-  ['✶', '✷', '✶'], // return: 6-point satellites
-];
 
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
@@ -146,21 +130,14 @@ export function getThemeSpinnerColors(): Array<[number, number, number]> {
 }
 
 /**
- * Theme-matched celestial constellation spinner beside Thinking:
- * Symmetrical heavy 3-star formation with dynamic theme color ripple.
- * Bold, thick, high-impact solid stars with zero tiny dots or thin outlines.
+ * OpenCode-style colored braille spinner:
+ * Renders the rotating braille dot with smooth theme color breathing.
  */
 export function spinnerColored(i: number): string {
+  const dot = spinnerFrame(i);
   const stops = getThemeSpinnerColors();
-  const idx = Math.abs(i);
-  const frameIdx = idx % CELESTIAL_CORE.length;
-  const [left, center, right] = CELESTIAL_CORE[frameIdx];
-  const cMid = stops[idx % stops.length];
-  const cSide = stops[(idx + Math.floor(stops.length / 2)) % stops.length];
-  const leftStr = `${rgb(cSide[0], cSide[1], cSide[2])}${T.bold}${left}${T.reset}`;
-  const midStr = `${rgb(cMid[0], cMid[1], cMid[2])}${T.bold}${center}${T.reset}`;
-  const rightStr = `${rgb(cSide[0], cSide[1], cSide[2])}${T.bold}${right}${T.reset}`;
-  return `${leftStr} ${midStr} ${rightStr}`;
+  const c = stops[Math.abs(i) % stops.length];
+  return `${rgb(c[0], c[1], c[2])}${T.bold}${dot}${T.reset}`;
 }
 
 /**

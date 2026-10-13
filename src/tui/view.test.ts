@@ -432,30 +432,30 @@ describe('gradient bars (jcode-style)', () => {
   });
 });
 
-describe('thinking spinner (radiant star spinner only)', () => {
-  it('includes glittering celestial star beside Thinking without spinning braille dot or bar sweep', () => {
+describe('thinking spinner (OpenCode braille spinner)', () => {
+  it('includes braille loading dot beside Thinking without star clutter or bar sweep', () => {
     const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
     const a = thinkingLine(0);
     const b = thinkingLine(3);
     expect(a).not.toBe(b); // still animates
-    expect(plain(a)).toMatch(/[✦★✶✷✸✹]/); // heavy solid star core
-    expect(plain(a)).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // no braille spinning dot
+    expect(plain(a)).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // braille loading dot
+    expect(plain(a)).not.toMatch(/[✦★✶✷✸✹]/); // no celestial star clutter
     expect(a).toContain('Thinking');
     expect(plain(a)).not.toContain('━'); // no bar rail
     expect(plain(a)).not.toContain('❬');
     const noted = thinkingLine(2, 'running tests');
     expect(noted).toContain('Thinking');
     expect(noted).toContain('running tests');
-    expect(plain(noted)).toMatch(/[✦★✶✷✸✹]/);
-    expect(plain(noted)).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(plain(noted)).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(plain(noted)).not.toMatch(/[✦★✶✷✸✹]/);
   });
 
-  it('cycles bright star frames with specular highlights', () => {
+  it('cycles braille dot frames with smooth theme coloring', () => {
     const s0 = spinnerColored(0);
     const s1 = spinnerColored(1);
     expect(s0).not.toBe(s1);
-    expect(s0).toContain('★');
-    expect(s1).toContain('✷');
+    expect(s0).toContain('⠋');
+    expect(s1).toContain('⠙');
   });
 
   it('animates moving dots (. -> .. -> ...) with invariant 3-cell width', () => {

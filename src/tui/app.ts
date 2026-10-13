@@ -40,6 +40,7 @@ import {
   composerTopRule,
   composerBottomRule,
   transcriptIndent,
+  spinnerFrame,
   thinkingLine,
   doneLine,
   resolveVerb,
@@ -297,10 +298,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        const star = (state.spinner >> 2) % 2 === 0 ? '✦' : '★';
+        const frame = spinnerFrame(state.spinner);
         const stops = getThemeSpinnerColors();
         const c = stops[state.spinner % stops.length];
-        iconColored = `\x1b[38;2;${c[0]};${c[1]};${c[2]}m${star}`;
+        iconColored = `\x1b[38;2;${c[0]};${c[1]};${c[2]}m${frame}`;
       } else if (status === 'done') {
         iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
       } else if (status === 'error') {
