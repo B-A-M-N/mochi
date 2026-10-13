@@ -1,0 +1,3 @@
+# Bun configuration for @mochi/agent
+[test]
+root = "src"

@@ -354,6 +354,18 @@ describe('task stepper', () => {
     expect(plain).toContain('[3/3 ○');
     expect(plain).toContain('──');
   });
+
+  it('renders a compact stepper on narrow viewports (< 50 cols) without wrapping', () => {
+    const tasks = [
+      { id: '1', title: 'Audit', status: 'completed' },
+      { id: '2', title: 'Patch', status: 'running' },
+    ];
+    const out = renderTaskStepper(tasks, 35);
+    const plain = out.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(visibleLen(out)).toBeLessThanOrEqual(35);
+    expect(plain).toContain('[1 ✓]');
+    expect(plain).toContain('[2 ✦]');
+  });
 });
 
 describe('layout', () => {

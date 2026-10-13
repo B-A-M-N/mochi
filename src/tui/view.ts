@@ -233,7 +233,6 @@ export function renderTaskStepper(tasks: TaskStepItem[], width: number): string 
 
   for (let i = 0; i < total; i++) {
     const t = tasks[i];
-    const num = `${i + 1}/${total}`;
     let icon = '○';
     let color = T.grayDark;
     if (t.status === 'completed' || t.status === 'done') {
@@ -247,15 +246,17 @@ export function renderTaskStepper(tasks: TaskStepItem[], width: number): string 
       color = T.error;
     }
 
-    const maxTitleLen = Math.max(6, Math.floor((width - 24) / total));
+    const num = width < 42 ? `${i + 1}` : `${i + 1}/${total}`;
+    const maxTitleLen = Math.max(4, Math.floor((width - 20) / total));
     const shortTitle = t.title ? ellipsize(t.title, maxTitleLen) : '';
     const label = width >= 64 && shortTitle ? ` ${shortTitle}` : '';
     parts.push(`${color}[${num} ${icon}${label}]${T.reset}`);
   }
 
-  const connector = `${T.grayDark} ── ${T.reset}`;
+  const connector = width < 50 ? `${T.grayDark}─${T.reset}` : `${T.grayDark} ── ${T.reset}`;
   const rail = parts.join(connector);
-  const out = `${T.act}·✦·${T.reset} ${rail}`;
+  const prefix = width < 48 ? '' : `${T.act}·✦·${T.reset} `;
+  const out = `${prefix}${rail}`;
   return visibleLen(out) > width ? ellipsize(out, width) : out;
 }
 

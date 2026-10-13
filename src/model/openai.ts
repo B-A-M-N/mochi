@@ -194,7 +194,7 @@ export function createOpenAIProvider(config: ProviderConfig) {
     const headerTimeoutRaw = Number(process.env.MOCHI_MODEL_HEADERS_TIMEOUT_MS);
     const headerTimeoutMs = Number.isFinite(headerTimeoutRaw) && headerTimeoutRaw > 0
       ? Math.max(100, headerTimeoutRaw)
-      : 45_000;
+      : 25_000;
     const headerTimer = setTimeout(() => signal.abort(new Error(`Model response headers stalled for ${headerTimeoutMs}ms`)), headerTimeoutMs);
 
     // Rate-limit + transient-failure safe fetch: only the request is retried
@@ -248,7 +248,10 @@ export function createOpenAIProvider(config: ProviderConfig) {
     // and the timer aborts the request only when the stream has been silent for
     // STALL_TIMEOUT_MS. This measurably raises token throughput on chatty
     // providers vs. a Promise.race around every chunk.
-    const STALL_TIMEOUT_MS = 30_000;
+    const stallTimeoutRaw = Number(process.env.MOCHI_MODEL_STALL_TIMEOUT_MS);
+    const STALL_TIMEOUT_MS = Number.isFinite(stallTimeoutRaw) && stallTimeoutRaw > 0
+      ? Math.max(1000, stallTimeoutRaw)
+      : 20_000;
     let lastChunkAt = Date.now();
     let stalled = false;
     const stallInterval = setInterval(() => {

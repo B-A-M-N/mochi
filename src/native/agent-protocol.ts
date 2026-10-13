@@ -13,6 +13,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,13 +38,38 @@ let nextId = 0;
 
 function agentPath(): string | null {
   if (process.env.MOCHI_NO_NATIVE === '1') return null;
+  if (process.env.MOCHI_AGENT_BIN && existsSync(process.env.MOCHI_AGENT_BIN)) {
+    return process.env.MOCHI_AGENT_BIN;
+  }
   try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      resolve(here, '..', '..', 'native', 'bin', 'mochi-agent'),
-      resolve(here, '..', '..', 'native', 'mochi_core', 'target', 'release', 'mochi-agent'),
-    ];
-    for (const p of candidates) if (existsSync(p)) return p;
+    const candidates: string[] = [];
+    try {
+      const here = dirname(fileURLToPath(import.meta.url));
+      candidates.push(
+        resolve(here, '..', '..', 'native', 'bin', 'mochi-agent'),
+        resolve(here, '..', '..', 'native', 'mochi_core', 'target', 'release', 'mochi-agent'),
+      );
+    } catch {
+      // Bundled virtual filesystem fallback
+    }
+    if (process.execPath) {
+      const execDir = dirname(process.execPath);
+      candidates.push(
+        resolve(execDir, '..', 'native', 'bin', 'mochi-agent'),
+        resolve(execDir, 'native', 'bin', 'mochi-agent'),
+        resolve(execDir, 'mochi-agent'),
+      );
+    }
+    const home = homedir();
+    candidates.push(
+      resolve(home, 'mochi', 'native', 'bin', 'mochi-agent'),
+      resolve(home, '.local', 'bin', 'mochi-agent'),
+      resolve(home, '.mochi', 'bin', 'mochi-agent'),
+      '/usr/local/bin/mochi-agent',
+    );
+    for (const p of candidates) {
+      if (p && existsSync(p)) return p;
+    }
     return null;
   } catch {
     return null;
