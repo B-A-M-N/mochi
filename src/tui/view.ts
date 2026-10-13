@@ -23,7 +23,7 @@ import { wrap } from './wrap.js'; // visibleLen is local (line ~84)
 
 import {
   THEMES, getTheme, getAllThemes, getCurrentTheme, applyTheme, themeSwatch,
-  defaultRoleColors, resolveRoleColors, adaptThemeColors,
+  defaultRoleColors, resolveRoleColors, adaptThemeColors, parseThemeRgb,
   type MochiTheme, type RoleColors,
 } from './themes.js';
 
@@ -101,20 +101,11 @@ export function padEnd(s: string, n: number): string {
 
 // ---- Thinking spinner ------------------------------------------------------
 // Celestial star spinner beside "Thinking…".
-// Bold, radiant celestial star with high-contrast chromatic glow and specular
-// flashes. Zero spinning braille dots, zero bars.
+// Dynamically inherits the active theme's palette so it matches whichever theme
+// is selected (e.g. Mochi violet/lavender/white for Mochi Purple, electric cyan
+// for Cyber Void, green/yellow for Matrix). Zero spinning braille dots, zero bars.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const CELESTIAL_STARS = ['✦', '✧', '✶', '✷', '✸', '✹', '✵', '★'];
-const STAR_STOPS: Array<[number, number, number]> = [
-  [255, 215, 0],   // vibrant stellar gold
-  [255, 255, 255], // pure specular white-hot flash
-  [255, 110, 199], // Y2K neon hot pink
-  [199, 146, 234], // cyber violet
-  [170, 150, 255], // neon lavender
-  [86, 212, 221],  // electric cyan
-  [255, 130, 180], // electric rose
-  [100, 235, 200], // ice mint glow
-];
+const CELESTIAL_STARS = ['✦', '✧', '✶', '✧'];
 
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
@@ -125,23 +116,38 @@ export function sparkleFrame(i: number): string {
 }
 
 /**
- * Luminous celestial star spinner beside Thinking:
- * High-impact, radiant star animation with specular flashes on supernova states.
+ * Resolves harmonic color stops tailored to the active theme.
+ * Extracts bright stops from the theme's handcrafted splashStops (ignoring dark backgrounds),
+ * or falls back to theme role tokens, and mirrors them into a smooth breathing wave.
+ */
+export function getThemeSpinnerColors(): Array<[number, number, number]> {
+  const theme = getCurrentTheme();
+  const rawStops = (theme.splashStops ?? []).filter(([r, g, b]) => (r + g + b) > 100);
+  if (rawStops.length >= 2) {
+    return [...rawStops, ...rawStops.slice(1, -1).reverse()];
+  }
+  const actRgb = parseThemeRgb(T.act, 38) ?? [167, 139, 250];
+  const secRgb = parseThemeRgb(T.violet ?? T.cyan ?? T.pink, 38) ?? [139, 92, 246];
+  return [secRgb, actRgb, [248, 248, 255], actRgb];
+}
+
+/**
+ * Theme-matched celestial star spinner beside Thinking:
+ * Smoothly pulses in the active theme's brand accent colors.
  */
 export function spinnerColored(i: number): string {
+  const stops = getThemeSpinnerColors();
   const idx = Math.abs(i);
   const spark = sparkleFrame(idx);
-  const c = STAR_STOPS[idx % STAR_STOPS.length];
-  const isSupernova = spark === '✸' || spark === '✹';
-  const color = isSupernova ? [255, 255, 255] : c;
-  return `${rgb(color[0], color[1], color[2])}${T.bold}${spark}${T.reset}`;
+  const c = stops[idx % stops.length];
+  return `${rgb(c[0], c[1], c[2])}${T.bold}${spark}${T.reset}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
   const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
   const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
-  const cText = STAR_STOPS[(Math.abs(frame) + 3) % STAR_STOPS.length];
-  const thinkingGlow = `${rgb(cText[0], cText[1], cText[2])}${T.bold}Thinking…${T.reset}`;
+  const thinkLabel = R.thinkingLabel || T.act;
+  const thinkingGlow = `${thinkLabel}${T.bold}Thinking…${T.reset}`;
   return `${spinnerColored(frame)} ${thinkingGlow}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
