@@ -289,7 +289,6 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
   const miniToggle = `${m.mode === 'plan' ? `${T.plan}● P` : `${T.act}● A`}${T.reset}`;
 
   const toggle = width >= 78 ? fullToggle : width >= 56 ? compactToggle : miniToggle;
-  const toggleLen = visibleLen(toggle);
 
   // Level-keyed badge color with a safe fallback: an unknown level name can
   // never print `[object Object]` (the old `?? R.reasonBadge` fallback did
@@ -332,25 +331,32 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
 
   const extra = m.extra?.length && width >= 90 ? ` ${T.grayDark}· ${m.extra.join(' · ')}${T.reset}` : '';
 
-  const fixedLen = visibleLen(reasoningBadge) + visibleLen(modeBadge) + visibleLen(barText) + visibleLen(extra) + toggleLen + 2;
+  const togglePart = toggle ? `  ${toggle}` : '';
+  const togglePartLen = visibleLen(togglePart);
+  const fixedLen = visibleLen(reasoningBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
   const availForModel = Math.max(4, width - fixedLen);
   const modelMax = Math.min(28, availForModel);
   const modelText = `${T.fg}${T.bold}${ellipsize(m.modelId, modelMax)}${T.reset}`;
 
-  let left = `${modelText}${reasoningBadge}${modeBadge}${barText}${extra}`;
-  if (visibleLen(left) + toggleLen + 1 > width) {
-    left = `${modelText}${modeBadge}${extra}`;
-    if (visibleLen(left) + toggleLen + 1 > width) {
-      left = `${modelText}`;
+  // Plan/act toggle sits directly beside the token usage/bar on the left, not right-padded.
+  let line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
+  if (visibleLen(line) > width) {
+    line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+    if (visibleLen(line) > width) {
+      line = `${modelText}${modeBadge}${barText}${togglePart}`;
+      if (visibleLen(line) > width) {
+        line = `${modelText}${barText}${togglePart}`;
+        if (visibleLen(line) > width) {
+          line = `${modelText}${togglePart}`;
+          if (visibleLen(line) > width) {
+            line = `${ellipsize(modelText, Math.max(4, width - togglePartLen))}${togglePart}`;
+          }
+        }
+      }
     }
   }
 
-  const leftLen = visibleLen(left);
-  const pad = Math.max(1, width - leftLen - toggleLen);
-  const combined = `${left}${' '.repeat(pad)}${toggle}`;
-  return visibleLen(combined) > width
-    ? `${ellipsize(left, Math.max(3, width - toggleLen - 1))} ${toggle}`
-    : padEnd(combined, width);
+  return padEnd(visibleLen(line) > width ? ellipsize(line, width) : line, width);
 }
 
 /** Row 2: workspace (branch) | auto-approve | N files +X -Y */
