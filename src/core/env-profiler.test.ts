@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getHostEnvironmentProfile, formatEnvironmentBlock, resetEnvironmentProfileCache } from './env-profiler.js';
+import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, delimiter } from 'node:path';
+import { getHostEnvironmentProfile, formatEnvironmentBlock, resetEnvironmentProfileCache, binaryOnPath } from './env-profiler.js';
 
 describe('Host Environment Profiler', () => {
   it('detects available runtime binaries on the system', () => {
@@ -39,5 +42,27 @@ describe('Host Environment Profiler', () => {
       timestamp: Date.now(),
     });
     expect(block).toBe('');
+  });
+
+  it('binaryOnPath scans PATH in-process (no shell, delimiter-aware)', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-binpath-'));
+    try {
+      writeFileSync(resolve(dir, 'mytool'), '#!/bin/sh\necho hi\n');
+      chmodSync(resolve(dir, 'mytool'), 0o755);
+      const pathEnv = `${dir}${delimiter}/nonexistent-dir-xyz`;
+      if (process.platform === 'win32') {
+        // PATHEXT-aware: exact name without extension is NOT enough, but
+        // name + a PATHEXT extension is (mirrors CreateProcess lookup).
+        expect(binaryOnPath('mytool', pathEnv)).toBe(false);
+        writeFileSync(resolve(dir, 'mytool.CMD'), '@echo off\r\necho hi\r\n');
+        expect(binaryOnPath('mytool', pathEnv)).toBe(true);
+      } else {
+        expect(binaryOnPath('mytool', pathEnv)).toBe(true);
+      }
+      expect(binaryOnPath('definitely-not-a-binary-xyz', pathEnv)).toBe(false);
+      expect(binaryOnPath('node')).toBe(true); // the test runner itself runs on node
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

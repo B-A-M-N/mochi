@@ -3,6 +3,8 @@
 // build systems, and formatters to prevent hallucinating nonexistent tools.
 
 import { spawnSync } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
+import { delimiter, resolve } from 'node:path';
 
 export interface ToolchainBinary {
   name: string;
@@ -77,14 +79,45 @@ const LINTER_CANDIDATES = [
 ];
 
 /** Binaries whose version probe is slow (300ms+ cold spawn) — availability via
- *  the batched `command -v` scan is enough; skip the version spawn. */
+ *  the batched PATH scan is enough; skip the version spawn. */
 const HEAVY_PROBE_NAMES = new Set(['pnpm', 'npm', 'yarn', 'gradle', 'mvn', 'tsc']);
+
+/** In-process PATH lookup: true when `name` resolves the way the OS spawner
+ *  would (exact executable on POSIX, PATHEXT-aware on win32). Exported for
+ *  tests; getHostEnvironmentProfile is the normal entry point. */
+export function binaryOnPath(name: string, pathEnv = process.env.PATH ?? ''): boolean {
+  for (const dir of pathEnv.split(delimiter).filter(Boolean)) {
+    if (process.platform === 'win32') {
+      // CreateProcess resolution: exact name plus PATHEXT extensions.
+      const exts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';')
+        .map((e) => e.trim()).filter(Boolean)
+        .map((e) => (e.startsWith('.') ? e : `.${e}`).toLowerCase());
+      for (const ext of exts) {
+        try {
+          if (statSync(resolve(dir, name + ext)).isFile()) return true;
+        } catch { /* not here */ }
+      }
+    } else {
+      try {
+        accessSync(resolve(dir, name), constants.X_OK);
+        return true;
+      } catch { /* not here */ }
+    }
+  }
+  return false;
+}
 
 /** Probe and return the host environment profile (cached per session).
  *  MCH-112: a naive per-binary spawnSync scan costs ~2s on cold start (each
  *  MISSING binary burns ~300ms in a full PATH walk). Resolve availability with
- *  ONE `command -v` batch first, then version-probe only the binaries that
- *  actually exist. Cuts first-prompt latency by ~2s. */
+ *  ONE in-process PATH scan first, then version-probe only the binaries that
+ *  actually exist. Cuts first-prompt latency by ~2s.
+ *
+ *  Deliberately shell-free: the old `bash -c command -v` batch broke on
+ *  Windows, where `bash` may resolve to git-bash (PATH conversion quirks) or
+ *  the WSL launcher (a whole other OS's PATH) — the profiler then reported
+ *  `node` missing on a box that runs node. A direct directory scan with
+ *  delimiter + PATHEXT awareness is deterministic on every platform. */
 export function getHostEnvironmentProfile(forceRefresh = false): HostEnvironmentProfile {
   if (cachedProfile && !forceRefresh) return cachedProfile;
 
@@ -95,14 +128,7 @@ export function getHostEnvironmentProfile(forceRefresh = false): HostEnvironment
   ].map((c) => c.name);
   let present = new Set<string>();
   try {
-    const res = spawnSync(
-      'bash',
-      ['-c', `for n in ${all.join(' ')}; do command -v "$n" >/dev/null 2>&1 && echo "$n"; done`],
-      { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'pipe'] },
-    );
-    if (res.status === 0 && res.stdout) {
-      present = new Set(res.stdout.trim().split('\n').filter(Boolean));
-    }
+    present = new Set(all.filter((n) => binaryOnPath(n)));
   } catch { /* fall through to per-binary probes */ }
 
   const runtimes: Record<string, ToolchainBinary> = {};
