@@ -41,6 +41,12 @@ test('lint rejects body with no steps', () => {
   expect(r.issues.some((i) => i.rule === 'has-steps')).toBe(true);
 });
 
+test('lint accepts numbered ATX headings as procedure steps (bundled house style)', () => {
+  const body = ['# Thing Procedure', '', '## 1. Do the first thing.', '', '## 2. Verify it worked.'].join('\n');
+  const r = lintSkillDoc('my-skill', 'A perfectly fine description of what this procedure does.', body);
+  expect(r.issues.some((i) => i.rule === 'has-steps')).toBe(false);
+});
+
 test('lint rejects TODO placeholders', () => {
   const body = goodBody + '\n5. TODO fill this in later.';
   const r = lintSkillDoc('my-skill', 'A perfectly fine description of what this procedure does.', body);

@@ -49,8 +49,10 @@ export function lintSkillDoc(name: string, description: string, body: string): S
     issues.push({ rule: 'body-max', severity: 'warn', message: `body very large (${trimmed.length} chars) — split or trim` });
   }
 
-  // R4: must contain at least one numbered/checkbox procedure step.
-  const stepCount = (trimmed.match(/^\s*(?:\d+[.)]|[-*]\s\[[ x]\])/gm) ?? []).length;
+  // R4: must contain at least one numbered/checkbox procedure step. Numbered
+  // ATX headings (`## 1. Detect`) count: that is the house style of the whole
+  // bundled library, and a numbered heading IS a procedure step marker.
+  const stepCount = (trimmed.match(/^\s*(?:\d+[.)]|#{1,6}\s+\d+[.)]|[-*]\s\[[ x]\])/gm) ?? []).length;
   if (stepCount < MIN_PROCEDURE_STEPS) {
     issues.push({ rule: 'has-steps', severity: 'error', message: 'no numbered steps or checkboxes found — skills must be actionable procedures' });
   }

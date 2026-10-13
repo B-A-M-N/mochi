@@ -9,8 +9,10 @@ export interface BuiltinMcpServer {
   id: string;
   name: string;
   description: string;
-  command: string;
-  args: string[];
+  command?: string;
+  args?: string[];
+  /** Remote endpoint alternative (no local spawn). Mutually exclusive with command. */
+  url?: string;
   env?: Record<string, string>;
   installHint?: string;
 }
@@ -47,9 +49,9 @@ export const BUILTIN_MCP_SERVERS: BuiltinMcpServer[] = [
     name: 'Brave Search MCP',
     description: 'Real-time web search via Brave Search API',
     command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-brave-search'],
+    args: ['-y', '@brave/brave-search-mcp-server'],
     env: { BRAVE_API_KEY: '${BRAVE_API_KEY}' },
-    installHint: 'Get API key at https://api.search.brave.com — export BRAVE_API_KEY=your_key',
+    installHint: 'Get API key at https://api.search.brave.com — export BRAVE_API_KEY=your_key (old @modelcontextprotocol/server-brave-search is deprecated)',
   },
   {
     id: 'mcp-puppeteer',
@@ -116,16 +118,125 @@ export const BUILTIN_MCP_SERVERS: BuiltinMcpServer[] = [
     args: ['-y', '@modelcontextprotocol/server-everything'],
     installHint: 'npx -y @modelcontextprotocol/server-everything',
   },
+  {
+    id: 'mcp-gitlab',
+    name: 'GitLab MCP',
+    description: 'GitLab API: projects, issues, merge requests, pipelines, code search',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-gitlab'],
+    env: { GITLAB_PERSONAL_ACCESS_TOKEN: '${GITLAB_PERSONAL_ACCESS_TOKEN}', GITLAB_API_URL: 'https://gitlab.com/api/v4' },
+    installHint: 'Create token at gitlab.com/-/user_settings/personal_access_tokens — export GITLAB_PERSONAL_ACCESS_TOKEN=glpat-...',
+  },
+  {
+    id: 'mcp-google-maps',
+    name: 'Google Maps MCP',
+    description: 'Places search, geocoding, directions, distance matrix, elevation',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-google-maps'],
+    env: { GOOGLE_MAPS_API_KEY: '${GOOGLE_MAPS_API_KEY}' },
+    installHint: 'Enable Maps APIs in Google Cloud Console — export GOOGLE_MAPS_API_KEY=...',
+  },
+  {
+    id: 'mcp-everart',
+    name: 'EverArt MCP',
+    description: 'AI image generation (text-to-image, image-to-image, upscaling)',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-everart'],
+    env: { EVERART_API_KEY: '${EVERART_API_KEY}' },
+    installHint: 'Get API key at everart.ai — export EVERART_API_KEY=...',
+  },
+  {
+    id: 'mcp-aws-kb',
+    name: 'AWS Knowledge Base MCP',
+    description: 'Query AWS Bedrock knowledge bases with RetrieveAndGenerate',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-aws-kb-retrieval'],
+    installHint: 'Configure AWS credentials (aws configure) with Bedrock + Bedrock KB access',
+  },
+  {
+    id: 'mcp-kubernetes',
+    name: 'Kubernetes MCP',
+    description: 'Read and manage Kubernetes resources: pods, deployments, logs, exec',
+    command: 'npx',
+    args: ['-y', 'mcp-server-kubernetes'],
+    installHint: 'Needs kubectl + ~/.kube/config pointing at your cluster (read-only ops by default)',
+  },
+  {
+    id: 'mcp-supabase',
+    name: 'Supabase MCP',
+    description: 'Supabase projects: SQL queries, table schema, migrations, logs',
+    command: 'npx',
+    args: ['-y', '@supabase/mcp-server-supabase'],
+    env: { SUPABASE_ACCESS_TOKEN: '${SUPABASE_ACCESS_TOKEN}' },
+    installHint: 'Create token at supabase.com/dashboard/account/tokens — export SUPABASE_ACCESS_TOKEN=sbp_...',
+  },
+  {
+    id: 'mcp-neon',
+    name: 'Neon Postgres MCP',
+    description: 'Neon serverless Postgres: branches, SQL, schema, migrations',
+    command: 'npx',
+    args: ['-y', '@neondatabase/mcp-server-neon'],
+    env: { NEON_API_KEY: '${NEON_API_KEY}' },
+    installHint: 'Get API key at console.neon.tech — export NEON_API_KEY=...',
+  },
+  {
+    id: 'mcp-tavily',
+    name: 'Tavily Search MCP',
+    description: 'Web search + extract with answers, news, and crawl depth control',
+    command: 'npx',
+    args: ['-y', 'tavily-mcp@latest'],
+    env: { TAVILY_API_KEY: '${TAVILY_API_KEY}' },
+    installHint: 'Sign up free at tavily.com — export TAVILY_API_KEY=tvly-...',
+  },
+  {
+    id: 'mcp-firecrawl',
+    name: 'Firecrawl MCP',
+    description: 'Scrape, crawl, map, and extract whole sites to markdown',
+    command: 'npx',
+    args: ['-y', 'firecrawl-mcp'],
+    env: { FIRECRAWL_API_KEY: '${FIRECRAWL_API_KEY}' },
+    installHint: 'Get API key at firecrawl.dev/app/api-keys — export FIRECRAWL_API_KEY=fc-...',
+  },
+  {
+    id: 'mcp-playwright',
+    name: 'Playwright MCP',
+    description: 'Real browser automation: navigate, click, fill, screenshot, scrape JS sites',
+    command: 'npx',
+    args: ['@playwright/mcp@latest'],
+    installHint: 'npx @playwright/mcp@latest (downloads browsers on first run; headless by default)',
+  },
+  {
+    id: 'mcp-context7',
+    name: 'Context7 Docs MCP',
+    description: 'Up-to-date library docs on demand (stops the model using stale APIs)',
+    command: 'npx',
+    args: ['-y', '@upstash/context7-mcp'],
+    env: { CONTEXT7_API_KEY: '${CONTEXT7_API_KEY}' },
+    installHint: 'Free key at context7.com/dashboard — export CONTEXT7_API_KEY=... (server also reads the env var, no --api-key flag needed)',
+  },
+  {
+    id: 'mcp-exa',
+    name: 'Exa Search MCP (hosted)',
+    description: 'Semantic web search + page fetch, no local install (rate-limited without key)',
+    url: 'https://mcp.exa.ai/mcp',
+    installHint: 'Works anonymously with limits; add ?exaApiKey or OAuth via /mcp for full limits',
+  },
 ];
 
 function yamlSnippet(server: BuiltinMcpServer): string {
+  if (server.url) {
+    return [
+      `  ${server.id}:`,
+      `    url: ${server.url}`,
+    ].join('\n');
+  }
   const envLines = server.env
     ? Object.entries(server.env).map(([k, v]) => `      ${k}: "${v}"`).join('\n')
     : '';
   return [
     `  ${server.id}:`,
     `    command: ${server.command}`,
-    `    args: [${server.args.map(a => `"${a}"`).join(', ')}]`,
+    `    args: [${(server.args ?? []).map(a => `"${a}"`).join(', ')}]`,
     envLines ? `    env:\n${envLines}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -197,7 +308,9 @@ export function addMcpServerConfig(projectDir: string, serverId: string): McpAdd
     // `add` accepts npm packages, uvx, and URLs too (one error surface).
     return addMcpSpecConfig(projectDir, serverId);
   }
-  const entry: Record<string, unknown> = { command: server.command, args: [...server.args] };
+  const entry: Record<string, unknown> = server.url
+    ? { url: server.url }
+    : { command: server.command, args: [...(server.args ?? [])] };
   if (server.env) entry.env = { ...server.env };
   const r = writeMcpServerConfig(projectDir, server.id, entry);
   if (!r.ok || r.alreadyPresent) return r;
@@ -232,7 +345,9 @@ export function parseMcpSpec(spec: string): { install: McpSpecInstall } | { erro
   if (!raw) return { error: 'Empty MCP spec. Use a built-in id (/mcp list), npm:<package>, uvx:<package>, https://… endpoint, or cmd:<binary> [args].' };
   const builtin = BUILTIN_MCP_SERVERS.find((s) => s.id === raw);
   if (builtin) {
-    const entry: Record<string, unknown> = { command: builtin.command, args: [...builtin.args] };
+    const entry: Record<string, unknown> = builtin.url
+      ? { url: builtin.url }
+      : { command: builtin.command, args: [...(builtin.args ?? [])] };
     if (builtin.env) entry.env = { ...builtin.env };
     return { install: { id: builtin.id, entry, origin: `built-in ${builtin.name}` } };
   }

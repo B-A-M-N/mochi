@@ -136,6 +136,32 @@ describe('testMcpServerConfig (live connect)', () => {
   }, 30_000);
 });
 
+describe('builtin registry integrity (fake-prevention)', () => {
+  it('every entry is installable: unique ids, url-or-command shape, real descriptions', () => {
+    const ids = new Set<string>();
+    for (const s of BUILTIN_MCP_SERVERS) {
+      expect(s.id, 'duplicate id').not.toBe('');
+      expect(ids.has(s.id), `duplicate id ${s.id}`).toBe(false);
+      ids.add(s.id);
+      // Exactly one transport: remote URL or local command (never neither,
+      // never a command-less entry that would spawn nothing).
+      const hasUrl = typeof s.url === 'string' && s.url.startsWith('https://');
+      const hasCmd = typeof s.command === 'string' && s.command.length > 0 && Array.isArray(s.args);
+      expect(hasUrl !== hasCmd, `${s.id} must have exactly one of url/command`).toBe(true);
+      expect(s.description.length, `${s.id} needs a description`).toBeGreaterThan(20);
+      expect(s.installHint && s.installHint.length > 0, `${s.id} needs an install hint`).toBe(true);
+    }
+    expect(BUILTIN_MCP_SERVERS.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('installs a URL builtin as a url entry (no fake command)', () => {
+    const p = proj('url1');
+    const r = addMcpServerConfig(p, 'mcp-exa');
+    expect(r.ok).toBe(true);
+    expect(readMcpServerConfig(p, 'mcp-exa')).toEqual({ url: 'https://mcp.exa.ai/mcp' });
+  });
+});
+
 describe('mcp_manage tool actions', () => {
   const ctx = (cwd: string): ToolContext => ({
     cwd, workspace: {} as never, config: {} as never, events: new EventBus() as never, agentId: 't',
