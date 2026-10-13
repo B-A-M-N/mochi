@@ -58,7 +58,7 @@ const MAX_OUTPUT_CHARS = 100_000;
 export const RESERVED_TOOL_NAMES = new Set([
   'tool_factory', 'skill', 'skill_manage', 'shell', 'read', 'write', 'edit',
   'patch', 'delete', 'glob', 'search', 'outline', 'inspect', 'git', 'todo',
-  'memory', 'think', 'ask_question', 'subagent', 'bg_task', 'fetch', 'web_search', 'web_crawl',
+  'memory', 'think', 'ask_question', 'notebook', 'subagent', 'bg_task', 'fetch', 'web_search', 'web_crawl',
   'chameleon', 'blast_radius', 'session_recall', 'compile_prompt', 'perf',
   // Built-in aliases that must never be shadowed by authored tools
   'sh', 'bash', 'cmd', 'exec', 'terminal', 'run_cmd', 'run_command', 'execute_command',
@@ -66,7 +66,7 @@ export const RESERVED_TOOL_NAMES = new Set([
   'search_files', 'grep', 'grep_search', 'ripgrep', 'read_file', 'readFile', 'view_file',
   'viewFile', 'cat', 'write_to_file', 'writeFile', 'create_file', 'edit_file', 'editFile',
   'replace_file_content', 'apply_diff', 'patch_file', 'browser_action', 'use_mcp_tool',
-  'ask_question', 'ask_followup_question',
+  'ask_question', 'ask_followup_question', 'notebook_edit', 'ipynb',
 ]);
 
 export function validateManifest(m: AuthoredToolManifest): string | null {

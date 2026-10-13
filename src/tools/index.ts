@@ -70,6 +70,7 @@ import { markdownTool } from './markdown.js';
 import { colorTool } from './color.js';
 import { acceptPlanTool } from './accept-plan.js';
 import { askQuestionTool } from './ask-question.js';
+import { notebookTool } from './notebook.js';
 
 export const ALL_TOOLS: Tool[] = [
   readTool, writeTool, editTool, deleteTool, shellTool, searchTool, globTool, outlineTool, astSliceTool,
@@ -90,6 +91,7 @@ export const ALL_TOOLS: Tool[] = [
   browserTool,
   acceptPlanTool,
   askQuestionTool,
+  notebookTool,
 ];
 
 export const ALL_TOOLS_MAP = new Map<string, Tool>(ALL_TOOLS.map((t) => [t.def.name, t]));
@@ -315,6 +317,9 @@ export const TOOL_ALIASES: Record<string, string> = {
   writeToFile: 'write',
   create_file: 'write',
   new_file: 'write',
+  // Jupyter notebooks (cell operations)
+  notebook_edit: 'notebook',
+  ipynb: 'notebook',
 
   // File editing
   edit_file: 'edit',

@@ -88,6 +88,12 @@ describe('glob tool', () => {
 // every directory under cwd with no caps; pointed at a broad root it blocked
 // the event loop for minutes and froze the whole TUI mid-task.
 describe('glob walk bounds (event-loop freeze regressions)', () => {
+  // NOTE: the vitest timeout here covers FIXTURE SETUP (36k synchronous file
+  // writes) + the walk, while the ms assertion below measures ONLY the walk.
+  // Under parallel load the setup alone can exceed 10s, flaking an otherwise
+  // green run — hence the generous wrapper. The <5000ms walk bound is the
+  // real regression tripwire and stays tight.
+  const WRAPPER_MS = process.platform === 'win32' ? 45_000 : 30_000;
   it('completes quickly inside a huge tree instead of blocking the event loop', async () => {
     // Synthetic fan-out far past the walker budgets: 40 dirs x 900 files.
     mkdirSync(resolve(dir, 'huge'), { recursive: true });
@@ -101,7 +107,7 @@ describe('glob walk bounds (event-loop freeze regressions)', () => {
     const ms = Date.now() - t0;
     expect(out.split('\n').filter(Boolean).length).toBeLessThanOrEqual(6); // limit(+note)
     expect(ms).toBeLessThan(5000);
-  }, process.platform === 'win32' ? 45_000 : 10_000);
+  }, WRAPPER_MS);
 
   it('does not loop forever on a self-referencing symlinked directory', async () => {
     try {
@@ -113,5 +119,5 @@ describe('glob walk bounds (event-loop freeze regressions)', () => {
     const out = await runGlob('**/nothing-matches-this.xyz', 10);
     expect(Date.now() - t0).toBeLessThan(8000);
     expect(typeof out).toBe('string');
-  }, process.platform === 'win32' ? 45_000 : 10_000);
+  }, WRAPPER_MS);
 });

@@ -3299,7 +3299,7 @@ Continue from 'Next:', do not redo completed progress.`,
     // cards" class — veto the mutation outright. Genuine clarification needs
     // go through ask_question (interactive user menu), reads through
     // read/glob/search.
-    if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
+    if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'notebook', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
       this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead.');
       return;
     }

@@ -1,6 +1,8 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Notebook tool** — Jupyter `.ipynb` by cell (read/edit/insert/delete/clear_outputs); hand-editing notebook JSON by line ranges corrupts cells, so this is the only supported path. nbformat-4 validated, outputs never pasted as blobs.
+- **Flake hardening** — glob huge-tree wrapper timeout 10s → 30s (the 36k-file fixture setup, not the walk, flaked under parallel load; the <5s walk bound is unchanged).
 - **Skill catalog you can download from** — no new infrastructure: the registry (clone → register → install by name), pack/unpack, cross-source search, and TUI browser already existed. Closed the trust gap: installs now run the skill-lint gate (prompt-injection payloads rejected, quality notes reported visibly), and the repo ships a `skills/packs.json` seed catalog so any clone is an installable source. Fixed 5 bundled skills missing procedures, 2 with stale instructions, and the lint rule that rejected the library's own styles.
 - **Prompt bloat cut on read-only tasks** — research/plan/document/unknown turns advertised all ~65 tool schemas (~10K tokens/call); new READ tier advertises 16 (~2K). Chat tier no longer drops `search` (dead `grep` alias entry). Measured per-tier schema weights in review.
 - **MCP registry 12 → 23** — Playwright, Context7, Tavily, Firecrawl, Exa (hosted), Supabase, Neon, GitLab, Google Maps, EverArt, AWS KB, Kubernetes, all package-verified; Brave migrated off its deprecated package; Exa rides a URL entry. New registry-integrity test (one transport, hints, unique ids).

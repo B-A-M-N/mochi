@@ -76,7 +76,7 @@ export class PermissionManager {
 
     if (this.policy === 'workspace-safe') {
       // Allow edits within the project workspace
-      const editTools = new Set(['write', 'edit', 'patch', 'delete', 'replace_symbol', 'regex_replace']);
+      const editTools = new Set(['write', 'edit', 'patch', 'delete', 'notebook', 'replace_symbol', 'regex_replace']);
       if (editTools.has(req.tool)) {
         const path = String(req.args.path ?? req.args.file ?? '');
         if (!path) return true; // no path = probably ok
