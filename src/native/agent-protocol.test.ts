@@ -2,7 +2,7 @@
 // must agree with the TS ContextEngine's valid-cut-point selection. If the
 // binary is absent, the tests assert the fallback contract instead.
 import { describe, it, expect, afterAll } from 'vitest';
-import { nativePlanCompaction, rustRuntimeVersion, isRustRuntimeAvailable, closeRustRuntime } from './agent-protocol.js';
+import { nativePlanCompaction, nativeTokensCount, nativeAssembleStream, rustRuntimeVersion, isRustRuntimeAvailable, closeRustRuntime } from './agent-protocol.js';
 import { ContextEngine } from '../context.js';
 import type { MochiConfig, ChatMessage } from '../types.js';
 
@@ -111,6 +111,98 @@ describe('Rust runtime compaction planner (stdio protocol)', () => {
     if (rust !== null && rust.cut !== null) {
       expect(rust.cut).toBe(ts);
       expect(messages[rust.cut].role).toBe('user');
+    }
+  });
+});
+
+function probeEngine(): ContextEngine {
+  const config = {
+    model: { provider: 'x', baseUrl: 'http://l', model: 'm' },
+    safety: { contextBudgetTokens: 8000, mode: 'auto', commandTimeoutSeconds: 5, maxIterations: 5, maxRuntimeMinutes: 1, maxConcurrentAgents: 1 },
+    permissions: { read: true, write: true, shell: true, network: true, gitDestructive: false },
+  } as unknown as MochiConfig;
+  return new ContextEngine(config, '/tmp/mochi-rust-probe');
+}
+
+describe('Rust runtime token counting (tokens op)', () => {
+  it('counts over message objects and agrees with the sync TS walk', async () => {
+    const ctx = probeEngine();
+    for (let i = 0; i < 30; i++) {
+      ctx.addMessage({ role: i % 2 ? 'assistant' : 'user', content: `message number ${i}: the quick brown fox jumps over the lazy dog` } as ChatMessage);
+    }
+    const sync = ctx.estimateTokens();
+    const native = await ctx.estimateTokensAsync();
+    if (isRustRuntimeAvailable()) {
+      // Regression guard: the runtime used to receive pre-stringified strings,
+      // which json_array_objects() skips -> tokens 0 -> the compaction floor
+      // check (ctxTokens > floor) never fired.
+      expect(native).toBeGreaterThan(0);
+      expect(native).toBeGreaterThanOrEqual(Math.floor(sync / 3));
+      expect(native).toBeLessThanOrEqual(sync * 3 + 100);
+    } else {
+      expect(native).toBe(sync);
+    }
+  });
+
+  it('stays silent on absurd payloads (>4MB)', async () => {
+    expect(await nativeTokensCount([{ role: 'user', content: 'x'.repeat(4_100_000) }])).toBeNull();
+    expect(await nativePlanCompaction([{ role: 'user', content: 'x'.repeat(4_100_000) }])).toBeNull();
+    expect(await nativeAssembleStream([{ content: 'x'.repeat(4_100_000) }])).toBeNull();
+  });
+});
+
+describe('Rust runtime stream assembly (accum op)', () => {
+  it('folds content, reasoning, stitched tool calls, and usage', async () => {
+    const a = await nativeAssembleStream([
+      { content: 'hello ' },
+      { content: 'world' },
+      { reasoningContent: 'think' },
+      { toolCalls: [{ index: 0, id: 'a1', function: { name: 'write', arguments: '{"path":' } }] },
+      { toolCalls: [{ index: 0, function: { arguments: '"g.txt"}' } }] },
+      { finishReason: 'tool_calls' },
+      { usage: { promptTokens: 10, completionTokens: 5 } },
+    ]);
+    if (isRustRuntimeAvailable()) {
+      expect(a).not.toBeNull();
+      expect(a!.content).toBe('hello world');
+      expect(a!.reasoning).toBe('think');
+      expect(a!.toolCalls).toEqual([{ id: 'a1', name: 'write', arguments: '{"path":"g.txt"}' }]);
+      expect(a!.finishReason).toBe('tool_calls');
+      expect(a!.promptTokens).toBe(10);
+      expect(a!.completionTokens).toBe(5);
+    }
+  });
+
+  it('fills defaults for omitted fields', async () => {
+    const a = await nativeAssembleStream([{ content: 'x' }]);
+    if (isRustRuntimeAvailable()) {
+      expect(a).not.toBeNull();
+      expect(a!.reasoning).toBe('');
+      expect(a!.toolCalls).toEqual([]);
+      expect(a!.finishReason).toBeNull();
+      expect(a!.promptTokens).toBe(0);
+      expect(a!.completionTokens).toBe(0);
+    }
+  });
+});
+
+describe('Rust runtime shutdown fallback', () => {
+  it('every op falls back to null after closeRustRuntime()', async () => {
+    closeRustRuntime();
+    // Deterministic: block respawn so the assertions hold regardless of how
+    // fast the exit event lands.
+    process.env.MOCHI_NO_NATIVE = '1';
+    try {
+      expect(await rustRuntimeVersion()).toBeNull();
+      expect(await nativePlanCompaction([{ role: 'user', content: 'hi' }])).toBeNull();
+      expect(await nativeTokensCount([{ role: 'user', content: 'hi' }])).toBeNull();
+      expect(await nativeAssembleStream([{ content: 'x' }])).toBeNull();
+      // Let the exit event flip procDead so the dead-proc arm is exercised.
+      await new Promise((r) => setTimeout(r, 150));
+      expect(await rustRuntimeVersion()).toBeNull();
+      closeRustRuntime(); // idempotent
+    } finally {
+      delete process.env.MOCHI_NO_NATIVE;
     }
   });
 });

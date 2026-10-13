@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { createTuiState, reduceEvent, pushLine, truncateArgs, toolFamily, resolveCommandPrefix } from './state.js';
+import {
+  createTuiState,
+  reduceEvent,
+  pushLine,
+  truncateArgs,
+  toolFamily,
+  resolveCommandPrefix,
+  formatToolInvocation,
+  formatToolCompleted,
+  rewrapSummaries,
+  toAbsLine,
+  toRelLine,
+} from './state.js';
 import { STREAM_LINE_CAP } from './state.js';
 
 function ev(partial: Record<string, unknown>): Record<string, unknown> { return partial; }
@@ -313,5 +325,211 @@ describe('resolveCommandPrefix (typeahead Enter selection)', () => {
   it('ignores a highlighted pick that is not among the matches', () => {
     expect(resolveCommandPrefix('/his', cmds, '/goal')).toBe('/history'); // unique match wins
     expect(resolveCommandPrefix('/re', cmds, '/goal')).toBeNull();        // bogus highlight → no hijack
+  });
+});
+
+describe('plain-text tool formatters', () => {
+  it('formats invocation rows across tools, aliases, and fallbacks', () => {
+    expect(formatToolInvocation('edit', { path: 'src/foo.ts', oldText: 'a', newText: 'b' })).toBe('edit: src/foo.ts');
+    expect(formatToolInvocation('write', { path: 'greeting.txt', content: 'hi' })).toBe('write: greeting.txt');
+    expect(formatToolInvocation('read', { file_path: 'docs/a.md' })).toBe('read: docs/a.md'); // arg alias → path
+    expect(formatToolInvocation('bash', { command: 'npm test' })).toBe('shell: npm test'); // tool alias
+    const long = formatToolInvocation('shell', { command: 'x'.repeat(300) });
+    expect(long.startsWith('shell: ')).toBe(true);
+    expect(long.length).toBeLessThanOrEqual('shell: '.length + 120 + 3);
+    expect(formatToolInvocation('search', { query: 'TODO' })).toBe('search: "TODO"');
+    expect(formatToolInvocation('glob', { pattern: '**/*.ts' })).toBe('glob: "**/*.ts"');
+    expect(formatToolInvocation('subagent', { tasks: [{}, {}] })).toBe('subagents: 2 parallel tasks');
+    expect(formatToolInvocation('subagent', { tasks: 'single' })).toBe('subagents: 1 parallel tasks');
+    expect(formatToolInvocation('subagent', { prompt: 'review this', role: 'reviewer' })).toBe('subagent (reviewer): "review this"');
+    expect(formatToolInvocation('subagent', { prompt: 'go' })).toBe('subagent (coder): "go"');
+    expect(formatToolInvocation('bg_task', { action: 'kill', task_id: 't7' })).toBe('bg_task: kill t7');
+    expect(formatToolInvocation('bg_task', {})).toBe('bg_task: list');
+    // Fallbacks: object without recognizable fields, and non-object args.
+    expect(formatToolInvocation('weird_tool', { foo: 1 })).toBe('weird_tool: ({"foo":1})');
+    expect(formatToolInvocation('weird_tool', 'plain string arg')).toBe('weird_tool: (plain string arg)');
+  });
+
+  it('formats completion rows for ok, error, and degenerate outputs', () => {
+    expect(formatToolCompleted('shell', { output: 'built ok', durationMs: 42 })).toBe('[OK] built ok (42ms)');
+    expect(formatToolCompleted('shell', { error: 'command timed out', durationMs: 10 })).toBe('[ERR] shell failed: command timed out (10ms)');
+    // Long first line → generic outcome row.
+    expect(formatToolCompleted('read', { output: 'x'.repeat(200) })).toBe('[OK] read completed');
+    // Shell markers and JSON payloads never surface as the headline.
+    expect(formatToolCompleted('shell', { output: 'exit_code: 1\nstderr text' })).toBe('[OK] shell completed');
+    expect(formatToolCompleted('shell', { output: '{"ok":true}' })).toBe('[OK] shell completed');
+    // Empty/absent result, and no duration → no timing suffix.
+    expect(formatToolCompleted('edit')).toBe('[OK] edit completed');
+    expect(formatToolCompleted('shell', { output: 'plain' })).toBe('[OK] plain');
+  });
+
+  it('truncates args for display in both string and object forms', () => {
+    expect(truncateArgs({ a: 1 })).toBe('{"a":1}');
+    expect(truncateArgs('y'.repeat(200)).length).toBe(123); // 120 + '...'
+    expect(truncateArgs('short')).toBe('short');
+  });
+});
+
+describe('toolFamily + pushLine collapse edges', () => {
+  it('never collapses rows whose text has no recognizable tool word', () => {
+    const s = createTuiState();
+    pushLine(s, 'tool', 'mystery row one');
+    pushLine(s, 'tool', 'mystery row two');
+    expect(s.lines.filter((l) => l.kind === 'tool').length).toBe(2);
+    expect(toolFamily('mystery row')).toBe('');
+    expect(toolFamily('\x1b[32m┌ shell — echo\x1b[0m')).toBe('shell'); // ANSI stripped first
+  });
+
+  it('collapses same-family rows and carries fullContent/metadata forward', () => {
+    const s = createTuiState();
+    pushLine(s, 'tool', '┌ edit — a.ts', 'full-1');
+    pushLine(s, 'tool', '┌ edit — b.ts', 'full-2', { tool: 'edit' });
+    const tools = s.lines.filter((l) => l.kind === 'tool');
+    expect(tools.length).toBe(1);
+    expect(tools[0].fullContent).toBe('full-2');
+    expect(tools[0].metadata).toEqual({ tool: 'edit' });
+    // summary lines are exempt from tool-family collapsing
+    pushLine(s, 'summary', 'a summary card');
+    pushLine(s, 'tool', '┌ edit — c.ts');
+    expect(s.lines.filter((l) => l.kind === 'summary').length).toBe(1);
+  });
+});
+
+describe('absolute line id helpers', () => {
+  it('round-trips ids across trims and reports trimmed-away lines', () => {
+    const s = createTuiState(3);
+    expect(toAbsLine(s, 0)).toBe(0);
+    pushLine(s, 'system', 'l0');
+    pushLine(s, 'system', 'l1');
+    pushLine(s, 'system', 'l2');
+    pushLine(s, 'system', 'l3'); // trims l0
+    expect(s.trimmed).toBe(1);
+    expect(toAbsLine(s, 0)).toBe(1);
+    expect(toRelLine(s, 1)).toBe(0); // l1 sits at index 0 now
+    expect(toRelLine(s, 0)).toBeUndefined(); // l0 was trimmed away
+    expect(toRelLine(s, 999)).toBeUndefined(); // never minted
+  });
+});
+
+describe('reduceEvent remaining branches', () => {
+  it('emits goal, tool:failed, error, and file:changed lines', () => {
+    const s = createTuiState();
+    expect(reduceEvent(s, ev({ type: 'goal:created', goal: { objective: 'Ship the release' } }))).toBe(true);
+    expect(s.lines.some((l) => l.kind === 'goal' && l.text === 'Ship the release')).toBe(true);
+    expect(reduceEvent(s, ev({ type: 'goal:created' }))).toBe(false);
+
+    expect(reduceEvent(s, ev({ type: 'tool:failed', tool: 'shell', error: 'command timed out' }))).toBe(true);
+    expect(s.lines.some((l) => l.kind === 'error' && l.text.includes('shell failed: command timed out'))).toBe(true);
+
+    expect(reduceEvent(s, ev({ type: 'error', error: 'provider exploded' }))).toBe(true);
+    expect(s.lines[s.lines.length - 1].text).toBe('provider exploded');
+
+    expect(reduceEvent(s, ev({ type: 'file:changed', operation: 'create', path: 'new.ts' }))).toBe(true);
+    expect(s.lines[s.lines.length - 1].text).toBe('+ create  new.ts');
+    reduceEvent(s, ev({ type: 'file:changed', operation: 'teleport', path: 'x.ts' }));
+    expect(s.lines[s.lines.length - 1].text).toBe('• teleport  x.ts'); // unknown op → bullet
+
+    expect(reduceEvent(s, ev({ type: 'no:such:event' }))).toBe(false); // default arm
+  });
+
+  it('computes token velocity from usage:updated deltas', () => {
+    const s = createTuiState();
+    expect(reduceEvent(s, ev({ type: 'usage:updated', totalTokens: 100 }))).toBe(false);
+    expect(s.lastTokens).toBe(100);
+    expect(s.tokenVelocity).toBeUndefined(); // first sample: no baseline yet
+    s.lastUsageAt = Date.now() - 2000;
+    reduceEvent(s, ev({ type: 'usage:updated', totalTokens: 500 }));
+    expect(s.tokenVelocity).toBe(200); // 400 tokens over ~2s
+    expect(s.lastTokens).toBe(500);
+    // Non-increasing totals never move the velocity.
+    const v = s.tokenVelocity;
+    s.lastUsageAt = Date.now() - 2000;
+    reduceEvent(s, ev({ type: 'usage:updated', totalTokens: 500 }));
+    expect(s.tokenVelocity).toBe(v);
+  });
+
+  it('drops empty message/reasoning events and tracks currentTask clearing', () => {
+    const s = createTuiState();
+    expect(reduceEvent(s, ev({ type: 'message', role: 'assistant' }))).toBe(false);
+    expect(reduceEvent(s, ev({ type: 'message:chunk' }))).toBe(false);
+    expect(reduceEvent(s, ev({ type: 'agent:reasoning' }))).toBe(false);
+
+    reduceEvent(s, ev({ type: 'task:started', task: { title: 'Do the thing' } })); // no id: title only
+    expect(s.currentTask).toBe('Do the thing');
+    reduceEvent(s, ev({ type: 'task:completed', task: { title: 'Do the thing' } }));
+    expect(s.currentTask).toBe('');
+    reduceEvent(s, ev({ type: 'task:failed', task: { title: 'nope' }, reason: 'bad' }));
+    expect(s.lines[s.lines.length - 1].text).toContain('nope');
+    // task:created without an id is still a render signal
+    expect(reduceEvent(s, ev({ type: 'task:created', task: {} }))).toBe(true);
+    // subagent:start without an id still registers under some key
+    reduceEvent(s, ev({ type: 'subagent:started', prompt: 'x' }));
+    expect(s.activeSubagents.size).toBe(1);
+  });
+
+  it('routes tool:completed without a pending card via append and promote', () => {
+    // No prior tool:called at all → append path.
+    const a = createTuiState();
+    reduceEvent(a, ev({ type: 'tool:completed', tool: 'read', result: { toolCallId: 'ghost', output: 'late' } }));
+    const appended = a.lines[a.lines.length - 1];
+    expect(appended.kind).toBe('tool');
+    expect(appended.fullContent).toBe('late');
+    // Last line is a tool card but not the matching pending → promote in place.
+    const b = createTuiState();
+    pushLine(b, 'tool', '┌ read — a.ts');
+    reduceEvent(b, ev({ type: 'tool:completed', tool: 'read', result: { output: 'zzz' } }));
+    expect(b.lines.length).toBe(1);
+    expect(b.lines[0].fullContent).toBe('zzz');
+    expect(b.lines[0].text).not.toBe('┌ read — a.ts');
+  });
+});
+
+describe('summary:rendered fallback + rewrap', () => {
+  const longDoc = {
+    status: 'complete',
+    overview: ('Refactored the auth module end to end and verified every path. ').repeat(8),
+    metrics: [{ label: 'FILES', value: '3 changed' }],
+    whatChanged: [{ text: 'edit: src/auth.ts', priority: 'P1' }],
+    verification: [{ text: '✓ npm test', priority: 'P1' }],
+    failures: [],
+    warnings: [],
+    references: [],
+    next: [],
+    populatedSections: ['overview', 'metrics', 'whatChanged', 'verification'],
+  };
+
+  it('skips no-op turns and falls back to the plain turn-summary card without a doc', () => {
+    const s = createTuiState();
+    // Zero tools + zero files (and non-array filesModified) → no card at all.
+    expect(reduceEvent(s, ev({ type: 'summary:rendered', success: true, stopReason: 'end_turn', durationMs: 10, toolCallsTotal: 0, filesModified: 'nope' }))).toBe(false);
+    expect(s.lines.length).toBe(0);
+    // With work to report but no doc → plain renderTurnSummaryCard path.
+    expect(reduceEvent(s, ev({ type: 'summary:rendered', success: true, stopReason: 'end_turn', durationMs: 1200, toolCallsTotal: 1, filesModified: ['a.ts'], summary: 'Did a thing' }))).toBe(true);
+    const last = s.lines[s.lines.length - 1];
+    expect(last.kind).toBe('tool');
+    expect(last.text).toContain('a.ts');
+  });
+
+  it('rewraps only the newest summary card when the width changes', () => {
+    const s = createTuiState();
+    expect(rewrapSummaries(s, 80)).toBe(false); // no doc yet
+    reduceEvent(s, ev({
+      type: 'summary:rendered',
+      success: true,
+      stopReason: 'completed',
+      durationMs: 900,
+      toolCallsTotal: 2,
+      filesModified: ['src/auth.ts'],
+      summary: 'Done',
+      doc: longDoc,
+    }));
+    expect(s.lines.some((l) => l.kind === 'summary')).toBe(true);
+    const w = (process.stdout.columns || 80) + 7; // guaranteed different width
+    expect(rewrapSummaries(s, w)).toBe(true); // re-rendered at new width
+    expect(rewrapSummaries(s, w)).toBe(false); // same width → text unchanged
+    // Once the summary line itself is trimmed away, rewrap reports false.
+    for (let i = 0; i < 600; i++) pushLine(s, 'system', `filler-${i}`);
+    expect(s.lines.some((l) => l.kind === 'summary')).toBe(false);
+    expect(rewrapSummaries(s, w)).toBe(false);
   });
 });

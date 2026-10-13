@@ -93,11 +93,13 @@ jobs:
 
       # ── Tests with coverage (MCH-23) ──
       # Coverage thresholds are a RATCHET, not an aspiration: measured
-      # 65.57% lines / 70.2% funcs on 2026-10-12 (the previous 70/70 had
-      # never been green — it masked real test failures behind it for
-      # weeks). Raise these when coverage rises; never lower silently.
+      # 66.49% statements / 69.59% lines / 74.57% functions / 57.56%
+      # branches on 2026-10-12 after the coverage-test batch (CI has run
+      # ~0.9 pts below local on past legs, so each floor sits below that
+      # worst projection). Raise these when coverage rises; never lower
+      # silently — a lower number means the gate stopped meaning something.
       - name: Tests
-        run: npx vitest run --coverage --coverage.reporter=text --coverage.thresholds.lines=65 --coverage.thresholds.functions=69
+        run: npx vitest run --coverage --coverage.reporter=text --coverage.thresholds.lines=66 --coverage.thresholds.functions=71
         continue-on-error: false
 
       - name: Build

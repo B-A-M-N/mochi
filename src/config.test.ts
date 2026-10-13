@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { loadConfig, validateConfig } from './config.js';
+import { loadConfig, validateConfig, loadEnvFiles, loadProjectConfig } from './config.js';
+import { PROVIDERS } from './model/providers.js';
+
+/** Set/delete env keys for the duration of fn, restoring exactly. */
+function withEnv(vars: Record<string, string | undefined>, fn: () => void): void {
+  const saved: Record<string, string | undefined> = {};
+  for (const k of Object.keys(vars)) saved[k] = process.env[k];
+  try {
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
 
 describe('loadConfig', () => {
   it('loads defaults (isolated from user config)', () => {
@@ -215,5 +234,292 @@ describe('validateConfig', () => {
       process.chdir(origCwd);
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('loadEnvFiles (.env parsing)', () => {
+  it('parses quotes, comments, and malformed lines without clobbering existing keys', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-dotenv-'));
+    writeFileSync(resolve(dir, '.env'), [
+      '# a comment',
+      '',
+      'MOCHI_TEST_ENV_A="quoted value"',
+      "MOCHI_TEST_ENV_B='single'",
+      'MOCHI_TEST_ENV_C=bare',
+      'NO_EQUALS_LINE',
+      '=no-key',
+      'MOCHI_TEST_ENV_A=second-should-not-win',
+      'MOCHI_TEST_ENV_PRESET=third-should-not-win',
+    ].join('\n'));
+    const origCwd = process.cwd();
+    const before: Record<string, string | undefined> = { ...process.env };
+    process.env.MOCHI_TEST_ENV_PRESET = 'original';
+    process.chdir(dir);
+    try {
+      loadEnvFiles();
+      expect(process.env.MOCHI_TEST_ENV_A).toBe('quoted value'); // first wins, quotes stripped
+      expect(process.env.MOCHI_TEST_ENV_B).toBe('single');
+      expect(process.env.MOCHI_TEST_ENV_C).toBe('bare');
+      expect(process.env.MOCHI_TEST_ENV_PRESET).toBe('original'); // never clobber
+    } finally {
+      process.chdir(origCwd);
+      for (const k of Object.keys(process.env)) if (!(k in before)) delete process.env[k];
+      for (const k of Object.keys(before)) if (before[k] !== process.env[k]) process.env[k] = before[k]!;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('project file merges + config path resolution', () => {
+  it('merges cwd mochi.json and accepts the servers alias in .mcp.json', async () => {
+    const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-projcfg-'));
+    writeFileSync(resolve(dir, 'mochi.json'), JSON.stringify({ quiet: true }));
+    writeFileSync(resolve(dir, '.mcp.json'), JSON.stringify({ servers: { s1: { command: 'node' } } }));
+    const origCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const cfg = loadConfig({}, '/nonexistent/nowhere.json');
+      expect(cfg.quiet).toBe(true); // mochi.json arm
+      expect(cfg.mcpServers?.s1?.command).toBe('node'); // "servers" alias arm
+    } finally {
+      process.chdir(origCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
+    // Separately: .mochi/config.json is the fallback when mochi.json is absent.
+    const dir2 = mkdtempSync(resolve(tmpdir(), 'mochi-projcfg2-'));
+    mkdirSync(resolve(dir2, '.mochi'));
+    writeFileSync(resolve(dir2, '.mochi', 'config.json'), JSON.stringify({ verbose: true }));
+    process.chdir(dir2);
+    try {
+      const cfg = loadConfig({}, '/nonexistent/nowhere.json');
+      expect(cfg.verbose).toBe(true);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(dir2, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores corrupt config files and honors MOCHI_CONFIG_PATH', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-corrupt-'));
+    const corrupt = resolve(dir, 'config.json');
+    writeFileSync(corrupt, '{not json at all');
+    // Explicit corrupt path -> defaults survive (readJsonFile catch arm).
+    expect(loadConfig({}, corrupt).model.provider).toBe('opencode-zen');
+    // MOCHI_CONFIG_PATH env path (same catch path, resolved via env).
+    const origCwd = process.cwd();
+    process.chdir(dir); // isolated cwd: no project files interfere
+    try {
+      withEnv({ MOCHI_CONFIG_PATH: corrupt }, () => {
+        expect(loadConfig().model.provider).toBe('opencode-zen');
+      });
+      // A valid marker through the env path proves the resolution arm.
+      writeFileSync(corrupt, JSON.stringify({ model: { model: 'marker-model-xyz' } }));
+      withEnv({ MOCHI_CONFIG_PATH: corrupt }, () => {
+        expect(loadConfig().model.model).toBe('marker-model-xyz');
+      });
+    } finally {
+      process.chdir(origCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('loadProjectConfig reads config.json or returns {}', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-lpc-'));
+    expect(loadProjectConfig(resolve(dir, 'nope'))).toEqual({});
+    writeFileSync(resolve(dir, 'config.json'), JSON.stringify({ telemetry: true }));
+    expect(loadProjectConfig(dir)).toEqual({ telemetry: true });
+    writeFileSync(resolve(dir, 'config.json'), '{broken');
+    expect(loadProjectConfig(dir)).toEqual({}); // corrupt -> {}
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('provider-table consistency + env knobs', () => {
+  it('keeps explicit user baseUrl/model/profiles (no provider-table overwrite)', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-keep-'));
+    const cfgPath = resolve(dir, 'config.json');
+    writeFileSync(cfgPath, JSON.stringify({ model: { provider: 'openrouter', baseUrl: 'https://custom.example/v1', model: 'custom-model', profiles: { fast: 'custom-fast' } } }));
+    try {
+      const cfg = loadConfig({}, cfgPath);
+      expect(cfg.model.baseUrl).toBe('https://custom.example/v1');
+      expect(cfg.model.model).toBe('custom-model');
+      expect(cfg.model.profiles?.fast).toBe('custom-fast'); // non-slash profile kept
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('derives baseUrl/model/profiles from the provider table when omitted', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-derive-'));
+    const cfgPath = resolve(dir, 'config.json');
+    writeFileSync(cfgPath, JSON.stringify({ model: { provider: 'openrouter' } }));
+    const prov = PROVIDERS.find((p) => p.id === 'openrouter');
+    expect(prov).toBeDefined();
+    try {
+      const cfg = loadConfig({}, cfgPath);
+      expect(cfg.model.baseUrl).toBe(prov!.baseUrl);
+      expect(cfg.model.model).toBe(prov!.defaultModel);
+      expect(cfg.model.profiles?.fast).toBe(prov!.defaultModel);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('honors MOCHI_BASE_URL over provider-table derivation', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-envbase-'));
+    const cfgPath = resolve(dir, 'config.json');
+    writeFileSync(cfgPath, JSON.stringify({ model: { provider: 'openrouter' } }));
+    try {
+      withEnv({ MOCHI_BASE_URL: 'https://env-base.example/v1' }, () => {
+        const cfg = loadConfig({}, cfgPath);
+        expect(cfg.model.baseUrl).toBe('https://env-base.example/v1');
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('applies env knobs: dirs, telemetry, safety, sandbox, permissions, flags', () => {
+    withEnv({
+      MOCHI_UNCENSORED: undefined,
+      MOCHI_PROJECT_DIR: '.proj-env',
+      MOCHI_CONFIG_DIR: '/tmp/cfg-env',
+      MOCHI_TELEMETRY: 'yes',
+      MOCHI_SAFETY: 'auto',
+      MOCHI_SANDBOX: 'bubblewrap',
+      MOCHI_PERMISSION_READ: '0',
+      MOCHI_PERMISSION_ADMIN: 'true',
+      MOCHI_QUIET: '1',
+      MOCHI_VERBOSE: '1',
+      MOCHI_DEBUG: '1',
+    }, () => {
+      const cfg = loadConfig({}, '/nonexistent/nowhere.json');
+      expect(cfg.projectDir).toBe('.proj-env');
+      expect(cfg.configDir).toBe('/tmp/cfg-env');
+      expect(cfg.telemetry).toBe(true);
+      expect(cfg.safety.mode).toBe('auto');
+      expect(cfg.safety.sandbox).toBe('bubblewrap');
+      expect(cfg.permissions.read).toBe(false);
+      expect(cfg.permissions.admin).toBe(true);
+      expect(cfg.quiet).toBe(true);
+      expect(cfg.verbose).toBe(true);
+      expect(cfg.debug).toBe(true);
+    });
+
+    // Invalid safety/sandbox values are ignored (no throw, no clobber).
+    withEnv({ MOCHI_UNCENSORED: undefined, MOCHI_SAFETY: 'bogus', MOCHI_SANDBOX: 'chroot' }, () => {
+      const cfg = loadConfig({}, '/nonexistent/nowhere.json');
+      expect(cfg.safety.mode).toBe('ask'); // kept default
+      expect(cfg.safety.sandbox).toBeUndefined();
+    });
+
+    // MOCHI_TELEMETRY falsy forms flip the flag back off.
+    withEnv({ MOCHI_TELEMETRY: 'no' }, () => {
+      expect(loadConfig({}, '/nonexistent/nowhere.json').telemetry).toBe(false);
+    });
+  });
+
+  it('maps MOCHI_REASONING synonyms and falls back to medium', () => {
+    const cases: Array<[string, string]> = [
+      ['extreme', 'max'], ['deep', 'max'], ['high', 'high'], ['hard', 'high'],
+      ['low', 'low'], ['easy', 'low'], ['off', 'off'], ['auto', 'auto'],
+      ['medium', 'medium'], ['bogus-level', 'medium'],
+    ];
+    for (const [raw, expected] of cases) {
+      withEnv({ MOCHI_REASONING: raw }, () => {
+        expect(loadConfig({}, '/nonexistent/nowhere.json').reasoning).toBe(expected);
+      });
+    }
+  });
+
+  it('applies per-provider env API keys through the envKeyMap', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-envkey-'));
+    const cfgPath = resolve(dir, 'config.json');
+    try {
+      // The provider must come from the CONFIG FILE: overrides merge after
+      // the envKeyMap resolution, so they cannot select the key lookup.
+      writeFileSync(cfgPath, JSON.stringify({ model: { provider: 'openrouter', model: 'x' } }));
+      withEnv({ OPENROUTER_API_KEY: 'sk-or-key-zzzzzzzz' }, () => {
+        const cfg = loadConfig({}, cfgPath);
+        expect(cfg.model.apiKey).toBe('sk-or-key-zzzzzzzz');
+      });
+      // A provider with no envKeyMap entry keeps whatever the config carried.
+      writeFileSync(cfgPath, JSON.stringify({ model: { provider: 'ollama', model: 'llama', apiKey: 'local-key' } }));
+      withEnv({ OPENROUTER_API_KEY: undefined }, () => {
+        const cfg = loadConfig({}, cfgPath);
+        expect(cfg.model.apiKey).toBe('local-key');
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores __proto__ pollution and undefined override values', () => {
+    const parsed = JSON.parse('{"__proto__": {"polluted": true}, "telemetry": true}') as Record<string, unknown>;
+    const cfg = loadConfig({ quiet: undefined, ...parsed } as never, '/nonexistent/nowhere.json');
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined(); // prototype untouched
+    expect(cfg.telemetry).toBe(true);
+    expect(cfg.quiet).toBe(false); // undefined source value skipped, default kept
+  });
+});
+
+describe('validateConfig full surface', () => {
+  it('reports every structural problem it knows about', () => {
+    const cfg = loadConfig({ model: { provider: 'openai', baseUrl: '', model: '' } }, '/nonexistent/nowhere.json');
+    cfg.reasoning = 'turbo' as never;
+    cfg.safety.maxRuntimeMinutes = 0.1;
+    cfg.safety.commandTimeoutSeconds = 1;
+    cfg.safety.sandbox = 'chroot' as never;
+    cfg.safety.maxConcurrentAgents = 99;
+    cfg.safety.maxTokens = 10;
+    cfg.safety.maxCostUsd = -1;
+    cfg.mcpServers = { bad: {} as never };
+    const problems = validateConfig(cfg);
+    expect(problems.some((p) => p.includes('model.baseUrl'))).toBe(true);
+    expect(problems.some((p) => p.includes('model.model is empty'))).toBe(true);
+    expect(problems.some((p) => p.includes('maxRuntimeMinutes'))).toBe(true);
+    expect(problems.some((p) => p.includes('commandTimeoutSeconds'))).toBe(true);
+    expect(problems.some((p) => p.includes('safety.sandbox'))).toBe(true);
+    expect(problems.some((p) => p.includes('maxConcurrentAgents'))).toBe(true);
+    expect(problems.some((p) => p.includes('maxTokens'))).toBe(true);
+    expect(problems.some((p) => p.includes('maxCostUsd'))).toBe(true);
+    expect(problems.some((p) => p.includes('MCP server "bad"'))).toBe(true);
+    expect(problems.some((p) => p.includes('reasoning "turbo"'))).toBe(true);
+
+    // Empty provider + openrouter waiver are their own arms.
+    const empty = loadConfig({}, '/nonexistent/nowhere.json');
+    empty.model.provider = '';
+    empty.model.baseUrl = '';
+    const ep = validateConfig(empty);
+    expect(ep.some((p) => p.includes('model.provider is empty'))).toBe(true);
+    expect(ep.some((p) => p.includes('model.baseUrl'))).toBe(false); // provider falsy -> no baseUrl complaint
+
+    // openrouter providers never need an explicit baseUrl.
+    const or = loadConfig({ model: { provider: 'openrouter', baseUrl: '', model: 'or-model' } }, '/nonexistent/nowhere.json');
+    expect(validateConfig(or).some((p) => p.includes('model.baseUrl'))).toBe(false);
   });
 });

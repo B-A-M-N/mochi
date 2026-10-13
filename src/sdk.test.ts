@@ -1,5 +1,5 @@
 // SDK surface: in-process prompt/branch/sessions against a fake provider.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -57,6 +57,55 @@ describe('Mochi SDK (in-process mode)', () => {
     const p = await mochi.plan('restructure the auth module');
     expect(p.length).toBeGreaterThan(0);
   });
+
+  it('run() aliases prompt() and newSession/useProvider return strings', async () => {
+    const mochi = await setup([
+      {
+        content: 'Creating the file now.',
+        finishReason: 'tool_calls',
+        toolCalls: [{ id: 'sdk-r1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'greeting.txt', content: 'hello mochi' }) } }],
+      },
+      { content: 'ran the task', finishReason: 'stop' },
+    ]);
+    const r = await mochi.run('Create greeting file and verify. fix tests too');
+    expect(r.summary).toContain('ran the task');
+    expect(mochi.newSession()).toBeTruthy();
+    expect(typeof (await mochi.useProvider('openai', 'fake-model-2'))).toBe('string');
+  });
+
+  it('on/onAny subscribe to live events and unsubscribe cleanly', async () => {
+    const mochi = await setup([{ content: 'subscribed work', finishReason: 'stop' }]);
+    const seen: string[] = [];
+    const offAny = mochi.onAny((e) => { seen.push(e.type); });
+    const offLog = mochi.on('agent:log', (e) => { seen.push(`log:${e.message}`); });
+    try {
+      await mochi.prompt('Create greeting file and verify. fix tests too');
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.some((s) => s.startsWith('log:'))).toBe(true);
+    } finally {
+      offAny();
+      offLog();
+    }
+    const frozen = seen.length;
+    expect(seen.length).toBe(frozen); // unsubscribed: no accumulation after
+  });
+
+  it('stream() yields events until broken out, then closes', async () => {
+    const mochi = await setup([{ content: 'stream done', finishReason: 'stop' }]);
+    const iter = mochi.stream();
+    const pending = mochi.prompt('Create greeting file and verify. fix tests too');
+    const seen: string[] = [];
+    for await (const e of iter) {
+      seen.push(e.type);
+      if (seen.length >= 2) break; // triggers iterator.return() -> close()
+    }
+    await pending;
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    // Closed iterator reports done immediately.
+    const after = await iter[Symbol.asyncIterator]().next();
+    expect(after.done).toBe(true);
+    iter.close(); // idempotent
+  });
 });
 
 describe('Mochi SDK streaming + discovery', () => {
@@ -82,5 +131,64 @@ describe('Mochi SDK streaming + discovery', () => {
     const bad = mochi.addMcpServer('no-such-server-xyz');
     expect(bad.ok).toBe(false);
     expect(bad.message).toContain('Unknown MCP server');
+  });
+});
+
+describe('Mochi SDK (remote daemon mode)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('GETs status with auth headers and coerces statusTyped', async () => {
+    const m = Mochi.connect({ port: 1234, token: 'tok' });
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ ready: true, tasks: '3', activeAgents: null }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const s = await m.status();
+    expect(s.ready).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:1234/api/status');
+    const opts = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((opts.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    expect((opts.headers as Record<string, string>)['content-type']).toBe('application/json');
+
+    expect(await m.statusTyped()).toEqual({ ready: true, tasks: 3, activeAgents: 0 });
+  });
+
+  it('POSTs prompt, applying defaults when the daemon omits fields', async () => {
+    const m = Mochi.connect({ port: 2222 }); // no token -> no auth header
+    const fetchMock = vi.fn(async () => ({ json: async () => ({}) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await m.prompt('do it');
+    expect(r).toEqual({ summary: '', status: 'unknown', success: false, tokensUsed: 0, costUsd: 0, durationMs: 0, filesModified: [] });
+    expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:2222/api/prompt');
+    expect(fetchMock.mock.calls[0][1]!.body).toBe('{"task":"do it"}');
+    expect((fetchMock.mock.calls[0][1]!.headers as Record<string, string>).authorization).toBeUndefined();
+
+    // Full payload maps through untouched.
+    fetchMock.mockImplementation(async () => ({
+      json: async () => ({ summary: 's', status: 'completed', success: true, tokensUsed: 7, costUsd: 0.5, durationMs: 9, filesModified: ['a.ts'] }),
+    }));
+    const full = await m.prompt('do it again');
+    expect(full).toEqual({ summary: 's', status: 'completed', success: true, tokensUsed: 7, costUsd: 0.5, durationMs: 9, filesModified: ['a.ts'] });
+  });
+
+  it('goal/plan/approve/resume hit their endpoints with the token', async () => {
+    const m = Mochi.connect({ port: 3333, token: 't' });
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ ok: 1 }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await m.goal('g')).toEqual({ ok: 1 });
+    expect(await m.plan('p')).toEqual({ ok: 1 });
+    expect(await m.approve()).toEqual({ ok: 1 });
+    expect(await m.resume('goal-1')).toEqual({ ok: 1 });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      'http://127.0.0.1:3333/api/goal',
+      'http://127.0.0.1:3333/api/plan',
+      'http://127.0.0.1:3333/api/approve',
+      'http://127.0.0.1:3333/api/resume',
+    ]);
+    expect(fetchMock.mock.calls[0][1]!.body).toBe('{"objective":"g"}');
+    expect(fetchMock.mock.calls[3][1]!.body).toBe('{"goalId":"goal-1"}');
+    expect((fetchMock.mock.calls[1][1]!.headers as Record<string, string>).authorization).toBe('Bearer t');
   });
 });

@@ -196,3 +196,128 @@ describe('ACP acpCheck', () => {
   });
 });
 
+describe('ACP protocol surface (pure dispatch)', () => {
+  it('dispatches session lifecycle, config, auth, and error paths', async () => {
+    const sessions = freshSessions();
+    const call = (id: number, method: string, params: Record<string, unknown> = {}) =>
+      handleRpc({ id, method, params }, sessions, process.cwd());
+
+    // additionalDirectories round-trip through new -> list
+    const created = await call(1, 'session/new', { cwd: process.cwd(), additionalDirectories: ['/tmp/extra-a', '/tmp/extra-b'] });
+    const sid = (created.result as { sessionId: string }).sessionId;
+    expect((created.result as { modes: Array<{ id: string }> }).modes.map((m) => m.id)).toEqual(['act', 'plan']);
+
+    // set_mode: unknown session errors, default modeId is act
+    expect((await call(2, 'session/set_mode', { sessionId: 'nope', modeId: 'plan' })).error?.code).toBe(-32602);
+    expect((await call(3, 'session/set_mode', { sessionId: sid })).result).toEqual({ modeId: 'act' });
+    expect(sessions.get(sid)!.runtime.config.planMode).toBe(false);
+
+    // config options: clamped numeric values + unknown option + unknown session
+    const mi = await call(4, 'session/set_config_option', { sessionId: sid, configId: 'max_iterations', value: 999 });
+    expect((mi.result as { value: number }).value).toBe(50);
+    expect(sessions.get(sid)!.runtime.config.safety.maxIterations).toBe(50);
+    const cb = await call(5, 'session/set_config_option', { sessionId: sid, configId: 'context_budget_tokens', value: 100 });
+    expect((cb.result as { value: number }).value).toBe(4000);
+    expect((await call(6, 'session/set_config_option', { sessionId: sid, configId: 'nope', value: 1 })).error?.code).toBe(-32603);
+    expect((await call(7, 'session/set_config_option', { sessionId: 'gone', configId: 'plan_mode', value: true })).error?.code).toBe(-32602);
+
+    // tools_list exposes the runtime tool inventory
+    const tl = await call(8, 'session/tools_list', { sessionId: sid });
+    expect(Array.isArray((tl.result as { tools: unknown[] }).tools)).toBe(true);
+    expect((await call(9, 'session/tools_list', { sessionId: 'gone' })).error?.code).toBe(-32602);
+
+    // permission + auth + logout
+    expect((await call(10, 'session/request_permission', { sessionId: sid })).result).toEqual({ outcome: 'allowed' });
+    expect((await call(11, 'authenticate', { sessionId: sid, methodId: 'agent' })).error).toBeUndefined();
+    expect((await call(12, 'authenticate', { sessionId: sid, methodId: 'oauth' })).error?.code).toBe(-32602);
+    expect((await call(13, 'authenticate', { sessionId: 'gone' })).error?.code).toBe(-32602);
+    expect((await call(14, 'logout', { sessionId: sid })).error).toBeUndefined();
+    expect((await call(15, 'logout', { sessionId: 'gone' })).error?.code).toBe(-32602);
+
+    // load: unknown session / no goalId / unknown goalId (result shape only)
+    expect((await call(16, 'session/load', { sessionId: 'gone', goalId: 'g' })).error?.code).toBe(-32602);
+    expect((await call(17, 'session/load', { sessionId: sid })).result).toHaveProperty('modes');
+    expect((await call(18, 'session/load', { sessionId: sid, goalId: 'no-such-goal' })).result).toHaveProperty('modes');
+    expect(sessions.get(sid)!.loadedGoal).toBeUndefined();
+
+    // list pagination: single page (no cursor), additionalDirectories surfaced,
+    // and a cursor past the end returns an empty page.
+    const listed = await call(19, 'session/list', { limit: 50 });
+    const listedRes = listed.result as { sessions: Array<{ additionalDirectories?: string[] }>; nextCursor?: string };
+    expect(listedRes.sessions).toHaveLength(1);
+    expect(listedRes.nextCursor).toBeUndefined();
+    expect(listedRes.sessions[0].additionalDirectories).toEqual(['/tmp/extra-a', '/tmp/extra-b']);
+    const past = await call(20, 'session/list', { cursor: Buffer.from(sid).toString('base64') });
+    expect((past.result as { sessions: unknown[] }).sessions).toEqual([]);
+
+    // delete unknown, resume-existing no-op, shutdown null
+    expect((await call(21, 'session/delete', { sessionId: 'gone' })).error?.code).toBe(-32602);
+    expect((await call(22, 'session/resume', { sessionId: sid })).result).toEqual({});
+    expect((await call(23, 'shutdown')).result).toBeNull();
+
+    await call(24, 'session/close', { sessionId: sid });
+    expect(sessions.has(sid)).toBe(false);
+  }, 60_000);
+});
+
+describe('ACP prompt text extraction + tool kinds', () => {
+  it('normalizes string/array/number prompts, maps tool kinds, streams usage', async () => {
+    const { startFakeOpenAI } = await import('./testutil/fake-openai.js');
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const { Runtime } = await import('./runtime.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-acp-text-'));
+    writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'node -e "process.exit(0)"' } }));
+    const fake = await startFakeOpenAI([
+      { content: 'hello!', finishReason: 'stop' },
+      // P2: write tool call (kind=edit) then prose
+      { toolCalls: [{ id: 'w1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'greeting.txt', content: 'hi' }) } }], finishReason: 'tool_calls' },
+      { content: 'wrote it', finishReason: 'stop' },
+      { content: 'three facts', finishReason: 'stop' },
+      // P4: shell tool call (kind=execute) then prose
+      { toolCalls: [{ id: 's1', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo hi' }) } }], finishReason: 'tool_calls' },
+      { content: 'shelled', finishReason: 'stop' },
+    ]);
+    const cfg = { model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' }, safety: { mode: 'auto', commandTimeoutSeconds: 10, maxIterations: 5, maxRuntimeMinutes: 2, maxConcurrentAgents: 1, contextBudgetTokens: 4000 }, permissions: { read: true, write: true, shell: true, network: true, gitDestructive: true }, telemetry: false, projectDir: '.mochi', quiet: true, verbose: false, debug: false } as any;
+    const sessions = new Map<string, AcpSession>();
+    const sid = 'text-sid';
+    sessions.set(sid, { id: sid, cwd: dir, runtime: Runtime.create({ cwd: dir, config: cfg }) });
+    const updates: string[] = [];
+    const notify = (_s: string, u: Record<string, unknown>) => updates.push(JSON.stringify(u));
+
+    // P1: plain string prompt (lenient path)
+    const p1 = await handleRpc({ id: 1, method: 'session/prompt', params: { sessionId: sid, prompt: 'hello there friend' } }, sessions, process.cwd(), notify);
+    expect((p1.result as { stopReason: string }).stopReason).toBe('end_turn');
+
+    // P2: ContentBlock array with resource blocks, junk entries, and constraints
+    const p2 = await handleRpc({ id: 2, method: 'session/prompt', params: {
+      sessionId: sid,
+      prompt: [
+        { type: 'text', text: 'what is the best greeting' },
+        { type: 'resource', resource: { text: 'extra context' } },
+        { type: 'text' }, // no text field -> skipped
+        42, // non-object -> skipped
+        'loose string block',
+      ],
+      constraints: ['keep it short'],
+    } }, sessions, process.cwd(), notify);
+    expect((p2.result as { stopReason: string }).stopReason).toBe('end_turn');
+    expect(updates.some((u) => u.includes('"kind":"edit"'))).toBe(true);
+
+    // P3: numeric prompt coerced via String()
+    const p3 = await handleRpc({ id: 3, method: 'session/prompt', params: { sessionId: sid, prompt: 42 } }, sessions, process.cwd(), notify);
+    expect((p3.result as { stopReason: string }).stopReason).toBe('end_turn');
+
+    // P4: shell -> execute kind + final usage_update
+    const p4 = await handleRpc({ id: 4, method: 'session/prompt', params: { sessionId: sid, prompt: [{ type: 'text', text: 'summarize the system state' }] } }, sessions, process.cwd(), notify);
+    expect((p4.result as { stopReason: string }).stopReason).toBe('end_turn');
+    expect(updates.some((u) => u.includes('"kind":"execute"'))).toBe(true);
+    expect(updates.some((u) => u.includes('usage_update'))).toBe(true);
+    expect(updates.some((u) => u.includes('tool_call_update'))).toBe(true);
+
+    await fake.close();
+    rmSync(dir, { recursive: true, force: true });
+  }, 120_000);
+});
+

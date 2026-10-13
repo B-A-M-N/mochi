@@ -147,11 +147,16 @@ export async function nativePlanCompaction(messages: PlanRequestMessage[], keep 
   }
 }
 
-/** Ask Rust to batch-count tokens over the message history (each entry
- *  pre-stringified by the caller). Returns null on any failure so the caller
- *  falls back to the TS implementation. */
-export async function nativeTokensCount(serializedMessages: string[]): Promise<number | null> {
-  const payload = JSON.stringify({ op: 'tokens', messages: serializedMessages });
+/** Ask Rust to batch-count tokens over the message history. Entries are the
+ *  ChatMessage objects themselves: the runtime extracts each element object
+ *  and counts over its serialized JSON — the same JSON.stringify(m) text the
+ *  TS estimateTokens() walk sums, so parity holds. (Pre-stringified strings
+ *  are NOT usable here: the runtime's array scanner only extracts object
+ *  elements and silently skipped strings, returning 0 for the whole batch.)
+ *  Returns null on any failure so the caller falls back to the TS
+ *  implementation. */
+export async function nativeTokensCount(messages: readonly object[]): Promise<number | null> {
+  const payload = JSON.stringify({ op: 'tokens', messages });
   if (payload.length > 4_000_000) return null;
   const line = await writeLine(payload);
   if (!line) return null;

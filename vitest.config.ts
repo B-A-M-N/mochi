@@ -30,9 +30,18 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       thresholds: {
-        lines: 65,
-        functions: 69,
-        branches: 50,
+        // RATCHET (2026-10-12, measured 66.49% stmt / 69.59% line /
+        // 74.57% func / 57.56% branch after the coverage-test batch).
+        // CI runs this gate on 3 OSes and has historically measured ~0.9
+        // points below local (61.61 vs 62.48 statements on the last
+        // pre-batch comparison), so every floor is set below that worst
+        // projection: statements 65 binds (worst projection ~65.6), the
+        // rest keep >=2.5 pts of platform margin. Raise when coverage
+        // rises; never lower silently — a lower number means the gate
+        // stopped meaning something.
+        lines: 66,
+        functions: 71,
+        branches: 54,
         statements: 65,
       },
     },

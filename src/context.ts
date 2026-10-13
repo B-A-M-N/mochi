@@ -331,8 +331,7 @@ export class ContextEngine {
    *  checks, not exact billing. */
   async estimateTokensAsync(): Promise<number> {
     if (this.messages.length > 24) {
-      const serialized = this.messages.map((m) => JSON.stringify(m));
-      const native = await nativeTokensCount(serialized);
+      const native = await nativeTokensCount(this.messages);
       if (native !== null) return native;
     }
     return this.estimateTokens();
