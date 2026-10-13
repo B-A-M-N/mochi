@@ -40,6 +40,7 @@ import {
   composerBottomRule,
   transcriptIndent,
   thinkingLine,
+  getThemeSpinnerColors,
   ellipsize,
 } from './view.js';
 
@@ -289,13 +290,16 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        iconColored = ((state.spinner >> 3) % 2 === 0) ? '\x1b[38;2;167;139;250m•' : '\x1b[38;2;100;88;140m•';
+        const star = (state.spinner >> 2) % 2 === 0 ? '✦' : '✧';
+        const stops = getThemeSpinnerColors();
+        const c = stops[state.spinner % stops.length];
+        iconColored = `\x1b[38;2;${c[0]};${c[1]};${c[2]}m${star}`;
       } else if (status === 'done') {
         iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
       } else if (status === 'error') {
         iconColored = `\x1b[38;2;248;113;113m✗`; // vibrant red error cross
       } else {
-        iconColored = isActive ? `\x1b[38;2;167;139;250m•` : `\x1b[38;2;120;115;145m•`;
+        iconColored = isActive ? `${T.act}•` : `${T.grayDark}•`;
       }
 
       const unread = c.unread ? ` \x1b[38;2;244;63;94m•` : '';

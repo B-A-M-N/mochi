@@ -105,14 +105,28 @@ export function padEnd(s: string, n: number): string {
 // is selected (e.g. Mochi violet/lavender/white for Mochi Purple, electric cyan
 // for Cyber Void, green/yellow for Matrix). Zero spinning braille dots, zero bars.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const CELESTIAL_STARS = ['✦', '✧', '⟡', '⟢', '◈', '⟣', '◇'];
+
+/**
+ * Celestial constellation core: a 3-cell symmetrical formation
+ * using universally supported Dingbat stars (✦, ✧) and middle dot (·).
+ * ZERO font fallback jitter, ZERO baseline bounce, invariant 3-cell width.
+ */
+export const CELESTIAL_CORE: Array<[string, string, string]> = [
+  ['·', '✦', '·'], // resting core: solid star with compact satellites
+  ['✧', '✦', '✧'], // expansion: satellite flares open to outline stars
+  ['✦', '✧', '✦'], // apex bloom: satellites ignite solid, core opens
+  ['✧', '✦', '✧'], // contraction: satellites settle to outline
+  ['·', '✧', '·'], // settling: satellites condense to dots, core outline
+  ['·', '✦', '·'], // rekindle: center star ignites solid
+];
 
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
 }
 
 export function sparkleFrame(i: number): string {
-  return CELESTIAL_STARS[Math.abs(i) % CELESTIAL_STARS.length];
+  const idx = Math.abs(i);
+  return idx % 2 === 0 ? '✦' : '✧';
 }
 
 /**
@@ -132,15 +146,21 @@ export function getThemeSpinnerColors(): Array<[number, number, number]> {
 }
 
 /**
- * Theme-matched celestial star spinner beside Thinking:
- * Smoothly pulses in the active theme's brand accent colors.
+ * Theme-matched celestial constellation spinner beside Thinking:
+ * Symmetrical 3-cell formation with dynamic theme color ripple.
+ * Invariant 3-cell width, rock-solid font metrics, zero jitter.
  */
 export function spinnerColored(i: number): string {
   const stops = getThemeSpinnerColors();
   const idx = Math.abs(i);
-  const spark = sparkleFrame(idx);
-  const c = stops[idx % stops.length];
-  return `${rgb(c[0], c[1], c[2])}${T.bold}${spark}${T.reset}`;
+  const frameIdx = idx % CELESTIAL_CORE.length;
+  const [left, center, right] = CELESTIAL_CORE[frameIdx];
+  const cMid = stops[idx % stops.length];
+  const cSide = stops[(idx + Math.floor(stops.length / 2)) % stops.length];
+  const leftStr = `${rgb(cSide[0], cSide[1], cSide[2])}${left}`;
+  const midStr = `${rgb(cMid[0], cMid[1], cMid[2])}${T.bold}${center}${T.reset}`;
+  const rightStr = `${rgb(cSide[0], cSide[1], cSide[2])}${right}${T.reset}`;
+  return `${leftStr}${midStr}${rightStr}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
