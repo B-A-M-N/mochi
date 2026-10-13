@@ -2199,6 +2199,15 @@ Continue from 'Next:', do not redo completed progress.`,
           if ((expectsFiles || executionPreamble) && !this.planMode && taskKind !== 'chat' && this.fileGuardNudges >= 1 && this.toolCallsTotal === 0) {
             return this.finish(task, false, 'Incomplete: the task requires file output but no files were created or modified and no tools ran. Last reply:\n' + response.content, 'tool_loop');
           }
+          // A failed mutation proves file INTENT — prose cannot stand in for
+          // it. After one file-guard nudge, either the failed write's target
+          // exists on disk now (the model recovered out-of-band, e.g. via
+          // shell — fall through so the normal gates judge it) or the claim
+          // is incomplete and goal self-review retries with the real error.
+          if ((expectsFiles || executionPreamble) && !this.planMode && taskKind !== 'chat' && this.fileGuardNudges >= 1 && this.failedMutation
+            && !this.failedMutationWrites.some((p) => existsSync(p))) {
+            return this.finish(task, false, 'Incomplete: a file mutation failed and no deliverable file exists on disk. Last reply:\n' + response.content, 'tool_loop');
+          }
 
           // A differently worded completion cannot bypass a rejected execution
           // preamble when no tools have run. Read-only evidence gathering remains
@@ -2683,10 +2692,23 @@ Continue from 'Next:', do not redo completed progress.`,
     this.context.addMessage({ role: 'tool', tool_call_id: c.id, content: `Blocked: ${reason}`, name: c.function.name });
   }
 
-  /** Mark a tool result as "file changed" and track the affected paths. */
-  private trackFileChange(name: string, args: Record<string, unknown>, toolResult?: { output?: string }) {
+  /** Mark a tool result as "file changed" and track the affected paths.
+   *  A FAILED mutation is not progress: it must not set fileChanged (that
+   *  would bypass every no-file completion guard) nor reset the error
+   *  streak counters (zeroing them here is what let a failing-write loop
+   *  spin forever — the runaway abort "8 consecutive failures without file
+   *  changes" never saw a streak above 0). Failed `write` targets are
+   *  recorded so the no-file guard can still detect out-of-band recovery
+   *  (the model recreating the file via shell). */
+  private trackFileChange(name: string, args: Record<string, unknown>, toolResult?: { output?: string; error?: unknown }) {
     const canonical = TOOL_ALIASES[name] || name;
     if (['write', 'edit', 'delete', 'patch'].includes(canonical)) {
+      if (toolResult?.error) {
+        this.failedMutation = true;
+        const failedPath = String(args.path ?? '');
+        if (canonical === 'write' && failedPath) this.failedMutationWrites.push(resolve(this.cwd, failedPath));
+        return;
+      }
       this.fileChanged = true;
       this.consecutiveToolErrorsCount = 0;
       this.cycleNudges = 0;
@@ -3591,7 +3613,7 @@ Continue from 'Next:', do not redo completed progress.`,
         this.learning.record(classified.pattern, this.lastStrategy ?? 'unclassified', false);
       }
     }
-    this.trackFileChange(toolName, args, { output: out });
+    this.trackFileChange(toolName, args, { output: out, error: err });
   }
   private parseArgs(raw: string): Record<string, unknown> {
     if (!raw || !raw.trim()) return {};
@@ -4210,6 +4232,13 @@ Continue from 'Next:', do not redo completed progress.`,
    * be called from tests and from future escape hatches without re-checking.
    * Rate-limited to once per task. Never blocks. */
   private autoPlanEscaped = false;
+  /** A mutating tool call (write/edit/patch/delete) FAILED this run: the
+   *  model has file intent but has not delivered. Prose completion is gated
+   *  on this the same way file-guard gates zero-tool runs. */
+  private failedMutation = false;
+  /** Resolved targets of failed `write` calls — if one exists on disk later,
+   *  the model recovered out-of-band (e.g. via shell) and prose may finish. */
+  private failedMutationWrites: string[] = [];
   /** A forced recovery plan has been requested but not yet followed by tool
    *  execution. The next plan-only response is an interim artifact: resume
    *  work instead of accepting it as completion. Cleared by tool execution. */

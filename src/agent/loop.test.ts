@@ -130,6 +130,73 @@ describe('Agent', () => {
     }
   });
 
+  it('a failed mutation does not mark file progress or reset error streaks', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-failed-mutation-'));
+    try {
+      const config = makeConfig(dir, 'http://localhost:0');
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      (agent as any).consecutiveToolErrorsCount = 3;
+      (agent as any).cycleNudges = 2;
+      (agent as any).trackFileChange('write', { path: 'x.txt' }, { output: '', error: 'ENOTDIR: not a directory' });
+      // A failed write changed nothing on disk: fileChanged must stay false
+      // and the error streak must survive (zeroing it here is what let a
+      // failing-write loop spin forever — the 8-failure runaway abort at
+      // line ~3966 never saw a streak above 0).
+      expect((agent as any).fileChanged).toBe(false);
+      expect((agent as any).consecutiveToolErrorsCount).toBe(3);
+      expect((agent as any).cycleNudges).toBe(2);
+      expect((agent as any).failedMutation).toBe(true);
+      // A successful mutation still counts as file progress.
+      (agent as any).trackFileChange('write', { path: 'x.txt' }, { output: 'Wrote 1 chars' });
+      expect((agent as any).fileChanged).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not treat a failed write followed by a successful shell as file progress', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-failed-write-'));
+    // `blocked` is a FILE, so writing blocked/x.txt fails ENOTDIR.
+    writeFileSync(resolve(dir, 'blocked'), 'not a directory');
+    const claim = 'Done — x.txt has been created with the requested content.';
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Creating x.txt now.',
+        toolCalls: [{ id: 'w-1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'blocked/x.txt', content: 'hello' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Checking the workspace state.',
+        toolCalls: [{ id: 's-1', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo ok' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'The file is now in place with the right contents.', finishReason: 'stop' },
+      { content: claim, finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create x.txt');
+      const task = createTask('Create x.txt', 'Create x.txt containing hello.');
+      const agent = new Agent({ id: 'failed-write-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      // The write failed (ENOTDIR) and no file exists — a later successful
+      // `shell` must not launder the failed mutation into "files changed",
+      // which would skip every no-file guard and complete on prose.
+      expect(existsSync(resolve(dir, 'x.txt'))).toBe(false);
+      expect(result.success).toBe(false);
+      expect(result.stopReason).not.toBe('completed');
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('ends the run when the same no-tool answer repeats even after a file already changed', async () => {
     // The old `!fileChanged` gate disabled the same-answer guard forever once
     // any file was edited — a model that then repeated the same two prose
