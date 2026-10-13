@@ -293,7 +293,7 @@ export function renderTurnSummaryCard(s: TurnSummary): string {
       if (remaining > 0) text += ` (+${remaining} more)`;
     }
     text = truncate(text, width - 16);
-    lines.push(`  ${T.cyan}~${T.reset} ${T.dim}files:${T.reset} ${text}`);
+    lines.push(`  ${T.act}└─${T.reset} ${T.dim}files:${T.reset} ${T.cyan}${text}${T.reset}`);
   }
 
   lines.push('');

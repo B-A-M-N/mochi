@@ -239,6 +239,49 @@ export function thinkingLine(
   return `${spinnerColored(frame)} ${verbGlow}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
+export interface TaskStepItem {
+  id?: string;
+  title: string;
+  status: string; // 'pending' | 'running' | 'completed' | 'failed' | 'done'
+}
+
+/**
+ * Borderless cyber progress stepper for multi-step autonomous plans.
+ * e.g. ·✦· [1/3 ✓ Audit] ── [2/3 ✦ Patch view.ts] ── [3/3 ○ Run Tests]
+ */
+export function renderTaskStepper(tasks: TaskStepItem[], width: number): string {
+  if (!tasks.length) return '';
+  const total = tasks.length;
+  const parts: string[] = [];
+
+  for (let i = 0; i < total; i++) {
+    const t = tasks[i];
+    const num = `${i + 1}/${total}`;
+    let icon = '○';
+    let color = T.grayDark;
+    if (t.status === 'completed' || t.status === 'done') {
+      icon = '✓';
+      color = T.lime;
+    } else if (t.status === 'running') {
+      icon = '✦';
+      color = T.act;
+    } else if (t.status === 'failed' || t.status === 'error') {
+      icon = '✗';
+      color = T.error;
+    }
+
+    const maxTitleLen = Math.max(6, Math.floor((width - 24) / total));
+    const shortTitle = t.title ? ellipsize(t.title, maxTitleLen) : '';
+    const label = width >= 64 && shortTitle ? ` ${shortTitle}` : '';
+    parts.push(`${color}[${num} ${icon}${label}]${T.reset}`);
+  }
+
+  const connector = `${T.grayDark} ── ${T.reset}`;
+  const rail = parts.join(connector);
+  const out = `${T.act}·✦·${T.reset} ${rail}`;
+  return visibleLen(out) > width ? ellipsize(out, width) : out;
+}
+
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
  *  theme token. Theme grayDark renders as a VISIBLE gray bar (12+10+6 gray
  *  blocks at idle) — the "grey bars" defect. This fixed dim track reads as
@@ -365,6 +408,7 @@ export interface StatusBarModel {
   autoApprove: boolean;
   /** extra mochi badges: kv-cache, queued tasks */
   extra?: string[];
+  tokenVelocity?: number;
 }
 
 function modeColor(mode: string): string {
@@ -405,6 +449,10 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
         : ''
     : '';
 
+  const velocityBadge = (m.tokenVelocity && m.tokenVelocity > 0 && width >= 54)
+    ? ` ${T.warning}${Math.round(m.tokenVelocity)} t/s ⚡${T.reset}`
+    : '';
+
   const modeBadge = m.agentMode && m.agentMode !== 'normal'
     ? width >= 48
       ? ` ${modeColor(m.agentMode)}${T.bold}[${m.agentMode.toUpperCase()}]${T.reset}`
@@ -433,23 +481,26 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
 
   const togglePart = toggle ? `  ${toggle}` : '';
   const togglePartLen = visibleLen(togglePart);
-  const fixedLen = visibleLen(reasoningBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
+  const fixedLen = visibleLen(reasoningBadge) + visibleLen(velocityBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
   const availForModel = Math.max(4, width - fixedLen);
   const modelMax = Math.min(28, availForModel);
   const modelText = `${T.fg}${T.bold}${ellipsize(m.modelId, modelMax)}${T.reset}`;
 
   // Plan/act toggle sits directly beside the token usage/bar on the left, not right-padded.
-  let line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
+  let line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
   if (visibleLen(line) > width) {
-    line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+    line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
     if (visibleLen(line) > width) {
-      line = `${modelText}${modeBadge}${barText}${togglePart}`;
+      line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
       if (visibleLen(line) > width) {
-        line = `${modelText}${barText}${togglePart}`;
+        line = `${modelText}${modeBadge}${barText}${togglePart}`;
         if (visibleLen(line) > width) {
-          line = `${modelText}${togglePart}`;
+          line = `${modelText}${barText}${togglePart}`;
           if (visibleLen(line) > width) {
-            line = `${ellipsize(modelText, Math.max(4, width - togglePartLen))}${togglePart}`;
+            line = `${modelText}${togglePart}`;
+            if (visibleLen(line) > width) {
+              line = `${ellipsize(modelText, Math.max(4, width - togglePartLen))}${togglePart}`;
+            }
           }
         }
       }
@@ -985,8 +1036,21 @@ export function renderMarkdown(text: string, width?: string | number): string[] 
         emitBlankIfNeeded();
         inCodeBlock = true;
         codeBlockLang = trimmed.slice(3).trim();
-        const tag = codeBlockLang ? `${R.codeType}${codeBlockLang}${T.reset}` : `${T.grayDark}code${T.reset}`;
-        out.push(`  ${T.grayDark}── ${tag} ${T.grayDark}──${T.reset}`);
+        let lang = codeBlockLang;
+        let file = '';
+        if (lang.includes(':')) {
+          const parts = lang.split(':', 2);
+          lang = parts[0];
+          file = parts[1];
+        } else if (lang.includes('/') || (lang.includes('.') && !/^\w+$/.test(lang))) {
+          file = lang;
+          lang = file.split('.').pop() || '';
+        }
+        const filePart = file ? `${T.fg}${T.bold}${file}${T.reset} ${T.grayDark}·${T.reset} ` : '';
+        const langPart = lang ? `${R.codeType}${lang}${T.reset}` : `${T.grayDark}code${T.reset}`;
+        const pill = `${T.act}✦${T.reset} ${filePart}${langPart}`;
+        const barLen = Math.max(4, Math.min(W - visibleLen(pill) - 6, 40));
+        out.push(`  ${pill} ${T.grayDark}${'─'.repeat(barLen)}${T.reset}`);
       } else {
         inCodeBlock = false;
         codeBlockLang = '';
@@ -1239,6 +1303,14 @@ export function renderDropdown(items: DropdownItem[], selected: number, width: n
   const w = Math.min(width, 64);
   const out: string[] = [];
   out.push(`${T.rule}╭${'─'.repeat(Math.max(0, w - 2))}╮${T.reset}`);
+
+  // Category pills header for Raycast-style palette on wide-enough terminals
+  if (w >= 48) {
+    const pills = `  ${T.act}${T.bold}[All]${T.reset} ${T.cyan}[Tools]${T.reset} ${T.pink}[Themes]${T.reset} ${T.lime}[Skills]${T.reset}`;
+    out.push(`${T.rule}│${T.reset}${padEnd(pills, w - 2)}${T.rule}│${T.reset}`);
+    out.push(`${T.rule}├${'─'.repeat(Math.max(0, w - 2))}┤${T.reset}`);
+  }
+
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const sel = i === selected;

@@ -10,7 +10,7 @@ import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
 import { terminateRow, paintCanvasBg } from './ansi-hygiene.js';
 import { prefersReducedMotion, applyTheme, canvasBg } from './themes.js';
-import { TabManager, tabBarCells, tabBarHit, slugTitle } from './tabs.js';
+import { TabManager, tabBarCells, tabBarHit, slugTitle, TAB_HINT_PLAIN } from './tabs.js';
 import { chromeLayout } from './chrome.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { kvCache } from '../model/kv-cache.js';
@@ -34,7 +34,7 @@ import {
   statusBarRow2,
   renderMarkdown,
   renderDropdown,
-
+  renderTaskStepper,
   composerRow,
   composerPlaceholderRow,
   composerTopRule,
@@ -275,14 +275,16 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
    *  opencode-style surface pills: breathing purple dot for running tabs,
    *  green check for completed tabs, red cross for errors, soft purple dot for idle,
    *  and clickable close button on each tab + `+` button. */
+  let lastActiveTabRange: [number, number] | null = null;
+
   function tabBarRow(w: number): string {
     const tabList = tabs.list();
     const layout = tabBarCells(tabList, activeTabId, w);
+    const activeIdx = layout.cells.findIndex((c) => c.tabId === activeTabId);
+    lastActiveTabRange = (activeIdx >= 0 && layout.ranges[activeIdx]) ? layout.ranges[activeIdx] : null;
+
     const ACTIVE_BG = '\x1b[48;2;34;28;48m';
     const PLUS_BG = '\x1b[48;2;38;38;38m';
-    // Running tabs breathe: the SAME dot glyph as idle, alternating bright /
-    // dim purple on a ~0.5s phase. Deliberately NOT a cycling glyph spinner —
-    // the thinking line owns motion (braille); the tab bar stays quiet.
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
@@ -322,7 +324,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
     const rendered = styled.join('');
     const remaining = Math.max(0, w - layout.width);
-    return `${rendered}${' '.repeat(remaining)}${T.reset}`;
+    const hint = TAB_HINT_PLAIN;
+    const hintSuffix = remaining >= hint.length + 3
+      ? `${' '.repeat(remaining - hint.length)}${T.grayDark}${hint}${T.reset}`
+      : ' '.repeat(remaining);
+    return `${rendered}${hintSuffix}${T.reset}`;
   }
 
   /** Click handling for the tab bar (screen row 0, 0-based column). */
@@ -831,18 +837,18 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         break;
       }
       case 'thought': {
-        // Hidden reasoning — Cline-style: compact, never a wall of italic
-        // prose. A long thinking block collapses to its first row + an
-        // ellipsis marker; the model's monologue must not dominate the
-        // transcript (screenshot feedback 2026-10-04).
+        // Hidden reasoning — luminous drawer ribbon: compact, structured,
+        // and informative without dominating the transcript.
         const THINK_MAX_ROWS = 3;
-        const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
+        const wrapped = wrap(cleanText, Math.max(10, maxWidth - 6));
         const shown = wrapped.slice(0, THINK_MAX_ROWS);
+        const header = `${T.act}⟡${T.reset} ${T.grayDark}Reasoning Trace${T.reset} ${T.violet}· ${wrapped.length} lines${T.reset} ${T.grayDark}(Ctrl+O to expand)${T.reset}`;
+        rows.push(visibleLen(header) > maxWidth ? ellipsize(header, maxWidth) : header);
         for (const w of shown) {
-          rows.push(`${T.dim}${T.italic}${R.thoughtText}${w}${T.reset}`);
+          rows.push(`  ${T.act}│${T.reset} ${T.dim}${T.italic}${R.thoughtText}${w}${T.reset}`);
         }
         if (wrapped.length > THINK_MAX_ROWS) {
-          const hint = `${T.grayDark}… thinking (${wrapped.length - THINK_MAX_ROWS} more rows hidden — Ctrl+O to expand)${T.reset}`;
+          const hint = `  ${T.act}└─${T.reset} ${T.grayDark}… (${wrapped.length - THINK_MAX_ROWS} more lines hidden)${T.reset}`;
           rows.push(visibleLen(hint) > maxWidth ? ellipsize(hint, maxWidth) : hint);
         }
         break;
@@ -1154,9 +1160,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const rows: string[] = new Array(h).fill('');
     const lead = ' '.repeat(indent);
 
-    // Pinned tab bar (row 0) + breathing room (row 1): transcript starts at TAB_BAR_ROWS.
+    // Pinned tab bar (row 0) + breathing room with underglow (row 1): transcript starts at TAB_BAR_ROWS.
     rows[0] = tabBarRow(w);
-    rows[1] = '';
+    if (lastActiveTabRange) {
+      const [start, end] = lastActiveTabRange;
+      const barLen = Math.max(0, end - start);
+      rows[1] = ' '.repeat(start) + `${T.act}${'▔'.repeat(barLen)}${T.reset}`;
+    } else {
+      rows[1] = '';
+    }
 
     const showSplash = !state.splashDismissed && state.lines.length === 0;
     if (showSplash) {
@@ -1173,6 +1185,16 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         const r = TAB_BAR_ROWS + i;
         const rendered = lead + applySelection(visible[i] ?? '', i, indent);
         rows[r] = visibleLen(rendered) > w ? ellipsize(rendered, w) : rendered;
+      }
+    }
+
+    if (state.tasks.size > 1) {
+      const stepper = renderTaskStepper([...state.tasks.values()], Math.max(20, w - indent));
+      if (stepper) {
+        const stepRow = TAB_BAR_ROWS + Math.max(0, contentH - 2);
+        if (stepRow >= TAB_BAR_ROWS && stepRow < h - bottomRows) {
+          rows[stepRow] = lead + stepper;
+        }
       }
     }
 
@@ -1236,9 +1258,6 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const roles = activeSubs.map((s) => `#${s.role}`).join(', ');
       extra.push(`⚡ ${activeSubs.length} subagents (${roles})`);
     }
-    if (state.tokenVelocity && state.tokenVelocity > 0) {
-      extra.push(`⚡ ${state.tokenVelocity} tok/s`);
-    }
     const statusModel = {
       modelId: modelShort,
       totalTokens: state.inTokens + state.outTokens + state.cacheTokens,
@@ -1252,6 +1271,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       gitDiff: state.gitDiff,
       autoApprove: state.autoApprove,
       extra,
+      tokenVelocity: state.tokenVelocity,
     };
 
     const s1 = h - bottomRows;
@@ -3505,6 +3525,24 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       }
 
       const c = s[i];
+
+      // Ctrl+K: Raycast-style command palette toggle
+      if (c === '\u000b') {
+        if (state.dropActive) {
+          state.dropActive = false;
+          state.dropSelected = 0;
+        } else {
+          state.dropActive = true;
+          state.dropSelected = 0;
+          if (!state.input.startsWith('/')) {
+            state.input = '/' + state.input;
+            state.cursor = state.input.length;
+          }
+        }
+        scheduleRender();
+        i++;
+        continue;
+      }
 
       // Ctrl+O: Drop down uncompressed inspector menu
       if (c === '\u000f') {

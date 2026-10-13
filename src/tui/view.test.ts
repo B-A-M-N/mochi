@@ -18,6 +18,7 @@ import {
   composerBottomRule,
   composerHintRow,
   renderDropdown,
+  renderTaskStepper,
   transcriptIndent,
   spinnerFrame,
   sparkleFrame,
@@ -124,6 +125,12 @@ describe('statusBar rows', () => {
     const row = statusBarRow1(baseStatus({ reasoningLevel: 'high' }), 90);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
     expect(plain).toContain('[REASON: HIGH]');
+  });
+
+  it('row1 displays token velocity speedometer when available', () => {
+    const row = statusBarRow1(baseStatus({ tokenVelocity: 68 }), 90);
+    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('68 t/s ⚡');
   });
 
   it('row2 shows workspace, branch, and diff stats', () => {
@@ -316,6 +323,36 @@ describe('dropdown', () => {
     expect(plain).toContain('/model');
     expect(plain).toContain('❯ /model');
     expect(plain).not.toContain('❯ /mode ');
+  });
+
+  it('renders category pills for raycast palette on wide viewports', () => {
+    const rows = renderDropdown(
+      [{ name: '/help', hint: 'show help' }],
+      0,
+      60,
+    );
+    const plain = rows.join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('[All]');
+    expect(plain).toContain('[Tools]');
+    expect(plain).toContain('[Themes]');
+    expect(plain).toContain('[Skills]');
+  });
+});
+
+describe('task stepper', () => {
+  it('renders borderless cyber stepper with status icons and connectors', () => {
+    const tasks = [
+      { id: '1', title: 'Audit Code', status: 'completed' },
+      { id: '2', title: 'Patch view.ts', status: 'running' },
+      { id: '3', title: 'Run Tests', status: 'pending' },
+    ];
+    const out = renderTaskStepper(tasks, 80);
+    const plain = out.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('·✦·');
+    expect(plain).toContain('[1/3 ✓');
+    expect(plain).toContain('[2/3 ✦');
+    expect(plain).toContain('[3/3 ○');
+    expect(plain).toContain('──');
   });
 });
 
@@ -712,5 +749,12 @@ describe('renderMarkdown', () => {
     expect(plain[1]).toBe('');
     expect(plain[2].startsWith('┌')).toBe(true);
     expect(plain[plain.length - 1]).toBe('All systems operational.');
+  });
+
+  it('renders styled code block header with language and file pills', () => {
+    const md = '```typescript:src/tui/view.ts\nconst x = 1;\n```';
+    const rows = renderMarkdown(md, 80);
+    const plain = rows.map((r) => r.replace(/\x1b\[[0-9;]*m/g, '')).join('\n');
+    expect(plain).toContain('✦ src/tui/view.ts · typescript');
   });
 });
