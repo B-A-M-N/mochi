@@ -82,4 +82,37 @@ describe('providers', () => {
       expect(resolveProvider(c as never).model).toBe(c.model);
     }
   });
+
+  it('every provider entry is shippable: default listed, models non-empty, endpoint sane', () => {
+    // Fake-prevention: a defaultModel missing from models (cerebras once
+    // shipped default llama-3.3-70b with only llama3.3-70b listed) silently
+    // points users at a 404 — the "fake model" class. Pinned for all entries.
+    for (const p of PROVIDERS) {
+      expect(p.models.length, `${p.id} lists no models`).toBeGreaterThan(0);
+      expect(p.models, `${p.id} default ${p.defaultModel} not listed`).toContain(p.defaultModel);
+      expect(typeof p.envKey).toBe('string');
+      // Azure has no fixed endpoint (per-deployment URL by construction) —
+      // the template is honest, not a fake; everything else must be a real URL.
+      if (p.id === 'azure') continue;
+      const local = p.baseUrl.startsWith('http://localhost') || p.baseUrl.startsWith('http://127.');
+      expect(local || p.baseUrl.startsWith('https://'), `${p.id} baseUrl ${p.baseUrl}`).toBe(true);
+    }
+  });
+
+  it('new Asia-Pacific + coding providers resolve through the OpenAI adapter', () => {
+    for (const [provider, model] of [
+      ['moonshot', 'kimi-k3'],
+      ['minimax', 'MiniMax-M3'],
+      ['zhipu', 'glm-5.3'],
+      ['zai', 'glm-5.3'],
+      ['cohere', 'command-a-plus-05-2026'],
+      ['qwen', 'qwen-max'],
+    ] as Array<[string, string]>) {
+      const cfg = providerById(provider);
+      expect(cfg, provider).toBeDefined();
+      const resolved = resolveProvider({ provider, baseUrl: cfg!.baseUrl, model } as never);
+      expect(resolved.model).toBe(model);
+      expect(typeof createProvider({ provider, baseUrl: cfg!.baseUrl, model } as never).chat).toBe('function');
+    }
+  });
 });

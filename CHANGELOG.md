@@ -1,5 +1,8 @@
 # Mochi Changelog
 
+## Unreleased
+- **6 new providers (27 total)** — Moonshot/Kimi, MiniMax, Zhipu GLM, Z.AI, Cohere, Alibaba Qwen, all endpoint-verified; Cerebras `llama-3.3-70b` id typo fixed; Together gains its Qwen coder. New table-integrity test pins every default as listed (the dead-default class can't recur).
+
 ## [0.24.0] - 2026-10-14
 - **Interactive `ask_question` menu** — the model can now ask you back mid-task: option menus (arrow keys + Enter, Esc skips, free-text fallback, multi-select) in the TUI, deterministic defaults headless. Previously `ask_question` was aliased to `think`, so questions went nowhere.
 - **Honest completion labels** — clean answers render "Question Answered", clean work "Task Complete"; "Partially Complete" only on real partials, "Task Failed" on failures (was: everything read "Partially Complete", including a bare `hi`).
