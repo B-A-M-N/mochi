@@ -2763,72 +2763,21 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     });
   }
 
-  /** /tools browser: pick a tool, inspect its schema, or run it with
-   *  prompted JSON args. Runs through the real executor, so cards, audit,
-   *  and permission checks behave exactly like agent-issued calls. */
+  /** /tools browser (unit lives in ./tools-menu.js, tested with scripted UI). */
   async function toolsMenu(line: string): Promise<void> {
-    const { buildTools, executeTool } = await import('../tools/index.js');
-    const { formatToolDetails } = await import('./cards.js');
-    const tools = buildTools(runtime.config);
-    const names = [...tools.keys()].sort();
-    const arg = (line.length > 6 ? line.slice(6) : '').trim().toLowerCase();
-    const showDetails = (name: string): void => {
-      const t = tools.get(name);
-      if (!t) { push('error', `No tool '${name}'.`); scheduleRender(); return; }
-      push('system', formatToolDetails(t.def));
-      scheduleRender();
-    };
-    const tryTool = async (name: string): Promise<void> => {
-      if (!tools.has(name)) { push('error', `No tool '${name}'.`); scheduleRender(); return; }
-      const raw = await ask(`Args for ${name} as JSON ({} for none, Esc cancels):`);
-      if (!raw.trim()) { push('system', 'Tool run cancelled.'); scheduleRender(); return; }
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(raw) as Record<string, unknown>;
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('need an object');
-      } catch {
-        push('error', 'Args must be a JSON object, e.g. {"path": "src/x.ts"}.');
-        scheduleRender();
-        return;
-      }
-      const tcId = `tui-${Date.now().toString(36)}`;
-      runtime.events.emit({ type: 'tool:called', tool: name, args: parsed, agentId: 'tui', tool_call_id: tcId });
-      scheduleRender();
-      const r = await executeTool(name, parsed, {
-        cwd: projectRoot,
-        workspace: runtime.workspace,
-        config: runtime.config,
-        events: runtime.events,
-        agentId: 'tui',
-        abortSignal: runtime.signal,
-        callerEmittedEvent: true,
-      }, tools);
-      runtime.events.emit({
-        type: 'tool:completed',
-        tool: name,
-        result: { toolCallId: tcId, name, output: r.output, error: r.error, durationMs: r.durationMs },
-        agentId: 'tui',
-      });
-      scheduleRender();
-    };
-    let pool = names;
-    if (arg) {
-      if (tools.has(arg)) { showDetails(arg); return; }
-      pool = names.filter((n) => n.includes(arg));
-      if (!pool.length) { push('error', `No tools match "${arg}".`); scheduleRender(); return; }
-      if (pool.length === 1) { showDetails(pool[0]); return; }
-    }
-    const items = pool.map((n) => {
-      const desc = String(tools.get(n)!.def.description).split('\n')[0].slice(0, 56);
-      return `${T.cyan}${n.padEnd(22)}${T.reset}  ${T.grayDark}${desc}${T.reset}`;
-    });
-    state.menuSelected = 0;
-    const idx = await openMenu(`Agent Tools (${pool.length})`, items);
-    if (idx < 0 || idx >= pool.length) return;
-    const chosen = pool[idx];
-    const act = await openMenu(`Tool: ${chosen}`, ['Show details', 'Try it (prompt for args)', 'Back']);
-    if (act === 0) showDetails(chosen);
-    else if (act === 1) await tryTool(chosen);
+    const { toolsMenu } = await import('./tools-menu.js');
+    await toolsMenu({
+      openMenu,
+      ask,
+      push,
+      scheduleRender,
+      config: runtime.config,
+      workspace: runtime.workspace,
+      events: runtime.events,
+      signal: runtime.signal,
+      projectRoot,
+      setMenuSelected: (i: number) => { state.menuSelected = i; },
+    }, line);
   }
 
   async function loginFlow() {

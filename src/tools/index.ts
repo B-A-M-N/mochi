@@ -563,13 +563,17 @@ export async function executeTool(
   const perm = tool.def.permission;
   if (perm) {
     const isUncensored = ctx.config.safety?.mode === 'uncensored';
+    // Programmatic callers (TUI try-it, probes) may pass a minimal config
+    // without a permissions block — fall back to the defaults instead of
+    // throwing on undefined (the ?? below already encodes them).
+    const perms = ctx.config.permissions ?? {};
     const isPermitted = isUncensored || (perm === 'admin'
-      ? ctx.config.permissions.admin !== false
-      : (ctx.config.permissions[perm] ?? (perm === 'read' || perm === 'write' || perm === 'shell' || perm === 'network')));
+      ? perms.admin !== false
+      : ((perms as Record<string, boolean | undefined>)[perm] ?? (perm === 'read' || perm === 'write' || perm === 'shell' || perm === 'network')));
     if (!isPermitted) {
       return { output: '', error: `Permission denied for tool ${name} (${perm})`, durationMs: 0 };
     }
-    if (ctx.config.safety.mode === 'safe' && tool.def.dangerous) {
+    if (ctx.config.safety?.mode === 'safe' && tool.def.dangerous) {
       return { output: '', error: `Tool ${name} requires safety mode ask/auto`, durationMs: 0 };
     }
   }
