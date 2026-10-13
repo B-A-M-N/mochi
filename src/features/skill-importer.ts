@@ -28,6 +28,7 @@ import { existsSync, readdirSync, statSync, mkdirSync, cpSync, readFileSync, wri
 import { join, basename, resolve, isAbsolute } from 'node:path';
 import { runArgv } from '../exec.js';
 import { parseFrontmatter, safeSlug } from '../skills/skill-manager.js';
+import { lintSkillDoc } from '../skills/skill-lint.js';
 
 export interface ImportedSkillInfo {
   name: string;
@@ -41,6 +42,8 @@ export interface SkillImportReport {
   imported: ImportedSkillInfo[];
   skipped: Array<{ name: string; reason: string; from: string }>;
   errors: string[];
+  /** Installed anyway, but the lint gate flagged quality notes (shown, not hidden). */
+  warnings: Array<{ name: string; issues: string[]; from: string }>;
   origin: string;
 }
 
@@ -247,7 +250,7 @@ export async function importSkills(opts: {
   origin?: string;                // namespace override; else derived from source
   force?: boolean;
 }): Promise<SkillImportReport> {
-  const report: SkillImportReport = { imported: [], skipped: [], errors: [], origin: opts.origin || '' };
+  const report: SkillImportReport = { imported: [], skipped: [], errors: [], warnings: [], origin: opts.origin || '' };
   const srcRes = await resolveSourceDir(opts.source);
   if (!srcRes.dir) {
     report.errors.push(srcRes.error || `source not found: ${opts.source}`);
@@ -294,6 +297,31 @@ export async function importSkills(opts: {
       report.skipped.push({ name: s.name, reason: 'name already installed (use --force to overwrite)', from: s.path });
       continue;
     }
+
+    // Install-time lint gate: a download catalog is an attack surface.
+    // Prompt-injection payloads are rejected outright (never installed
+    // silently); quality notes (placeholders, thin procedures) install
+    // anyway but are reported visibly in `warnings` — the user asked for
+    // the skill, so we deliver it flagged, not censored.
+    try {
+      const raw = readFileSync(s.path, 'utf8');
+      const parsed = parseFrontmatter(raw);
+      if (parsed) {
+        const res = lintSkillDoc(
+          String(parsed.meta.name ?? s.name),
+          String(parsed.meta.description ?? ''),
+          parsed.body,
+        );
+        const injection = res.issues.filter((i) => i.rule === 'no-injection');
+        if (injection.length > 0) {
+          report.skipped.push({ name: s.name, reason: `rejected: possible prompt injection (${injection.map((i) => i.message).join('; ').slice(0, 160)})`, from: s.path });
+          continue;
+        }
+        if (!res.ok || res.issues.length > 0) {
+          report.warnings.push({ name: s.name, issues: res.issues.map((i) => `${i.severity}:${i.rule}`), from: s.path });
+        }
+      }
+    } catch { /* unreadable here surfaces as a copy error below */ }
 
     const destDir = join(targetRoot, slug);
     const destFile = join(destDir, 'SKILL.md');

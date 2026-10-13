@@ -63,3 +63,10 @@ class LazyChameleonOrchestrator:
 
 ### Flow
 User -> Planner -> TreeSearch -> [Critic->Verifier->Refiner]^N -> Gate -> Output
+
+## Using this skill
+1. Classify the task and set the thinking budget up front (TINY=1 for trivia, MEDIUM=3 default, HARD=8, MASSIVE=20+ for novel architecture).
+2. Generate 3 candidate approaches (conservative, creative, minimal) before committing to one — single-path planning is where bad designs come from.
+3. Critique each candidate adversarially (bugs, hallucinations, missing requirements), then verify against compile/test/lint — not vibes.
+4. Refine only the failing parts; re-run the critic until it passes or the budget is spent, then let the confidence gate decide.
+5. Score the final answer; below 0.3 confidence, double the budget and run once more instead of shipping doubt.

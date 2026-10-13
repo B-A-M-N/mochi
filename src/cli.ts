@@ -922,8 +922,9 @@ async function main() {
       const rep = await importSkills({ source: sourceName, force: !!flags.force });
       for (const it of rep.imported) console.log(`imported  ${it.name}  -> ${it.to}`);
       for (const sk of rep.skipped) console.log(`skipped   ${sk.name}  (${sk.reason})`);
+      for (const w of rep.warnings) console.log(`warning   ${w.name}  (${w.issues.join(', ')})`);
       for (const e of rep.errors) console.error(`error     ${e}`);
-      console.log(`\n${rep.imported.length} imported, ${rep.skipped.length} skipped, ${rep.errors.length} errors (origin: ${rep.origin}).`);
+      console.log(`\n${rep.imported.length} imported, ${rep.skipped.length} skipped, ${rep.warnings.length} warnings, ${rep.errors.length} errors (origin: ${rep.origin}).`);
       return;
     }
     if (sub === 'repo' || sub === 'registry' || sub === 'src') {
@@ -1093,16 +1094,17 @@ async function main() {
           console.error(`No packs with category '${cat}' in '${src.name}'.`);
           return;
         }
-        let installed = 0, skipped = 0, errs = 0;
+        let installed = 0, skipped = 0, warns = 0, errs = 0;
         for (const p of packs) {
           const pd = resolvePackDir(res.dir, p.name, src.catalogFile);
           if (!pd) { errs++; console.error(`error  pack '${p.name}' unresolvable in source`); continue; }
           const rep = await importSkills({ source: pd, origin: src.name, force: !!flags.force });
           for (const it of rep.imported) { installed++; console.log(`installed  ${it.name}  -> ${it.to}`); }
           for (const s of rep.skipped) { skipped++; console.log(`skipped    ${s.name}  (${s.reason})`); }
+          for (const w of rep.warnings) { warns++; console.log(`warning    ${w.name}  (${w.issues.join(', ')})`); }
           for (const e of rep.errors) { errs++; console.error(`error      ${e}`); }
         }
-        console.log(`\n${installed} installed, ${skipped} skipped, ${errs} errors (source: ${src.name}, category: ${cat}).`);
+        console.log(`\n${installed} installed, ${skipped} skipped, ${warns} warnings, ${errs} errors (source: ${src.name}, category: ${cat}).`);
         return;
       }
       const resolvedPackId = repoName ? packId : null;
@@ -1115,8 +1117,9 @@ async function main() {
       const rep = await importSkills({ source: targetDir ?? res.dir, origin: src.name, force: !!flags.force });
       for (const it of rep.imported) console.log(`installed  ${it.name}  -> ${it.to}`);
       for (const sk of rep.skipped) console.log(`skipped    ${sk.name}  (${sk.reason})`);
+      for (const w of rep.warnings) console.log(`warning    ${w.name}  (${w.issues.join(', ')})`);
       for (const e of rep.errors) console.error(`error      ${e}`);
-      console.log(`\n${rep.imported.length} installed, ${rep.skipped.length} skipped, ${rep.errors.length} errors (source: ${src.name}).`);
+      console.log(`\n${rep.imported.length} installed, ${rep.skipped.length} skipped, ${rep.warnings.length} warnings, ${rep.errors.length} errors (source: ${src.name}).`);
       return;
     }
     const { skills } = loadAllSkills(cwd);

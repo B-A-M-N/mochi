@@ -7,11 +7,13 @@ tools: [read, glob, search, shell, sql_codebase_query]
 # Database Optimizer Skill
 
 ## Diagnose first
-- Identify the slow query (from logs or a reported endpoint). If it comes from an ORM, translate it to the raw SQL the ORM emits before analyzing.
-- Run `EXPLAIN ANALYZE` (Postgres), `EXPLAIN QUERY PLAN` (SQLite), or the engine's equivalent. Read the plan:
+1. Identify the slow query (from logs or a reported endpoint). If it comes from an ORM, translate it to the raw SQL the ORM emits before analyzing.
+2. Run `EXPLAIN ANALYZE` (Postgres), `EXPLAIN QUERY PLAN` (SQLite), or the engine's equivalent. Read the plan:
   - Full table scans on large tables → candidate for an index or a better query shape.
   - Nested loops feeding the same table → possible N+1.
   - Sort/group/hash after a filtered scan → consider a covering or composite index.
+3. Apply the smallest fix that changes the plan (eager loading, composite index, added filter), then re-run `EXPLAIN` and confirm the scan became a lookup.
+4. Keep a regression test on the query path and re-check migration history before any schema change.
 
 ## Common fixes
 - **N+1**: replace loop-per-row queries with an `IN (...)` or a join; with an ORM, use eager loading (`select_related`/`prefetch_related`, `include`, `relations`).

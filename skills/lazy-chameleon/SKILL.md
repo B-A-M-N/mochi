@@ -21,12 +21,10 @@ The complete Lazy Chameleon Parameter Synthesis Engine baked directly into Mochi
 - **Context Compression**: LLMLingua-style token minimization and prefix-anchored KV-cache alignment.
 
 ## Usage in Mochi
-```bash
-# In Mochi interactive TUI or CLI:
-mochi
-> /chameleon task="Design a distributed consensus protocol" mode="hard" strategy="chain_of_draft"
-```
-Or use the agent tool:
+1. Pick the strategy for the task: `chain_of_draft` for design, `budget_force` for decomposition, `devils_advocate` for risky changes, `self_consistency` for ambiguous calls.
+2. Invoke the agent `chameleon` tool (or run `mochi goal --enhance "<task>"`) — the engine reasons inside the run, no separate command needed.
+3. For cheap pre-reasoning with zero model calls, ask for flash-mode heuristic synthesis first, then escalate to stalled test-time passes only if confidence is low.
+4. Verify the output with the repo's own checks — expanded reasoning is still reasoning, not proof.
 ```json
 {
   "name": "chameleon",

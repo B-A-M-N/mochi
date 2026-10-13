@@ -2884,8 +2884,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     await run(async () => {
       const rep = await importSkills({ source: pd ?? srcDir, origin: src.name });
       if (rep.imported.length) {
-        push('system', `Installed skill '${chosen.name}' from '${sourceName}'.`);
-        return `Installed ${rep.imported.map((i) => i.name).join(', ')} from '${sourceName}'.`;
+        const warn = rep.warnings.length ? ` (${rep.warnings.length} lint warning(s): ${rep.warnings.map((w) => `${w.name}: ${w.issues.join(', ')}`).join('; ').slice(0, 160)})` : '';
+        push('system', `Installed skill '${chosen.name}' from '${sourceName}'.${warn}`);
+        return `Installed ${rep.imported.map((i) => i.name).join(', ')} from '${sourceName}'.${warn}`;
       }
       const reasons = rep.skipped.map((s) => s.reason).join('; ') || rep.errors.join('; ');
       push('system', `Skill '${chosen.name}' not newly installed${reasons ? ` (${reasons})` : ''}.`);

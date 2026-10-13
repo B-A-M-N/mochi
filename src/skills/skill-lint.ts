@@ -57,8 +57,13 @@ export function lintSkillDoc(name: string, description: string, body: string): S
     issues.push({ rule: 'has-steps', severity: 'error', message: 'no numbered steps or checkboxes found — skills must be actionable procedures' });
   }
 
-  // R5: no placeholder markers.
-  if (/\bTODO\b|\bTBD\b|\bFIXME\b|<placeholder>|\bXXX\b/.test(trimmed)) {
+  // R5: no placeholder markers. Quoted spans are excluded: a skill that
+  // *prohibits* placeholders ('no "TODO: implement" stubs') names the marker
+  // in prose — real leftovers are bare code comments, never quoted. This keeps
+  // the implementation skill (which bans TODOs by name) passing without
+  // letting an actual `// TODO: finish` through.
+  const unquoted = trimmed.replace(/(["'`])[^"'`\n]*\1/g, '');
+  if (/\bTODO\b|\bTBD\b|\bFIXME\b|<placeholder>|\bXXX\b/.test(unquoted)) {
     issues.push({ rule: 'no-placeholders', severity: 'error', message: 'placeholder marker (TODO/TBD/FIXME/XXX) in body — unfinished skills must not ship' });
   }
 

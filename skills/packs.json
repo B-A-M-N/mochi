@@ -1,0 +1,422 @@
+[
+  {
+    "name": "accessibility-audit",
+    "path": "accessibility-audit",
+    "description": "Audit and fix accessibility (a11y) — WCAG 2.2 AA compliance, screen-reader flows, keyboard navigation, and ARIA correctness for web apps. Use when checking a UI for accessibility, fixing a11y bugs, or preparing for compliance review."
+  },
+  {
+    "name": "acp-setup",
+    "path": "acp-setup",
+    "description": "Guide on using Mochi's Agent Client Protocol (ACP) for editor integrations"
+  },
+  {
+    "name": "api-design",
+    "path": "api-design",
+    "description": "Design public APIs and CLIs — naming, ergonomics, versioning, error surfaces, and backward-compat discipline. Use when adding a public command, SDK surface, REST/JSON contract, or plugin interface. Ported from Anthropic/OpenAI API-design practice."
+  },
+  {
+    "name": "api-integration",
+    "path": "api-integration",
+    "description": "Integrate third-party APIs correctly — auth patterns, retry/backoff, pagination, rate limits, idempotency, and contract testing. Use when wiring an external API/SDK into an app, debugging flaky API calls, or designing an integration layer."
+  },
+  {
+    "name": "api-security-hardening",
+    "path": "api-security-hardening",
+    "description": "Secure web APIs and backends — authz enforcement, injection prevention, rate limiting, secret handling, and the OWASP-class checks that block real attacks. Use when hardening an API before launch, reviewing a service's security posture, or responding to a security finding."
+  },
+  {
+    "name": "auth-implementations",
+    "path": "auth-implementations",
+    "description": "Implement authentication correctly — session/JWT/OAuth/SSC flows, password handling, MFA, and the failure modes that become breaches. Use when adding login/signup, fixing auth bugs, designing SSO, or reviewing an auth implementation."
+  },
+  {
+    "name": "benchmark-methodology",
+    "path": "benchmark-methodology",
+    "description": "Honest benchmarking with TTFF/TTFI/PSS probes — cold start, token throughput, prompt-to-first-token. Use when measuring performance or publishing numbers in BENCHMARKS.md."
+  },
+  {
+    "name": "browser-automation",
+    "path": "browser-automation",
+    "description": "Automate real browsers for testing and scraping — Playwright-first flows, selector strategy, waiting discipline, and anti-flake patterns. Use when writing E2E tests, scraping a JS-rendered site, taking screenshots, or automating any browser workflow."
+  },
+  {
+    "name": "caching-strategy",
+    "path": "caching-strategy",
+    "description": "Design caching layers — HTTP caching, CDN, application memory caches, invalidation patterns, and cache-coherence reasoning. Use when adding caching to fix performance, debugging stale-data bugs, or designing cache keys/TTLs."
+  },
+  {
+    "name": "checkpoint-semantics",
+    "path": "checkpoint-semantics",
+    "description": "Git-backed checkpoints and rollback composition — naming, nesting, conflicts, when to auto-commit. Use when touching src/repo/ or checkpoint/rollback flows."
+  },
+  {
+    "name": "ci-pipeline-design",
+    "path": "ci-pipeline-design",
+    "description": "Design and repair CI/CD pipelines — fast feedback stages, parallelization, flaky test quarantine, artifact flows, and deploy gates. Use when builds are slow, CI is flaky, deploys are scary, or setting up a new project's pipeline."
+  },
+  {
+    "name": "code-review",
+    "path": "code-review",
+    "description": "Comprehensive code review, pull request analysis, security vetting, cyclomatic complexity check, and architectural alignment."
+  },
+  {
+    "name": "cognitive-anchor",
+    "path": "cognitive-anchor",
+    "description": "Operational Persistence System — preserves execution continuity by maintaining state integrity, object continuity, memory integrity, epistemic classification, recovery discipline, completion criteria, action accountability, and information economy throughout a session. Use for any multi-turn task, any task involving defect tracking or task decomposition, any session where context compression may occur, or when the user asks to checkpoint state, recover from a failed approach, reconstruct prior conclusions, or maintain stable object identities across edits. Apply ANCHOR after OWL's reasoning pass and before DOX loads documentation contracts."
+  },
+  {
+    "name": "cognitive-dox",
+    "path": "cognitive-dox",
+    "description": "Documentation Operations eXchange — AGENTS.md hierarchy protocol that treats documentation as a binding work contract. Use when editing files inside a project that contains AGENTS.md, when creating or updating AGENTS.md, when the user asks to maintain DOX, sync AGENTS.md, build the DOX tree, index the project, or mentions AGENTS.md hierarchy, child DOX index, or documentation contracts. After meaningful edits in a DOX-enabled project, run the DOX closeout pass."
+  },
+  {
+    "name": "cognitive-owl",
+    "path": "cognitive-owl",
+    "description": "Operational Wisdom Layer — pre-implementation reasoning protocol that applies 9 engineering principles silently by default, surfacing only when a finding would change what the user does or expects. Use for any coding, review, debugging, or refactoring task. Especially important for ambiguous requests, existing codebases, long multi-turn tasks, tasks where the user has pushed back on a diagnosis, or any situation where success criteria is unclear. Apply OWL before implementing — it runs the reasoning pass, not the solution."
+  },
+  {
+    "name": "cognitive-sispis",
+    "path": "cognitive-sispis",
+    "description": "Output calibration gate — determines response format (direct answer, analytical explanation, or structured decision framework) based on entropy, upstream OWL signals, and weighted intent. Prevents over-structuring simple queries and under-structuring complex ones. Use at the end of the pipeline to calibrate how findings from OWL and ANCHOR are communicated. Applies when the request contains potential decision structure, comparative evaluation, or downstream impact."
+  },
+  {
+    "name": "concurrency-debugging",
+    "path": "concurrency-debugging",
+    "description": "Debug races, deadlocks, and async bugs — happens-before reasoning, deterministic reproduction, and the standard race patterns in JS/Python/Rust/Go. Use when intermittent failures appear only under load, async code behaves nondeterministically, or locks/timeouts misbehave."
+  },
+  {
+    "name": "core-harness",
+    "path": "core-harness",
+    "description": "Design document for core harness architecture"
+  },
+  {
+    "name": "daemon-endpoints",
+    "path": "daemon-endpoints",
+    "description": "Adding HTTP endpoints to the persistent daemon — auth, persistence, job lifecycle. Use when extending src/daemon/ or wiring external clients to the daemon."
+  },
+  {
+    "name": "data-viz",
+    "path": "data-viz",
+    "description": "Design and build data visualizations — chart type selection, perceptual accuracy, axis integrity, color scales, and library choices (D3/Recharts/Plotly/Observable). Use when asked to chart, graph, or visualize data, or when reviewing a chart for honesty and clarity."
+  },
+  {
+    "name": "database-migrations",
+    "path": "database-migrations",
+    "description": "Design and execute safe database schema migrations — expand/contract pattern, zero-downtime rules, rollback plans, and data-backfill discipline for PostgreSQL/MySQL/SQLite. Use when changing schemas, adding columns/tables/indexes, or migrating data at scale."
+  },
+  {
+    "name": "database-optimizer",
+    "path": "database-optimizer",
+    "description": "Database optimization workflow — EXPLAIN ANALYZE inspection, index design, N+1 detection, query plan reading, and schema tuning. Use when a query or schema is slow or when asked to optimize persistence."
+  },
+  {
+    "name": "debugging",
+    "path": "debugging",
+    "description": "Systematic procedure for fixing bugs - reproduce first, localize with symbol tools, fix the root cause, and add a regression test. Use when a test fails, an error is reported, or behavior is wrong."
+  },
+  {
+    "name": "dependency-upgrades",
+    "path": "dependency-upgrades",
+    "description": "Upgrade dependencies safely (npm/pip/cargo/go): audit first, update in layers, verify with the repo's own suite. Use when asked to update, bump, or audit dependencies."
+  },
+  {
+    "name": "design-systems",
+    "path": "design-systems",
+    "description": "Build and maintain design systems — token architecture, component APIs, documentation, versioning, and adoption strategy. Use when creating a component library, unifying UI across an app, or fixing inconsistent styling across a codebase."
+  },
+  {
+    "name": "docker-k8s",
+    "path": "docker-k8s",
+    "description": "Containerize and orchestrate services — Dockerfile discipline, image size/security, compose for local dev, Kubernetes manifests/helm, and production pod hygiene. Use when containerizing an app, fixing slow/bloated builds, debugging k8s deployments, or writing manifests."
+  },
+  {
+    "name": "document-generation",
+    "path": "document-generation",
+    "description": "Create and edit real document files — DOCX, XLSX, PPTX, PDF — with correct structure, styling, and compatibility. Use when asked to produce a Word doc, Excel spreadsheet with formulas, PowerPoint deck, or fill/edit a PDF. Ported from Claude's document-skills corpus, deepened with validation and compat rules."
+  },
+  {
+    "name": "e2e-testing",
+    "path": "e2e-testing",
+    "description": "End-to-end browser tests with Playwright/Cypress: page objects, deterministic waits, CI sharding. Use when asked for e2e, browser, or user-flow tests."
+  },
+  {
+    "name": "eval-design",
+    "path": "eval-design",
+    "description": "Design document for agentic evaluations"
+  },
+  {
+    "name": "exec-policy",
+    "path": "exec-policy",
+    "description": "Subprocess execution must go through the central exec policy — risk classification, timeout escalation SIGTERM→SIGKILL, output caps. Use when adding any code that spawns processes."
+  },
+  {
+    "name": "feature-flags",
+    "path": "feature-flags",
+    "description": "Implement feature flags and gradual rollouts — flag taxonomy, kill switches, percentage rollouts, targeting rules, and flag-debt hygiene. Use when adding a feature toggle system, doing a risky rollout, or cleaning up flag sprawl."
+  },
+  {
+    "name": "feature-port",
+    "path": "feature-port",
+    "description": "Port a feature from another agent/tool into Mochi properly — study the original, extract the invariant idea, rewrite for Mochi's architecture (Rust core + TS fallback, zero runtime deps), add parity tests. Use when adapting any external design rather than cargo-culting it."
+  },
+  {
+    "name": "frontend-design",
+    "path": "frontend-design",
+    "description": "Design distinctive, high-craft frontend interfaces — visual identity, typography, motion, 3D, and polish that avoids generic AI aesthetics. Use when building any user-facing web UI, landing page, dashboard, or component library where the result should feel designed, not generated. Ported from Claude's frontend-design practice, deepened for Mochi."
+  },
+  {
+    "name": "game-dev-features",
+    "path": "game-dev-features",
+    "description": "Implement game features — game loops, entity systems, collision, state machines, save systems, and performance budgets at 60fps. Use when building a game, porting a mechanic between engines, or debugging game-specific problems (jank, physics glitches, save corruption)."
+  },
+  {
+    "name": "geospy-methodology",
+    "path": "geospy-methodology",
+    "description": "Advanced prompt engineering and methodology"
+  },
+  {
+    "name": "git-workflow",
+    "path": "git-workflow",
+    "description": "Safe git procedures - checkpoints, inspecting history, branches, rebases, merge conflicts, and what never to do without approval. Use for any git operation beyond plain status/diff, including resolving conflicts and restructuring commits."
+  },
+  {
+    "name": "gui-design",
+    "path": "gui-design",
+    "description": "Design and build desktop GUI applications — Qt/PySide6, Electron, Tauri, GTK patterns for layout, state management, native platform conventions, and packaging. Use when building a desktop app, settings window, launcher, or any windowed interface."
+  },
+  {
+    "name": "harness-struggle-recovery",
+    "path": "harness-struggle-recovery",
+    "description": "Agent stall/struggle detection and recovery — struggle-state injection, escalation ladder, provider failover. Use when touching the loop, Chameleon, or autonomy settings."
+  },
+  {
+    "name": "implementation",
+    "path": "implementation",
+    "description": "Procedure for writing code changes - read before editing, surgical diffs, matching conventions, and verifying. Use for building features, fixing code, and any file change."
+  },
+  {
+    "name": "incident-response",
+    "path": "incident-response",
+    "description": "Respond to production incidents — triage, mitigation before root-cause, communication cadence, and postmortem discipline. Use when a service is down, error rates spike, users report outages, or an alert fires."
+  },
+  {
+    "name": "internationalization",
+    "path": "internationalization",
+    "description": "Internationalize software correctly — externalization, Unicode handling, pluralization, locale-aware formatting, RTL layouts, and locale data pitfalls. Use when adding i18n to an app, fixing locale bugs, or preparing a product for non-English markets."
+  },
+  {
+    "name": "jupyter-notebooks",
+    "path": "jupyter-notebooks",
+    "description": "Jupyter notebooks for reproducible analysis: linear flow, pinned envs, no hidden state. Use when asked for notebooks, data analysis, or ipynb work."
+  },
+  {
+    "name": "lazy-chameleon",
+    "path": "lazy-chameleon",
+    "description": "Lazy Chameleon v2.4 Parameter Synthesis Engine & Test-Time Compute Stalling — Transforms standard flash-class models into frontier-grade reasoners via in-harness test-time compute expansion (Chain-of-Draft, Budget Forcing, Constitutional loops, Devil's Advocate, Self-Consistency, Confidence Gating), zero-latency deterministic heuristic synthesis, and LLMLingua-style context compression without external API keys."
+  },
+  {
+    "name": "load-testing",
+    "path": "load-testing",
+    "description": "Load and stress testing with k6/Locust: realistic scenarios, ramp profiles, bottleneck reading. Use when asked for load tests, performance validation, or capacity planning."
+  },
+  {
+    "name": "logging-standards",
+    "path": "logging-standards",
+    "description": "Structured logging that actually helps at 3am: levels, context fields, sampling, PII rules. Use when asked for logging, observability instrumentation, or log cleanup."
+  },
+  {
+    "name": "mcp-server-authoring",
+    "path": "mcp-server-authoring",
+    "description": "Authoring MCP servers that Mochi can load — stdio and Streamable HTTP transports, tool schemas, .mcp.json wiring. Use when adding or debugging MCP integrations."
+  },
+  {
+    "name": "mcp-setup",
+    "path": "mcp-setup",
+    "description": "Guide on configuring Model Context Protocol (MCP) servers in Mochi"
+  },
+  {
+    "name": "memory-design",
+    "path": "memory-design",
+    "description": "Design document for agentic memory handling"
+  },
+  {
+    "name": "ml-app-integration",
+    "path": "ml-app-integration",
+    "description": "Integrate ML models and LLM APIs into applications — prompt/params management, streaming, evals, caching, fallback chains, and cost control. Use when adding AI features to an app, improving an existing LLM integration, or debugging model-powered features."
+  },
+  {
+    "name": "mobile-app-dev",
+    "path": "mobile-app-dev",
+    "description": "Build and debug mobile apps (iOS/Android) — native, React Native, or Flutter; simulator workflows, device debugging, signing/build pipelines, and store submission. Use when developing, debugging, or shipping a mobile application."
+  },
+  {
+    "name": "mochi-architecture",
+    "path": "mochi-architecture",
+    "description": "Mochi internal architecture, dual Rust runtime core, 16 agent roles, tool suite, and orchestration design"
+  },
+  {
+    "name": "monorepo-tooling",
+    "path": "monorepo-tooling",
+    "description": "Manage monorepos — workspace tooling (npm/pnpm/turbo/nx/bazel), dependency graph discipline, task caching, code sharing boundaries, and CI pipelines that don't rebuild the world. Use when structuring a multi-package repo, speeding up slow CI, or deciding what deserves its own package."
+  },
+  {
+    "name": "native-core-port",
+    "path": "native-core-port",
+    "description": "Port a TypeScript operation to the Rust native core end-to-end — Rust op, C ABI, napi binding, TS fallback, parity tests. Use when adding or extending native/* modules."
+  },
+  {
+    "name": "observability",
+    "path": "observability",
+    "description": "Add and use observability — structured logging, metrics, tracing, and alert design that makes production debuggable. Use when instrumenting a service, debugging issues you can't reproduce locally, or fixing alert fatigue."
+  },
+  {
+    "name": "parity-testing",
+    "path": "parity-testing",
+    "description": "Differential testing between Rust native ops and TS fallbacks — property-based cases, adversarial inputs, deterministic seeds. Use when adding native ops or investigating parity drift."
+  },
+  {
+    "name": "payments-integration",
+    "path": "payments-integration",
+    "description": "Integrate payments correctly — Stripe-class gateway patterns, webhook reliability, idempotency, subscription lifecycle, and reconciliation. Use when adding checkout, subscriptions, billing, or payouts; when money moves, this procedure applies."
+  },
+  {
+    "name": "performance-profiling",
+    "path": "performance-profiling",
+    "description": "Measure, locate, and fix performance problems in any program — flame-graph workflow, allocation tracing, latency budgets, and benchmark discipline. Use when something is slow, memory grows, or a benchmark regressed. Ported from Codex/production-engineering practice, rewritten for Mochi."
+  },
+  {
+    "name": "provider-registration",
+    "path": "provider-registration",
+    "description": "Adding a model provider end-to-end — typed client, auth flow, model list, env var, tests. Use when wiring new LLM providers (OpenRouter, Groq, Bedrock, etc.)."
+  },
+  {
+    "name": "redteam-web",
+    "path": "redteam-web",
+    "description": "Offensive security testing procedure for web apps and APIs — recon, auth bypass, injection, business-logic abuse, with strict authorization discipline. Use when asked to pentest, red-team, or find vulnerabilities in a target you are authorized to test."
+  },
+  {
+    "name": "refactoring",
+    "path": "refactoring",
+    "description": "Refactor code safely without behavior change — seam identification, test-first refactoring, strangler-fig decomposition, and rename/move mechanics. Use when improving structure, reducing duplication, decomposing a large file/module, or untangling legacy code."
+  },
+  {
+    "name": "release-engineering",
+    "path": "release-engineering",
+    "description": "Cut releases safely — versioning, changelogs, tagging, binary/asset builds, publishing to registries, and post-release verification. Use when preparing a release, publishing a package, or building a release pipeline."
+  },
+  {
+    "name": "research",
+    "path": "research",
+    "description": "Web and codebase research procedure - search, crawl, cite sources, and explore unfamiliar repositories efficiently. Use when investigating libraries, APIs, errors, or an unknown codebase."
+  },
+  {
+    "name": "reverse-engineering-binaries",
+    "path": "reverse-engineering-binaries",
+    "description": "Analyze compiled binaries and protocols — static analysis triage, dynamic instrumentation, format/file-carving, and deobfuscation workflow. Use when given a binary, firmware, or unknown file format to understand; interoperating with undocumented protocols; or analyzing potentially malicious files."
+  },
+  {
+    "name": "rigorous-code-review",
+    "path": "rigorous-code-review",
+    "description": "Exhaustive multi-pass code review focusing on race conditions, memory leaks, OWASP top 10, and architectural integrity. Use when asked for a deep audit, root-cause review, or security vetting of a change or codebase."
+  },
+  {
+    "name": "sdk-design",
+    "path": "sdk-design",
+    "description": "Client library/SDK design: resource-oriented surface, pagination, errors, retries, versioning. Use when asked for an SDK, client library, or API wrapper."
+  },
+  {
+    "name": "security-audit",
+    "path": "security-audit",
+    "description": "Defensive security audit procedure for codebases — dependency risk, secrets, auth patterns, injection surfaces, and hardening review. Use when auditing a repo before release, reviewing a PR with security-sensitive changes, or hardening an existing service."
+  },
+  {
+    "name": "seo-technical",
+    "path": "seo-technical",
+    "description": "Technical SEO and web performance — crawlability, structured data, Core Web Vitals, and ranking-factor hygiene for web apps. Use when building or fixing a site that needs to rank, diagnosing traffic drops, or auditing a site's search health."
+  },
+  {
+    "name": "serverless-functions",
+    "path": "serverless-functions",
+    "description": "Serverless functions (Lambda/Cloudflare Workers/Vercel): cold starts, bundling, env config, local emulation. Use when asked for serverless, edge functions, or lambda handlers."
+  },
+  {
+    "name": "shell-scripting",
+    "path": "shell-scripting",
+    "description": "Bash scripts that don't rot: strict mode, quoting, tempfiles, argument parsing. Use when asked for shell scripts, automation scripts, or bash tooling."
+  },
+  {
+    "name": "skill-authoring",
+    "path": "skill-authoring",
+    "description": "How to write high-quality SKILL.md files — when to author one, required structure, detail bar, and the lifecycle (create, use, refine, retire). Load this before creating or improving any skill."
+  },
+  {
+    "name": "skill-creator",
+    "path": "skill-creator",
+    "description": "Create new Mochi skills that pass the quality bar — trigger design, procedure density, pitfall mining, and catalog registration. Use when asked to write a skill for Mochi (or any agent's skill format), or when a repeated successful procedure should become a skill."
+  },
+  {
+    "name": "skill-quality-bar",
+    "path": "skill-quality-bar",
+    "description": "The quality bar for skills that ship with Mochi — triggers, numbered steps, pitfalls, verification. Use when writing or reviewing any skill in skills/."
+  },
+  {
+    "name": "state-management",
+    "path": "state-management",
+    "description": "Choose and implement client state management — server-state vs UI-state separation, caching layers (TanStack Query/SWR), store design (Zustand/Redux/signals), and the patterns that prevent state bugs. Use when architecting a frontend app, fixing prop-drilling/state-sync pain, or debugging stale-UI bugs."
+  },
+  {
+    "name": "tdd-workflow",
+    "path": "tdd-workflow",
+    "description": "Test-Driven Development (TDD) and test repair workflow. Use when adding features with automated test guarantees, fixing flaky tests, or establishing test suites for uncovered code."
+  },
+  {
+    "name": "terraform-iac",
+    "path": "terraform-iac",
+    "description": "Terraform/OpenTofu infrastructure as code: module layout, state safety, plan review, drift. Use when asked for terraform, IaC, or infrastructure provisioning."
+  },
+  {
+    "name": "testing",
+    "path": "testing",
+    "description": "How to pick the right test runner, write narrow meaningful tests, and repair failing suites. Use when asked to add tests, when coverage is needed, or when tests fail."
+  },
+  {
+    "name": "tools-design",
+    "path": "tools-design",
+    "description": "Design document for tool dispatcher and schema"
+  },
+  {
+    "name": "tui-design",
+    "path": "tui-design",
+    "description": "Design and build professional terminal user interfaces (TUIs) — layout composition, color systems, keybinding conventions, and rendering performance budgets. Use when building or restyling a CLI dashboard, terminal app, prompt, or any ncurses/ANSI/Textual/Bubble Tea/Ratatui-style interface."
+  },
+  {
+    "name": "tui-frame-budget",
+    "path": "tui-frame-budget",
+    "description": "TUI rendering discipline — dirty-region rendering, 16ms frame budget, leak guards, theme correctness on pure black. Use when touching src/tui/."
+  },
+  {
+    "name": "web-design",
+    "path": "web-design",
+    "description": "Build production-grade web UI — layout systems, typography scales, responsive breakpoints, accessibility, and performance budgets. Use when creating or redesigning a website, landing page, dashboard, or web app UI, or when reviewing frontend code quality."
+  },
+  {
+    "name": "webhooks",
+    "path": "webhooks",
+    "description": "Webhook receivers done right: signature verification, idempotency, async processing, replay. Use when asked for webhooks, Stripe/GitHub handlers, or event ingestion."
+  },
+  {
+    "name": "websockets-realtime",
+    "path": "websockets-realtime",
+    "description": "Build real-time features — WebSocket/SSE transport choice, connection lifecycle, reconnection with backoff, backpressure, and scale-out via pub/sub. Use when adding chat, live updates, collaboration, notifications, or any push channel to an app."
+  },
+  {
+    "name": "worker-queues",
+    "path": "worker-queues",
+    "description": "Background job queues (BullMQ/SQS/pg-boss): job design, retries with backoff, dead-lettering, observability. Use when asked for queues, background jobs, or async workers."
+  },
+  {
+    "name": "zero-downtime-deploys",
+    "path": "zero-downtime-deploys",
+    "description": "Zero-downtime deployments: rolling updates, health gates, migrations, instant rollback. Use when asked for safe deploys, rollout strategy, or release automation."
+  }
+]

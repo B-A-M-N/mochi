@@ -141,3 +141,10 @@ class SelfTrainingLoop:
         worst = modes.most_common(3)
         for mode, count in worst:
             self._apply_fix(mode)
+
+## Using this skill
+1. Define the eval first: pick the benchmark category matching the work (coding: HumanEval/MBPP, agent: SWE-bench/GAIA, tool-use: APIBench) — never grade vibes.
+2. Score every solution on correctness, completeness, efficiency, style, and safety (0-1 each, weighted toward correctness and verification).
+3. Classify failures with the mode detector (hallucination, logic error, missing context, tool misuse, overconfidence) and record them — patterns across runs are the training signal.
+4. Compare harness-vs-raw on the same benchmark to prove the scaffolding helps; if it doesn't move the numbers, cut it.
+5. Feed the worst modes back into prompts and re-run: an eval loop that never changes the system is theater.
