@@ -107,17 +107,17 @@ export function padEnd(s: string, n: number): string {
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /**
- * Celestial constellation core: a 3-cell symmetrical formation
- * using universally supported Dingbat stars (✦, ✧) and middle dot (·).
- * ZERO font fallback jitter, ZERO baseline bounce, invariant 3-cell width.
+ * Radiant celestial star core: heavy, bold, high-contrast solid stars (★, ✶, ✷, ✸, ✹).
+ * 100% solid filled glyphs with zero thin outlines (✧) and zero tiny dots (·).
+ * Invariant cell width, rock-solid font metrics, zero jitter.
  */
 export const CELESTIAL_CORE: Array<[string, string, string]> = [
-  ['·', '✦', '·'], // resting core: solid star with compact satellites
-  ['✧', '✦', '✧'], // expansion: satellite flares open to outline stars
-  ['✦', '✧', '✦'], // apex bloom: satellites ignite solid, core opens
-  ['✧', '✦', '✧'], // contraction: satellites settle to outline
-  ['·', '✧', '·'], // settling: satellites condense to dots, core outline
-  ['·', '✦', '·'], // rekindle: center star ignites solid
+  ['✦', '★', '✦'], // core anchor: solid 4-point satellites with heavy 5-point star
+  ['✶', '✷', '✶'], // expansion: 6-point satellites with heavy 8-point star
+  ['✷', '✸', '✷'], // bloom: heavy 8-point satellites with dense starburst
+  ['✸', '✹', '✸'], // apex supernova: dense starbursts with 12-point radiant core
+  ['✷', '✸', '✷'], // contraction: settling back to heavy 8-point
+  ['✶', '✷', '✶'], // return: 6-point satellites
 ];
 
 export function spinnerFrame(i: number): string {
@@ -125,8 +125,8 @@ export function spinnerFrame(i: number): string {
 }
 
 export function sparkleFrame(i: number): string {
-  const idx = Math.abs(i);
-  return idx % 2 === 0 ? '✦' : '✧';
+  const stars = ['★', '✶', '✷', '✸', '✹', '✸', '✷', '✶'];
+  return stars[Math.abs(i) % stars.length];
 }
 
 /**
@@ -147,8 +147,8 @@ export function getThemeSpinnerColors(): Array<[number, number, number]> {
 
 /**
  * Theme-matched celestial constellation spinner beside Thinking:
- * Symmetrical 3-cell formation with dynamic theme color ripple.
- * Invariant 3-cell width, rock-solid font metrics, zero jitter.
+ * Symmetrical heavy 3-star formation with dynamic theme color ripple.
+ * Bold, thick, high-impact solid stars with zero tiny dots or thin outlines.
  */
 export function spinnerColored(i: number): string {
   const stops = getThemeSpinnerColors();
@@ -157,10 +157,10 @@ export function spinnerColored(i: number): string {
   const [left, center, right] = CELESTIAL_CORE[frameIdx];
   const cMid = stops[idx % stops.length];
   const cSide = stops[(idx + Math.floor(stops.length / 2)) % stops.length];
-  const leftStr = `${rgb(cSide[0], cSide[1], cSide[2])}${left}`;
+  const leftStr = `${rgb(cSide[0], cSide[1], cSide[2])}${T.bold}${left}${T.reset}`;
   const midStr = `${rgb(cMid[0], cMid[1], cMid[2])}${T.bold}${center}${T.reset}`;
-  const rightStr = `${rgb(cSide[0], cSide[1], cSide[2])}${right}${T.reset}`;
-  return `${leftStr}${midStr}${rightStr}`;
+  const rightStr = `${rgb(cSide[0], cSide[1], cSide[2])}${T.bold}${right}${T.reset}`;
+  return `${leftStr} ${midStr} ${rightStr}`;
 }
 
 /**

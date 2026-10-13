@@ -297,7 +297,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        const star = (state.spinner >> 2) % 2 === 0 ? '✦' : '✧';
+        const star = (state.spinner >> 2) % 2 === 0 ? '✦' : '★';
         const stops = getThemeSpinnerColors();
         const c = stops[state.spinner % stops.length];
         iconColored = `\x1b[38;2;${c[0]};${c[1]};${c[2]}m${star}`;
