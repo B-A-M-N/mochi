@@ -61,15 +61,29 @@ if (process.argv.includes('--skip-tests')) {
     suiteFailed = true;
   }
   let summary = '';
+  let failingFiles = [];
   try {
-    summary = readFileSync(suiteLog, 'utf8').split('\n')
+    const log = readFileSync(suiteLog, 'utf8');
+    summary = log.split('\n')
       .filter((l) => l.includes('Test Files') || l.includes('Tests  '))
       .join(' ');
+    // Failing file names for a one-glance verdict (flake vs real): vitest
+    // prints `FAIL <file> …` lines for both assertion failures and worker
+    // crashes. Cap at 5; the full log path is printed too.
+    const seen = new Set();
+    for (const line of log.split('\n')) {
+      const m = /FAIL\s+(\S+\.test\.ts)/.exec(line);
+      if (m && !seen.has(m[1]) && seen.size < 5) { seen.add(m[1]); failingFiles.push(m[1]); }
+    }
+    if (/Unhandled Errors/i.test(log)) failingFiles.push('(unhandled worker error — see log)');
   } catch { /* unreadable log: exit code alone decides */ }
-  try { unlinkSync(suiteLog); } catch { /* best-effort */ }
   if (suiteFailed || /failed/i.test(summary)) {
-    fail(`full test suite has failures${summary ? ` (${summary.trim().slice(0, 160)})` : ''}`);
+    const detail = [summary.trim().slice(0, 120), failingFiles.length ? `files: ${failingFiles.join(', ')}` : '', `log: ${suiteLog}`]
+      .filter(Boolean).join(' | ');
+    fail(`full test suite has failures${detail ? ` (${detail})` : ''}`);
+    // Keep the log for inspection on failure; delete only on success.
   } else {
+    try { unlinkSync(suiteLog); } catch { /* best-effort */ }
     ok(`full test suite green${summary ? ` (${summary.trim().slice(0, 160)})` : ''}`);
   }
 }
