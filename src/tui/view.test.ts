@@ -20,8 +20,8 @@ import {
   renderDropdown,
   transcriptIndent,
   spinnerFrame,
+  sparkleFrame,
   spinnerColored,
-  spinnerSweep,
   thinkingLine,
   farewellFrame,
   formatDuration,
@@ -392,29 +392,23 @@ describe('gradient bars (jcode-style)', () => {
   });
 });
 
-describe('animated spinner', () => {
-  it('cycles colored frames with braille spinner beside thinking', () => {
-    const a = spinnerColored(0);
-    const b = spinnerColored(3);
-    expect(a).not.toBe(b);
-    expect(a).toMatch(/⠋/);
-    expect(b).toMatch(/⠸/);
-  });
-
-  it('sweep line animates diamond laser tracer', () => {
-    const a = spinnerSweep(0, 7);
-    const b = spinnerSweep(3, 7);
-    expect(a).not.toBe(b);
-    expect(a).toContain('━');
-    expect(a).toContain('◈');
-  });
-
-  it('thinking line includes the loading spinner, sweep and note', () => {
-    const line = thinkingLine(2, 'running tests');
-    expect(line).toContain('Thinking');
-    expect(line).toContain('running tests');
-    expect(line).toContain('━');
-    expect(line).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+describe('thinking spinner (star + braille loading spinner)', () => {
+  it('includes glittering star and braille loading dot beside Thinking without bar sweep', () => {
+    const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    const a = thinkingLine(0);
+    const b = thinkingLine(3);
+    expect(a).not.toBe(b); // still animates
+    expect(plain(a)).toMatch(/[✦✧⋆✵✶✹✷✸✻✼]/); // star spinner
+    expect(plain(a)).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // braille loading dot
+    expect(a).toContain('Thinking');
+    expect(a).toContain('38;2;167;139;250'); // Mochi purple accent
+    expect(plain(a)).not.toContain('━'); // no bar rail
+    expect(plain(a)).not.toContain('❬');
+    const noted = thinkingLine(2, 'running tests');
+    expect(noted).toContain('Thinking');
+    expect(noted).toContain('running tests');
+    expect(plain(noted)).toMatch(/[✦✧⋆✵✶✹✷✸✻✼]/);
+    expect(plain(noted)).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
   });
 });
 

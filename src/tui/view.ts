@@ -100,6 +100,9 @@ export function padEnd(s: string, n: number): string {
 }
 
 // ---- Thinking spinner ------------------------------------------------------
+// Celestial star + live braille spinner in Mochi purple beside "Thinking…".
+// No ugly bar or sweep rail — just the clean glittering star, loading braille dots,
+// and thinking text.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SPARKLES = ['✦', '✧', '⋆', '✵', '✶', '✹', '✷', '✸', '✻', '✼'];
 const HARMONIC_STOPS: Array<[number, number, number]> = [
@@ -115,59 +118,32 @@ const HARMONIC_STOPS: Array<[number, number, number]> = [
   [255, 170, 220], // bubblegum
 ];
 
+/** Mochi purple (matches the active-tab dot): the primary accent of the line. */
+const THINK_SPIN = '\x1b[38;2;167;139;250m';
+
 export function spinnerFrame(i: number): string {
   return DOTS[Math.abs(i) % DOTS.length];
 }
 
-/**
- * Loading spinner beside Thinking:
- * Rotating braille spinner paired with a glittering cyber star with smooth
- * harmonic colors.
- */
-export function spinnerColored(i: number): string {
-  const dot = spinnerFrame(i);
-  const spark = SPARKLES[Math.abs(i) % SPARKLES.length];
-  const c1 = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  const c2 = HARMONIC_STOPS[(Math.abs(i) + 4) % HARMONIC_STOPS.length];
-  return `${rgb(c1[0], c1[1], c1[2])}${T.bold}${spark}${T.reset} ${rgb(c2[0], c2[1], c2[2])}${T.bold}${dot}${T.reset}`;
+export function sparkleFrame(i: number): string {
+  return SPARKLES[Math.abs(i) % SPARKLES.length];
 }
 
 /**
- * Mochi Main Spinner — Diamond Laser Tracer:
- * High-tech, clean Y2K cyber beam. A brilliant white diamond core (◈) with
- * glowing neon shoulder (━) glides fluidly along a subtle laser rail (─)
- * bounded by cyber brackets (❬ ❭). Zero chunky dither blocks, zero visual clutter.
+ * Loading & star spinner beside Thinking:
+ * Rotating braille spinner paired with a glittering celestial star.
  */
-export function spinnerSweep(i: number, width = 7): string {
-  const w = Math.max(5, width);
-  const cycle = (w - 1) * 2;
-  const step = Math.abs(i) % cycle;
-  const pos = step < (w - 1) ? step : cycle - step;
+export function spinnerColored(i: number): string {
+  const dot = spinnerFrame(i);
+  const spark = sparkleFrame(i);
   const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  const cBracket = HARMONIC_STOPS[(Math.abs(i) + 2) % HARMONIC_STOPS.length];
-
-  const cells: string[] = [];
-  for (let x = 0; x < w; x++) {
-    const dist = Math.abs(x - pos);
-    if (dist === 0) {
-      cells.push(`${rgb(255, 255, 255)}${T.bold}◈${T.reset}`);
-    } else if (dist === 1) {
-      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}━${T.reset}`);
-    } else {
-      cells.push(`\x1b[38;2;68;62;82m─${T.reset}`);
-    }
-  }
-  const bL = `${rgb(cBracket[0], cBracket[1], cBracket[2])}❬${T.reset}`;
-  const bR = `${rgb(cBracket[0], cBracket[1], cBracket[2])}❭${T.reset}`;
-  return `${bL}${cells.join('')}${bR}`;
+  return `${rgb(c[0], c[1], c[2])}${T.bold}${spark}${T.reset} ${THINK_SPIN}${T.bold}${dot}${T.reset}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
   const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
   const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
-  const cText = HARMONIC_STOPS[(Math.abs(frame) + 2) % HARMONIC_STOPS.length];
-  const thinkingGlow = `${rgb(cText[0], cText[1], cText[2])}${T.bold}Thinking…${T.reset}`;
-  return `${spinnerColored(frame)} ${thinkingGlow} ${spinnerSweep(frame, 7)}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  return `${spinnerColored(frame)} ${T.bold}Thinking…${T.reset}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
