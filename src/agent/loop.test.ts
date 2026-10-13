@@ -2056,3 +2056,83 @@ describe('repeated tool result detection (quality slice 5 — flag when the mode
     }
   });
 });
+
+describe('scope fence (drift guard — out-of-scope writes vetoed)', () => {
+  it('vetoes a write outside fileScope and lets an in-scope retry through', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-scope-fence-'));
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Wandering off.',
+        toolCalls: [{ id: 'w-out', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../unrelated/gonext.txt', content: 'drift' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Back on task.',
+        toolCalls: [{ id: 'w-in', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'game/index.html', content: '<html></html>' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done. Created game/index.html.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Build snake game');
+      const task = createTask('Build snake game', 'Create game/index.html with a playable snake game.');
+      task.fileScope = ['game'];
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(existsSync(resolve(dir, 'unrelated/gonext.txt'))).toBe(false);
+      expect(existsSync(resolve(dir, 'game/index.html'))).toBe(true);
+      // The veto message must name the out-of-scope path and restate the objective.
+      const vetoed = fake.requests.some((r) => JSON.stringify(r).includes('OUTSIDE this task'));
+      expect(vetoed).toBe(true);
+      expect(result.success).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('re-injects TASK_FOCUS_PROTOCOL on the second out-of-scope write', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-scope-fence2-'));
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Drifting.',
+        toolCalls: [{ id: 'w-1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../other/a.txt', content: 'x' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Still drifting.',
+        toolCalls: [{ id: 'w-2', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../other/b.txt', content: 'y' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'On task now.',
+        toolCalls: [{ id: 'w-3', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'app.js', content: 'console.log(1)' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done. Created app.js.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create app.js');
+      const task = createTask('Create app.js', 'Create app.js.');
+      task.fileScope = ['app.js'];
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(existsSync(resolve(dir, 'other/b.txt'))).toBe(false);
+      // Second veto re-injects the focus protocol so the objective returns to near context.
+      const refocused = fake.requests.some((r) => JSON.stringify(r).includes('TASK EXECUTION & OPERATIONAL AUTONOMY PROTOCOL'));
+      expect(refocused).toBe(true);
+      expect(result.success).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

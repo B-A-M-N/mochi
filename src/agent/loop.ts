@@ -262,7 +262,7 @@ export { expectsFileOutput, isGreenfieldTask };
 export const TASK_FOCUS_PROTOCOL = [
   '# TASK EXECUTION & OPERATIONAL AUTONOMY PROTOCOL',
   'You are executing an engineering task with full local administrative and system authority.',
-  '1. FULL SYSTEM ACCESS: You have complete access to the project workspace, home directory, and host environment. Read, search, inspect, or modify files anywhere on the system as required by the user\'s objective without artificial limits or disclaimers.',
+  '1. FULL SYSTEM ACCESS: You have complete access to the project workspace, home directory, and host environment. Read, search, inspect, or modify files anywhere on the system AS REQUIRED BY THE USER\'S OBJECTIVE. Every file you create or change must serve that objective — never wander into unrelated projects, files, or features mid-task.',
   '2. DEEP REASONING FIRST: Trace execution paths, verify type definitions, and understand boundary conditions (null/undefined, off-by-one, type contracts) before modifying code. Use the `think` tool for non-trivial logic.',
   '3. SURGICAL PRECISION: Prefer `edit` or `patch` for targeted, clean changes. Fit seamlessly into existing code styles and types. Never leave lazy placeholders or half-implemented stubs.',
   '4. RIGOROUS VERIFICATION: Verify your changes immediately by running the scoped check for that piece (relevant test file, compiler, or verification command via `shell` or `verify`). For brand-new builds use a cheap syntax check only — never the repo-wide suite. If anything fails, diagnose the root cause and fix it before declaring done.',
@@ -434,6 +434,39 @@ export class Agent {
   private taskRunExecuted = false;
   private finishHintSent = false;
   private taskKind?: import('../core/taskkind.js').TaskKind;
+  /** Scope-fence (drift guard) state: consecutive out-of-scope write vetoes. */
+  private scopeVetoCount = 0;
+
+  /** True when `path` resolves inside one of the fileScope roots. Glob
+   *  patterns are honoured when the segment count matches; plain dirs prefix-
+   *  match; relative paths resolve against cwd. Unknown = out of scope. */
+  private pathInScope(path: string, fileScope: string[]): boolean {
+    try {
+      const abs = resolve(this.cwd, path);
+      for (const pattern of fileScope) {
+        const absPattern = resolve(this.cwd, pattern);
+        if (abs === absPattern || abs.startsWith(absPattern + '/')) return true;
+        // Glob support without pulling in minimatch: '*'/'**' segments match
+        // any path segments in the same position count.
+        const pSegs = absPattern.split('/');
+        const tSegs = abs.split('/');
+        if (pSegs.some((s) => s.includes('*'))) {
+          let ok = true;
+          let ti = 0;
+          for (let pi = 0; pi < pSegs.length; pi++) {
+            const seg = pSegs[pi];
+            if (seg === '**') { ti = tSegs.length; break; }
+            if (ti >= tSegs.length) { ok = false; break; }
+            if (seg === '*') { ti++; continue; }
+            if (tSegs[ti] !== seg) { ok = false; break; }
+            ti++;
+          }
+          if (ok && ti === tSegs.length) return true;
+        }
+      }
+    } catch { /* unresolvable -> out of scope */ }
+    return false;
+  }
   private task?: import('../types.js').Task;
   private contextCutoffNudged = false;
   private lastCompletionAnswer = '';
@@ -3240,6 +3273,37 @@ Continue from 'Next:', do not redo completed progress.`,
     }
     const args = normalizeToolArgs(toolName, this.parseArgs(tc.function.arguments));
 
+    // SCOPE FENCE (drift guard): a mutating write to a path outside the task's
+    // scope is the "started working on gonext" failure class — the model wanders
+    // into sibling projects / unrelated files mid-task. First out-of-scope write
+    // gets vetoed with a return-to-objective directive; a SECOND consecutive one
+    // re-injects the TASK_FOCUS_PROTOCOL so the goal stays in the near context.
+    // Fence only engages when the task declares a fileScope (greenfield and
+    // scoped tasks); repo-wide refactors without fileScope stay unfenced.
+    if (['write', 'edit', 'delete', 'patch'].includes(toolName) && this.activeTask?.fileScope?.length) {
+      const target = String(args.path ?? '');
+      if (target && !this.pathInScope(target, this.activeTask.fileScope)) {
+        this.scopeVetoCount++;
+        const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+        this.context.addMessage({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content:
+            `Vetoed: "${target}" is OUTSIDE this task's scope (${this.activeTask.fileScope.join(', ')}). ` +
+            `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
+            focus,
+        });
+        this.events.emit({
+          type: 'tool:completed',
+          tool: tc.function.name,
+          result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope write (drift guard).', durationMs: 0 },
+          agentId: this.id,
+        });
+        return;
+      }
+    }
+
     // Execution Registry deduplication: if identical execution already finished within window, replay it
     const execRecord = this.executionRegistry.register({
       toolName,
@@ -3286,6 +3350,29 @@ Continue from 'Next:', do not redo completed progress.`,
     // config, data) gains nothing from repo-wide suites or builds — they
     // exercise code, not content, and pre-existing failures then burn tokens
     // and fail correct work. Veto the suite; suggest a direct check instead.
+    if (toolName === 'shell' && this.activeTask?.fileScope?.length) {
+      // Scope-fence for shell: a command that WRITES (mkdir/touch/mv/cp/tee/>,
+      // redirects) referencing paths outside the task scope is the same drift
+      // class as a vetoed write tool. Cheap regex on the command text; the
+      // directive mirrors the write-tool fence so the model self-corrects.
+      const cmd = String(args.command ?? '');
+      const WRITES_OUTSIDE = /\b(mkdir|touch|mv|cp|tee|install|rsync|ln)\b[^;&|]*\.\.|>>?\s*(?!\/)[\w./-]*\.\.\//;
+      if (cmd && WRITES_OUTSIDE.test(cmd)) {
+        this.scopeVetoCount++;
+        const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+        this.context.addMessage({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content:
+            `Vetoed: this command writes OUTSIDE the task's scope (${this.activeTask.fileScope.join(', ')}). ` +
+            `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
+            focus,
+        });
+        this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope shell write (drift guard).', durationMs: 0 }, agentId: this.id });
+        return;
+      }
+    }
     if (toolName === 'shell' && this.contentOnly) {
       const cmd = String(args.command ?? '');
       const isRepoWide = /^(npm|pnpm|yarn)\s+(test|run\s+test)|^(npx|pnpm)\s+(vitest|jest|mocha)\s*(run)?\s*$|\bgo\s+test\s+\.\/\.\.\b|^cargo\s+(test|build)|^mvn\s+test|^\.\/gradlew\s+test|^dotnet\s+test|^python3?\s+-m\s+pytest\s*$|^bundle\s+exec\s+rspec$|^zig\s+build\s+test$/.test(cmd.trim());
