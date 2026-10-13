@@ -1,6 +1,7 @@
 # Mochi Changelog
 
 ## Unreleased
+- **Prompt bloat cut on read-only tasks** — research/plan/document/unknown turns advertised all ~65 tool schemas (~10K tokens/call); new READ tier advertises 16 (~2K). Chat tier no longer drops `search` (dead `grep` alias entry). Measured per-tier schema weights in review.
 - **MCP registry 12 → 23** — Playwright, Context7, Tavily, Firecrawl, Exa (hosted), Supabase, Neon, GitLab, Google Maps, EverArt, AWS KB, Kubernetes, all package-verified; Brave migrated off its deprecated package; Exa rides a URL entry. New registry-integrity test (one transport, hints, unique ids).
 - **12 new skills (73 → 85)** — dependency-upgrades, e2e-testing, webhooks, worker-queues, serverless-functions, load-testing, terraform-iac, logging-standards, jupyter-notebooks, shell-scripting, sdk-design, zero-downtime-deploys. Skill-lint gate fixed to recognize the library's own `## N.` step style (it rejected every bundled skill).
 - **6 new providers (27 total)** — Moonshot/Kimi, MiniMax, Zhipu GLM, Z.AI, Cohere, Alibaba Qwen, all endpoint-verified; Cerebras `llama-3.3-70b` id typo fixed; Together gains its Qwen coder. New table-integrity test pins every default as listed (the dead-default class can't recur).

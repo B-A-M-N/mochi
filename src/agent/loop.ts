@@ -13,12 +13,12 @@ import { createProvider } from '../model/router.js';
 import { PROVIDERS } from '../model/providers.js';
 import { isMode, modeInstruction } from '../modes.js';
 
-import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTools } from '../tools/index.js';
+import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTools, CHAT_TOOL_NAMES } from '../tools/index.js';
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo/repo.js';
 import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../core/taskkind.js';
-import { trimToLeanTier } from '../tools/index.js';
+import { trimToLeanTier, trimToReadTier } from '../tools/index.js';
 import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
@@ -798,14 +798,32 @@ Continue from 'Next:', do not redo completed progress.`,
       // other tool stays restorable mid-run exactly like mch91/mch110.
       // ask_question stays advertised: it is how the model asks the user back
       // (interactive menu), which is a legitimate chat-turn move.
-      const CHAT_TOOLS = new Set(['read', 'glob', 'grep', 'skill', 'load_tools', 'ask_question', 'think']);
+      // NOTE: 'search' is the tool name ('grep' is only an alias and never
+      // matches a map key — listing it here silently dropped search).
       const kept = new Set<string>();
       for (const [name] of this.tools) {
-        if (CHAT_TOOLS.has(name)) kept.add(name);
+        if (CHAT_TOOL_NAMES.has(name)) kept.add(name);
       }
       if (this.tools.size - kept.size > 0) {
         this.toolDefs = [...kept].map((n) => this.tools.get(n)!.def);
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch111] chat tier: advertised ${kept.size} tools, deferred ${this.tools.size - kept.size} (load_tools restores them)` });
+      }
+    } else if (taskKind === 'research' || taskKind === 'document' || taskKind === 'plan' || taskKind === 'unknown') {
+      // READ tier: read-only task shapes advertised the full ~65-tool schema
+      // (~10K tokens/call) despite never legitimately mutating (plan mode
+      // vetoes mutations anyway). Advertise the 16 read-only essentials;
+      // anything else restores mid-run via load_tools.
+      const taskText = `${task.title} ${task.description ?? ''}`;
+      const readTrimmed = trimToReadTier(this.tools, taskText);
+      if (readTrimmed > 0) {
+        this.toolDefs = [...this.tools.values()].map((t) => t.def);
+        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[read-tier] advertised ${this.tools.size} read-only tools for ${taskKind} task (load_tools restores them)` });
+      } else {
+        const trimmed = trimHeavyTools(this.tools, taskText);
+        if (trimmed > 0) {
+          this.toolDefs = [...this.tools.values()].map((t) => t.def);
+          this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
+        }
       }
     }
     const repo = detectRepo(this.cwd);

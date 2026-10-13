@@ -154,6 +154,34 @@ export function trimToLeanTier(map: Map<string, Tool>, taskText: string): number
   return trimmed;
 }
 
+/** READ tier — read-only essentials for research/document/plan tasks, which
+ *  previously advertised the full ~65-tool schema (~10K tokens/call) despite
+ *  never legitimately mutating (plan mode vetoes mutations anyway). Mutating
+ *  tools stay restorable mid-run via `load_tools`, exactly like lean/heavy.
+ *  Cuts the research prompt to ~16 small schemas. */
+export const READ_TOOL_NAMES = new Set([
+  'read', 'search', 'glob', 'outline', 'inspect', 'tree', 'diff', 'fetch',
+  'web_search', 'skill', 'think', 'ask_question', 'load_tools', 'todo',
+  'memory', 'blast_radius',
+]);
+
+/** Defer all non-READ tools to `load_tools` for read-only task shapes.
+ *  Returns the number deferred (0 = task signals heavier needs, keep full set). */
+export function trimToReadTier(map: Map<string, Tool>, taskText: string): number {
+  if (LEAN_SIGNAL_RE.test(taskText)) return 0;
+  let trimmed = 0;
+  for (const name of [...map.keys()]) {
+    if (!READ_TOOL_NAMES.has(name) && ALL_TOOLS_MAP.has(name)) { map.delete(name); trimmed++; }
+  }
+  return trimmed;
+}
+
+/** MCH-111 chat tier: read-only essentials (+ load_tools escape hatch) for
+ *  conversational tasks. NOTE: 'search' is the tool name — 'grep' is only an
+ *  alias and never matches a map key (listing it here once silently dropped
+ *  search from every chat turn). Single-sourced: the agent loop filters by it. */
+export const CHAT_TOOL_NAMES = new Set(['read', 'glob', 'search', 'skill', 'load_tools', 'ask_question', 'think']);
+
 /** MCH-91: deferred tool discovery — the model calls this when it needs a tool
  *  that was trimmed from its advertised schema. Loads the named heavy/auxiliary
  *  tool(s) into the live toolset; the loop re-advertises defs on change. */

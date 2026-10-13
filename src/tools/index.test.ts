@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildTools, trimHeavyTools, loadToolsTool, HEAVY_TOOL_NAMES, ALL_TOOLS_MAP, TOOL_ALIASES } from './index.js';
+import { buildTools, trimHeavyTools, trimToReadTier, CHAT_TOOL_NAMES, loadToolsTool, HEAVY_TOOL_NAMES, ALL_TOOLS_MAP, TOOL_ALIASES } from './index.js';
 import type { MochiConfig } from '../types.js';
 
 const cfg = { projectDir: '/tmp/mch91-test' } as unknown as MochiConfig;
@@ -59,5 +59,37 @@ describe('MCH-91 task-adaptive tool advertising', () => {
     for (const name of HEAVY_TOOL_NAMES) {
       expect(ALL_TOOLS_MAP.has(name)).toBe(true);
     }
+  });
+
+  it('chat tier keeps search (tool name, not the grep alias)', () => {
+    // Regression: the chat set once listed 'grep', which never matches a map
+    // key — search silently vanished from every chat turn.
+    expect(CHAT_TOOL_NAMES.has('search')).toBe(true);
+    expect(CHAT_TOOL_NAMES.has('grep')).toBe(false);
+    const tools = buildTools(cfg);
+    const kept = [...tools.keys()].filter((n) => CHAT_TOOL_NAMES.has(n));
+    expect(kept).toContain('search');
+    expect(kept).toContain('read');
+    expect(kept).not.toContain('write');
+    expect(kept).not.toContain('shell');
+  });
+
+  it('read tier advertises read-only essentials for research/plan tasks', () => {
+    const tools = buildTools(cfg);
+    const trimmed = trimToReadTier(tools, 'Research how auth flows through the codebase');
+    expect(trimmed).toBeGreaterThan(0);
+    for (const name of ['read', 'search', 'glob', 'outline', 'inspect', 'fetch', 'skill', 'think', 'ask_question', 'load_tools']) {
+      expect(tools.has(name), `${name} kept`).toBe(true);
+    }
+    for (const name of ['write', 'edit', 'shell', 'git', 'delete', 'subagent']) {
+      expect(tools.has(name), `${name} deferred`).toBe(false);
+    }
+    expect(tools.has('load_tools')).toBe(true); // escape hatch survives
+  });
+
+  it('read tier is a no-op when task text signals heavier needs', () => {
+    const tools = buildTools(cfg);
+    expect(trimToReadTier(tools, 'Research browser automation with screenshots')).toBe(0);
+    expect(tools.has('browser')).toBe(true);
   });
 });
