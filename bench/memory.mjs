@@ -13,7 +13,7 @@
 //   bare node baseline    ~47MB
 
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,9 +28,13 @@ const SETTLE_MS = Number(process.env.SETTLE_MS ?? 600);
 
 function measureChild(modulePath) {
   return new Promise((res, rej) => {
+    // file:// URL, not a bare path: dynamic import() rejects plain Windows
+    // absolute paths (D:\… → ERR_UNSUPPORTED_ESM_URL_SCHEME) and would mangle
+    // backslashes as escapes. file URLs import identically on every OS.
+    const moduleUrl = pathToFileURL(resolve(root, modulePath)).href;
     const script = `
       const t = setTimeout(() => process.exit(3), ${SETTLE_MS + 15000});
-      import(${JSON.stringify(resolve(root, modulePath))})
+      import(${JSON.stringify(moduleUrl)})
         .then(async () => {
           await new Promise((r) => setTimeout(r, ${SETTLE_MS})); // let lazy inits settle
           clearTimeout(t);
