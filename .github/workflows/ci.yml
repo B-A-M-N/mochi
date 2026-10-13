@@ -31,7 +31,19 @@ jobs:
       matrix:
         # package.json declares engines.node >= 22; test on latest LTS.
         node: [22]
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
+        include:
+          # Windows: the full suite, split 4 ways. Spawn/wait-heavy tests
+          # (model-stall guard, daemon resume, runtime review/fix, MCP
+          # subprocess) inflate ~8-15x under the Windows runner and the
+          # leg NEVER completed in a single job in 60+ runs — killed at
+          # both the 20-min and 35-min ceilings, coverage or not. Same
+          # suite, same per-file verdict; four runners divide the wall
+          # time into a budget that actually finishes.
+          - { os: windows-latest, node: 22, shard: 1/4 }
+          - { os: windows-latest, node: 22, shard: 2/4 }
+          - { os: windows-latest, node: 22, shard: 3/4 }
+          - { os: windows-latest, node: 22, shard: 4/4 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -115,7 +127,7 @@ jobs:
 
       - name: Tests (full suite)
         if: runner.os == 'Windows'
-        run: npx vitest run --reporter=dot
+        run: npx vitest run --reporter=dot --shard=${{ matrix.shard }}
         continue-on-error: false
 
       - name: Build
