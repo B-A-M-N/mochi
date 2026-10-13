@@ -1,4 +1,5 @@
 import { TOOL_ALIASES, normalizeToolArgs } from '../tools/index.js';
+import type { ToolDefinition } from '../types.js';
 import { T, R } from './view.js';
 import { sliceCells, visibleCells } from './wrap.js';
 
@@ -242,6 +243,24 @@ export function formatToolCompletedCard(
 ): string {
   const outcome = describeToolOutcome(rawTool, result);
   return renderToolCard(rawTool, rawArgs, outcome, { status: outcome.kind });
+}
+
+/** Full tool reference block for the /tools browser: name, permission,
+ *  one-line description, and the argument table. Pure (pinned by test). */
+export function formatToolDetails(def: ToolDefinition): string {
+  const lines = [
+    `tool: ${def.name}${def.dangerous ? ' [dangerous]' : ''}${def.permission ? ` (permission: ${def.permission})` : ''}`,
+    `  ${def.description}`,
+  ];
+  if (def.parameters?.length) {
+    lines.push('  args:');
+    for (const p of def.parameters) {
+      lines.push(`    - ${p.name} (${p.type}${p.required ? ', required' : ''}) — ${p.description}`);
+    }
+  } else {
+    lines.push('  args: none');
+  }
+  return lines.join('\n');
 }
 
 export interface TurnSummary {

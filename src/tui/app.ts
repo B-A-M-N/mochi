@@ -119,9 +119,9 @@ const COMMANDS = [
   { name: '/profiles', hint: 'List specialized agent profiles' },
   { name: '/memory', hint: 'Show project memory and learned rules' },
   { name: '/rules', hint: 'Show/edit the MOCHI.md behavioral contract' },
-  { name: '/facts', hint: 'List durable project facts across sessions' },
-  { name: '/feedback', hint: 'Show recent 👍/👎 feedback signal' },
-  { name: '/circle', hint: 'Run circle-detector on recent turns (debug) ' },
+  { name: '/feedback', hint: 'Show recent 👍/👎 feedback signal (or /good, /bad)' },
+  { name: '/good', hint: 'Rate last assistant response with 👍' },
+  { name: '/bad', hint: 'Rate last assistant response with 👎' },
   { name: '/history', hint: 'Interactive session manager & history' },
   { name: '/rename', hint: 'Rename current conversation session' },
   { name: '/export', hint: 'Export session transcript to JSON' },
@@ -1710,8 +1710,32 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line.startsWith('/rules add ')) { await run(async () => { const { appendRule } = await import('../contract.js'); const rule = line.slice('/rules add '.length).trim(); if (!rule) return 'empty rule'; const r = appendRule(runtime.cwd, rule); return `appended → ${r.file}`; }); return; }
     if (line === '/facts') { await run(async () => { const { memoryDigest } = await import('../memory/memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
     if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory/memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
-    if (line.startsWith('/forget ')) { await run(async () => { const { forgetFact } = await import('../memory/memory-store.js'); const q = line.slice(8).trim(); if (!q) return 'usage: /forget <substring|id>'; const n = forgetFact(q); return `forgot ${n} fact(s)`; }); return; }
-    if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../observability/feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Press g/b on an assistant turn to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
+    if (line === '/good' || line === '/bad' || line.startsWith('/good ') || line.startsWith('/bad ') || line.startsWith('/feedback ')) {
+      const rest = line.startsWith('/feedback ') ? line.slice(10).trim() : '';
+      const isGood = line === '/good' || line.startsWith('/good ') || rest.startsWith('good') || rest.startsWith('+1');
+      const isBad = line === '/bad' || line.startsWith('/bad ') || rest.startsWith('bad') || rest.startsWith('-1');
+      if (isGood || isBad) {
+        const verdict: FeedbackVerdict = isGood ? 'good' : 'bad';
+        const recent = [...state.lines].reverse().find((l) => l.kind === 'assistant');
+        if (recent) {
+          const turn = state.lines.filter((l) => l.kind === 'assistant').indexOf(recent);
+          recordFeedback({
+            ts: Date.now(),
+            session: runtime.activeSessionId ?? 'default',
+            turn,
+            verdict,
+            snippet: recent.text.slice(0, 200),
+          });
+          push('system', `${verdict === 'good' ? '👍 recorded (good)' : '👎 recorded (bad)'} — turn #${turn}`);
+          scheduleRender();
+        } else {
+          push('system', 'No assistant turn yet to rate.');
+          scheduleRender();
+        }
+        return;
+      }
+    }
+    if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../observability/feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Use /good or /bad to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
     if (line === '/circle') { await run(async () => {
       const { detectCircle } = await import('../circle.js');
       const { SessionStore } = await import('../state/session-store.js');
@@ -3291,7 +3315,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // restore must never win over finishing the restore.
     try { restoreConsole?.(); } catch { /* ignore */ }
     try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
-    try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}`); } catch { /* EPIPE */ }
+    try { process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}\x1b]0;\x07`); } catch { /* EPIPE */ }
     // Goodbye card (opencode-style): printed AFTER the alt-screen teardown
     // so it persists in scrollback — logo + session id + stats + safety
     // badge (uncensored/admin when privileged). Best-effort, never throws.
@@ -3882,29 +3906,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         continue;
       }
 
-      // Feedback keys: g = 👍 on most-recent assistant turn, b = 👎.
-      // Only fire when the composer is empty so they never collide with typing.
-      if ((c === 'g' || c === 'b') && state.input.length === 0 && !state.menuActive) {
-        const recent = [...state.lines].reverse().find((l) => l.kind === 'assistant');
-        if (recent) {
-          const verdict: FeedbackVerdict = c === 'g' ? 'good' : 'bad';
-          const turn = state.lines.filter((l) => l.kind === 'assistant').indexOf(recent);
-          recordFeedback({
-            ts: Date.now(),
-            session: runtime.activeSessionId ?? 'default',
-            turn,
-            verdict,
-            snippet: recent.text.slice(0, 200),
-          });
-          push('system', `${verdict === 'good' ? '👍 recorded (good)' : '👎 recorded (bad)'} — turn #${turn}`);
-          scheduleRender();
-        } else {
-          push('system', 'No assistant turn yet to rate.');
-          scheduleRender();
-        }
-        i++;
-        continue;
-      }
+
 
       // Accumulate standard printable characters (>= ' ')
       let j = i;
@@ -4111,7 +4113,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     const initialBg = canvasBg();
     const oscBg = initialBg ? OSC_BG_BLACK : '';
     try {
-      process.stdout.write(ALT_ENTER + oscBg + NO_AUTOWRAP + HIDE + '\x1b[?1000h\x1b[?1002h\x1b[?1006h' + BRACKET_PASTE_ON);
+      process.stdout.write(ALT_ENTER + oscBg + NO_AUTOWRAP + HIDE + '\x1b[?1000h\x1b[?1002h\x1b[?1006h' + BRACKET_PASTE_ON + `\x1b]0;mochi · ${projectName}\x07`);
     } catch { /* EPIPE or dead tty */ }
     try { process.stdin.setRawMode?.(true); } catch { /* not a tty / errno 5 */ }
     try { process.stdin.resume(); } catch { /* ignore */ }
@@ -4133,7 +4135,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       try { restoreConsole?.(); } catch { /* ignore */ }
       try { process.stdin.setRawMode?.(false); } catch { /* dead tty */ }
       try {
-        process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}\x1b[?1000l\x1b[?1002l\x1b[?1006l` + BRACKET_PASTE_OFF);
+        process.stdout.write(`${RESET}${SHOW}${AUTOWRAP}${ALT_EXIT}${OSC_BG_RESET}\x1b[?1000l\x1b[?1002l\x1b[?1006l\x1b]0;\x07` + BRACKET_PASTE_OFF);
       } catch { /* EPIPE on a dead pane */ }
     };
     process.on('exit', exitListener);
