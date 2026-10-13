@@ -1,0 +1,123 @@
+// prompt-menus with scripted UI fns: every ask_question + approval path.
+import { describe, it, expect } from 'vitest';
+import { tuiPromptUser, tuiRequestApproval, type PromptMenuDeps } from './prompt-menus.js';
+import type { LineKind } from './state.js';
+import type { UserPromptQuestion } from '../tools/user-prompt.js';
+import type { ApprovalDecision } from '../security/approval.js';
+
+function deps(over: Partial<PromptMenuDeps> = {}): { d: PromptMenuDeps; lines: Array<{ kind: LineKind; text: string }>; menus: string[] } {
+  const lines: Array<{ kind: LineKind; text: string }> = [];
+  const menus: string[] = [];
+  return {
+    d: {
+      openMenu: async (title: string) => { menus.push(title); return -1; },
+      ask: async () => '',
+      push: (kind: LineKind, text: string) => { lines.push({ kind, text }); },
+      scheduleRender: () => {},
+      setMenuSelected: () => {},
+      ...over,
+    },
+    lines,
+    menus,
+  };
+}
+
+const q = (over: Partial<UserPromptQuestion> = {}): UserPromptQuestion => ({
+  question: 'Which auth?',
+  options: [{ label: 'JWT', description: 'stateless' }, { label: 'sessions' }],
+  ...over,
+});
+
+describe('tuiPromptUser', () => {
+  it('single pick returns the label', async () => {
+    const { d, lines } = deps({ openMenu: async () => 0 });
+    const res = await tuiPromptUser(d, { questions: [q()] });
+    expect(res.answers[0].selected).toEqual(['JWT']);
+    expect(res.answers[0].skipped).toBeUndefined();
+    expect(lines.some((l) => l.text.includes('you chose: JWT'))).toBe(true);
+  });
+
+  it('custom answer flows through freeText', async () => {
+    const { d } = deps({
+      openMenu: async (_t: string, items: string[]) => items.length - 1,
+      ask: async () => '  my own auth  ',
+    });
+    const res = await tuiPromptUser(d, { questions: [q()] });
+    expect(res.answers[0].selected).toEqual([]);
+    expect(res.answers[0].freeText).toBe('my own auth');
+  });
+
+  it('Esc skips honestly', async () => {
+    const { d, lines } = deps({ openMenu: async () => -1 });
+    const res = await tuiPromptUser(d, { questions: [q({ header: 'Auth' })] });
+    expect(res.answers[0].skipped).toBe(true);
+    expect(res.answers[0].selected).toEqual([]);
+    expect(lines.some((l) => l.text.includes('skipped'))).toBe(true);
+  });
+
+  it('empty custom answer counts as skip', async () => {
+    const { d } = deps({
+      openMenu: async (_t: string, items: string[]) => items.length - 1,
+      ask: async () => '   ',
+    });
+    const res = await tuiPromptUser(d, { questions: [q()] });
+    expect(res.answers[0].skipped).toBe(true);
+  });
+
+  it('multi-select accumulates picks until Done', async () => {
+    const picks = [0, 1, 2]; // A, B, Done (2 options + Done + Custom)
+    const { d } = deps({ openMenu: async () => picks.shift() ?? -1 });
+    const res = await tuiPromptUser(d, { questions: [q({ multiSelect: true })] });
+    expect(res.answers[0].selected).toEqual(['JWT', 'sessions']);
+    expect(res.answers[0].skipped).toBeUndefined();
+  });
+
+  it('multi-select immediate Done skips', async () => {
+    const { d } = deps({ openMenu: async () => 2 }); // Done with nothing picked
+    const res = await tuiPromptUser(d, { questions: [q({ multiSelect: true })] });
+    expect(res.answers[0].skipped).toBe(true);
+  });
+
+  it('multi-select empty answer keeps picking instead of skipping', async () => {
+    const picks = [3, 0, 2]; // custom (empty answer, keep picking) -> pick A -> Done
+    const { d, lines } = deps({
+      openMenu: async () => picks.shift() ?? -1,
+      ask: async () => '   ',
+    });
+    const res = await tuiPromptUser(d, { questions: [q({ multiSelect: true })] });
+    expect(res.answers[0].selected).toEqual(['JWT']);
+    expect(res.answers[0].skipped).toBeUndefined();
+    expect(lines.some((l) => l.text.includes('JWT'))).toBe(true);
+  });
+
+  it('multi-select custom text breaks out with freeText', async () => {
+    const { d } = deps({
+      openMenu: async (_t: string, items: string[]) => items.length - 1,
+      ask: async () => 'both, phased',
+    });
+    const res = await tuiPromptUser(d, { questions: [q({ multiSelect: true })] });
+    expect(res.answers[0].freeText).toBe('both, phased');
+  });
+});
+
+describe('tuiRequestApproval', () => {
+  const req = { tool: 'shell', summary: '$ rm -rf /tmp/x', risk: 'destructive', policy: 'strict' as const };
+
+  it.each([
+    [0, 'allow-once', 'allowed once'],
+    [1, 'allow-always', 'allowed always'],
+    [2, 'deny', 'denied'],
+    [-1, 'deny', 'denied'],
+  ] as Array<[number, ApprovalDecision, string]>)('idx %i resolves %s', async (idx, decision, lineBit) => {
+    const { d, lines } = deps({ openMenu: async () => idx });
+    expect(await tuiRequestApproval(d, req)).toBe(decision);
+    expect(lines.some((l) => l.text.includes(lineBit))).toBe(true);
+    expect(lines[0].text).toContain('wants to run');
+  });
+
+  it('omits the risk tag for low-risk calls', async () => {
+    const { d, lines } = deps({ openMenu: async () => 0 });
+    await tuiRequestApproval(d, { tool: 'shell', summary: '$ ls', risk: 'low', policy: 'workspace-safe' });
+    expect(lines[0].text).not.toContain('[risk:');
+  });
+});

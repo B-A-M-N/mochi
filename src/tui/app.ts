@@ -2646,97 +2646,36 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     scheduleRender();
   }
 
-  /** Interactive ask_question resolver (Claude Code / opencode parity): one
-   *  menu per question — arrow keys + Enter to pick, Esc skips, "type my own"
-   *  drops to free text, multi-select loops single picks until Done.
+  /** Interactive ask_question resolver (Claude Code / opencode parity).
+   *  Unit lives in ./prompt-menus.js (scripted tests); this stays a binding
+   *  adapter so the coverage ratchet keeps meaning something.
    *  NOTE: the menu + transcript lines always render on the ACTIVE tab (the
    *  tool result still returns to the prompting agent either way). Prompting
    *  runs are foreground in practice; a background tab's question surfaces
    *  where the user is looking rather than hijacking tab focus. */
   async function tuiPromptUser(req: import('../tools/user-prompt.js').UserPromptRequest): Promise<import('../tools/user-prompt.js').UserPromptResponse> {
-    const answers: import('../tools/user-prompt.js').UserPromptAnswer[] = [];
-    for (const q of req.questions) {
-      const title = q.header ? `${q.header}: ${q.question}` : q.question;
-      push('system', `? ${title}`);
-      const picked: string[] = [];
-      let custom = '';
-      let skipped = false;
-      if (!q.multiSelect) {
-        const items = [
-          ...q.options.map((o) => `${T.bold}${o.label}${T.reset}${o.recommended ? ` ${T.lime}(recommended)${T.reset}` : ''}${o.description ? `${T.grayDark} — ${o.description}${T.reset}` : ''}`),
-          `${T.cyan}✎ Type my own answer…${T.reset}`,
-        ];
-        state.menuSelected = 0;
-        const idx = await openMenu(title, items);
-        if (idx < 0 || idx >= items.length) {
-          skipped = true;
-        } else if (idx === items.length - 1) {
-          custom = (await ask('Your answer (Enter to send, Esc to skip):')).trim();
-          if (!custom) skipped = true;
-        } else {
-          picked.push(q.options[idx].label);
-        }
-      } else {
-        for (;;) {
-          const items = [
-            ...q.options.map((o) => `${picked.includes(o.label) ? `${T.lime}●${T.reset}` : `${T.grayDark}○${T.reset}`} ${T.bold}${o.label}${T.reset}${o.description ? `${T.grayDark} — ${o.description}${T.reset}` : ''}`),
-            `${T.lime}✓ Done — use selected${picked.length ? ` (${picked.length})` : ''}${T.reset}`,
-            `${T.cyan}✎ Type my own answer…${T.reset}`,
-          ];
-          state.menuSelected = 0;
-          const idx = await openMenu(picked.length ? `${title} (${picked.length} selected)` : title, items);
-          if (idx < 0 || idx >= items.length) break;
-          if (idx === items.length - 1) {
-            const t = (await ask('Your answer (Enter to send, empty keeps picking):')).trim();
-            if (t) { custom = t; break; }
-            continue;
-          }
-          if (idx === items.length - 2) break;
-          const label = q.options[idx].label;
-          if (!picked.includes(label)) picked.push(label);
-        }
-        if (picked.length === 0 && !custom) skipped = true;
-      }
-      if (skipped) push('system', '◇ question skipped — the agent proceeds with its best judgment');
-      else push('system', `◇ you chose: ${[...picked, ...(custom ? [`"${custom}"`] : [])].join(', ')}`);
-      answers.push({
-        question: q.question,
-        header: q.header,
-        selected: picked,
-        ...(custom ? { freeText: custom } : {}),
-        ...(skipped ? { skipped: true } : {}),
-      });
-      scheduleRender();
-    }
-    return { answers };
+    const { tuiPromptUser } = await import('./prompt-menus.js');
+    return tuiPromptUser({
+      openMenu,
+      ask,
+      push,
+      scheduleRender,
+      setMenuSelected: (i: number) => { state.menuSelected = i; },
+    }, req);
   }
 
   /** Interactive approval gate (Claude Code parity): allow once / allow
    *  always this session / deny. Esc denies. Same active-tab caveat as
-   *  tuiPromptUser above. */
+   *  tuiPromptUser above; unit in ./prompt-menus.js. */
   async function tuiRequestApproval(req: import('../security/approval.js').ApprovalRequest): Promise<import('../security/approval.js').ApprovalDecision> {
-    const risk = req.risk && req.risk !== 'low' ? ` ${T.warning ?? T.orange ?? ''}[risk: ${req.risk}]${T.reset}` : '';
-    push('system', `? ${T.bold}${req.tool}${T.reset} wants to run: ${req.summary}${risk}`);
-    const items = [
-      `${T.lime}Allow once${T.reset}${T.grayDark} — run it this time${T.reset}`,
-      `${T.cyan}Allow always${T.reset}${T.grayDark} — remember for this session${T.reset}`,
-      `${T.error}Deny${T.reset}${T.grayDark} — skip it (Esc)${T.reset}`,
-    ];
-    state.menuSelected = 0;
-    const idx = await openMenu(`Allow ${req.tool}? (${req.policy})`, items);
-    if (idx === 0) {
-      push('system', `◇ allowed once: ${req.summary}`);
-      scheduleRender();
-      return 'allow-once';
-    }
-    if (idx === 1) {
-      push('system', `◇ allowed always this session: ${req.summary}`);
-      scheduleRender();
-      return 'allow-always';
-    }
-    push('system', `◇ denied: ${req.summary} — the agent works around it`);
-    scheduleRender();
-    return 'deny';
+    const { tuiRequestApproval } = await import('./prompt-menus.js');
+    return tuiRequestApproval({
+      openMenu,
+      ask,
+      push,
+      scheduleRender,
+      setMenuSelected: (i: number) => { state.menuSelected = i; },
+    }, req);
   }
 
 
