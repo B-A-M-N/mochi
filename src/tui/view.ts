@@ -101,13 +101,19 @@ export function padEnd(s: string, n: number): string {
 
 // ---- Thinking spinner ------------------------------------------------------
 // Layered animation: a braille cycle for motion + a sweeping color gradient
-// (violet → cyan → lime) so the spinner feels alive instead of a gray dot.
+// with harmonic stops so the spinner feels alive and glowing instead of harsh blinking.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const SPIN_COLORS: Array<[number, number, number]> = [
-  [199, 146, 234], // violet
+const HARMONIC_STOPS: Array<[number, number, number]> = [
+  [199, 146, 234], // soft violet
+  [170, 150, 245], // lavender
+  [140, 165, 255], // periwinkle
   [121, 184, 255], // act blue
-  [86, 212, 221],  // cyan
-  [163, 230, 53],  // lime
+  [95, 205, 245],  // sky cyan
+  [86, 212, 221],  // turquoise
+  [100, 225, 190], // mint
+  [130, 230, 130], // soft lime
+  [180, 215, 180], // sage
+  [195, 175, 225], // orchid
 ];
 
 export function spinnerFrame(i: number): string {
@@ -116,27 +122,32 @@ export function spinnerFrame(i: number): string {
 
 export function spinnerColored(i: number): string {
   const dot = spinnerFrame(i);
-  const c = SPIN_COLORS[Math.abs(i) % SPIN_COLORS.length];
+  const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
   return `${rgb(c[0], c[1], c[2])}${T.bold}${dot}${T.reset}`;
 }
 
-/** Animated gradient underline that sweeps under the thinking note. */
-export function spinnerSweep(i: number, width = 18): string {
+/** Animated luminous sweep that glides smoothly along a hairline track. */
+export function spinnerSweep(i: number, width = 8): string {
   const pos = Math.abs(i) % width;
   const cells: string[] = [];
   for (let x = 0; x < width; x++) {
     const dist = Math.abs(x - pos);
-    if (dist > 2) { cells.push(`${T.grayDark}·${T.reset}`); continue; }
-    const t = 1 - dist / 2; // 0..1 peak at the sweep head
-    const c = lerp([72, 79, 86], [86, 212, 221], t);
-    cells.push(`${rgb(c[0], c[1], c[2])}━${T.reset}`);
+    if (dist === 0) {
+      const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}━${T.reset}`);
+    } else if (dist === 1) {
+      const c = lerp([60, 65, 80], [121, 184, 255], 0.6);
+      cells.push(`${rgb(c[0], c[1], c[2])}─${T.reset}`);
+    } else {
+      cells.push(`${TRACK}─${T.reset}`);
+    }
   }
   return cells.join('');
 }
 
 export function thinkingLine(frame: number, note = ''): string {
-  const note_ = note ? ` ${T.orange}${note}${T.reset}` : '';
-  return `${spinnerColored(frame)} ${R.thinkingLabel}Thinking…${T.reset} ${spinnerSweep(frame, 8)}${note_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
+  return `${spinnerColored(frame)} ${T.bold}${R.thinkingLabel}Thinking…${T.reset} ${spinnerSweep(frame, 8)}${note_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a

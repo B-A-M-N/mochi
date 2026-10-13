@@ -166,8 +166,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
   const savedTheme = getCurrentTheme();
   setTheme(savedTheme.id);
 
-  // Tab bar occupies the top terminal row (always visible, opencode-style).
-  const TAB_BAR_ROWS = 1;
+  // Tab bar occupies the top rows (row 0: tabs, row 1: breathing margin).
+  const TAB_BAR_ROWS = 2;
 
   let state = {
     input: '',
@@ -738,12 +738,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
     switch (line.kind) {
       case 'user': {
-        // 2-space gutter + ❯ accent + background-fill + bold fg text
+        // Prompt chevron + bold high-contrast text; continuation rows indent under text
         const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
         for (let i = 0; i < wrapped.length; i++) {
           const w = wrapped[i];
-          if (i === 0) rows.push(`  ${R.userGutter}${T.bold}❯${T.reset} ${R.userBg}${R.userFg}${T.bold}${w}${T.reset}`);
-          else rows.push(`  ${R.userBg}${R.userFg}${T.bold}${w}${T.reset}`);
+          if (i === 0) rows.push(`${R.userGutter}${T.bold}❯${T.reset} ${T.bold}${R.userFg}${w}${T.reset}`);
+          else rows.push(`  ${R.userFg}${w}${T.reset}`);
         }
         break;
       }
@@ -779,7 +779,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         for (const src of text.split('\n')) {
           if (!src.trim()) { rows.push(''); continue; }
           for (const r of wrapAnsi(src, Math.max(20, maxWidth - 2))) {
-            rows.push(`  ${r}`);
+            rows.push(r);
           }
         }
         break;
@@ -789,7 +789,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
         for (let i = 0; i < wrapped.length; i++) {
           const w = wrapped[i];
-          if (i === 0) rows.push(`  ${R.errorMark}${T.bold}! [ERR]${T.reset} ${R.errorText}${w}${T.reset}`);
+          if (i === 0) rows.push(`${R.errorMark}${T.bold}! [ERR]${T.reset} ${R.errorText}${w}${T.reset}`);
           else rows.push(`  ${R.errorText}${w}${T.reset}`);
         }
         break;
@@ -798,7 +798,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         // Muted secondary info — no per-line glyphs.
         const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
         for (const w of wrapped) {
-          rows.push(`  ${T.dim}${R.systemText}${w}${T.reset}`);
+          rows.push(`${T.dim}${R.systemText}${w}${T.reset}`);
         }
         break;
       }
@@ -807,7 +807,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
         for (let i = 0; i < wrapped.length; i++) {
           const w = wrapped[i];
-          if (i === 0) rows.push(`  ${R.taskMark}${T.bold}★ [TASK]${T.reset} ${R.taskText}${w}${T.reset}`);
+          if (i === 0) rows.push(`${R.taskMark}${T.bold}★ [TASK]${T.reset} ${R.taskText}${w}${T.reset}`);
           else rows.push(`  ${T.dim}${R.toolGenericName}${w}${T.reset}`);
         }
         break;
@@ -821,10 +821,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         const wrapped = wrap(cleanText, Math.max(10, maxWidth - 4));
         const shown = wrapped.slice(0, THINK_MAX_ROWS);
         for (const w of shown) {
-          rows.push(`  ${T.dim}${T.italic}${R.thoughtText}${w}${T.reset}`);
+          rows.push(`${T.dim}${T.italic}${R.thoughtText}${w}${T.reset}`);
         }
         if (wrapped.length > THINK_MAX_ROWS) {
-          const hint = `  ${T.grayDark}… thinking (${wrapped.length - THINK_MAX_ROWS} more rows hidden — Ctrl+O to expand)${T.reset}`;
+          const hint = `${T.grayDark}… thinking (${wrapped.length - THINK_MAX_ROWS} more rows hidden — Ctrl+O to expand)${T.reset}`;
           rows.push(visibleLen(hint) > maxWidth ? ellipsize(hint, maxWidth) : hint);
         }
         break;
@@ -832,7 +832,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       default: {
         const wrapped = wrap(cleanText, Math.max(10, maxWidth));
         for (const w of wrapped) {
-          rows.push(`  ${R.assistantText}${w}${T.reset}`);
+          rows.push(`${R.assistantText}${w}${T.reset}`);
         }
         break;
       }
@@ -1136,8 +1136,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const rows: string[] = new Array(h).fill('');
     const lead = ' '.repeat(indent);
 
-    // Pinned tab bar (row 0): transcript content starts at TAB_BAR_ROWS.
+    // Pinned tab bar (row 0) + breathing room (row 1): transcript starts at TAB_BAR_ROWS.
     rows[0] = tabBarRow(w);
+    rows[1] = '';
 
     const showSplash = !state.splashDismissed && state.lines.length === 0;
     if (showSplash) {
@@ -1159,7 +1160,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
     if (state.busy) {
       const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
-      const busyStr = '  ' + thinkingLine(state.spinner, state.currentTool || state.currentTask || '');
+      const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
+      const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
+      const note = state.currentTool || (!isEcho ? state.currentTask : '');
+      const busyStr = lead + thinkingLine(state.spinner, note);
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
     }
 
@@ -1219,11 +1223,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     };
 
     const s1 = h - bottomRows;
-    rows[s1] = statusBarRow1(statusModel, w);
+    const sbW = Math.max(20, w - indent);
+    const r1 = statusBarRow1(statusModel, sbW);
+    rows[s1] = lead + (visibleLen(r1) > sbW ? ellipsize(r1, sbW) : r1);
     let cTop = s1 + 1;
 
     if (statusRows >= 2) {
-      rows[s1 + 1] = statusBarRow2(statusModel, w);
+      const r2 = statusBarRow2(statusModel, sbW);
+      rows[s1 + 1] = lead + (visibleLen(r2) > sbW ? ellipsize(r2, sbW) : r2);
       cTop = s1 + 2;
     }
 
