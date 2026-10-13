@@ -221,6 +221,9 @@ export async function startDaemonInProcess(opts: {
     close: async () => {
       if (ticker) clearInterval(ticker);
       server.close();
+      // Release process-owned resources (open SQLite session handles lock the
+      // workspace dir on Windows) before unlinking the daemon info file.
+      try { runtime.close(); } catch { /* best-effort */ }
       const p = daemonInfoPath(wsDir);
       if (existsSync(p)) {
         try { unlinkSync(p); } catch { /* already gone */ }

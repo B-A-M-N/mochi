@@ -1,5 +1,13 @@
 # Mochi Changelog
 
+## [0.24.0] - 2026-10-14
+- **Interactive `ask_question` menu** — the model can now ask you back mid-task: option menus (arrow keys + Enter, Esc skips, free-text fallback, multi-select) in the TUI, deterministic defaults headless. Previously `ask_question` was aliased to `think`, so questions went nowhere.
+- **Honest completion labels** — clean answers render "Question Answered", clean work "Task Complete"; "Partially Complete" only on real partials, "Task Failed" on failures (was: everything read "Partially Complete", including a bare `hi`).
+- **Chat turns stay conversational** — mutating tools are vetoed on Q&A tasks (the `hi` → tool-spam + error-card class), greetings need no tools, and harness chatter (`think` echoes) no longer types into your transcript: only you write user lines (pinned by `chat-ownership` source-guard tests).
+- **Universal `mcp add`** — install any server, not just the 12 built-ins: `npm:<pkg>`, `uvx:<pkg>`, `https://…` endpoints, `cmd:<bin>` (bare words never hit npm, so typos can't pull a stranger's package); plus `mcp remove` and `mcp test` (live handshake + tool inventory) in CLI, TUI, and `mcp_manage`.
+- **Quiet spinners** — thinking line is one purple braille dot beside `Thinking…`; running tabs breathe dim/bright instead of cycling glyphs.
+- **ACP `kind` fix + release gate honesty** — ACP `tool_call` notifications carry the right kind again; `release-check` now fails on suite failures (its `tail -n 5` grep waved red suites through as green).
+
 ## [0.23.1] - 2026-10-12
 - **First GitHub release** — standalone binaries for linux-x64, windows-x64, darwin-x64, darwin-arm64 on the releases page (`scripts/package-release.mjs` + `release.yml` matrix). No Node needed.
 - **1-line install** — `curl -fsSL https://raw.githubusercontent.com/xanstomper/mochi/main/install.sh | bash` (linux/mac) and `irm …/install.ps1 | iex` (windows). Installs `mochi` to PATH with source-build fallback. See `docs/INSTALL.md`.

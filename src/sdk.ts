@@ -152,7 +152,14 @@ export class Mochi {
 
   /** Session recall: recent past sessions (titles + objectives). */
   sessions(limit = 10): Array<{ id: string; objective: string; updated: number }> {
-    return new SessionStore(this.rt.cwd).list(limit).map((s) => ({ id: s.id, objective: s.objective, updated: s.updatedAt }));
+    const store = new SessionStore(this.rt.cwd);
+    try {
+      return store.list(limit).map((s) => ({ id: s.id, objective: s.objective, updated: s.updatedAt }));
+    } finally {
+      // Windows locks an open SQLite file — release it or the workspace dir
+      // can never be deleted while this process lives.
+      try { store.close(); } catch { /* best-effort */ }
+    }
   }
 
   /** Skill discovery over every loaded skill (local + user + bundled). */
@@ -184,6 +191,13 @@ export class Mochi {
 
   /** Raw Runtime escape hatch for anything the typed surface lacks. */
   get runtime(): Runtime { return this.rt; }
+
+  /** Release process-owned resources (session/SQLite handles via the
+   *  runtime). Call before deleting a workspace dir on Windows, where an
+   *  open SQLite handle keeps an exclusive lock. Idempotent, best-effort. */
+  close(): void {
+    try { this.rt.close(); } catch { /* best-effort */ }
+  }
 
   // ── MCH-68: typed event stream ──────────────────────────────────────────
   /** Subscribe to a specific typed event on the runtime EventBus. Returns an unsubscribe fn. */

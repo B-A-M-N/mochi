@@ -17,7 +17,7 @@ export interface Provider {
 }
 
 export const PROVIDERS: Provider[] = [
-  { id: 'opencode-zen', name: 'OpenCode Zen', kind: 'openai', baseUrl: 'https://opencode.ai/zen/v1', envKey: 'OPENCODE_ZEN_API_KEY', models: ['deepseek-v4-flash', 'kimi-k2.7-code', 'glm-5.3-flash', 'gpt-5.4-nano', 'minimax-m2.7', 'qwen3.8-flash', 'claude-sonnet-4-6'], defaultModel: 'deepseek-v4-flash' },
+  { id: 'opencode-zen', name: 'OpenCode Zen', kind: 'openai', baseUrl: 'https://opencode.ai/zen/v1', envKey: 'OPENCODE_ZEN_API_KEY', models: ['deepseek-v4-flash', 'deepseek-v4-flash-free', 'kimi-k2.7-code', 'glm-5.3-flash', 'gpt-5.4-nano', 'minimax-m2.7', 'qwen3.8-flash', 'claude-sonnet-4-6'], defaultModel: 'deepseek-v4-flash' },
   { id: 'opencode-go', name: 'OpenCode Go', kind: 'openai', baseUrl: 'https://opencode.ai/go/v1', envKey: 'OPENCODE_GO_API_KEY', models: ['deepseek-v4-flash'], defaultModel: 'deepseek-v4-flash' },
   { id: 'freeinference', name: 'FreeInference.org (Harvard SEAS)', kind: 'openai', baseUrl: 'https://freeinference.org/v1', envKey: 'FREEINFERENCE_API_KEY', models: ['glm-5.3', 'glm-5.3-flash', 'minimax-m3', 'qwen3.6-35b', 'diffusiongemma', 'deepseek-v4-flash', 'bge-m3'], defaultModel: 'glm-5.3-flash' },
   { id: 'openai', name: 'OpenAI', kind: 'openai', baseUrl: 'https://api.openai.com/v1', envKey: 'OPENAI_API_KEY', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-5', 'gpt-5-nano', 'gpt-5.4', 'gpt-5.4-nano', 'o3', 'o4-mini'], defaultModel: 'gpt-5.4' },

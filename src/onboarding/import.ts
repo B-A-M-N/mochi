@@ -181,7 +181,7 @@ export function importDetectedModels(
       fast: disk.model.model || 'freeinference/glm-5.3-flash',
       coding: disk.model.model || 'freeinference/deepseek-v4-flash',
       reasoning: disk.model.model || 'opencode/opencode-zen-3.5',
-      review: disk.model.model || 'freeinference/kimi-k2.7-code',
+      review: disk.model.model || 'freeinference/glm-5.3-flash',
     };
   }
 

@@ -14,14 +14,24 @@ function makeConfig(url: string): Partial<MochiConfig> {
 
 let fake: FakeOpenAI | null = null;
 let dir = '';
+const liveSdks: Mochi[] = [];
 async function setup(replies: Array<Record<string, unknown>>): Promise<Mochi> {
   dir = mkdtempSync(resolve(tmpdir(), 'mochi-sdk-'));
   execSync('git init -q ' + dir);
   writeFileSync(resolve(dir, 'README.md'), '# t');
   fake = await startFakeOpenAI(replies as never);
-  return Mochi.create({ cwd: dir, config: makeConfig(fake.url) });
+  const m = Mochi.create({ cwd: dir, config: makeConfig(fake.url) });
+  liveSdks.push(m);
+  return m;
 }
-afterEach(async () => { await fake?.close(); if (dir) rmSync(dir, { recursive: true, force: true }); fake = null; dir = ''; });
+afterEach(async () => {
+  await fake?.close();
+  // Windows locks the open SQLite file — release every runtime before the
+  // workspace dir can be deleted.
+  for (const m of liveSdks.splice(0)) { try { m.close(); } catch { /* best-effort */ } }
+  if (dir) rmSync(dir, { recursive: true, force: true });
+  fake = null; dir = '';
+});
 
 describe('Mochi SDK (in-process mode)', () => {
   it('runs a prompt end-to-end and returns a structured result', async () => {

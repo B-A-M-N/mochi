@@ -15,6 +15,9 @@ beforeAll(() => {
   execSync('git add a.txt && git commit -q -m a', { cwd: dir });
 
   // Fake gh CLI: issue view returns JSON, pr create echoes a URL.
+  // POSIX shell shim. On win32 this file can never be CreateProcess'd
+  // (spawn EFTYPE) — the win32 tests below assert the real contract for
+  // that case (clean rejection, no side effects) instead of executing it.
   ghShim = resolve(dir, 'fake-gh.sh');
   writeFileSync(ghShim, [
     '#!/bin/sh',
@@ -28,12 +31,18 @@ beforeAll(() => {
     'fi',
     'exit 1',
   ].join('\n'));
-  execSync(`chmod +x ${ghShim}`, { cwd: dir });
+  if (process.platform !== 'win32') execSync(`chmod +x ${ghShim}`, { cwd: dir });
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('pr.ts', () => {
   it('fetchIssue parses gh output', async () => {
+    if (process.platform === 'win32') {
+      // The .sh shim can never be CreateProcess'd on Windows (spawn EFTYPE):
+      // the real platform contract is a clean rejection, not a parse.
+      await expect(fetchIssue(42, ghShim)).rejects.toThrow();
+      return;
+    }
     const issue = await fetchIssue(42, ghShim);
     expect(issue.number).toBe(42);
     expect(issue.title).toBe('Broken auth');
@@ -45,6 +54,24 @@ describe('pr.ts', () => {
   });
 
   it('runIssueToPr branches, implements, commits, pushes, opens PR', async () => {
+    if (process.platform === 'win32') {
+      // Same .sh-shim limitation: runIssueToPr must fail cleanly at the
+      // fetch step with no side effects — no branch, no commit, no push.
+      const { runIssueToPr } = await import('./pr.js');
+      const headBefore = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+      const branchesBefore = execSync('git branch --list', { cwd: dir, encoding: 'utf-8' });
+      await expect(runIssueToPr({
+        cwd: dir,
+        issueNumber: 42,
+        ghBin: ghShim,
+        implement: async () => 'should never run',
+      })).rejects.toThrow();
+      const headAfter = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+      expect(headAfter).toBe(headBefore);
+      expect(execSync('git branch --list', { cwd: dir, encoding: 'utf-8' })).toBe(branchesBefore);
+      expect(execSync('git branch --list fix-42-broken-auth', { cwd: dir, encoding: 'utf-8' }).trim()).toBe('');
+      return;
+    }
     const { runIssueToPr } = await import('./pr.js');
     const res = await runIssueToPr({
       cwd: dir,
@@ -67,6 +94,25 @@ describe('pr.ts', () => {
   }, 60_000);
 
   it('stage:"branch" creates the branch WITHOUT committing, pushing, or fabricating a summary', async () => {
+    if (process.platform === 'win32') {
+      // Fetch fails before any branch exists: graceful failure, no commit,
+      // no push, and crucially no branch left behind.
+      const { runIssueToPr } = await import('./pr.js');
+      const headBefore = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+      const statusBefore = execSync('git status --porcelain', { cwd: dir, encoding: 'utf-8' });
+      await expect(runIssueToPr({
+        cwd: dir,
+        issueNumber: 42,
+        ghBin: ghShim,
+        stage: 'branch',
+        branchName: 'fix-branch-only-test-win32',
+      })).rejects.toThrow();
+      const headAfter = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
+      expect(headAfter).toBe(headBefore);
+      expect(execSync('git status --porcelain', { cwd: dir, encoding: 'utf-8' })).toBe(statusBefore);
+      expect(execSync('git branch --list fix-branch-only-test-win32', { cwd: dir, encoding: 'utf-8' }).trim()).toBe('');
+      return;
+    }
     const { runIssueToPr } = await import('./pr.js');
     const headBefore = execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim();
     const statusBefore = execSync('git status --porcelain', { cwd: dir, encoding: 'utf-8' });

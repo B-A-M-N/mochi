@@ -160,13 +160,16 @@ export async function handleRpc(
         const handleEvent = (e: MochiEvent) => {
           if (e.type === 'tool:called') {
             const tcId = `tc-${randomUUID().slice(0, 8)}`;
-            emitToolCallIds.set(JSON.stringify(e.args), tcId);
+            // Key by tool name: tool:completed carries no args to correlate
+            // with (the old args-keyed map never matched its tool-keyed
+            // lookups, so every update fell back to the bare tool name).
+            emitToolCallIds.set(e.tool, tcId);
             onNotify(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title: e.tool, kind: toolKind(e.tool), status: 'pending', rawInput: e.args });
           } else if (e.type === 'tool:completed') {
-            const tcId = emitToolCallIds.get(JSON.stringify(e.tool)) ?? e.tool;
+            const tcId = emitToolCallIds.get(e.tool) ?? e.tool;
             onNotify(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: 'completed', content: [{ type: 'text', text: String(e.result?.output ?? '').slice(0, 4000) }] });
           } else if (e.type === 'tool:failed') {
-            const tcId = emitToolCallIds.get(JSON.stringify(e.tool)) ?? e.tool;
+            const tcId = emitToolCallIds.get(e.tool) ?? e.tool;
             onNotify(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: 'failed', content: [{ type: 'text', text: String(e.error).slice(0, 2000) }] });
           } else if (e.type === 'file:changed') {
             onNotify(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'file:' + e.path, locations: [{ path: e.path }] });

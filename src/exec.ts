@@ -116,6 +116,10 @@ function finishSpawn(
     };
     if (opts.signal?.aborted) { onAbort(); return; }
     opts.signal?.addEventListener('abort', onAbort, { once: true });
+    // No caller ever feeds stdin (no stdin-input API exists): close it now so
+    // an interactive child (cmd.exe without /C) hits EOF instead of blocking
+    // on our open pipe until the timeout kills it.
+    try { child.stdin?.end(); } catch { /* already closed */ }
     void timedOut; void cancelled;
     child.stdout?.on('data', (chunk) => {
       stdoutRef.text += String(chunk);
@@ -164,13 +168,23 @@ export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions 
  *  use runArgv instead. */
 export function runShellString(command: string, opts: ExecOptions & { shellBin?: string } = {}): Promise<ExecResult> {
   const startedAt = Date.now();
-  const shellBin = opts.shellBin ?? (process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : (process.env.SHELL || '/bin/bash'));
-  const wrapped = maybeSandbox(shellBin, ['-c', command], opts);
+  const isWin = process.platform === 'win32';
+  const shellBin = opts.shellBin ?? (isWin ? (process.env.ComSpec || 'cmd.exe') : (process.env.SHELL || '/bin/bash'));
+  // Windows: mirror Node's own shell:true recipe (child_process.js): cmd.exe
+  // only understands `/`-prefixed switches, so the POSIX `-c` form leaves cmd
+  // with no /C — it starts INTERACTIVELY, prints its banner, and blocks on
+  // our never-closed stdin pipe until killed (every runShellString hung to
+  // its timeout on win32). /d skips AutoRun, /s + outer quotes strip exactly
+  // one quote pair and run the rest verbatim; windowsVerbatimArguments keeps
+  // Node from re-quoting the already-quoted command.
+  const shellArgs = isWin ? ['/d', '/s', '/c', `"${command}"`] : ['-c', command];
+  const wrapped = maybeSandbox(shellBin, shellArgs, opts);
   const child = spawn(wrapped.cmd, wrapped.args, {
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     stdio: 'pipe',
     windowsHide: true,
+    ...(isWin ? { windowsVerbatimArguments: true } : {}),
   });
   return finishSpawn(child, command, opts, { text: '', truncated: false }, { text: '', truncated: false }, startedAt);
 }
@@ -251,16 +265,18 @@ export function buildBubblewrapArgs(
 }
 
 /** Wrap [cmd, args] per opts.sandbox. Returns the command unchanged when the
- *  sandbox is off, unavailable in auto mode — or throws in `bubblewrap` mode
+ *  sandbox is off or unavailable in auto mode — or throws in `bubblewrap` mode
  *  when bwrap is missing (explicit request, fail loudly, never silently run
- *  unsandboxed). */
+ *  unsandboxed). NOTE: no win32 early-return — bubblewrap is POSIX-only, so a
+ *  forced request on Windows must throw the loud "bwrap not found" error
+ *  instead of silently running unsandboxed. */
 export function maybeSandbox(
   cmd: string,
   args: readonly string[],
   opts: ExecOptions,
 ): { cmd: string; args: string[] } {
   const sb = opts.sandbox;
-  if (!sb || sb.mode === 'off' || process.platform === 'win32') return { cmd, args: [...args] };
+  if (!sb || sb.mode === 'off') return { cmd, args: [...args] };
   const bwrap = detectBubblewrap();
   if (!bwrap) {
     if (sb.mode === 'bubblewrap') {

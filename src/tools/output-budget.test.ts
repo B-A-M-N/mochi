@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { tmpdir } from 'node:os';
 import { clipToolOutput, HEAD_CHARS, TAIL_CHARS, DEFAULT_TOOL_RESULT_MAX_CHARS } from './output-budget.js';
 import { shellTool } from './shell.js';
 
@@ -36,7 +37,7 @@ describe('shellTool output budget', () => {
     const result = await shellTool.execute(
       { command: 'seq 1 200000' },
       {
-        cwd: '/tmp',
+        cwd: tmpdir(),
         config: {
           safety: {
             mode: 'safe',

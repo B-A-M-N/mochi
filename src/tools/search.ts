@@ -306,7 +306,9 @@ export const searchTool: Tool = {
         const c2 = rest.indexOf(':');
         if (c2 < 0) continue;
         const line = Number(rest.slice(0, c2)) || 1;
-        const finalP = targetDir !== ctx.cwd ? resolve(targetDir, rawP) : rawP;
+        // Normalize separators so win32 backslash results compare equal to
+        // forward-slash queries (POSIX-no-op: no backslashes to replace).
+        const finalP = (targetDir !== ctx.cwd ? resolve(targetDir, rawP) : rawP).replace(/\\/g, '/');
         matches.push({ path: finalP, line, text: rest.slice(c2 + 1) });
       }
       result = buildStructured(targetDir, groupMatches(targetDir, matches), limit);

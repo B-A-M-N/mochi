@@ -27,6 +27,7 @@ describe('update-check version compare', () => {
 describe('maybeCheckUpdate', () => {
   let home: string;
   let savedHome: string | undefined;
+  let savedProfile: string | undefined;
   let savedVitest: string | undefined;
   let savedNoCheck: string | undefined;
   let savedTTY: unknown;
@@ -36,7 +37,11 @@ describe('maybeCheckUpdate', () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'mochi-upd-'));
     savedHome = process.env.HOME;
+    savedProfile = process.env.USERPROFILE;
     process.env.HOME = home;
+    // os.homedir() on win32 reads USERPROFILE, NOT HOME — stage both so the
+    // cache lands in the throwaway dir on every platform (feedback.test pattern).
+    process.env.USERPROFILE = home;
     savedVitest = process.env.VITEST;
     savedNoCheck = process.env.MOCHI_NO_UPDATE_CHECK;
     // maybeCheckUpdate deliberately no-ops under test runners and non-TTY
@@ -51,6 +56,7 @@ describe('maybeCheckUpdate', () => {
 
   afterEach(() => {
     if (savedHome === undefined) delete process.env.HOME; else process.env.HOME = savedHome;
+    if (savedProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = savedProfile;
     if (savedVitest === undefined) delete process.env.VITEST; else process.env.VITEST = savedVitest;
     if (savedNoCheck === undefined) delete process.env.MOCHI_NO_UPDATE_CHECK; else process.env.MOCHI_NO_UPDATE_CHECK = savedNoCheck;
     Object.defineProperty(process.stderr, 'isTTY', { value: savedTTY, configurable: true });

@@ -107,16 +107,17 @@ export class VerifierEngine {
     for (const command of commands) {
       this.budget.recordToolCall();
       const result = await this.runCommand(command);
-      // A check that cannot even run (command not found, exit 127) is an
-      // environment gap, not evidence the agent's work is wrong. The decomposer
-      // freely invents verification commands (tsc, pytest, cargo...) that may
-      // not exist on PATH in the user's repo; failing the task for that would
-      // reject correct work. Mark such checks as passed-with-a-skip-note so the
-      // judge sees them as no-op rather than failure. (Pinned by test:
+      // A check that cannot even run (command not found: exit 127 on POSIX,
+      // 9009 on cmd.exe) is an environment gap, not evidence the agent's work
+      // is wrong. The decomposer freely invents verification commands (tsc,
+      // pytest, cargo...) that may not exist on PATH in the user's repo;
+      // failing the task for that would reject correct work. Mark such checks
+      // as passed-with-a-skip-note so the judge sees them as no-op rather
+      // than failure. (Pinned by test:
       // "skips a verification command that is not installed instead of failing".)
       const exitMatch = result.match(/^exit_code: (\d+)/);
-      const exit127 = exitMatch ? Number(exitMatch[1]) === 127 : false;
-      if (exit127) {
+      const exitCode = exitMatch ? Number(exitMatch[1]) : -1;
+      if (exitCode === 127 || exitCode === 9009) {
         evidence.push({
           source: `command:${command}`,
           result: `[SKIPPED: command not found] ${result.slice(0, 2000)}`,

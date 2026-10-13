@@ -274,7 +274,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const layout = tabBarCells(tabList, activeTabId, w);
     const ACTIVE_BG = '\x1b[48;2;34;28;48m';
     const PLUS_BG = '\x1b[48;2;38;38;38m';
-    const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    // Running tabs breathe: the SAME dot glyph as idle, alternating bright /
+    // dim purple on a ~0.5s phase. Deliberately NOT a cycling glyph spinner —
+    // the thinking line owns motion (braille); the tab bar stays quiet.
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
@@ -287,8 +289,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        const frame = BRAILLE[state.spinner % BRAILLE.length];
-        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live braille spinner
+        iconColored = ((state.spinner >> 3) % 2 === 0) ? '\x1b[38;2;167;139;250m•' : '\x1b[38;2;100;88;140m•';
       } else if (status === 'done') {
         iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
       } else if (status === 'error') {
@@ -357,6 +358,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const info = tabs.create(title);
     const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
     rt.setPromptUser(tuiPromptUser);
+    rt.setApprovalHandler(tuiRequestApproval);
     rt.resetSession();
     try { rt.workspace.clearCheckpoint(); } catch { /* best effort */ }
     const st = freshTabState();
@@ -449,6 +451,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       // Fresh slate in place: new runtime + clean checkpoint.
       const rt2 = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
       rt2.setPromptUser(tuiPromptUser);
+      rt2.setApprovalHandler(tuiRequestApproval);
       rt2.resetSession();
       try { rt2.workspace.clearCheckpoint(); } catch { /* best effort */ }
       const st2 = freshTabState();
@@ -2269,19 +2272,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
     // Permission policy slash commands
     if (line === '/yolo' || line === '/yolo on' || line === '/dangerously-skip-permissions' || line === '/dangerously-skip-permissions on') {
-      runtime.permPolicy = 'yolo';
+      runtime.setPermPolicy('yolo');
       push('system', '[YOLO] YOLO mode ENABLED — all permission prompts bypassed. Type /yolo off to restore.');
       scheduleRender();
       return;
     }
     if (line === '/yolo off' || line === '/dangerously-skip-permissions off') {
-      runtime.permPolicy = 'strict';
+      runtime.setPermPolicy('strict');
       push('system', '[SAFE] YOLO mode disabled. Strict permissions restored.');
       scheduleRender();
       return;
     }
     if (line === '/workspace-safe') {
-      runtime.permPolicy = 'workspace-safe';
+      runtime.setPermPolicy('workspace-safe');
       push('system', '[AUTO] Workspace-safe mode: reads + workspace edits auto-approved, shell requires approval.');
       scheduleRender();
       return;
@@ -2509,7 +2512,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       if (chosen > 0) {
         runtime.maxRuns = chosen;
         state.autoApprove = true;
-        runtime.permPolicy = 'yolo';
+        runtime.setPermPolicy('yolo');
         push('system', `Auto improve: ON — up to ${chosen} self-review passes. Each pass reviews + verifies the previous one and iterates until it's verified done, then moves on. Send a message to begin.`);
         state.autoImproveArmed = true;
       } else {
@@ -2584,6 +2587,34 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       scheduleRender();
     }
     return { answers };
+  }
+
+  /** Interactive approval gate (Claude Code parity): allow once / allow
+   *  always this session / deny. Esc denies. Same active-tab caveat as
+   *  tuiPromptUser above. */
+  async function tuiRequestApproval(req: import('../security/approval.js').ApprovalRequest): Promise<import('../security/approval.js').ApprovalDecision> {
+    const risk = req.risk && req.risk !== 'low' ? ` ${T.warning ?? T.orange ?? ''}[risk: ${req.risk}]${T.reset}` : '';
+    push('system', `? ${T.bold}${req.tool}${T.reset} wants to run: ${req.summary}${risk}`);
+    const items = [
+      `${T.lime}Allow once${T.reset}${T.grayDark} — run it this time${T.reset}`,
+      `${T.cyan}Allow always${T.reset}${T.grayDark} — remember for this session${T.reset}`,
+      `${T.error}Deny${T.reset}${T.grayDark} — skip it (Esc)${T.reset}`,
+    ];
+    state.menuSelected = 0;
+    const idx = await openMenu(`Allow ${req.tool}? (${req.policy})`, items);
+    if (idx === 0) {
+      push('system', `◇ allowed once: ${req.summary}`);
+      scheduleRender();
+      return 'allow-once';
+    }
+    if (idx === 1) {
+      push('system', `◇ allowed always this session: ${req.summary}`);
+      scheduleRender();
+      return 'allow-always';
+    }
+    push('system', `◇ denied: ${req.summary} — the agent works around it`);
+    scheduleRender();
+    return 'deny';
   }
 
 
@@ -3917,7 +3948,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     subscribeTab(activeTabId, runtime);
     // Interactive mid-task questions (ask_question) resolve through the TUI
     // menu above; every tab runtime gets the same resolver (see newTab).
+    // Same for the approval gate (allow/deny menu for mutating tools).
     runtime.setPromptUser(tuiPromptUser);
+    runtime.setApprovalHandler(tuiRequestApproval);
     void refreshGitStats(); // seed the status bar diff stats
 
     // Clean fresh startup: single session tab ready for immediate work
@@ -3925,15 +3958,29 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     tabs.setStatus(activeTabId, 'idle');
     runtime.activeSessionId = undefined;
 
-    // Cozy one-time welcome & setup menu: first launch ever shows the
-    // interactive onboarding wizard. Dismissed forever once completed.
+    // First launch ever: ONE quiet hint line, never an auto-wizard. The old
+    // auto-onboarding pushed ~10 system lines about agents/skills/models/MCPs
+    // and opened the setup menu before the user typed anything — mochi
+    // appearing to "type messages automatically" about MCPs. The full wizard
+    // lives on explicit /onboard. The startup model check below covers keys.
     try {
       const { isOnboarded } = await import('../onboarding/import.js');
       if (!isOnboarded() && !initialPrompt) {
-        const { runInteractiveOnboarding } = await import('./onboard-flow.js');
-        void runInteractiveOnboarding(runtime, openMenu, push, scheduleRender, pkg.version);
+        push('system', '◇ First launch? Run /onboard for the 60-second setup (borrows keys, models, skills & MCPs from your other agents). Nothing runs until you ask.');
+        scheduleRender();
       }
-    } catch { /* onboarding banner is best-effort */ }
+    } catch { /* onboarding hint is best-effort */ }
+    // Startup model health: a missing key or an unknown model id fails EVERY
+    // request (401/404 + failover burn), which reads as "loads with a fake
+    // model". Say so in one line with the fix; silence when healthy.
+    try {
+      const { checkStartupModel } = await import('../model/startup-check.js');
+      const health = checkStartupModel(runtime.config.model);
+      if (!health.ok && health.line) {
+        push('system', health.line);
+        scheduleRender();
+      }
+    } catch { /* health check is best-effort */ }
     cleanupFns = [
       () => process.stdin.off('data', keyListener),
       () => process.stdout.off('resize', resizeListener),

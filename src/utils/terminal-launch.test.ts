@@ -78,6 +78,23 @@ describe('launchInNewTerminal', () => {
     }
   });
 
+  it('dryRun resolves the command without spawning (win32-safe contract)', async () => {
+    // No real terminal spawn: dryRun only resolves emulator + argv. On win32
+    // this is the supported path (no gnome-terminal/konsole exists there) —
+    // it must return ok + a populated command without touching the process
+    // table, on every platform.
+    const r = await launchInNewTerminal(['goal', 'x'], { emulator: 'gnome-terminal', dryRun: true });
+    expect(r.ok).toBe(true);
+    expect(r.emulator).toBe('gnome-terminal');
+    expect(Array.isArray(r.command)).toBe(true);
+    expect(r.command!.length).toBeGreaterThan(1);
+    expect(r.command!.join(' ')).toContain('goal');
+    if (process.platform === 'win32') {
+      // Win32 dry-run contract: same resolution, still no spawn, no pid.
+      expect(r.pid).toBeUndefined();
+    }
+  });
+
   it('spawns a stub emulator with the exact argv (integration)', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-term-'));
     const log = resolve(dir, 'argv.log');

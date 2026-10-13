@@ -29,7 +29,7 @@ beforeAll(async () => {
     permissions: { read: true, write: true, shell: true, network: true, gitDestructive: false },
     telemetry: false,
     projectDir: '.mochi',
-    configDir: '/tmp',
+    configDir: tmpdir(),
     quiet: true,
     verbose: false,
     debug: false,

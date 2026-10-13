@@ -586,13 +586,26 @@ export function runSkillDoctor(
     const snippet = extractVerificationSnippet(raw);
     if (snippet && executeSnippets) {
       try {
-        execFileSync('/bin/bash', ['-c', snippet], {
-          cwd: projectDir,
-          timeout: timeoutMs,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}` },
-        });
+        // Platform shell: the `exit 0` / `exit 1` / `echo` probes are already
+        // cmd-compatible, so only the runner needs the branch — win32 mirrors
+        // exec.ts's runShellString recipe (cmd.exe /d /s /c), POSIX keeps bash.
+        if (process.platform === 'win32') {
+          execFileSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', snippet], {
+            cwd: projectDir,
+            timeout: timeoutMs,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env },
+          });
+        } else {
+          execFileSync('/bin/bash', ['-c', snippet], {
+            cwd: projectDir,
+            timeout: timeoutMs,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}` },
+          });
+        }
         // Success: reset failure count
         history.byName[s.name] = { consecutiveFailures: 0, lastCheckedAt: now };
         healthy++;

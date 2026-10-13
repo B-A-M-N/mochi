@@ -4,6 +4,7 @@
 import type { Tool } from './types.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isAbsolutePath } from './path-util.js';
 
 const C = {
   bold: '\x1b[1m', italic: '\x1b[3m', underline: '\x1b[4m',
@@ -94,7 +95,7 @@ export const markdownTool: Tool = {
     let content = args.content ? String(args.content) : undefined;
 
     if (!content && args.file) {
-      const filePath = String(args.file).startsWith('/') ? String(args.file) : join(ctx.cwd, String(args.file));
+      const filePath = isAbsolutePath(String(args.file)) ? String(args.file) : join(ctx.cwd, String(args.file));
       if (!existsSync(filePath)) return `File not found: ${filePath}`;
       content = readFileSync(filePath, 'utf8');
     }

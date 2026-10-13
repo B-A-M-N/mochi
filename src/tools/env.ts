@@ -4,6 +4,7 @@
 import type { Tool } from './types.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isAbsolutePath } from './path-util.js';
 
 const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASS|PWD|AUTH|CRED|PRIVATE/i;
 
@@ -45,7 +46,7 @@ export const envTool: Tool = {
     const key = args.key ? String(args.key) : undefined;
     const value = args.value !== undefined ? String(args.value) : undefined;
     const file = args.file ? String(args.file) : '.env';
-    const filePath = file.startsWith('/') ? file : join(ctx.cwd, file);
+    const filePath = isAbsolutePath(file) ? file : join(ctx.cwd, file);
 
     switch (action) {
       case 'get': {

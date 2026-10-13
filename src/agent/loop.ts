@@ -24,6 +24,10 @@ import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
 import type { PromptUserFn } from '../tools/user-prompt.js';
+import { PermissionManager } from '../security/permission.js';
+import type { PermissionPolicy } from '../security/permission.js';
+import { describeApproval, normalizePolicy } from '../security/approval.js';
+import type { ApprovalHandler } from '../security/approval.js';
 import { AgentProfileService } from '../agents/profile.js';
 import { BudgetEngine } from '../budget.js';
 import { SpeculativeEngine } from './speculative.js';
@@ -298,6 +302,12 @@ export interface AgentOptions {
    *  subagents and headless hosts leave it unset and ask_question resolves
    *  deterministic defaults instead. */
   promptUser?: PromptUserFn;
+  /** Interactive approval resolver (TUI allow/deny menu). Unset headless —
+   *  the gate then preserves historical behavior (allow) and only audits. */
+  approvalHandler?: ApprovalHandler;
+  /** Permission tier ('yolo' | 'workspace-safe' | 'strict'). Undefined =
+   *  strict; headless runs without a handler still allow (audit-only). */
+  permPolicy?: string;
 }
 
 export type AgentStopReason =
@@ -347,6 +357,12 @@ export class Agent {
   private budget?: BudgetEngine;
   private abortSignal?: AbortSignal;
   private promptUser?: PromptUserFn;
+  private approvalHandler?: ApprovalHandler;
+  private permPolicy?: string;
+  /** Session "allow always" memory: exact (tool, args) keys approved this run. */
+  private approvedAlways = new Set<string>();
+  /** Cached PermissionManager, rebuilt when the tier changes (/yolo mid-run). */
+  private permMgr?: { policy: PermissionPolicy; mgr: PermissionManager };
   private tools: Map<string, import('../tools/types.js').Tool>;
   private toolDefs: ToolDefinition[];
   private provider: ReturnType<typeof createProvider>;
@@ -562,6 +578,8 @@ export class Agent {
     this.budget = opts.budget;
     this.abortSignal = opts.abortSignal;
     this.promptUser = opts.promptUser;
+    this.approvalHandler = opts.approvalHandler;
+    this.permPolicy = opts.permPolicy;
     this.verifyBaseline = opts.verifyBaseline;
     // A shared run-wide cache is preferred so parallel agents that read the same
     // source file don't each re-read it from disk; the cache is keyed on
@@ -953,7 +971,10 @@ Continue from 'Next:', do not redo completed progress.`,
 
     // Wire any configured MCP servers into the toolset. These tools are closed
     // when the run finishes (see finish()), so subprocesses don't leak.
-    if (this.config.mcpServers) {
+    // Skipped for chat turns (same rule as loadMcpInRun below): spawning +
+    // handshaking every server on a greeting is connect spam for a turn that
+    // can only use reads + ask_question anyway.
+    if (this.config.mcpServers && this.taskKind !== 'chat') {
       const log = (m: string): undefined => {
         this.events.emit({ type: 'agent:log', agentId: this.id, message: m });
         return undefined;
@@ -1036,7 +1057,7 @@ Continue from 'Next:', do not redo completed progress.`,
         this.budget.recordModelCall();
       }
 
-      if (i === 0) await this.loadMcpInRun();
+      if (i === 0 && this.taskKind !== 'chat') await this.loadMcpInRun();
       if (i > 0 && i % 8 === 0) await this.checkpointAndCompact('periodic');
 
       // Compact-first context floor: once the live transcript grows past a
@@ -2520,6 +2541,13 @@ Continue from 'Next:', do not redo completed progress.`,
 
   /** MCH-33: lazily connect configured MCP servers and merge their tools in. */
   private async loadMcpInRun(): Promise<void> {
+    // Chat turns never load MCP servers: spawning + handshaking every
+    // configured server on a greeting ("hi") is the "mochi tries to connect
+    // to MCP unprompted" spam class — process spawns, fresh tool schemas the
+    // model then pokes at, and connect-failure noise, all for a turn whose
+    // tools are reads + ask_question by construction. Non-chat runs load
+    // lazily on first iteration as before.
+    if (this.taskKind === 'chat') return;
     if (this.mcpLoaded) return;
     this.mcpLoaded = true;
     const servers = this.config.mcpServers;
@@ -2623,8 +2651,10 @@ Continue from 'Next:', do not redo completed progress.`,
 
   /** Alternate model ids on the same provider to fail over to when the
    *  active model degenerates (repetition loops on weak free tiers). Ordered
-   *  by observed reliability for tool-calling tasks. */
-  private static FALLBACK_MODELS = ['kimi-k2.7-code', 'qwen3.6-35b', 'minimax-m3', 'glm-5.3', 'glm-5.3-flash', 'deepseek-v4-flash'];
+   *  by observed reliability for tool-calling tasks. NOTE: kimi-k2.7-code was
+   *  dropped — the endpoint 404s it, so failing over to it burns a full
+   *  round-trip on a dead model before reaching a live one. */
+  private static FALLBACK_MODELS = ['qwen3.6-35b', 'minimax-m3', 'glm-5.3', 'glm-5.3-flash', 'deepseek-v4-flash'];
 
   /** Pick the next fallback model id, skipping the active one. Returns
    *  undefined when every fallback has already been tried. */
@@ -3246,6 +3276,51 @@ Continue from 'Next:', do not redo completed progress.`,
     if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
       this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead.');
       return;
+    }
+    // APPROVAL GATE (the tiers in security/permission.ts finally enforced):
+    // anything the policy does not auto-allow needs a human decision when a
+    // UI handler is attached (TUI menu: allow once / always / deny), and is
+    // audit-logged either way. Headless runs (no handler) and subagents
+    // (depth > 0, never prompt) preserve historical behavior: allow + audit.
+    // Plan-mode mutating calls never reach here (batch veto above).
+    {
+      const policy = normalizePolicy(this.permPolicy);
+      if (!this.permMgr || this.permMgr.policy !== policy) {
+        this.permMgr = { policy, mgr: new PermissionManager(policy, this.workspace.dir) };
+      }
+      const parsedArgs = this.parseArgs(tc.function.arguments);
+      const auto = this.permMgr.mgr.autoAllow({ tool: toolName, args: parsedArgs, cwd: this.cwd, workspaceDir: this.workspace.dir });
+      const auditBase = { ts: new Date().toISOString(), tool: toolName, args: parsedArgs, policy } as const;
+      if (auto || policy === 'yolo') {
+        this.permMgr.mgr.audit({ ...auditBase, decision: 'allow' });
+      } else {
+        const alwaysKey = `${toolName}:${tc.function.arguments ?? ''}`;
+        if (this.approvedAlways.has(alwaysKey)) {
+          this.permMgr.mgr.audit({ ...auditBase, decision: 'allow' });
+        } else if (this.subagentDepth > 0 || !this.approvalHandler) {
+          // No one to ask (headless host or child agent): allow, loudly
+          // audited — identical to pre-gate behavior, never a hang.
+          this.permMgr.mgr.audit({ ...auditBase, decision: 'allow' });
+        } else {
+          const { summary, risk } = describeApproval(toolName, parsedArgs);
+          let decision: 'allow-once' | 'allow-always' | 'deny' = 'deny';
+          try {
+            decision = await this.approvalHandler({ tool: toolName, summary, risk, policy });
+          } catch {
+            decision = 'deny'; // a broken prompt UI fails closed, never hangs
+          }
+          if (decision === 'allow-always') {
+            if (this.approvedAlways.size < 200) this.approvedAlways.add(alwaysKey);
+            this.permMgr.mgr.audit({ ...auditBase, decision: 'allow' });
+          } else if (decision === 'allow-once') {
+            this.permMgr.mgr.audit({ ...auditBase, decision: 'allow' });
+          } else {
+            this.permMgr.mgr.audit({ ...auditBase, decision: 'deny' });
+            this.vetoToolCall(tc, `User denied ${summary}. Proceed WITHOUT it: work around it with allowed tools, explain what you need and why, or ask a narrower question via ask_question — do not just retry the same call.`);
+            return;
+          }
+        }
+      }
     }
     // Fuzzy spam guard (windowed, per tool+target): the exact-match guard
     // above misses two observed live patterns — (a) cycling the same FILE

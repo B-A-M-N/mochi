@@ -378,8 +378,8 @@ async function main() {
   const isUncensored = configOverrides.__uncensored === true ||
     configOverrides.safety?.mode === 'uncensored' ||
     process.env.MOCHI_UNCENSORED === '1';
-  runtime.permPolicy = (isUncensored || isYolo) ? 'yolo'
-    : (configOverrides.safety?.mode === 'auto' ? 'workspace-safe' : 'strict');
+  runtime.setPermPolicy((isUncensored || isYolo) ? 'yolo'
+    : (configOverrides.safety?.mode === 'auto' ? 'workspace-safe' : 'strict'));
   // Announce elevated mode ONLY when explicitly requested on THIS command
   // line. Reading it from config/env printed the banner on every run — noise,
   // not an announcement (the TUI badge still reflects the active policy).

@@ -120,7 +120,10 @@ describe('notifyJobResult', () => {
     const { resolve } = await import('node:path');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-notify-'));
     const out = resolve(dir, 'got.txt');
-    const job = { id: 'job2', prompt: 'x', schedule: 'every 1m', lastRun: null, nextRun: 0, createdAt: 0, enabled: true, runs: 0, notify: `echo "$MOCHI_JOB_SUMMARY" > ${out}` };
+    // cmd.exe has no $VAR expansion and cron notify runs via runShellString
+    // (cmd /d /s /c on win32): the win32 variant uses %MOCHI_JOB_SUMMARY%.
+    // POSIX command stays byte-identical.
+    const job = { id: 'job2', prompt: 'x', schedule: 'every 1m', lastRun: null, nextRun: 0, createdAt: 0, enabled: true, runs: 0, notify: process.platform === 'win32' ? `echo %MOCHI_JOB_SUMMARY% > ${out}` : `echo "$MOCHI_JOB_SUMMARY" > ${out}` };
     await notifyJobResult(job, 'the summary text');
     expect(readFileSync(out, 'utf8').trim()).toBe('the summary text');
   }, 60_000);

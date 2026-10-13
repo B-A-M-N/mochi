@@ -58,7 +58,7 @@ export class RetrievalEngine {
         if (st.isDirectory()) {
           walk(full);
         } else {
-          const rel = relative(this.cwd, full);
+          const rel = relative(this.cwd, full).replace(/\\/g, '/');
           files.push(rel);
           if (files.length >= max) return;
         }
@@ -137,8 +137,10 @@ export class RetrievalEngine {
   }
 
   private scoreFile(query: string, file: string): number {
-    const q = query.toLowerCase();
-    const f = file.toLowerCase();
+    // Win32 backslash paths must compare equal to forward-slash queries;
+    // POSIX-no-op (POSIX relative paths contain no backslashes).
+    const q = query.toLowerCase().replace(/\\/g, '/');
+    const f = file.toLowerCase().replace(/\\/g, '/');
     if (f === q) return 100;
     if (f.includes(q)) return 60;
     const terms = q.replace(/([a-z])([A-Z])/g, '$1 $2').split(/[\s/_\-.]+/).filter(Boolean);

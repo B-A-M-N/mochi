@@ -211,7 +211,7 @@ describe('Agent', () => {
     // through that extra round. (In non-git dirs selfReview exits early with
     // no model call; the no-selfReview choreography is covered by the
     // repeated-preamble test above.)
-    execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir });
     const sameLine = 'Still writing the file, almost there.';
     const fake = await startFakeOpenAI([
       {
@@ -792,7 +792,7 @@ describe('Agent', () => {
 
   it('hygiene gate catches leftover TODO debris and loops to fix it', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-review-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     writeFileSync(resolve(dir, 'lib.ts'), 'export const answer = 42;\n');
     execSync('git add -A && git commit -qm base', { cwd: dir });
 
@@ -827,7 +827,7 @@ describe('Agent', () => {
 
   it('self-review catches a real correctness problem (wrong constant) and loops to fix it', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-review-const-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     writeFileSync(resolve(dir, 'lib.ts'), 'export const answer = 42;\n');
     execSync('git add -A && git commit -qm base', { cwd: dir });
     const writeCall = (id: string, path: string, content: string) => ({
@@ -861,7 +861,7 @@ describe('Agent', () => {
 
   it('does not re-loop / re-stream when self-review returns a terse non-issue verdict', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-review-terse-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     writeFileSync(resolve(dir, 'lib.ts'), 'export const answer = 42;\n');
     execSync('git add -A && git commit -qm base', { cwd: dir });
     const writeCall = (id: string, path: string, content: string) => ({

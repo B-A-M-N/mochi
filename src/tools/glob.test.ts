@@ -101,7 +101,7 @@ describe('glob walk bounds (event-loop freeze regressions)', () => {
     const ms = Date.now() - t0;
     expect(out.split('\n').filter(Boolean).length).toBeLessThanOrEqual(6); // limit(+note)
     expect(ms).toBeLessThan(5000);
-  }, 10_000);
+  }, process.platform === 'win32' ? 45_000 : 10_000);
 
   it('does not loop forever on a self-referencing symlinked directory', async () => {
     try {
@@ -113,5 +113,5 @@ describe('glob walk bounds (event-loop freeze regressions)', () => {
     const out = await runGlob('**/nothing-matches-this.xyz', 10);
     expect(Date.now() - t0).toBeLessThan(8000);
     expect(typeof out).toBe('string');
-  }, 10_000);
+  }, process.platform === 'win32' ? 45_000 : 10_000);
 });

@@ -123,12 +123,18 @@ export const shellTool: Tool = {
       env.MOCHI_WORKSPACE = ctx.workspace.dir;
       env.MOCHI_AGENT_ID = ctx.agentId;
     }
-    // Ensure administrative system paths (/usr/sbin, /sbin, /usr/local/sbin) are in PATH
-    const currentPath = env.PATH || '';
-    const adminPaths = ['/usr/local/sbin', '/usr/sbin', '/sbin'];
-    const missingPaths = adminPaths.filter((p) => !currentPath.includes(p));
-    if (missingPaths.length > 0) {
-      env.PATH = `${currentPath}:${missingPaths.join(':')}`;
+    // Ensure administrative system paths (/usr/sbin, /sbin, /usr/local/sbin) are in PATH.
+    // POSIX-only: on win32 this would append colon-joined POSIX dirs onto a
+    // semicolon-separated PATH, corrupting the final entry (drive-relative
+    // lookups then fail). Windows skips this block; ComSpec/System32 are
+    // already on PATH by default.
+    if (process.platform !== 'win32') {
+      const currentPath = env.PATH || '';
+      const adminPaths = ['/usr/local/sbin', '/usr/sbin', '/sbin'];
+      const missingPaths = adminPaths.filter((p) => !currentPath.includes(p));
+      if (missingPaths.length > 0) {
+        env.PATH = `${currentPath}:${missingPaths.join(':')}`;
+      }
     }
 
     // Central execution policy (timeout → SIGTERM → SIGKILL, output caps,

@@ -217,9 +217,12 @@ export async function notifyJobResult(job: CronJob, summary: string): Promise<vo
       }
       // shell command: summary via MOCHI_JOB_SUMMARY env under central policy
       // (timeout/SIGKILL/output cap). Never interpolated into the command.
-      const { runArgv } = await import('../exec.js');
+      // runShellString (not runArgv sh -c): on win32 this runs the fixed
+      // cmd.exe /d /s /c recipe; a raw `sh` spawn mangles backslash redirect
+      // paths and ENOENTs when Git usr/bin is absent.
+      const { runShellString } = await import('../exec.js');
       try {
-        const r = await runArgv('sh', ['-c', target], {
+        const r = await runShellString(target, {
           env: { ...process.env, MOCHI_JOB_SUMMARY: summaryCapped },
           timeoutMs: 15_000,
           maxOutput: 1024 * 1024,

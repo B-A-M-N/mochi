@@ -4,8 +4,9 @@
 // binary exists, runs, and stays out of the tarball). Read-only except for
 // running checks; never publishes. Usage: node scripts/release-check.mjs [--skip-tests]
 import { execSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,11 +48,29 @@ else ok('typecheck clean');
 if (process.argv.includes('--skip-tests')) {
   console.log('  skip  full test suite (--skip-tests)');
 } else {
-  const out = run('npx vitest run 2>&1 | tail -n 5');
-  if (out === null || /failed/i.test(out.split('\n').filter((l) => l.includes('Test Files') || l.includes('Tests ')).join(' '))) {
-    fail('full test suite has failures');
+  // Exit-code truth: the old `npx vitest run 2>&1 | tail -n 5` + grep waved
+  // RED suites through as green — the tail window dropped the summary lines
+  // and the pipeline's exit status was tail's (0), never vitest's. Now the
+  // non-zero exit fails the gate directly, and the summary is grepped from a
+  // full log file (belt + suspenders: nonzero exit OR /failed/ in summary).
+  const suiteLog = resolve(tmpdir(), `mochi-release-suite-${process.pid}.log`);
+  let suiteFailed = false;
+  try {
+    execSync(`npx vitest run --reporter=basic > "${suiteLog}" 2>&1`, { cwd: root, timeout: 600_000 });
+  } catch {
+    suiteFailed = true;
+  }
+  let summary = '';
+  try {
+    summary = readFileSync(suiteLog, 'utf8').split('\n')
+      .filter((l) => l.includes('Test Files') || l.includes('Tests  '))
+      .join(' ');
+  } catch { /* unreadable log: exit code alone decides */ }
+  try { unlinkSync(suiteLog); } catch { /* best-effort */ }
+  if (suiteFailed || /failed/i.test(summary)) {
+    fail(`full test suite has failures${summary ? ` (${summary.trim().slice(0, 160)})` : ''}`);
   } else {
-    ok('full test suite green');
+    ok(`full test suite green${summary ? ` (${summary.trim().slice(0, 160)})` : ''}`);
   }
 }
 

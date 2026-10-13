@@ -273,7 +273,12 @@ describe('ACP prompt text extraction + tool kinds', () => {
     const { Runtime } = await import('./runtime.js');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-acp-text-'));
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'node -e "process.exit(0)"' } }));
-    const fake = await startFakeOpenAI([
+    // Shape-routed script: harness-internal model calls (goal decompose +
+    // run-summary narrative) consume queue entries too, so a bare FIFO
+    // misaligns — the write call lands on the wrong turn and no kind:edit
+    // ever fires. The sticky router answers planning/summary calls inline
+    // (no FIFO consumed); agent turns below run in script order.
+    const agentTurns: Array<{ content?: string; toolCalls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>; finishReason: string }> = [
       { content: 'hello!', finishReason: 'stop' },
       // P2: write tool call (kind=edit) then prose
       { toolCalls: [{ id: 'w1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'greeting.txt', content: 'hi' }) } }], finishReason: 'tool_calls' },
@@ -282,6 +287,26 @@ describe('ACP prompt text extraction + tool kinds', () => {
       // P4: shell tool call (kind=execute) then prose
       { toolCalls: [{ id: 's1', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo hi' }) } }], finishReason: 'tool_calls' },
       { content: 'shelled', finishReason: 'stop' },
+    ];
+    const fake = await startFakeOpenAI([
+      {
+        sticky: true,
+        respondFn: (body: { messages?: Array<{ content?: unknown }> }) => {
+          const texts = (body?.messages ?? []).map((m) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')).join('\n');
+          if (/planning agent/i.test(texts) || texts.includes('Decompose the goal into a JSON array')) {
+            // Echo the REAL goal objective into the task: classifiers only see
+            // the decomposed title/description, and a generic stub ("Do the
+            // prompted work") one-shots to chat — vetoing the very tool call
+            // this test exists to observe.
+            const goalLine = texts.split('\n').find((l) => l.startsWith('Goal:'))?.slice(5).trim() || 'Do the prompted work';
+            return { content: JSON.stringify([{ title: goalLine.slice(0, 80), description: goalLine, role: 'coder', dependencies: [], acceptanceCriteria: [] }]), finishReason: 'stop' as const };
+          }
+          if (/concise summary/i.test(texts)) {
+            return { content: 'Run summarized.', finishReason: 'stop' as const };
+          }
+          return agentTurns.length ? agentTurns.shift()! : { content: 'done', finishReason: 'stop' as const };
+        },
+      },
     ]);
     const cfg = { model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' }, safety: { mode: 'auto', commandTimeoutSeconds: 10, maxIterations: 5, maxRuntimeMinutes: 2, maxConcurrentAgents: 1, contextBudgetTokens: 4000 }, permissions: { read: true, write: true, shell: true, network: true, gitDestructive: true }, telemetry: false, projectDir: '.mochi', quiet: true, verbose: false, debug: false } as any;
     const sessions = new Map<string, AcpSession>();
@@ -294,11 +319,16 @@ describe('ACP prompt text extraction + tool kinds', () => {
     const p1 = await handleRpc({ id: 1, method: 'session/prompt', params: { sessionId: sid, prompt: 'hello there friend' } }, sessions, process.cwd(), notify);
     expect((p1.result as { stopReason: string }).stopReason).toBe('end_turn');
 
-    // P2: ContentBlock array with resource blocks, junk entries, and constraints
+    // P2: ContentBlock array with resource blocks, junk entries, and constraints.
+    // NOTE: the lead text carries an action verb on purpose — a pure question
+    // ("what is the best greeting") classifies as a chat task, and chat tasks
+    // veto mutating tools before any tool:called event exists, so no tool_call
+    // notification would ever fire. This test pins ACP plumbing (extraction +
+    // kind mapping), not loop policy, so it asks for file work explicitly.
     const p2 = await handleRpc({ id: 2, method: 'session/prompt', params: {
       sessionId: sid,
       prompt: [
-        { type: 'text', text: 'what is the best greeting' },
+        { type: 'text', text: 'write the best greeting to greeting.txt' },
         { type: 'resource', resource: { text: 'extra context' } },
         { type: 'text' }, // no text field -> skipped
         42, // non-object -> skipped

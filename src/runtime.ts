@@ -60,6 +60,9 @@ export class Runtime {
    *  Assign via setPromptUser() so it propagates to the goal engine. Unset
    *  headless: ask_question resolves deterministic defaults instead. */
   promptUser?: import('./tools/user-prompt.js').PromptUserFn;
+  /** Interactive approval resolver (TUI allow/deny menu). Assign via
+   *  setApprovalHandler(). Unset headless: the gate allows + audits. */
+  approvalHandler?: import('./security/approval.js').ApprovalHandler;
 
   constructor(opts: RuntimeOptions = {}) {
     this.config = loadConfig(opts.config);
@@ -807,6 +810,8 @@ export class Runtime {
   private syncEngines() {
     (this.goals as unknown as { config: MochiConfig }).config = this.config;
     this.goals.promptUser = this.promptUser;
+    this.goals.approvalHandler = this.approvalHandler;
+    this.goals.permPolicy = this.permPolicy;
   }
 
   /** Attach the interactive user-prompt resolver (TUI option menu) and
@@ -814,6 +819,19 @@ export class Runtime {
   setPromptUser(fn?: import('./tools/user-prompt.js').PromptUserFn): void {
     this.promptUser = fn;
     this.goals.promptUser = fn;
+  }
+
+  /** Attach the interactive approval resolver (TUI allow/deny menu). */
+  setApprovalHandler(fn?: import('./security/approval.js').ApprovalHandler): void {
+    this.approvalHandler = fn;
+    this.goals.approvalHandler = fn;
+  }
+
+  /** Set the permission tier and propagate it to the engines that spawn
+   *  agents. Prefer over assigning runtime.permPolicy directly. */
+  setPermPolicy(p?: string): void {
+    this.permPolicy = p;
+    this.goals.permPolicy = p;
   }
 
   private async runChecks(): Promise<Record<string, string>> {

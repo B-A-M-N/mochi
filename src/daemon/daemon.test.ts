@@ -27,7 +27,7 @@ afterAll(async () => {
 
 it('starts, writes info, serves status with the token', async () => {
   dir = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-'));
-  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir });
   writeFileSync(resolve(dir, 'math.ts'), 'export const add = (a: number, b: number) => a + b;');
   handle = await startDaemonInProcess({ cwd: dir, token: 'sekret' });
   expect(handle.info.token).toBe('sekret');
@@ -50,7 +50,7 @@ it('starts, writes info, serves status with the token', async () => {
 it('rotates the bearer token: old dies, new works, info persists', async () => {
   const d2 = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-rot-'));
   try {
-    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d2, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d2 });
     const h = await startDaemonInProcess({ cwd: d2, token: 'old-token' });
     try {
       const rr = await fetch(`http://127.0.0.1:${h.info.port}/api/rotate`, {
@@ -90,7 +90,7 @@ it('rejects requests with an expired token and unit-tests the helpers', async ()
   expect(next.expiresAt).toBe(1_000_000 + DAEMON_TOKEN_TTL_MS);
   const d3 = mkdtempSync(resolve(tmpdir(), 'mochi-daemon-exp-'));
   try {
-    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d3, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: d3 });
     const h = await startDaemonInProcess({ cwd: d3, token: 'short-lived', expiresAt: Date.now() - 1000 });
     try {
       const res = await fetch(`http://127.0.0.1:${h.info.port}/api/status`, {

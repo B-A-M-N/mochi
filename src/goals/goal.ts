@@ -82,6 +82,10 @@ export class GoalEngine {
    *  only; unset headless, where ask_question resolves defaults. Set by the
    *  host via Runtime.setPromptUser (kept in sync on config swaps). */
   promptUser?: import('../tools/user-prompt.js').PromptUserFn;
+  /** Interactive approval resolver (TUI allow/deny menu) + permission tier.
+   *  Set by the host via Runtime.setApprovalHandler / setPermPolicy. */
+  approvalHandler?: import('../security/approval.js').ApprovalHandler;
+  permPolicy?: string;
 
   /** MCH-81: per-task token/cost attribution, filled as tasks finish. */
   private taskCosts: Array<{ title: string; tokens: number; costUsd: number }> = [];
@@ -609,6 +613,8 @@ Return ONLY the JSON array, no markdown.`;
           cwd: this.cwd, context: reviewContext, abortSignal, budget, readCache,
           verifyBaseline: this.runBaseline,
           promptUser: this.promptUser,
+          approvalHandler: this.approvalHandler,
+          permPolicy: this.permPolicy,
         });
         const reviewResult = await this.runAgentWithAutoResume(reviewAgent, goal, task, reviewContext, abortSignal);
         this.goalStats.tokens += reviewResult.tokensUsed;
@@ -792,6 +798,8 @@ Return ONLY the JSON array, no markdown.`;
       readCache,
       verifyBaseline: this.runBaseline,
       promptUser: this.promptUser,
+      approvalHandler: this.approvalHandler,
+      permPolicy: this.permPolicy,
     });
     // MCH-74: register as a steer target for the lifetime of the run.
     this.liveAgents.set(task.id, agent);

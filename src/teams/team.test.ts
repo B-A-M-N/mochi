@@ -21,7 +21,7 @@ function makeConfig(url: string, dir: string): MochiConfig {
 
 function makeRepo(): string {
   const dir = mkdtempSync(resolve(tmpdir(), 'mochi-team-'));
-  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir });
   return dir;
 }
 

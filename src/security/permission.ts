@@ -3,7 +3,7 @@
 // granular permission tiers, and audit logging.
 
 import {appendFileSync, mkdirSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {resolve, sep} from 'node:path';
 import { classifyCommand, type CommandRisk } from './security.js';
 
 // ---------------------------------------------------------------------------
@@ -81,7 +81,15 @@ export class PermissionManager {
         const path = String(req.args.path ?? req.args.file ?? '');
         if (!path) return true; // no path = probably ok
         const absPath = resolve(req.cwd, path);
-        return absPath.startsWith(req.workspaceDir) || absPath.startsWith(req.cwd);
+        // Boundary-aware containment: a raw startsWith prefix lets
+        // `/workspace-evil` pass for root `/workspace` (and on win32,
+        // resolve('/w') is `D:\w` while the raw root stays '/w', so compare
+        // resolved roots with a trailing separator).
+        const inside = (root: string) => {
+          const r = resolve(root);
+          return absPath === r || absPath.startsWith(r.endsWith(sep) ? r : r + sep);
+        };
+        return inside(req.workspaceDir) || inside(req.cwd);
       }
       if (req.tool === 'shell') {
         const cmd = String(req.args.command ?? '');
