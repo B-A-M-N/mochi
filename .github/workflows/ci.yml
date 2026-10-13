@@ -21,7 +21,11 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Windows gets more headroom: process-spawn-heavy tests run ~8-10x slower
+    # under Defender, and the leg never completed the full suite inside 20 min
+    # once v8 coverage instrumentation was added on top (vitest hit the kill
+    # at 19+ min while unix legs finished the whole job in ~3).
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 35 || 20 }}
     strategy:
       fail-fast: false
       matrix:
@@ -98,8 +102,20 @@ jobs:
       # ~0.9 pts below local on past legs, so each floor sits below that
       # worst projection). Raise these when coverage rises; never lower
       # silently — a lower number means the gate stopped meaning something.
-      - name: Tests
+      #
+      # The gate runs on the unix legs (both measured green on 295f5bc).
+      # Windows runs the SAME full suite WITHOUT v8 instrumentation: the
+      # instrumentation + report overhead never finished inside the job
+      # timeout there, and the signal Windows exists to provide is
+      # pass/fail on the platform — not a duplicate coverage measurement.
+      - name: Tests (coverage gate)
+        if: runner.os != 'Windows'
         run: npx vitest run --coverage --coverage.reporter=text --coverage.thresholds.lines=66 --coverage.thresholds.functions=71
+        continue-on-error: false
+
+      - name: Tests (full suite)
+        if: runner.os == 'Windows'
+        run: npx vitest run --reporter=dot
         continue-on-error: false
 
       - name: Build
