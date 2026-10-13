@@ -387,6 +387,15 @@ export interface StatusBarModel {
   /** extra mochi badges: kv-cache, queued tasks */
   extra?: string[];
   tokenVelocity?: number;
+  /** Active busy/spinner state for bottom spinner */
+  busy?: boolean;
+  spinner?: number;
+  verb?: string;
+  currentTool?: string;
+  currentTask?: string;
+  elapsed?: string;
+  done?: boolean;
+  doneElapsed?: string;
 }
 
 function modeColor(mode: string): string {
@@ -457,27 +466,52 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
 
   const extra = m.extra?.length && width >= 90 ? ` ${T.grayDark}· ${m.extra.join(' · ')}${T.reset}` : '';
 
+  let spinnerBadge = '';
+  if (m.busy && m.spinner !== undefined) {
+    const sGlyph = spinnerColored(m.spinner);
+    const verb = m.verb || 'Thinking';
+    const dots = movingDots(m.spinner);
+    let verbColor = R.thinkingLabel || T.act;
+    if (verb === 'Searching') verbColor = T.cyan ?? T.act;
+    else if (verb === 'Working') verbColor = T.pink ?? T.violet ?? T.act;
+
+    const timeStr = m.elapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.elapsed}${T.reset}` : '';
+    const toolPart = m.currentTool ? ` ${T.grayDark}·${T.reset} ${T.cyan}${m.currentTool}${T.reset}` : '';
+
+    if (width >= 80) {
+      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb}${dots}${T.reset}${toolPart}${timeStr}  `;
+    } else if (width >= 58) {
+      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb}${dots}${T.reset}${timeStr}  `;
+    } else {
+      spinnerBadge = `${sGlyph} ${verbColor}${T.bold}${verb[0]}${dots}${T.reset} `;
+    }
+  } else if (m.done) {
+    const doneTime = m.doneElapsed ? ` ${T.grayDark}·${T.reset} ${T.gray}${m.doneElapsed}${T.reset}` : '';
+    spinnerBadge = `${T.lime}${T.bold}✓ Done${T.reset}${doneTime}  `;
+  }
+
   const togglePart = toggle ? `  ${toggle}` : '';
   const togglePartLen = visibleLen(togglePart);
-  const fixedLen = visibleLen(reasoningBadge) + visibleLen(velocityBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
+  const spinnerBadgeLen = visibleLen(spinnerBadge);
+  const fixedLen = spinnerBadgeLen + visibleLen(reasoningBadge) + visibleLen(velocityBadge) + visibleLen(modeBadge) + visibleLen(barText) + togglePartLen + visibleLen(extra);
   const availForModel = Math.max(4, width - fixedLen);
   const modelMax = Math.min(28, availForModel);
   const modelText = `${T.fg}${T.bold}${ellipsize(m.modelId, modelMax)}${T.reset}`;
 
   // Plan/act toggle sits directly beside the token usage/bar on the left, not right-padded.
-  let line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
+  let line = `${spinnerBadge}${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}${extra}`;
   if (visibleLen(line) > width) {
-    line = `${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+    line = `${spinnerBadge}${modelText}${velocityBadge}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
     if (visibleLen(line) > width) {
-      line = `${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
+      line = `${spinnerBadge}${modelText}${reasoningBadge}${modeBadge}${barText}${togglePart}`;
       if (visibleLen(line) > width) {
-        line = `${modelText}${modeBadge}${barText}${togglePart}`;
+        line = `${spinnerBadge}${modelText}${modeBadge}${barText}${togglePart}`;
         if (visibleLen(line) > width) {
-          line = `${modelText}${barText}${togglePart}`;
+          line = `${spinnerBadge}${modelText}${barText}${togglePart}`;
           if (visibleLen(line) > width) {
-            line = `${modelText}${togglePart}`;
+            line = `${spinnerBadge}${modelText}${togglePart}`;
             if (visibleLen(line) > width) {
-              line = `${ellipsize(modelText, Math.max(4, width - togglePartLen))}${togglePart}`;
+              line = `${spinnerBadge}${ellipsize(modelText, Math.max(4, width - spinnerBadgeLen - togglePartLen))}${togglePart}`;
             }
           }
         }
@@ -1231,22 +1265,24 @@ export function composerTopRule(width: number): string {
  *  input look like a row of stacked `❯❯❯` symbols and corrupted the box. The
  *  `❯` column still matches the caret math (`4 = ❯ + 2 spaces`).
  */
-export function composerRow(text: string, width: number, isFirst = true): string {
+export function composerRow(text: string, width: number, isFirst = true, busy = false, spinner = 0): string {
   const inner = Math.max(1, width - 6);
   const shown = visibleLen(text) > inner ? ellipsize(text, inner) : text;
-  // First row: `│ ❯ <text> │`; continuation rows: `│    <text> │`.
+  // First row: `│ ❯ <text> │` (or `│ ⠋ <text> │` when busy); continuation rows: `│    <text> │`.
   // Skeleton per row is `│ ` + prompt + padEnd + ` │` = prompt + pad + 4 cells.
-  // First prompt `❯ ` is 2 wide, so pad to `inner`; the continuation prompt is
+  // First prompt is 2 wide, so pad to `inner`; the continuation prompt is
   // 3 spaces so pad to `inner - 1` — both sum to `inner + 6 == width`, keeping
   // the right border `│` at a fixed column and the box perfectly square.
-  const prompt = isFirst ? `${T.act}${T.bold}❯${T.reset} ` : '   ';
+  const glyph = busy ? spinnerColored(spinner) : `${T.act}${T.bold}❯${T.reset}`;
+  const prompt = isFirst ? `${glyph} ` : '   ';
   const padLen = isFirst ? inner : inner - 1;
   return `${T.rule}│${T.reset} ${prompt}${T.fg}${padEnd(shown, padLen)}${T.reset} ${T.rule}│${T.reset}`;
 }
 
-export function composerPlaceholderRow(placeholder: string, width: number): string {
+export function composerPlaceholderRow(placeholder: string, width: number, busy = false, spinner = 0): string {
   const inner = Math.max(1, width - 6);
-  return `${T.rule}│${T.reset} ${T.act}${T.bold}❯${T.reset} ${T.grayDark}${padEnd(placeholder, inner)}${T.reset} ${T.rule}│${T.reset}`;
+  const glyph = busy ? spinnerColored(spinner) : `${T.act}${T.bold}❯${T.reset}`;
+  return `${T.rule}│${T.reset} ${glyph} ${T.grayDark}${padEnd(placeholder, inner)}${T.reset} ${T.rule}│${T.reset}`;
 }
 
 export function composerBottomRule(width: number): string {

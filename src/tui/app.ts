@@ -1245,21 +1245,22 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
     const followRow = TAB_BAR_ROWS + Math.min(contentH - 1, visible.length);
 
+    const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
+    const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
+    const toolKey = state.currentTool;
+    let note = '';
+    if (toolKey) {
+      const args = state.activeToolArgs.get(toolKey);
+      const desc = args ? describeToolArgs(toolKey, args) : '';
+      note = desc ? `${toolKey} ${desc}` : toolKey;
+    } else if (!isEcho) {
+      note = state.currentTask;
+    }
+    const elapsedSec = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
+    const verb = resolveVerb(state.currentTool, state.currentTask);
+
     if (state.busy && state.scroll === 0) {
       const r = followRow;
-      const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
-      const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
-      const toolKey = state.currentTool;
-      let note = '';
-      if (toolKey) {
-        const args = state.activeToolArgs.get(toolKey);
-        const desc = args ? describeToolArgs(toolKey, args) : '';
-        note = desc ? `${toolKey} ${desc}` : toolKey;
-      } else if (!isEcho) {
-        note = state.currentTask;
-      }
-      const elapsedSec = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
-      const verb = resolveVerb(state.currentTool, state.currentTask);
       const busyStr = lead + thinkingLine(state.spinner, note, elapsedSec, verb);
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
     } else if (state.doneAt && Date.now() - state.doneAt < 2500 && state.scroll === 0) {
@@ -1305,6 +1306,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const roles = activeSubs.map((s) => `#${s.role}`).join(', ');
       extra.push(`⚡ ${activeSubs.length} subagents (${roles})`);
     }
+    const isDone = Boolean(state.doneAt && Date.now() - state.doneAt < 2500);
     const statusModel = {
       modelId: modelShort,
       totalTokens: state.inTokens + state.outTokens + state.cacheTokens,
@@ -1319,6 +1321,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       autoApprove: state.autoApprove,
       extra,
       tokenVelocity: state.tokenVelocity,
+      busy: state.busy,
+      spinner: state.spinner,
+      verb,
+      currentTool: toolKey || undefined,
+      currentTask: !isEcho ? state.currentTask : undefined,
+      elapsed: elapsedSec,
+      done: isDone,
+      doneElapsed: state.lastDoneElapsed,
     };
 
     const s1 = h - bottomRows;
@@ -1353,14 +1363,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       if (r < h) {
         if (i === 0 && !state.input) {
           const placeholder = w >= 65
-            ? 'Message mochi… (Tab: plan/act · /: commands · ⏎: send)'
-            : 'Message mochi… (/ for commands)';
-          rows[r] = composerPlaceholderRow(placeholder, w);
+            ? (state.busy ? 'Working… (type to queue · Esc to cancel)' : 'Message mochi… (Tab: plan/act · /: commands · ⏎: send)')
+            : (state.busy ? 'Working… (Esc to cancel)' : 'Message mochi… (/ for commands)');
+          rows[r] = composerPlaceholderRow(placeholder, w, state.busy, state.spinner);
         } else if (i < shownRows.length) {
-          // Only the FIRST visible row carries the `❯` prompt glyph; wrapped
+          // Only the FIRST visible row carries the prompt glyph; wrapped
           // continuation rows render without it so a long input doesn't stack
-          // ❯❯❯ symbols and corrupt the box edge.
-          rows[r] = composerRow(shownRows[i], w, i === 0);
+          // symbols and corrupt the box edge.
+          rows[r] = composerRow(shownRows[i], w, i === 0, state.busy && i === 0, state.spinner);
         } else {
           rows[r] = composerRow('', w, i === 0);
         }

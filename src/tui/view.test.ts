@@ -15,6 +15,7 @@ import {
   renderToolOutput,
   renderEntry,
   composerRow,
+  composerPlaceholderRow,
   composerBottomRule,
   composerHintRow,
   renderDropdown,
@@ -131,6 +132,21 @@ describe('statusBar rows', () => {
     const row = statusBarRow1(baseStatus({ tokenVelocity: 68 }), 90);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
     expect(plain).toContain('68 t/s ⚡');
+  });
+
+  it('row1 displays animated bottom spinner and verb when busy', () => {
+    const row = statusBarRow1(baseStatus({ busy: true, spinner: 2, verb: 'Working', currentTool: 'bash', elapsed: '3.2s' }), 90);
+    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('Working');
+    expect(plain).toContain('bash');
+    expect(plain).toContain('3.2s');
+  });
+
+  it('row1 displays Done indicator when recently completed', () => {
+    const row = statusBarRow1(baseStatus({ done: true, doneElapsed: '1.8s' }), 90);
+    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('✓ Done');
+    expect(plain).toContain('1.8s');
   });
 
   it('row2 shows workspace, branch, and diff stats', () => {
@@ -268,6 +284,24 @@ describe('composer', () => {
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
     expect(plain).toContain('❯');
     expect(plain).toContain('fix the bug');
+  });
+
+  it('composer row shows animated spinner prompt glyph when busy', () => {
+    const row = composerRow('running command', 60, true, true, 0);
+    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).not.toContain('❯');
+    expect(plain).toContain('⠋');
+    expect(plain).toContain('running command');
+    expect(visibleLen(row.replace(/\x1b\[[0-9;]*m/g, ''))).toBe(60);
+  });
+
+  it('composer placeholder row shows spinner glyph when busy', () => {
+    const row = composerPlaceholderRow('Working…', 60, true, 0);
+    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).not.toContain('❯');
+    expect(plain).toContain('⠋');
+    expect(plain).toContain('Working…');
+    expect(visibleLen(row.replace(/\x1b\[[0-9;]*m/g, ''))).toBe(60);
   });
 
   it('wrapped continuation rows do NOT repeat the ❯ prompt (no stacked symbols)', () => {
