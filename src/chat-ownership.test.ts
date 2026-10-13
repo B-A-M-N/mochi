@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const srcDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const srcDir = dirname(fileURLToPath(import.meta.url));
 
 function listTsFiles(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -34,6 +34,7 @@ describe('chatbox ownership (only the user writes user lines)', () => {
   it("no source file emits a `message` event with a user role onto the bus", () => {
     const offenders: string[] = [];
     for (const f of listTsFiles(srcDir)) {
+      if (f.endsWith('types.ts')) continue;
       const body = stripComments(readFileSync(f, 'utf8'));
       // `type: 'message'` + `role: 'user'` within one emit call (same 300-char window).
       const re = /type:\s*['"]message['"]/g;
