@@ -46,7 +46,6 @@
     '<a href="' + homeHref + '" class="nav-brand">mochi<span class="sparkle">✦</span></a>' +
     '<nav class="nav-links">' +
       navHTML +
-      '<a href="' + demoHref + '" class="nav-demo-btn">▶ Live Demo</a>' +
     '</nav>' +
     '<div class="nav-right">' +
       '<a href="' + REPO + '" class="nav-cta" target="_blank" rel="noopener">' +
@@ -71,7 +70,6 @@
   mobileTabBar.innerHTML =
     '<div class="mobile-tab-scroll">' +
       mobPillsHTML +
-      '<a href="' + demoHref + '" class="mob-tab-pill mob-demo-pill">▶ Live Demo</a>' +
     '</div>';
   document.body.insertBefore(mobileTabBar, header.nextSibling);
 
@@ -89,11 +87,6 @@
       '</div>' +
       '<div class="mobile-drawer-nav">' +
         drawerLinksHTML +
-        '<a href="' + demoHref + '" class="drawer-nav-link drawer-demo-link">' +
-          '<span class="drawer-link-num">⚡</span>' +
-          '<span class="drawer-link-title" style="color:#8A67F6;font-weight:700">Live Terminal Demo</span>' +
-          '<span class="drawer-link-arrow" style="color:#8A67F6">▶</span>' +
-        '</a>' +
       '</div>' +
       '<div class="mobile-drawer-footer">' +
         '<a href="' + REPO + '" class="mobile-drawer-cta" target="_blank" rel="noopener">' +
