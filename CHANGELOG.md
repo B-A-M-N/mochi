@@ -1,13 +1,19 @@
 # Mochi Changelog
 
 ## Unreleased
+
+## [0.25.0] - 2026-10-14
+- **Clean OpenCode-style braille spinner** — restored the classic, rock-solid braille spinner dot with theme-native harmonic breathing glow, eliminating star jitter and outline flicker.
+- **Full cyber TUI suite** — active tab neon underglow, token velocity speedometer, multi-step task stepper with narrow viewport reflow (<50 cols), interactive code pills, Raycast-style command palette, luminous collapsible `<think>` drawer, and clean turn summary receipts.
 - **Notebook tool** — Jupyter `.ipynb` by cell (read/edit/insert/delete/clear_outputs); hand-editing notebook JSON by line ranges corrupts cells, so this is the only supported path. nbformat-4 validated, outputs never pasted as blobs.
+- **Native Rust core binary discovery** — standalone Bun binary `mochi` now dynamically searches host system paths (`~/.local/bin/mochi-agent`, `process.execPath`, `~/mochi/native/bin/mochi-agent`), eliminating the virtual-filesystem sandbox barrier.
+- **Stall guard watchdog acceleration** — reduced header stall timeout (45s → 25s) and chunk stall timeout (30s → 20s) with `MOCHI_MODEL_STALL_TIMEOUT_MS` configurability for 2× faster provider failover.
 - **Flake hardening** — glob huge-tree wrapper timeout 10s → 30s (the 36k-file fixture setup, not the walk, flaked under parallel load; the <5s walk bound is unchanged).
-- **Skill catalog you can download from** — no new infrastructure: the registry (clone → register → install by name), pack/unpack, cross-source search, and TUI browser already existed. Closed the trust gap: installs now run the skill-lint gate (prompt-injection payloads rejected, quality notes reported visibly), and the repo ships a `skills/packs.json` seed catalog so any clone is an installable source. Fixed 5 bundled skills missing procedures, 2 with stale instructions, and the lint rule that rejected the library's own styles.
-- **Prompt bloat cut on read-only tasks** — research/plan/document/unknown turns advertised all ~65 tool schemas (~10K tokens/call); new READ tier advertises 16 (~2K). Chat tier no longer drops `search` (dead `grep` alias entry). Measured per-tier schema weights in review.
-- **MCP registry 12 → 23** — Playwright, Context7, Tavily, Firecrawl, Exa (hosted), Supabase, Neon, GitLab, Google Maps, EverArt, AWS KB, Kubernetes, all package-verified; Brave migrated off its deprecated package; Exa rides a URL entry. New registry-integrity test (one transport, hints, unique ids).
-- **12 new skills (73 → 85)** — dependency-upgrades, e2e-testing, webhooks, worker-queues, serverless-functions, load-testing, terraform-iac, logging-standards, jupyter-notebooks, shell-scripting, sdk-design, zero-downtime-deploys. Skill-lint gate fixed to recognize the library's own `## N.` step style (it rejected every bundled skill).
-- **6 new providers (27 total)** — Moonshot/Kimi, MiniMax, Zhipu GLM, Z.AI, Cohere, Alibaba Qwen, all endpoint-verified; Cerebras `llama-3.3-70b` id typo fixed; Together gains its Qwen coder. New table-integrity test pins every default as listed (the dead-default class can't recur).
+- **Skill catalog you can download from** — no new infrastructure: the registry (clone → register → install by name), pack/unpack, cross-source search, and TUI browser already existed. Closed the trust gap: installs now run the skill-lint gate (prompt-injection payloads rejected, quality notes reported visibly), and the repo ships a `skills/packs.json` seed catalog so any clone is an installable source.
+- **Prompt bloat cut on read-only tasks** — research/plan/document/unknown turns advertised all ~65 tool schemas (~10K tokens/call); new READ tier advertises 16 (~2K). Chat tier no longer drops `search` (dead `grep` alias entry).
+- **MCP registry 12 → 23** — Playwright, Context7, Tavily, Firecrawl, Exa (hosted), Supabase, Neon, GitLab, Google Maps, EverArt, AWS KB, Kubernetes, all package-verified; Brave migrated off its deprecated package; Exa rides a URL entry.
+- **12 new skills (73 → 85)** — dependency-upgrades, e2e-testing, webhooks, worker-queues, serverless-functions, load-testing, terraform-iac, logging-standards, jupyter-notebooks, shell-scripting, sdk-design, zero-downtime-deploys.
+- **6 new providers (27 total)** — Moonshot/Kimi, MiniMax, Zhipu GLM, Z.AI, Cohere, Alibaba Qwen, all endpoint-verified; Cerebras `llama-3.3-70b` id typo fixed; Together gains its Qwen coder.
 
 ## [0.24.0] - 2026-10-14
 - **Interactive `ask_question` menu** — the model can now ask you back mid-task: option menus (arrow keys + Enter, Esc skips, free-text fallback, multi-select) in the TUI, deterministic defaults headless. Previously `ask_question` was aliased to `think`, so questions went nowhere.
