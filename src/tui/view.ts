@@ -103,6 +103,7 @@ export function padEnd(s: string, n: number): string {
 // Layered animation: a braille cycle for motion + a sweeping color gradient
 // with harmonic stops so the spinner feels alive and glowing instead of harsh blinking.
 const DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPARKLES = ['✦', '✧', '⋆', '✵', '✶', '✹', '✷', '✸', '✻', '✼'];
 const HARMONIC_STOPS: Array<[number, number, number]> = [
   [199, 146, 234], // soft violet
   [170, 150, 245], // lavender
@@ -122,32 +123,54 @@ export function spinnerFrame(i: number): string {
 
 export function spinnerColored(i: number): string {
   const dot = spinnerFrame(i);
-  const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  return `${rgb(c[0], c[1], c[2])}${T.bold}${dot}${T.reset}`;
+  const spark = SPARKLES[Math.abs(i) % SPARKLES.length];
+  const c1 = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+  const c2 = HARMONIC_STOPS[(Math.abs(i) + 4) % HARMONIC_STOPS.length];
+  return `${rgb(c1[0], c1[1], c1[2])}${T.bold}${spark}${T.reset} ${rgb(c2[0], c2[1], c2[2])}${T.bold}${dot}${T.reset}`;
 }
 
-/** Animated luminous sweep that glides smoothly along a hairline track. */
+/**
+ * Animated kinetic plasma beam: a glowing quantum laser pulse with
+ * harmonic sinusoidal easing that glides smoothly back and forth between
+ * two twinkling celestial stars.
+ */
 export function spinnerSweep(i: number, width = 8): string {
-  const pos = Math.abs(i) % width;
+  const w = Math.max(4, width);
+  const phase = (i * 0.22) % (Math.PI * 2);
+  const pos = Math.round((Math.sin(phase) * 0.5 + 0.5) * (w - 1));
+  const sparkLeft = SPARKLES[Math.abs(i) % SPARKLES.length];
+  const sparkRight = SPARKLES[(Math.abs(i) + 5) % SPARKLES.length];
+  const cLeft = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+  const cRight = HARMONIC_STOPS[(Math.abs(i) + 5) % HARMONIC_STOPS.length];
+
   const cells: string[] = [];
-  for (let x = 0; x < width; x++) {
+  for (let x = 0; x < w; x++) {
     const dist = Math.abs(x - pos);
     if (dist === 0) {
-      const c = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+      const c = HARMONIC_STOPS[(Math.abs(i) + x) % HARMONIC_STOPS.length];
       cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}━${T.reset}`);
     } else if (dist === 1) {
-      const c = lerp([60, 65, 80], [121, 184, 255], 0.6);
-      cells.push(`${rgb(c[0], c[1], c[2])}─${T.reset}`);
+      const c = lerp([70, 80, 110], [121, 184, 255], 0.7);
+      cells.push(`${rgb(c[0], c[1], c[2])}╍${T.reset}`);
+    } else if (dist === 2) {
+      const c = lerp([50, 55, 75], [199, 146, 234], 0.5);
+      cells.push(`${rgb(c[0], c[1], c[2])}╌${T.reset}`);
     } else {
       cells.push(`${TRACK}─${T.reset}`);
     }
   }
-  return cells.join('');
+
+  const left = `${rgb(cLeft[0], cLeft[1], cLeft[2])}${T.bold}${sparkLeft}${T.reset}`;
+  const right = `${rgb(cRight[0], cRight[1], cRight[2])}${T.bold}${sparkRight}${T.reset}`;
+  return `${left} ${cells.join('')} ${right}`;
 }
 
-export function thinkingLine(frame: number, note = ''): string {
+export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
   const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
-  return `${spinnerColored(frame)} ${T.bold}${R.thinkingLabel}Thinking…${T.reset} ${spinnerSweep(frame, 8)}${note_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
+  const cText = HARMONIC_STOPS[(Math.abs(frame) + 2) % HARMONIC_STOPS.length];
+  const thinkingGlow = `${rgb(cText[0], cText[1], cText[2])}${T.bold}Thinking…${T.reset}`;
+  return `${spinnerColored(frame)} ${thinkingGlow} ${spinnerSweep(frame, 8)}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a

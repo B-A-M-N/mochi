@@ -177,6 +177,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     lines: [] as Line[],
     tasks: new Map<string, TaskView>(),
     busy: false,
+    busyStartedAt: 0,
     spinner: 0,
     scroll: 0,
     startedAt: Date.now(),
@@ -386,6 +387,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       lines: [],
       tasks: new Map(),
       busy: false,
+      busyStartedAt: 0,
       spinner: 0,
       scroll: 0,
       promptActive: false,
@@ -1163,7 +1165,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
       const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
       const note = state.currentTool || (!isEcho ? state.currentTask : '');
-      const busyStr = lead + thinkingLine(state.spinner, note);
+      const elapsedSec = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
+      const busyStr = lead + thinkingLine(state.spinner, note, elapsedSec);
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
     }
 
@@ -2325,6 +2328,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     tabs.setStatus(tabId, 'running');
     tabs.setBusy(tabId, true);
     rs.busy = true;
+    rs.busyStartedAt = Date.now();
     startSpinner();
     scheduleRender();
     let out = '';
@@ -3844,6 +3848,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     if (initialPrompt) {
       push('user', initialPrompt);
       state.busy = true;
+      state.busyStartedAt = Date.now();
       tabs.setBusy(activeTabId, true);
       tabs.setStatus(activeTabId, 'running');
       tabs.autoTitle(activeTabId, initialPrompt);
