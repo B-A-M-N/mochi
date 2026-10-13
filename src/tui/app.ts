@@ -19,6 +19,7 @@ import { recordFeedback } from '../observability/feedback.js';
 import type { FeedbackVerdict } from '../observability/feedback.js';
 import { formatModes, isMode } from '../modes.js';
 import type { AgentMode } from '../modes.js';
+import { describeToolArgs } from './cards.js';
 import {
   T,
   R,
@@ -40,6 +41,8 @@ import {
   composerBottomRule,
   transcriptIndent,
   thinkingLine,
+  doneLine,
+  resolveVerb,
   getThemeSpinnerColors,
   ellipsize,
 } from './view.js';
@@ -179,6 +182,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     tasks: new Map<string, TaskView>(),
     busy: false,
     busyStartedAt: 0,
+    doneAt: 0,
+    lastDoneElapsed: '',
     spinner: 0,
     scroll: 0,
     startedAt: Date.now(),
@@ -395,6 +400,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       tasks: new Map(),
       busy: false,
       busyStartedAt: 0,
+      doneAt: 0,
+      lastDoneElapsed: '',
       spinner: 0,
       scroll: 0,
       promptActive: false,
@@ -1173,10 +1180,23 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
       const lastUserLine = [...state.lines].reverse().find((l) => l.kind === 'user')?.text.trim();
       const isEcho = state.currentTask && state.currentTask.trim() === lastUserLine;
-      const note = state.currentTool || (!isEcho ? state.currentTask : '');
+      const toolKey = state.currentTool;
+      let note = '';
+      if (toolKey) {
+        const args = state.activeToolArgs.get(toolKey);
+        const desc = args ? describeToolArgs(toolKey, args) : '';
+        note = desc ? `${toolKey} ${desc}` : toolKey;
+      } else if (!isEcho) {
+        note = state.currentTask;
+      }
       const elapsedSec = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
-      const busyStr = lead + thinkingLine(state.spinner, note, elapsedSec);
+      const verb = resolveVerb(state.currentTool, state.currentTask);
+      const busyStr = lead + thinkingLine(state.spinner, note, elapsedSec, verb);
       rows[r] = visibleLen(busyStr) > w ? ellipsize(busyStr, w) : busyStr;
+    } else if (state.doneAt && Date.now() - state.doneAt < 3000) {
+      const r = TAB_BAR_ROWS + Math.max(0, contentH - 1);
+      const doneStr = lead + doneLine(state.lastDoneElapsed);
+      rows[r] = visibleLen(doneStr) > w ? ellipsize(doneStr, w) : doneStr;
     }
 
     // autocomplete dropdown floats above the status bar, centered on screen
@@ -2403,12 +2423,17 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       }
     } finally {
       rs.busy = false;
+      rs.doneAt = Date.now();
+      rs.lastDoneElapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
       tabs.setBusy(tabId, false);
       // A run that finished while its tab was in the background badges once
       // (per-event badging would pin the counter at 99 mid-stream).
       if (tabId !== activeTabId) tabs.markUnread(tabId);
       stopSpinner();
       scheduleRender();
+      setTimeout(() => {
+        scheduleRender();
+      }, 3100);
       // Drain the message queue: messages typed mid-run send now, in order.
       // Sequential (not parallel) so each queued message gets a full run.
       // Per-item try/catch: one throwing drain item must not strand the rest
@@ -3209,6 +3234,10 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   function onKey(buf: Buffer) {
     const s = buf.toString('utf8');
     renderPaused = false;
+    if (state.doneAt) {
+      state.doneAt = 0;
+      scheduleRender();
+    }
 
     // Bracketed paste: the terminal wraps pasted text in
     // \x1b[200~ ... \x1b[201~ (possibly split across many data chunks).
@@ -4019,9 +4048,14 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         })
         .finally(() => {
           state.busy = false;
+          state.doneAt = Date.now();
+          state.lastDoneElapsed = ((Date.now() - (state.busyStartedAt || state.startedAt)) / 1000).toFixed(1) + 's';
           tabs.setBusy(activeTabId, false);
           stopSpinner();
           scheduleRender();
+          setTimeout(() => {
+            scheduleRender();
+          }, 3100);
         });
     }
   }

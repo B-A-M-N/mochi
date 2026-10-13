@@ -23,6 +23,9 @@ import {
   sparkleFrame,
   spinnerColored,
   thinkingLine,
+  doneLine,
+  resolveVerb,
+  movingDots,
   farewellFrame,
   formatDuration,
   ellipsize,
@@ -416,6 +419,53 @@ describe('thinking spinner (radiant star spinner only)', () => {
     expect(s0).not.toBe(s1);
     expect(s0).toContain('✦');
     expect(s1).toContain('✧');
+  });
+
+  it('animates moving dots (. -> .. -> ...) with invariant 3-cell width', () => {
+    expect(movingDots(0)).toBe('.  ');
+    expect(movingDots(4)).toBe('.. ');
+    expect(movingDots(8)).toBe('...');
+    expect(movingDots(12)).toBe('.  ');
+    expect(visibleLen(movingDots(0))).toBe(3);
+    expect(visibleLen(movingDots(4))).toBe(3);
+    expect(visibleLen(movingDots(8))).toBe(3);
+  });
+
+  it('maps tools to contextual verbs: Thinking, Searching, Working, and Done', () => {
+    expect(resolveVerb('', '')).toBe('Thinking');
+    expect(resolveVerb('think', '')).toBe('Thinking');
+    expect(resolveVerb('search', '')).toBe('Searching');
+    expect(resolveVerb('read', '')).toBe('Searching');
+    expect(resolveVerb('glob', '')).toBe('Searching');
+    expect(resolveVerb('web_search', '')).toBe('Searching');
+    expect(resolveVerb('edit', '')).toBe('Working');
+    expect(resolveVerb('write', '')).toBe('Working');
+    expect(resolveVerb('shell', '')).toBe('Working');
+    expect(resolveVerb('exec', '')).toBe('Working');
+    expect(resolveVerb('verify', '')).toBe('Working');
+  });
+
+  it('renders contextual verbs and moving dots in thinkingLine', () => {
+    const searching = thinkingLine(0, 'src/tui/view.ts', '1.2s', 'Searching');
+    expect(searching).toContain('Searching');
+    expect(searching).toContain('.  ');
+    expect(searching).toContain('src/tui/view.ts');
+
+    const working = thinkingLine(4, 'compile', '2.5s', 'Working');
+    expect(working).toContain('Working');
+    expect(working).toContain('.. ');
+
+    const done = thinkingLine(8, '', '3.1s', 'Done');
+    expect(done).toContain('Done');
+    expect(done).toContain('✓');
+    expect(done).not.toContain('esc to cancel');
+  });
+
+  it('renders doneLine with green checkmark and duration', () => {
+    const d = doneLine('4.2s');
+    expect(d).toContain('Done');
+    expect(d).toContain('✓');
+    expect(d).toContain('4.2s');
   });
 });
 

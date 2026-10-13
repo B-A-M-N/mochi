@@ -163,12 +163,80 @@ export function spinnerColored(i: number): string {
   return `${leftStr}${midStr}${rightStr}`;
 }
 
-export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
+/**
+ * Resolves the active verb based on current tool execution and task intent.
+ * Distinct states:
+ * - 'Searching': search, read, glob, grep, find, web_search, inspect, etc.
+ * - 'Working': write, edit, patch, shell, exec, verify, format, etc.
+ * - 'Thinking': model generation, planning, reasoning, think tool.
+ * - 'Done': task completed.
+ */
+export function resolveVerb(tool = '', task = ''): 'Thinking' | 'Working' | 'Searching' | 'Done' {
+  if (!tool) {
+    if (/\b(search|find|grep|look\s+for|lookup)\b/i.test(task)) return 'Searching';
+    if (/\b(build|compile|test|write|edit|fix|patch)\b/i.test(task)) return 'Working';
+    return 'Thinking';
+  }
+  const t = tool.toLowerCase().replace(/[-_]/g, '');
+  if (
+    t.includes('search') ||
+    t.includes('glob') ||
+    t.includes('grep') ||
+    t.includes('find') ||
+    t.includes('read') ||
+    t.includes('inspect') ||
+    t.includes('tree') ||
+    t.includes('outline') ||
+    t.includes('ast') ||
+    t.includes('crawl') ||
+    t.includes('codegraph') ||
+    t.includes('codebasemap') ||
+    t.includes('symbol') ||
+    t.includes('fuzzy') ||
+    t.includes('fetch')
+  ) {
+    return 'Searching';
+  }
+  if (t === 'think' || t.includes('thinking')) {
+    return 'Thinking';
+  }
+  return 'Working';
+}
+
+/**
+ * Animated moving ellipsis dots (.  -> ..  -> ...)
+ * Exactly 3 characters wide on all frames to eliminate horizontal wiggling/jitter.
+ */
+export function movingDots(frame: number): string {
+  const dotCycle = Math.floor(Math.abs(frame) / 4) % 3;
+  return dotCycle === 0 ? '.  ' : dotCycle === 1 ? '.. ' : '...';
+}
+
+export function doneLine(elapsed?: string | number, note = ''): string {
   const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
   const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
-  const thinkLabel = R.thinkingLabel || T.act;
-  const thinkingGlow = `${thinkLabel}${T.bold}Thinking…${T.reset}`;
-  return `${spinnerColored(frame)} ${thinkingGlow}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  return `${T.lime}${T.bold}✓${T.reset} ${T.lime}${T.bold}Done${T.reset}${note_}${time_}`;
+}
+
+export function thinkingLine(
+  frame: number,
+  note = '',
+  elapsed?: string | number,
+  verb: 'Thinking' | 'Working' | 'Searching' | 'Done' | string = 'Thinking',
+): string {
+  if (verb === 'Done') {
+    return doneLine(elapsed, note);
+  }
+  const note_ = note ? ` ${T.grayDark}·${T.reset} ${T.cyan}${note}${T.reset}` : '';
+  const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
+  const dots = movingDots(frame);
+
+  let verbColor = R.thinkingLabel || T.act;
+  if (verb === 'Searching') verbColor = T.cyan ?? T.act;
+  else if (verb === 'Working') verbColor = T.pink ?? T.violet ?? T.act;
+
+  const verbGlow = `${verbColor}${T.bold}${verb}${dots}${T.reset}`;
+  return `${spinnerColored(frame)} ${verbGlow}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
