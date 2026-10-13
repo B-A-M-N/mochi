@@ -339,6 +339,9 @@ export type MochiEvent =
       agentId: string;
       success: boolean;
       stopReason: string;
+      /** Coarse turn shape ('chat' = conversational answer, else task work).
+       *  Lets renderers label a clean answer "Question Answered". */
+      taskKind?: string;
       durationMs: number;
       toolCallsTotal: number;
       tokensUsed?: number;

@@ -56,6 +56,10 @@ export class Runtime {
   /** Max self-review/auto-improve passes, adjustable from the TUI (/review).
    *  Undefined = engine default. */
   maxRuns?: number;
+  /** Interactive user-prompt resolver (TUI option menu for ask_question).
+   *  Assign via setPromptUser() so it propagates to the goal engine. Unset
+   *  headless: ask_question resolves deterministic defaults instead. */
+  promptUser?: import('./tools/user-prompt.js').PromptUserFn;
 
   constructor(opts: RuntimeOptions = {}) {
     this.config = loadConfig(opts.config);
@@ -802,6 +806,14 @@ export class Runtime {
    *  looked applied while every run silently used the stale model. */
   private syncEngines() {
     (this.goals as unknown as { config: MochiConfig }).config = this.config;
+    this.goals.promptUser = this.promptUser;
+  }
+
+  /** Attach the interactive user-prompt resolver (TUI option menu) and
+   *  propagate it to the engines that spawn agents. */
+  setPromptUser(fn?: import('./tools/user-prompt.js').PromptUserFn): void {
+    this.promptUser = fn;
+    this.goals.promptUser = fn;
   }
 
   private async runChecks(): Promise<Record<string, string>> {

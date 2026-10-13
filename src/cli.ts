@@ -1591,13 +1591,16 @@ async function main() {
     return;
   }
   if (first === 'mcp') {
-    // mochi mcp [list|search <q>|add <id>] — 1-command MCP discovery +
-    // install into .mcp.json (same engine as the /mcp TUI command).
-    const { searchMcpServers, addMcpServerConfig, BUILTIN_MCP_SERVERS } = await import('./tools/mcp-manage.js');
+    // mochi mcp [list|search <q>|add <spec>|remove <id>|test [id]] — MCP
+    // discovery + universal install (built-in id, npm:<pkg>, uvx:<pkg>,
+    // https://… endpoint, cmd:<bin>) into .mcp.json (same engine as /mcp).
+    const { searchMcpServers, addMcpServerConfig, removeMcpServerConfig, testMcpServerConfig, listConfiguredMcpServers, BUILTIN_MCP_SERVERS } = await import('./tools/mcp-manage.js');
     const sub = positional[1] ?? 'list';
     const rest = positional.slice(2).join(' ');
     if (sub === 'list' || !sub) {
       for (const s of BUILTIN_MCP_SERVERS) console.log(`${s.id.padEnd(24)} ${s.description}`);
+      const configured = listConfiguredMcpServers(cwd);
+      if (configured.length) console.log(`\nConfigured in .mcp.json: ${configured.join(', ')}`);
       return;
     }
     if (sub === 'search') {
@@ -1609,13 +1612,38 @@ async function main() {
       return;
     }
     if (sub === 'add') {
-      if (!rest) { console.error('Usage: mochi mcp add <server-id>'); process.exit(1); }
+      if (!rest) { console.error('Usage: mochi mcp add <server-id|npm:<pkg>|uvx:<pkg>|https://…|cmd:<bin> [args]>'); process.exit(1); }
       const r = addMcpServerConfig(cwd, rest);
       console.log(r.message);
       if (!r.ok) process.exit(1);
       return;
     }
-    console.error(`Unknown mcp command "${sub}". Use: mochi mcp [list|search <q>|add <id>]`);
+    if (sub === 'remove') {
+      if (!rest) { console.error('Usage: mochi mcp remove <server-id>'); process.exit(1); }
+      const r = removeMcpServerConfig(cwd, rest);
+      console.log(r.message);
+      if (!r.ok) process.exit(1);
+      return;
+    }
+    if (sub === 'test') {
+      if (rest) {
+        const r = await testMcpServerConfig(cwd, rest);
+        console.log(r.message);
+        if (!r.ok) process.exit(1);
+        return;
+      }
+      const ids = listConfiguredMcpServers(cwd);
+      if (!ids.length) { console.log('Nothing configured in .mcp.json — add a server first.'); return; }
+      let failed = false;
+      for (const id of ids) {
+        const r = await testMcpServerConfig(cwd, id);
+        console.log(r.message);
+        if (!r.ok) failed = true;
+      }
+      if (failed) process.exit(1);
+      return;
+    }
+    console.error(`Unknown mcp command "${sub}". Use: mochi mcp [list|search <q>|add <spec>|remove <id>|test [id]]`);
     process.exit(1);
   }
   if (first === 'doctor') {

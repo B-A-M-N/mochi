@@ -69,6 +69,7 @@ import { mcpManageTool } from './mcp-manage.js';
 import { markdownTool } from './markdown.js';
 import { colorTool } from './color.js';
 import { acceptPlanTool } from './accept-plan.js';
+import { askQuestionTool } from './ask-question.js';
 
 export const ALL_TOOLS: Tool[] = [
   readTool, writeTool, editTool, deleteTool, shellTool, searchTool, globTool, outlineTool, astSliceTool,
@@ -88,6 +89,7 @@ export const ALL_TOOLS: Tool[] = [
   toolFactoryTool,
   browserTool,
   acceptPlanTool,
+  askQuestionTool,
 ];
 
 export const ALL_TOOLS_MAP = new Map<string, Tool>(ALL_TOOLS.map((t) => [t.def.name, t]));
@@ -132,7 +134,7 @@ export function trimHeavyTools(map: Map<string, Tool>, taskText: string): number
  *  Cuts first-call schema from ~7-11K to ~2.5K tokens, directly shrinking TTFC
  *  and per-call burn on the dominant task shapes. */
 export const LEAN_TOOL_NAMES = new Set([
-  'read', 'write', 'edit', 'patch', 'search', 'glob', 'shell', 'git', 'think',
+  'read', 'write', 'edit', 'patch', 'search', 'glob', 'shell', 'git', 'think', 'ask_question',
   'todo', 'load_tools', 'verify', 'lint', 'format', 'find_definitions',
   'replace_symbol', 'move_file', 'create_directory', 'outline', 'delete',
 ]);
@@ -197,7 +199,7 @@ export function loadToolsTool(getTools: () => Map<string, Tool>): Tool {
  */
 const CORE_TOOL_NAMES = new Set([
   'read', 'write', 'edit', 'patch', 'replace_symbol', 'delete', 'shell', 'search', 'glob', 'outline', 'ast_slice',
-  'git', 'inspect', 'todo', 'skill', 'subagent', 'bg_task', 'fetch', 'web_search', 'web_crawl', 'think', 'chameleon', 'blast_radius', 'session_recall', 'codebase_map', 'security_audit'
+  'git', 'inspect', 'todo', 'skill', 'subagent', 'bg_task', 'fetch', 'web_search', 'web_crawl', 'think', 'ask_question', 'chameleon', 'blast_radius', 'session_recall', 'codebase_map', 'security_audit'
 ]);
 
 /** Detect whether a model name implies a weak/free-tier model that struggles
@@ -229,6 +231,7 @@ export function buildTools(config: MochiConfig, allowed?: string[]): Map<string,
       name === 'chameleon' ||
       name === 'blast_radius' ||
       name === 'think' ||
+      name === 'ask_question' ||
       name === 'session_recall' ||
       name === 'memory' ||
       name === 'skill_manage' ||
@@ -331,8 +334,7 @@ export const TOOL_ALIASES: Record<string, string> = {
   audit: 'security_audit',
   vuln_scan: 'security_audit',
   scan_security: 'security_audit',
-  ask_followup_question: 'think',
-  ask_question: 'think',
+  ask_followup_question: 'ask_question',
 
   // Deletion
   delete_file: 'delete',

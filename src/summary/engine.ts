@@ -36,6 +36,11 @@ export interface SummaryItem {
 
 export interface SummaryDocument {
   status: 'complete' | 'failed' | 'partial';
+  /** Which turn shape produced this card: a conversational answer ('chat')
+   *  or engineering work ('task'). Set by the agent loop at finish time so
+   *  the renderer can label a clean answer "Question Answered" instead of
+   *  "Task Complete". Unset (tests, legacy docs) renders as a task. */
+  turnKind?: 'chat' | 'task';
   overview: string;
   /** Optional model-written Cline-style narrative ("Here's where things stand…"),
    *  rendered as the lead prose block of the card. Empty = omit it. */
@@ -134,6 +139,28 @@ export function dedupe(events: ClassifiedEvent[]): ClassifiedEvent[] {
   return out;
 }
 
+/** Run-level status resolution (the fix for "every Q&A shows Partially
+ *  Complete"). summarize() alone cannot report 'complete' without a
+ *  task:completed event, which never exists yet when the agent loop snapshots
+ *  its own events at finish time. The loop therefore folds its KNOWN outcome
+ *  in here:
+ *  - success + no recorded failures/check failures → 'complete'
+ *  - success + recorded failures (recovered or advisory) → 'partial'
+ *  - failure → 'failed', except a user abort which keeps the evidence verdict
+ *    (Esc after clean work reads "Partially Complete", not "Task Failed"). */
+export function resolveRunStatus(
+  doc: SummaryDocument,
+  success: boolean,
+  stopReason?: string,
+): 'complete' | 'failed' | 'partial' {
+  if (!success) {
+    if (stopReason === 'aborted') return doc.status;
+    return 'failed';
+  }
+  const hasFailures = doc.failures.length > 0 || doc.verification.some((v) => v.text.startsWith('✗'));
+  return hasFailures ? 'partial' : 'complete';
+}
+
 /** Build the structured summary from the event stream. Every metric is derived
  *  from real events; absent data omits the field (never fabricates). */
 export function summarize(events: readonly MochiEvent[], _opts: { goal?: string } = {}): SummaryDocument {
@@ -226,6 +253,13 @@ export function summarize(events: readonly MochiEvent[], _opts: { goal?: string 
   doc.warnings = warningTexts.map((t) => ({ text: t, priority: 'P2' as Priority }));
 
   // ── Status: honest, from evidence ──
+  // NOTE: this is the evidence-level verdict only. It requires a
+  // `task:completed` event to report 'complete', but the agent loop snapshots
+  // its events in finish() BEFORE the goal engine emits task:completed — so a
+  // clean Q&A turn (answer text, zero failures) lands here as 'partial'.
+  // Agent.finish() repairs that with resolveRunStatus() below, which folds in
+  // the run's known success. Prefer resolveRunStatus for run outcomes; the raw
+  // summarize() status stays the pure evidence verdict (unit-pinned).
   if (failureTexts.length > 0 || checksFailed > 0) doc.status = checksPassed > 0 ? 'partial' : 'failed';
   else if (classified.some((c) => c.event.type === 'task:completed')) doc.status = 'complete';
   else doc.status = 'partial';

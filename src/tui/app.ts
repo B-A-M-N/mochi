@@ -274,7 +274,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const layout = tabBarCells(tabList, activeTabId, w);
     const ACTIVE_BG = '\x1b[48;2;34;28;48m';
     const PLUS_BG = '\x1b[48;2;38;38;38m';
-    const BRAILLE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    const TAB_ORIGAMI_FACETS = ['▞', '▚', '▛', '▟', '◰', '◳', '▜', '▙', '◢', '◣', '◤', '◥', '◈', '◇'];
 
     const styled = layout.cells.map((c) => {
       if (c.tabId === null) {
@@ -287,8 +287,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
 
       let iconColored = '';
       if (isBusy || status === 'running') {
-        const frame = BRAILLE[state.spinner % BRAILLE.length];
-        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live braille spinner
+        const frame = TAB_ORIGAMI_FACETS[state.spinner % TAB_ORIGAMI_FACETS.length];
+        iconColored = `\x1b[38;2;251;191;36m${frame}`; // amber live metamorphic origami facet
       } else if (status === 'done') {
         iconColored = `\x1b[38;2;74;222;128m✓`; // vibrant green completion checkmark
       } else if (status === 'error') {
@@ -356,6 +356,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (state.menuActive || state.promptActive || state.inspectorActive) return;
     const info = tabs.create(title);
     const rt = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+    rt.setPromptUser(tuiPromptUser);
     rt.resetSession();
     try { rt.workspace.clearCheckpoint(); } catch { /* best effort */ }
     const st = freshTabState();
@@ -447,6 +448,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (wasLast) {
       // Fresh slate in place: new runtime + clean checkpoint.
       const rt2 = Runtime.create({ cwd: runtime.cwd, config: runtime.config });
+      rt2.setPromptUser(tuiPromptUser);
       rt2.resetSession();
       try { rt2.workspace.clearCheckpoint(); } catch { /* best effort */ }
       const st2 = freshTabState();
@@ -1895,11 +1897,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       return;
     }
     if (line === '/mcp' || line.startsWith('/mcp ')) {
-      // /mcp [search <q> | add <id> | list] — 1-command MCP discovery +
-      // install into .mcp.json. No YAML hand-editing, no restart dance
-      // (doctor picks it up; the next run loads it).
+      // /mcp [search <q> | add <spec> | remove <id> | test [id] | list] —
+      // universal MCP discovery + install (built-in id, npm:<pkg>, uvx:<pkg>,
+      // https://… endpoint, cmd:<bin>) into .mcp.json. No YAML hand-editing,
+      // no restart dance (doctor picks it up; the next run loads it).
       const rest = (line === '/mcp' ? '' : line.slice(5)).trim();
-      const { searchMcpServers, addMcpServerConfig, BUILTIN_MCP_SERVERS } = await import('../tools/mcp-manage.js');
+      const { searchMcpServers, addMcpServerConfig, removeMcpServerConfig, testMcpServerConfig, listConfiguredMcpServers, BUILTIN_MCP_SERVERS } = await import('../tools/mcp-manage.js');
       const [sub, ...words] = rest.split(/\s+/).filter(Boolean);
       const query = words.join(' ');
       if (!sub || sub === 'list') {
@@ -1936,13 +1939,41 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         return;
       }
       if (sub === 'add') {
-        if (!query) { push('error', 'Usage: /mcp add <server-id> (see /mcp list)'); scheduleRender(); return; }
+        if (!query) { push('error', 'Usage: /mcp add <server-id|npm:<pkg>|uvx:<pkg>|https://…|cmd:<bin> [args]> (see /mcp list)'); scheduleRender(); return; }
         const r = addMcpServerConfig(projectRoot, query);
         push(r.ok ? 'system' : 'error', r.message);
         scheduleRender();
         return;
       }
-      push('error', `Unknown /mcp command "${sub}". Use: /mcp [list|search <q>|add <id>]`);
+      if (sub === 'remove') {
+        if (!query) {
+          const ids = listConfiguredMcpServers(projectRoot);
+          if (!ids.length) { push('system', 'Nothing configured in .mcp.json — nothing to remove.'); scheduleRender(); return; }
+          const idx = await openMenu('Remove MCP server', ids);
+          if (idx < 0 || idx >= ids.length) return;
+          const r = removeMcpServerConfig(projectRoot, ids[idx]);
+          push(r.ok ? 'system' : 'error', r.message);
+          scheduleRender();
+          return;
+        }
+        const r = removeMcpServerConfig(projectRoot, query);
+        push(r.ok ? 'system' : 'error', r.message);
+        scheduleRender();
+        return;
+      }
+      if (sub === 'test') {
+        const ids = query ? [query] : listConfiguredMcpServers(projectRoot);
+        if (!ids.length) { push('system', 'Nothing configured in .mcp.json — add a server first (/mcp list).'); scheduleRender(); return; }
+        push('system', `◇ testing ${ids.length} MCP server(s)…`);
+        scheduleRender();
+        for (const id of ids) {
+          const r = await testMcpServerConfig(projectRoot, id);
+          push(r.ok ? 'system' : 'error', r.message);
+          scheduleRender();
+        }
+        return;
+      }
+      push('error', `Unknown /mcp command "${sub}". Use: /mcp [list|search <q>|add <spec>|remove <id>|test [id]]`);
       scheduleRender();
       return;
     }
@@ -2488,6 +2519,71 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     }
     menuResolver = undefined;
     scheduleRender();
+  }
+
+  /** Interactive ask_question resolver (Claude Code / opencode parity): one
+   *  menu per question — arrow keys + Enter to pick, Esc skips, "type my own"
+   *  drops to free text, multi-select loops single picks until Done.
+   *  NOTE: the menu + transcript lines always render on the ACTIVE tab (the
+   *  tool result still returns to the prompting agent either way). Prompting
+   *  runs are foreground in practice; a background tab's question surfaces
+   *  where the user is looking rather than hijacking tab focus. */
+  async function tuiPromptUser(req: import('../tools/user-prompt.js').UserPromptRequest): Promise<import('../tools/user-prompt.js').UserPromptResponse> {
+    const answers: import('../tools/user-prompt.js').UserPromptAnswer[] = [];
+    for (const q of req.questions) {
+      const title = q.header ? `${q.header}: ${q.question}` : q.question;
+      push('system', `? ${title}`);
+      const picked: string[] = [];
+      let custom = '';
+      let skipped = false;
+      if (!q.multiSelect) {
+        const items = [
+          ...q.options.map((o) => `${T.bold}${o.label}${T.reset}${o.recommended ? ` ${T.lime}(recommended)${T.reset}` : ''}${o.description ? `${T.grayDark} — ${o.description}${T.reset}` : ''}`),
+          `${T.cyan}✎ Type my own answer…${T.reset}`,
+        ];
+        state.menuSelected = 0;
+        const idx = await openMenu(title, items);
+        if (idx < 0 || idx >= items.length) {
+          skipped = true;
+        } else if (idx === items.length - 1) {
+          custom = (await ask('Your answer (Enter to send, Esc to skip):')).trim();
+          if (!custom) skipped = true;
+        } else {
+          picked.push(q.options[idx].label);
+        }
+      } else {
+        for (;;) {
+          const items = [
+            ...q.options.map((o) => `${picked.includes(o.label) ? `${T.lime}●${T.reset}` : `${T.grayDark}○${T.reset}`} ${T.bold}${o.label}${T.reset}${o.description ? `${T.grayDark} — ${o.description}${T.reset}` : ''}`),
+            `${T.lime}✓ Done — use selected${picked.length ? ` (${picked.length})` : ''}${T.reset}`,
+            `${T.cyan}✎ Type my own answer…${T.reset}`,
+          ];
+          state.menuSelected = 0;
+          const idx = await openMenu(picked.length ? `${title} (${picked.length} selected)` : title, items);
+          if (idx < 0 || idx >= items.length) break;
+          if (idx === items.length - 1) {
+            const t = (await ask('Your answer (Enter to send, empty keeps picking):')).trim();
+            if (t) { custom = t; break; }
+            continue;
+          }
+          if (idx === items.length - 2) break;
+          const label = q.options[idx].label;
+          if (!picked.includes(label)) picked.push(label);
+        }
+        if (picked.length === 0 && !custom) skipped = true;
+      }
+      if (skipped) push('system', '◇ question skipped — the agent proceeds with its best judgment');
+      else push('system', `◇ you chose: ${[...picked, ...(custom ? [`"${custom}"`] : [])].join(', ')}`);
+      answers.push({
+        question: q.question,
+        header: q.header,
+        selected: picked,
+        ...(custom ? { freeText: custom } : {}),
+        ...(skipped ? { skipped: true } : {}),
+      });
+      scheduleRender();
+    }
+    return { answers };
   }
 
 
@@ -3819,6 +3915,9 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     process.on('SIGTERM', signalExit);
     process.on('SIGHUP', signalExit);
     subscribeTab(activeTabId, runtime);
+    // Interactive mid-task questions (ask_question) resolve through the TUI
+    // menu above; every tab runtime gets the same resolver (see newTab).
+    runtime.setPromptUser(tuiPromptUser);
     void refreshGitStats(); // seed the status bar diff stats
 
     // Clean fresh startup: single session tab ready for immediate work

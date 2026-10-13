@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classify, dedupe, summarize } from './engine.js';
+import { classify, dedupe, summarize, resolveRunStatus } from './engine.js';
 import { compactSession, compactToPrompt } from './compact.js';
 import type { MochiEvent } from '../types.js';
 
@@ -57,6 +57,29 @@ describe('summary engine — summarize', () => {
       { type: 'command:completed', command: 'test', executionId: 'e2', exitCode: 1, durationMs: 100, truncated: false, timestamp: ts(10) },
     ];
     expect(summarize(events).status).toBe('partial');
+  });
+
+  // The agent loop snapshots its events in finish() BEFORE the goal engine
+  // emits task:completed, so a clean Q&A turn summarizes to 'partial' here by
+  // design (pure evidence verdict). resolveRunStatus() folds the run's known
+  // outcome in — this pins the end-to-end contract the user sees.
+  it('clean Q&A turn (no task:completed yet): evidence says partial, run resolution says complete', () => {
+    const events: MochiEvent[] = [
+      { type: 'message:chunk', content: 'Hello! How can I help?', agentId: 'a', timestamp: ts(0) },
+      { type: 'agent:completed', id: 'a', taskId: 't1', timestamp: ts(10) },
+    ];
+    const doc = summarize(events);
+    expect(doc.status).toBe('partial');
+    expect(resolveRunStatus(doc, true, 'completed')).toBe('complete');
+  });
+
+  it('resolveRunStatus: success+failures → partial, failure → failed, abort keeps evidence', () => {
+    const failed = summarize([{ type: 'error', error: 'x', timestamp: ts(0) }]);
+    expect(resolveRunStatus(failed, true, 'completed')).toBe('partial');
+    expect(resolveRunStatus(failed, false, 'tool_loop')).toBe('failed');
+    const clean = summarize([{ type: 'message:chunk', content: 'hi', agentId: 'a', timestamp: ts(0) }]);
+    expect(resolveRunStatus(clean, false, 'aborted')).toBe(clean.status);
+    expect(resolveRunStatus(clean, false, 'model_error')).toBe('failed');
   });
 
   it('no verification data → no CHECKS metric (never fabricate)', () => {

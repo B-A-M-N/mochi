@@ -29,23 +29,31 @@ export interface FeedbackEntry {
   snippet: string;       // first 200 chars of the answer text
 }
 
-const FEEDBACK_DIR = resolve(homedir(), '.mochi');
-const FEEDBACK_FILE = resolve(FEEDBACK_DIR, 'feedback.jsonl');
+function getFeedbackDir(): string {
+  const h = process.env.HOME || process.env.USERPROFILE || homedir();
+  return resolve(h, '.mochi');
+}
+
+function getFeedbackFile(): string {
+  return resolve(getFeedbackDir(), 'feedback.jsonl');
+}
 
 function ensureFile(): void {
-  if (!existsSync(FEEDBACK_DIR)) mkdirSync(FEEDBACK_DIR, { recursive: true });
-  if (!existsSync(FEEDBACK_FILE)) writeFileSync(FEEDBACK_FILE, '');
+  const dir = getFeedbackDir();
+  const file = getFeedbackFile();
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(file)) writeFileSync(file, '');
 }
 
 export function recordFeedback(entry: FeedbackEntry): void {
   ensureFile();
-  appendFileSync(FEEDBACK_FILE, JSON.stringify(entry) + '\n');
+  appendFileSync(getFeedbackFile(), JSON.stringify(entry) + '\n');
 }
 
 export function loadAllFeedback(): FeedbackEntry[] {
   ensureFile();
   const raw = [];
-  try { raw.push(...readFileSync(FEEDBACK_FILE, 'utf8').split('\n')); } catch { return []; }
+  try { raw.push(...readFileSync(getFeedbackFile(), 'utf8').split('\n')); } catch { return []; }
   const out: FeedbackEntry[] = [];
   for (const line of raw) {
     if (!line.trim()) continue;

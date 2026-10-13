@@ -44,6 +44,25 @@ describe('summary renderer', () => {
     expect(plain).not.toContain('┌'); // rounded corners, not sharp
   });
 
+  it('labels a clean conversational turn "Question Answered", not "Task Complete"', () => {
+    const doc = sampleDoc();
+    doc.turnKind = 'chat';
+    const plain = renderSummary(doc, 80).map(stripAnsi).join('\n');
+    expect(plain).toContain('Question Answered');
+    expect(plain).not.toContain('Task Complete');
+  });
+
+  it('labels failed runs "Task Failed" and mixed runs "Partially Complete"', () => {
+    const failed = sampleDoc();
+    failed.status = 'failed';
+    expect(renderSummary(failed, 80).map(stripAnsi).join('\n')).toContain('Task Failed');
+    const partial = sampleDoc();
+    partial.status = 'partial';
+    const plainPartial = renderSummary(partial, 80).map(stripAnsi).join('\n');
+    expect(plainPartial).toContain('Partially Complete');
+    expect(plainPartial).not.toContain('Question Answered');
+  });
+
   it('renders the Cline-voice narrative as the lead block, width-aligned', () => {
     const doc = sampleDoc();
     doc.narrative =

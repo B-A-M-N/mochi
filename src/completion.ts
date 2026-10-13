@@ -91,6 +91,8 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'list', description: 'List built-in MCP servers' },
       { name: 'search', description: 'Search servers by keyword' },
       { name: 'add', description: 'Install a server into .mcp.json' },
+      { name: 'remove', description: 'Remove a server from .mcp.json' },
+      { name: 'test', description: 'Live connect-check configured servers' },
     ],
   },
   { name: 'acp', description: 'Agent Client Protocol server (--check verifies lifecycle)' },

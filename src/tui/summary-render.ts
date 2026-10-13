@@ -26,8 +26,14 @@ export function renderSummary(doc: SummaryDocument, width = 80): string[] {
   const status: 'complete' | 'failed' | 'partial' = doc.status;
   const statusKind: 'completed' | 'failed' | 'warning' =
     status === 'complete' ? 'completed' : status === 'failed' ? 'failed' : 'warning';
+  // Conversational turns get their own label: a clean answer is "Question
+  // Answered", engineering work is "Task Complete" — never "Partially
+  // Complete" for work that fully succeeded.
+  const isChat = doc.turnKind === 'chat';
   const statusText =
-    status === 'complete' ? 'Task Complete' : status === 'failed' ? 'Task Failed' : 'Partially Complete';
+    status === 'complete' ? (isChat ? 'Question Answered' : 'Task Complete')
+    : status === 'failed' ? 'Task Failed'
+    : 'Partially Complete';
   const statusColor =
     status === 'complete' ? SEMANTIC_COLOR.SUCCESS : status === 'failed' ? SEMANTIC_COLOR.ERROR : SEMANTIC_COLOR.WARNING;
   const statusGlyph = STATUS_GLYPH[statusKind];

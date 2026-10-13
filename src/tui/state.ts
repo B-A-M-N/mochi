@@ -259,6 +259,12 @@ export function reduceEvent(state: TuiState, event: Record<string, unknown>): bo
       const role = String(event.role);
       const content = event.content as string | undefined;
       if (!content) return false;
+      // CHATBOX OWNERSHIP: only the user writes user lines, and they are
+      // pushed directly by the composer (TUI push('user', …)) — never via the
+      // event bus. A `message`/user event on the bus is harness cross-talk
+      // (history replay, session import) and must not render as a fake user
+      // message in the transcript. Drop it; assistant/system still render.
+      if (role === 'user') return false;
       const last = state.lines[state.lines.length - 1];
       if (last && last.kind === role) {
         // Idempotency: an identical OR an endsWith match means this exact

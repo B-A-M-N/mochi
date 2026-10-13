@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { withRetries, classifyError, throttled, resetThrottleForTests } from './rate-limit.js';
 import { ProviderError } from '../utils/http-error.js';
 

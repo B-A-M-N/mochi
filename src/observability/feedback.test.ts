@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, appendFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, appendFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 
 // feedback.ts resolves ~/.mochi at module load — point HOME at a throwaway
 // directory BEFORE the first import so tests never touch the real store.
@@ -102,5 +102,6 @@ describe('feedback store', () => {
 
 function writeFresh(entries: Array<Parameters<typeof fb.recordFeedback>[0]>): void {
   // Rewrite the store wholesale (keep the file present so ensureFile no-ops).
+  mkdirSync(dirname(feedbackFile), { recursive: true });
   writeFileSync(feedbackFile, entries.map((e) => JSON.stringify(e)).join('\n') + (entries.length ? '\n' : ''));
 }

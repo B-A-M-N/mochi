@@ -193,9 +193,107 @@ export interface McpAddResult {
 export function addMcpServerConfig(projectDir: string, serverId: string): McpAddResult {
   const server = BUILTIN_MCP_SERVERS.find((s) => s.id === serverId);
   if (!server) {
-    const ids = BUILTIN_MCP_SERVERS.map((s) => s.id).join(', ');
-    return { ok: false, message: `Unknown MCP server "${serverId}". Known: ${ids}` };
+    // Not a built-in id: fall through to the universal spec parser so
+    // `add` accepts npm packages, uvx, and URLs too (one error surface).
+    return addMcpSpecConfig(projectDir, serverId);
   }
+  const entry: Record<string, unknown> = { command: server.command, args: [...server.args] };
+  if (server.env) entry.env = { ...server.env };
+  const r = writeMcpServerConfig(projectDir, server.id, entry);
+  if (!r.ok || r.alreadyPresent) return r;
+  const envNote = server.env ? ` Set ${Object.keys(server.env).join(', ')} first.` : '';
+  return { ok: true, message: `Added ${server.id} (${server.name}) to .mcp.json.${envNote} Restart the session (or run /doctor) so the MCP client picks it up.` };
+}
+
+/** Parsed install spec: a concrete .mcp.json entry plus the id to file it under. */
+export interface McpSpecInstall {
+  id: string;
+  entry: Record<string, unknown>;
+  /** Human-readable origin line for the confirmation message. */
+  origin: string;
+}
+
+function sanitizeId(s: string): string {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return clean || 'mcp-server';
+}
+
+/** Parse a universal install spec into an id + .mcp.json entry. Accepted forms:
+ *  - built-in id (e.g. `mcp-github`)
+ *  - `npm:<pkg> [extra args...]` or `npx:<pkg>` (scoped `@org/pkg` included)
+ *  - `uvx:<pkg> [extra args...]`
+ *  - `https://host/path` (Streamable-HTTP endpoint)
+ *  - `cmd:<binary> [args...]` (explicit local command)
+ *  A bare word is ONLY a built-in id — never silently an npm package (a typo
+ *  must error with suggestions, not install a stranger's package). Returns
+ *  `{ error }` when the spec matches nothing. Pure. */
+export function parseMcpSpec(spec: string): { install: McpSpecInstall } | { error: string } {
+  const raw = spec.trim();
+  if (!raw) return { error: 'Empty MCP spec. Use a built-in id (/mcp list), npm:<package>, uvx:<package>, https://… endpoint, or cmd:<binary> [args].' };
+  const builtin = BUILTIN_MCP_SERVERS.find((s) => s.id === raw);
+  if (builtin) {
+    const entry: Record<string, unknown> = { command: builtin.command, args: [...builtin.args] };
+    if (builtin.env) entry.env = { ...builtin.env };
+    return { install: { id: builtin.id, entry, origin: `built-in ${builtin.name}` } };
+  }
+  const head = raw.split(/\s+/)[0];
+  const tail = raw.slice(head.length).trim().split(/\s+/).filter(Boolean);
+  const prefixOf = (h: string): string | null => {
+    const i = h.indexOf(':');
+    return i > 0 ? h.slice(0, i).toLowerCase() : null;
+  };
+  const prefix = prefixOf(head);
+  if (prefix === 'npm' || prefix === 'npx') {
+    const pkg = head.slice(prefix.length + 1);
+    if (!pkg || !/^[a-z0-9@][\w-.~@/]*$/i.test(pkg)) {
+      return { error: `Bad npm spec "${raw}". Use npm:<package> (e.g. npm:@modelcontextprotocol/server-github).` };
+    }
+    const base = sanitizeId(pkg.split('/').pop() ?? pkg);
+    return { install: { id: `mcp-${base}`, entry: { command: 'npx', args: ['-y', pkg, ...tail] }, origin: `npm package ${pkg}` } };
+  }
+  if (prefix === 'uvx' || prefix === 'uv') {
+    const pkg = head.slice(prefix.length + 1);
+    if (!pkg || !/^[a-z0-9][\w-.]*$/i.test(pkg)) {
+      return { error: `Bad uvx spec "${raw}". Use uvx:<package> (e.g. uvx:mcp-server-fetch).` };
+    }
+    return { install: { id: `mcp-${sanitizeId(pkg)}`, entry: { command: 'uvx', args: [pkg, ...tail] }, origin: `uvx package ${pkg}` } };
+  }
+  if (prefix === 'cmd') {
+    const bin = head.slice(4);
+    if (!bin) return { error: `Bad cmd spec "${raw}". Use cmd:<binary> [args...] (e.g. cmd:python3 ./server.py).` };
+    return { install: { id: `mcp-${sanitizeId(bin.split('/').pop() ?? bin)}`, entry: { command: bin, args: tail }, origin: `local command ${bin}` } };
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const host = new URL(raw).hostname;
+      return { install: { id: `mcp-${sanitizeId(host)}`, entry: { url: raw }, origin: `HTTP endpoint ${raw}` } };
+    } catch {
+      return { error: `Bad URL spec "${raw}". Use a full https://… MCP endpoint.` };
+    }
+  }
+  // Scoped npm package without prefix (@org/pkg) is unambiguous — accept it.
+  if (/^@[a-z0-9-~][\w-.~]*\/[\w-.~]+/i.test(head) && tail.length === 0) {
+    const base = sanitizeId(head.split('/').pop() ?? head);
+    return { install: { id: `mcp-${base}`, entry: { command: 'npx', args: ['-y', head] }, origin: `npm package ${head}` } };
+  }
+  const ids = BUILTIN_MCP_SERVERS.map((s) => s.id).join(', ');
+  return {
+    error: `Unknown MCP server "${raw}". Known built-ins: ${ids}. For anything else use an explicit spec — npm:<package>, uvx:<package>, https://… endpoint, or cmd:<binary> [args] (bare words never install from npm, so a typo can't pull a stranger's package).`,
+  };
+}
+
+/** Universal one-command install: builtin id OR any parseMcpSpec form. */
+export function addMcpSpecConfig(projectDir: string, spec: string): McpAddResult {
+  const parsed = parseMcpSpec(spec);
+  if ('error' in parsed) return { ok: false, message: parsed.error };
+  const r = writeMcpServerConfig(projectDir, parsed.install.id, parsed.install.entry);
+  if (!r.ok || r.alreadyPresent) return r;
+  return { ok: true, message: `Added ${parsed.install.id} (${parsed.install.origin}) to .mcp.json. Restart the session (or run /doctor) so the MCP client picks it up.` };
+}
+
+/** Core .mcp.json writer shared by builtin + spec installs. Never clobbers an
+ *  existing entry or unrelated keys; corrupt files are refused, not overwritten. */
+export function writeMcpServerConfig(projectDir: string, id: string, entry: Record<string, unknown>): McpAddResult {
   const file = resolve(projectDir, '.mcp.json');
   let doc: Record<string, unknown> = {};
   if (existsSync(file)) {
@@ -210,37 +308,134 @@ export function addMcpServerConfig(projectDir: string, serverId: string): McpAdd
     }
   }
   const servers = (doc.mcpServers ?? doc.servers ?? {}) as Record<string, unknown>;
-  if (servers[server.id] !== undefined) {
-    return { ok: true, alreadyPresent: true, message: `${server.id} is already configured in .mcp.json — no changes made.` };
+  if (servers[id] !== undefined) {
+    return { ok: true, alreadyPresent: true, message: `${id} is already configured in .mcp.json — no changes made.` };
   }
-  const entry: Record<string, unknown> = { command: server.command, args: [...server.args] };
-  if (server.env) entry.env = { ...server.env };
-  doc.mcpServers = { ...(servers as Record<string, unknown>), [server.id]: entry };
+  doc.mcpServers = { ...(servers as Record<string, unknown>), [id]: entry };
   try {
     mkdirSync(projectDir, { recursive: true });
     writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
   } catch (e) {
     return { ok: false, message: `Could not write .mcp.json: ${e instanceof Error ? e.message : String(e)}` };
   }
-  const envNote = server.env ? ` Set ${Object.keys(server.env).join(', ')} first.` : '';
-  return { ok: true, message: `Added ${server.id} (${server.name}) to .mcp.json.${envNote} Restart the session (or run /doctor) so the MCP client picks it up.` };
+  return { ok: true, message: `Added ${id} to .mcp.json.` };
+}
+
+/** Read one configured entry (or undefined when absent/corrupt). Pure read. */
+export function readMcpServerConfig(projectDir: string, id: string): Record<string, unknown> | undefined {
+  try {
+    const file = resolve(projectDir, '.mcp.json');
+    if (!existsSync(file)) return undefined;
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const servers = (doc?.mcpServers ?? (doc as Record<string, unknown>)?.servers ?? {}) as Record<string, unknown>;
+    const entry = servers[id];
+    return entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Ids currently configured in <projectDir>/.mcp.json (empty when none). */
+export function listConfiguredMcpServers(projectDir: string): string[] {
+  try {
+    const file = resolve(projectDir, '.mcp.json');
+    if (!existsSync(file)) return [];
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const servers = (doc?.mcpServers ?? (doc as Record<string, unknown>)?.servers ?? {}) as Record<string, unknown>;
+    return Object.keys(servers);
+  } catch {
+    return [];
+  }
+}
+
+/** Remove one configured server (never touches other entries). */
+export function removeMcpServerConfig(projectDir: string, id: string): McpAddResult {
+  const file = resolve(projectDir, '.mcp.json');
+  if (!existsSync(file)) return { ok: false, message: `No .mcp.json in ${projectDir} — nothing configured.` };
+  let doc: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, message: `.mcp.json is corrupt (not an object) — refusing to modify it. Back it up, delete it, and retry.` };
+    }
+    doc = parsed as Record<string, unknown>;
+  } catch {
+    return { ok: false, message: `.mcp.json is not valid JSON — refusing to modify it. Back it up, delete it, and retry.` };
+  }
+  const key = doc.mcpServers !== undefined ? 'mcpServers' : (doc.servers !== undefined ? 'servers' : 'mcpServers');
+  const servers = { ...((doc[key] ?? {}) as Record<string, unknown>) };
+  if (servers[id] === undefined) {
+    const known = Object.keys(servers);
+    return { ok: false, message: `No MCP server "${id}" configured.${known.length ? ` Configured: ${known.join(', ')}` : ''}` };
+  }
+  delete servers[id];
+  doc[key] = servers;
+  try {
+    writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+  } catch (e) {
+    return { ok: false, message: `Could not write .mcp.json: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  return { ok: true, message: `Removed ${id} from .mcp.json.` };
+}
+
+/** Live connect-check: handshake + tools/list against one configured entry and
+ *  report the tool inventory. This is the "does it actually connect" proof —
+ *  an install that can't handshake is reported honestly, not assumed. */
+export async function testMcpServerConfig(
+  projectDir: string,
+  id: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<McpAddResult> {
+  const entry = readMcpServerConfig(projectDir, id);
+  if (!entry) {
+    const known = listConfiguredMcpServers(projectDir);
+    return { ok: false, message: `No MCP server "${id}" configured.${known.length ? ` Configured: ${known.join(', ')}` : ' (no .mcp.json entries)'}` };
+  }
+  const { McpClient } = await import('../mcp/index.js');
+  const client = McpClient.forConfig(entry as import('../mcp/index.js').McpServerConfig, id);
+  const timeoutMs = opts.timeoutMs ?? 20_000;
+  try {
+    // listTools() runs the initialize handshake first, so one call proves the
+    // full connect path (spawn + handshake + inventory).
+    const tools = await withTimeout(client.listTools(), timeoutMs, 'connect + tools/list');
+    const names = tools.map((t) => t.name);
+    return {
+      ok: true,
+      message: `✓ ${id} connects (${entry.url ? `HTTP ${entry.url}` : `${entry.command} ${(entry.args as unknown[] ?? []).join(' ')}`}) — ${names.length} tool(s)${names.length ? `: ${names.slice(0, 12).join(', ')}${names.length > 12 ? ` (+${names.length - 12} more)` : ''}` : ''}.`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: `× ${id} failed to connect: ${msg.slice(0, 220)}${/TOKEN|KEY|URL|secret|auth/i.test(msg) || JSON.stringify(entry).includes('${') ? ' (check required env vars / credentials first)' : ''}` };
+  } finally {
+    try { client.close(); } catch { /* already dead */ }
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms);
+    timer.unref?.();
+  });
+  return Promise.race([p.finally(() => { if (timer) clearTimeout(timer); }), timeout]);
 }
 
 export const mcpManageTool: Tool = {
   def: {
     name: 'mcp_manage',
-    description: 'Discover and install MCP servers: search built-ins by keyword, one-command add to .mcp.json, list, install guides, and config snippets.',
+    description: 'Discover, install, remove, and health-check MCP servers. Search built-ins by keyword; add by built-in id OR universal spec (npm:<package>, uvx:<package>, https://… endpoint, cmd:<binary> [args]); remove by id; test runs a live connect handshake and reports the tool inventory.',
     parameters: [
-      { name: 'action', type: 'string', description: "'search' | 'add' | 'list' | 'install-guide' | 'config'", required: true },
+      { name: 'action', type: 'string', description: "'search' | 'add' | 'list' | 'install-guide' | 'config' | 'remove' | 'test'", required: true },
       { name: 'query', type: 'string', description: 'Search keywords (for search action)', required: false },
-      { name: 'server_id', type: 'string', description: 'Specific server ID (for config/add actions)', required: false },
-      { name: 'project_dir', type: 'string', description: 'Project root for add (defaults to cwd)', required: false },
+      { name: 'server_id', type: 'string', description: 'Built-in server ID, install spec, or configured id (for config/add/remove/test actions). Omit for test to check every configured server.', required: false },
+      { name: 'project_dir', type: 'string', description: 'Project root for add/remove/test (defaults to cwd)', required: false },
     ],
     permission: 'read',
   },
   async execute(args, ctx) {
     const action = String(args.action || '').toLowerCase();
     const serverId = args.server_id ? String(args.server_id) : undefined;
+    const dir = typeof args.project_dir === 'string' && args.project_dir ? args.project_dir : (ctx?.cwd ?? process.cwd());
 
     switch (action) {
       case 'search': {
@@ -256,10 +451,23 @@ export const mcpManageTool: Tool = {
         ].join('\n');
       }
       case 'add': {
-        if (!serverId) return 'add needs server_id (use search or list to find one).';
-        const dir = typeof args.project_dir === 'string' && args.project_dir ? args.project_dir : (ctx?.cwd ?? process.cwd());
+        if (!serverId) return 'add needs server_id: a built-in id (see list) or a universal spec — npm:<package>, uvx:<package>, https://… endpoint, cmd:<binary> [args].';
         const r = addMcpServerConfig(dir, serverId);
         return r.message;
+      }
+      case 'remove': {
+        if (!serverId) {
+          const known = listConfiguredMcpServers(dir);
+          return known.length ? `remove needs server_id. Configured: ${known.join(', ')}` : 'Nothing configured in .mcp.json — nothing to remove.';
+        }
+        return removeMcpServerConfig(dir, serverId).message;
+      }
+      case 'test': {
+        if (serverId) return (await testMcpServerConfig(dir, serverId)).message;
+        const ids = listConfiguredMcpServers(dir);
+        if (!ids.length) return 'Nothing configured in .mcp.json — add a server first (search/list for built-ins).';
+        const lines = await Promise.all(ids.map(async (id) => (await testMcpServerConfig(dir, id)).message));
+        return lines.join('\n');
       }
       case 'list': {
         const rows = BUILTIN_MCP_SERVERS.map(s =>
@@ -312,7 +520,7 @@ export const mcpManageTool: Tool = {
       }
 
       default:
-        throw new Error(`Unknown action: ${action}. Use search|add|list|config|install-guide.`);
+        throw new Error(`Unknown action: ${action}. Use search|add|list|config|install-guide|remove|test.`);
     }
   },
 };

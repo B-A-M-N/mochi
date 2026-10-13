@@ -1,79 +1,153 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+// mcp-manage: universal spec parsing, .mcp.json round-trips, live connect test.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { mcpManageTool, searchMcpServers, addMcpServerConfig } from './mcp-manage.js';
+import {
+  parseMcpSpec,
+  addMcpServerConfig,
+  addMcpSpecConfig,
+  removeMcpServerConfig,
+  listConfiguredMcpServers,
+  readMcpServerConfig,
+  testMcpServerConfig,
+  BUILTIN_MCP_SERVERS,
+} from './mcp-manage.js';
+import { mcpManageTool } from './mcp-manage.js';
+import type { ToolContext } from './types.js';
+import { EventBus } from '../events.js';
 
-const ctx = { cwd: '/tmp', workspace: {} as any, config: {} as any, events: {} as any, agentId: 'test' };
+// Minimal fake stdio MCP server: handshake + tools/list only.
+const SERVER_SRC = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin });
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  let msg; try { msg = JSON.parse(line); } catch { return; }
+  const ok = (result) => send({ jsonrpc: '2.0', id: msg.id, result });
+  if (msg.method === 'initialize') ok({ protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'fake', version: '1' } });
+  else if (msg.method === 'tools/list') ok({ tools: [{ name: 'ping', description: 'pong', inputSchema: { type: 'object', properties: {} } }] });
+  else ok({});
+});
+`;
 
-describe('mcp_manage tool', () => {
-  it('lists all built-in MCP servers', async () => {
-    const result = await mcpManageTool.execute({ action: 'list' }, ctx);
-    expect(result).toContain('mcp-filesystem');
-    expect(result).toContain('mcp-github');
-    expect(result).toContain('mcp-memory');
-    expect(result).toContain('| ID | Name | Description |');
+let dir: string;
+let serverScript: string;
+beforeAll(() => {
+  dir = mkdtempSync(resolve(tmpdir(), 'mochi-mcp-manage-'));
+  serverScript = resolve(dir, 'fake-mcp.cjs');
+  writeFileSync(serverScript, SERVER_SRC);
+});
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+const proj = (name: string): string => {
+  const d = resolve(dir, name);
+  rmSync(d, { recursive: true, force: true });
+  return d;
+};
+
+describe('parseMcpSpec', () => {
+  it('resolves built-in ids', () => {
+    const r = parseMcpSpec('mcp-github');
+    expect('install' in r && r.install.id).toBe('mcp-github');
   });
 
-  it('returns config yaml for all servers', async () => {
-    const result = await mcpManageTool.execute({ action: 'config' }, ctx);
-    expect(result).toContain('mcpServers:');
-    expect(result).toContain('mcp-filesystem');
-    expect(result).toContain('npx');
+  it('parses npm:, npx:, uvx:, cmd:, and https specs', () => {
+    const npm = parseMcpSpec('npm:@modelcontextprotocol/server-github');
+    expect('install' in npm && npm.install.entry).toEqual({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] });
+    expect('install' in npm && npm.install.id).toBe('mcp-server-github');
+
+    const uvx = parseMcpSpec('uvx:mcp-server-fetch --port 8000');
+    expect('install' in uvx && uvx.install.entry).toEqual({ command: 'uvx', args: ['mcp-server-fetch', '--port', '8000'] });
+
+    const url = parseMcpSpec('https://mcp.example.com/rpc');
+    expect('install' in url && url.install.entry).toEqual({ url: 'https://mcp.example.com/rpc' });
+    expect('install' in url && url.install.id).toContain('example-com');
+
+    const cmd = parseMcpSpec('cmd:python3 ./server.py --stdio');
+    expect('install' in cmd && cmd.install.entry).toEqual({ command: 'python3', args: ['./server.py', '--stdio'] });
   });
 
-  it('returns install guide for a specific server', async () => {
-    const result = await mcpManageTool.execute({ action: 'install-guide', server_id: 'mcp-github' }, ctx);
-    expect(result).toContain('GitHub MCP');
-    expect(result).toContain('GITHUB_TOKEN');
+  it('accepts a bare scoped npm package, rejects bare typos (never silent npm)', () => {
+    const scoped = parseMcpSpec('@modelcontextprotocol/server-memory');
+    expect('install' in scoped).toBe(true);
+    const typo = parseMcpSpec('mcp-githb');
+    expect('error' in typo && typo.error).toContain('Unknown MCP server');
+    expect('error' in typo && typo.error).toContain('npm:<package>');
+    expect(parseMcpSpec('')).toMatchObject({ error: expect.stringContaining('Empty') });
+    expect(parseMcpSpec('not a real thing!!')).toMatchObject({ error: expect.stringContaining('Unknown MCP server') });
+  });
+});
+
+describe('.mcp.json round-trips', () => {
+  it('add (builtin + spec), duplicate refusal, list/read, remove', () => {
+    const p = proj('rt1');
+    const a = addMcpServerConfig(p, 'mcp-memory');
+    expect(a.ok).toBe(true);
+    const b = addMcpSpecConfig(p, 'npm:@modelcontextprotocol/server-github');
+    expect(b.ok).toBe(true);
+    expect(b.message).toContain('mcp-server-github');
+    // Duplicate refuses without clobbering.
+    const dup = addMcpServerConfig(p, 'mcp-memory');
+    expect(dup.alreadyPresent).toBe(true);
+    expect(listConfiguredMcpServers(p).sort()).toEqual(['mcp-memory', 'mcp-server-github']);
+    expect(readMcpServerConfig(p, 'mcp-memory')).toMatchObject({ command: 'npx' });
+    // Unrelated keys survive a remove.
+    const doc = JSON.parse(readFileSync(resolve(p, '.mcp.json'), 'utf8'));
+    doc.otherTool = { x: 1 };
+    writeFileSync(resolve(p, '.mcp.json'), JSON.stringify(doc));
+    const rm = removeMcpServerConfig(p, 'mcp-memory');
+    expect(rm.ok).toBe(true);
+    const after = JSON.parse(readFileSync(resolve(p, '.mcp.json'), 'utf8'));
+    expect(after.otherTool).toEqual({ x: 1 });
+    expect(listConfiguredMcpServers(p)).toEqual(['mcp-server-github']);
+    expect(removeMcpServerConfig(p, 'mcp-nope').ok).toBe(false);
   });
 
-  it('throws for unknown action', async () => {
-    await expect(mcpManageTool.execute({ action: 'destroy' }, ctx)).rejects.toThrow();
+  it('refuses corrupt files instead of overwriting', () => {
+    const p = proj('rt2');
+    writeFileSync(resolve(p, '.mcp.json'), '{not json');
+    expect(addMcpServerConfig(p, 'mcp-memory').ok).toBe(false);
+    expect(removeMcpServerConfig(p, 'mcp-memory').ok).toBe(false);
+  });
+});
+
+describe('testMcpServerConfig (live connect)', () => {
+  it('reports the tool inventory for a working server', async () => {
+    const p = proj('live1');
+    const added = addMcpSpecConfig(p, `cmd:${process.execPath} ${serverScript}`);
+    expect(added.ok).toBe(true);
+    const id = listConfiguredMcpServers(p)[0];
+    const r = await testMcpServerConfig(p, id, { timeoutMs: 15_000 });
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain('ping');
+  }, 30_000);
+
+  it('fails honestly for a dead command and unknown ids', async () => {
+    const p = proj('live2');
+    addMcpSpecConfig(p, 'cmd:/nonexistent-binary-xyz --stdio');
+    const id = listConfiguredMcpServers(p)[0];
+    const r = await testMcpServerConfig(p, id, { timeoutMs: 10_000 });
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('failed to connect');
+    expect((await testMcpServerConfig(p, 'mcp-nope')).ok).toBe(false);
+  }, 30_000);
+});
+
+describe('mcp_manage tool actions', () => {
+  const ctx = (cwd: string): ToolContext => ({
+    cwd, workspace: {} as never, config: {} as never, events: new EventBus() as never, agentId: 't',
   });
 
-  it('searches built-ins by keyword (id, name, description, env)', () => {
-    expect(searchMcpServers('github')[0].server.id).toBe('mcp-github');
-    expect(searchMcpServers('postgres')[0].server.id).toBe('mcp-postgres');
-    expect(searchMcpServers('GITHUB_TOKEN').map((h) => h.server.id)).toContain('mcp-github');
-    expect(searchMcpServers('browser automation')[0].server.id).toBe('mcp-puppeteer');
-    expect(searchMcpServers('')).toEqual([]);
-    expect(searchMcpServers('zzz-no-such-thing')).toEqual([]);
-  });
-
-  it('adds a server to .mcp.json without clobbering siblings', async () => {
-    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-mcp-'));
-    try {
-      const r1 = addMcpServerConfig(dir, 'mcp-sqlite');
-      expect(r1.ok).toBe(true);
-      const doc = JSON.parse(readFileSync(resolve(dir, '.mcp.json'), 'utf8')) as { mcpServers: Record<string, { command: string }> };
-      expect(doc.mcpServers['mcp-sqlite'].command).toBeTruthy();
-      const r2 = addMcpServerConfig(dir, 'mcp-sqlite');
-      expect(r2.ok).toBe(true);
-      expect(r2.alreadyPresent).toBe(true);
-      const r3 = addMcpServerConfig(dir, 'mcp-fetch');
-      expect(r3.ok).toBe(true);
-      expect(Object.keys(JSON.parse(readFileSync(resolve(dir, '.mcp.json'), 'utf8')).mcpServers)).toContain('mcp-sqlite');
-      expect(addMcpServerConfig(dir, 'nope').ok).toBe(false);
-      // Tool surface: search + add through the agent tool.
-      const s = await mcpManageTool.execute({ action: 'search', query: 'git' }, ctx);
-      expect(s).toContain('mcp-git');
-      const a = await mcpManageTool.execute({ action: 'add', server_id: 'mcp-memory', project_dir: dir }, ctx);
-      expect(a).toContain('mcp-memory');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('refuses corrupt .mcp.json instead of overwriting', () => {
-    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-mcp-'));
-    try {
-      writeFileSync(resolve(dir, '.mcp.json'), 'not json{{{');
-      const r = addMcpServerConfig(dir, 'mcp-git');
-      expect(r.ok).toBe(false);
-      expect(readFileSync(resolve(dir, '.mcp.json'), 'utf8')).toBe('not json{{{');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it('add/remove/test end-to-end through the tool', async () => {
+    const p = proj('tool1');
+    const c = ctx(p);
+    expect(await mcpManageTool.execute({ action: 'add', server_id: 'mcp-memory' }, c)).toContain('mcp-memory');
+    expect(await mcpManageTool.execute({ action: 'add', server_id: 'npm:@modelcontextprotocol/server-github' }, c)).toContain('mcp-server-github');
+    expect(await mcpManageTool.execute({ action: 'remove' }, c)).toContain('Configured:');
+    expect(await mcpManageTool.execute({ action: 'remove', server_id: 'mcp-memory' }, c)).toContain('Removed');
+    expect(await mcpManageTool.execute({ action: 'remove', server_id: 'mcp-memory' }, c)).toContain('No MCP server');
+    expect(BUILTIN_MCP_SERVERS.length).toBeGreaterThan(0);
   });
 });

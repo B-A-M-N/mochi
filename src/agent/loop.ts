@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import {sortableId} from '../util.js';
-import type { Attempt, ChatMessage, MochiConfig, ModelProfile, Task, ToolDefinition, ToolCall, ToolResult } from '../types.js';
+import type { Attempt, ChatMessage, MochiConfig, ModelProfile, Task, ToolDefinition, ToolCall, ToolResult, MochiEvent } from '../types.js';
 import { contentText } from '../types.js';
 import type { EventBus } from '../events.js';
 import type { Workspace } from '../workspace.js';
@@ -23,6 +23,7 @@ import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/mo
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
+import type { PromptUserFn } from '../tools/user-prompt.js';
 import { AgentProfileService } from '../agents/profile.js';
 import { BudgetEngine } from '../budget.js';
 import { SpeculativeEngine } from './speculative.js';
@@ -71,7 +72,7 @@ import { LoopStateMachine } from './loop-state.js';
 import { scanDiffForHygiene, renderHygieneFindings, type HygieneFinding } from '../core/diff-hygiene.js';
 import { parseCompilerDiagnostics, renderCompilerAdvisory } from './error-diagnostics.js';
 import { AnchorEngine } from '../cognitive/anchor.js';
-import { summarize } from '../summary/engine.js';
+import { summarize, resolveRunStatus } from '../summary/engine.js';
 import { compactSession, compactToPrompt } from '../summary/compact.js';
 import { ExecutionRegistry } from '../core/execution-registry.js';
 import { evaluateTestDensity } from '../core/test-density.js';
@@ -293,6 +294,10 @@ export interface AgentOptions {
   /** Repo-check failures captured before this run. A verify failure matching
    *  it is pre-existing debt and must not fail the task. */
   verifyBaseline?: VerificationBaseline | Promise<VerificationBaseline | undefined>;
+  /** Interactive user-prompt resolver (TUI option menu). Top-level runs only:
+   *  subagents and headless hosts leave it unset and ask_question resolves
+   *  deterministic defaults instead. */
+  promptUser?: PromptUserFn;
 }
 
 export type AgentStopReason =
@@ -341,6 +346,7 @@ export class Agent {
   private contentOnly = false;
   private budget?: BudgetEngine;
   private abortSignal?: AbortSignal;
+  private promptUser?: PromptUserFn;
   private tools: Map<string, import('../tools/types.js').Tool>;
   private toolDefs: ToolDefinition[];
   private provider: ReturnType<typeof createProvider>;
@@ -541,6 +547,10 @@ export class Agent {
   private mcpClose?: () => void;
   /** Harness-v2 Phase 1: per-run iteration lifecycle tracker (created in run()). */
   private sm?: LoopStateMachine;
+  /** Last bus event before this run started: finish() summarizes only the
+   *  events AFTER it, so turn N's card never inherits turn N-1's files,
+   *  checks, or failures from the shared session bus. */
+  private runStartMarker?: MochiEvent;
 
   constructor(opts: AgentOptions) {
     this.id = opts.id ?? randomUUID();
@@ -551,6 +561,7 @@ export class Agent {
     this.context = opts.context;
     this.budget = opts.budget;
     this.abortSignal = opts.abortSignal;
+    this.promptUser = opts.promptUser;
     this.verifyBaseline = opts.verifyBaseline;
     // A shared run-wide cache is preferred so parallel agents that read the same
     // source file don't each re-read it from disk; the cache is keyed on
@@ -603,6 +614,9 @@ export class Agent {
   async run(task: Task): Promise<AgentResult> {
     this.startTime = performance.now();
     this.activeTask = task;
+    // Mark the bus position so the finish-time summary covers THIS run only.
+    const hist = this.events.snapshot();
+    this.runStartMarker = hist.length > 0 ? hist[hist.length - 1] : undefined;
     this.consecutiveVerifyFailures = 0;
     this.escalatedThisTask = false;
     this.events.emit({ type: 'task:started', task, agentId: this.id });
@@ -756,7 +770,9 @@ Continue from 'Next:', do not redo completed progress.`,
       // single largest avoidable latency cost on a trivial question. Advertise
       // only the read-only essentials (+ load_tools for escape hatch); any
       // other tool stays restorable mid-run exactly like mch91/mch110.
-      const CHAT_TOOLS = new Set(['read', 'glob', 'grep', 'skill', 'load_tools']);
+      // ask_question stays advertised: it is how the model asks the user back
+      // (interactive menu), which is a legitimate chat-turn move.
+      const CHAT_TOOLS = new Set(['read', 'glob', 'grep', 'skill', 'load_tools', 'ask_question', 'think']);
       const kept = new Set<string>();
       for (const [name] of this.tools) {
         if (CHAT_TOOLS.has(name)) kept.add(name);
@@ -2682,7 +2698,7 @@ Continue from 'Next:', do not redo completed progress.`,
       'todo', 'skill', 'memory', 'session_recall', 'blast_radius', 'chameleon', 'analyze_code', 'perf', 'perf_audit',
       'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
       'find_references', 'find_definitions', 'db_inspect', 'diff', 'tree', 'deepwiki',
-      'fetch', 'verify', 'sql_codebase', 'sql_codebase_query', 'think', 'accept_plan',
+      'fetch', 'verify', 'sql_codebase', 'sql_codebase_query', 'think', 'accept_plan', 'ask_question',
     ].includes(canonical) || /__resources_(list|read)$/.test(canonical);
   }
 
@@ -3190,6 +3206,9 @@ Continue from 'Next:', do not redo completed progress.`,
         abortSignal: this.abortSignal,
         readCache: this.readCache,
         callerEmittedEvent: true,
+        // Interactive questions are a top-level affordance: subagents were
+        // promised "the child cannot ask questions", so they resolve defaults.
+        ...(this.subagentDepth === 0 && this.promptUser ? { promptUser: this.promptUser } : {}),
       };
       const { output, error } = await executeTool(tc.function.name, args, ctx, this.tools);
       if (error) this.executionRegistry.markFailed(rec.executionId, error);
@@ -3216,6 +3235,16 @@ Continue from 'Next:', do not redo completed progress.`,
     }
     if (this.toolSigRepeat >= 3) {
       this.vetoToolCall(tc, `You have already called ${toolName} with these exact arguments ${this.toolSigRepeat} times in a row. The result will not change. Do NOT call it again — use the result you already have and proceed to the next step of the task.`);
+      return;
+    }
+    // Chat/Q&A turns are conversational: the deliverable is the answer text,
+    // never file or shell mutations. A model reaching for write/edit/shell on
+    // a greeting ("hi") produced the visible "tool spam + no-such-file error
+    // cards" class — veto the mutation outright. Genuine clarification needs
+    // go through ask_question (interactive user menu), reads through
+    // read/glob/search.
+    if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
+      this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead.');
       return;
     }
     // Fuzzy spam guard (windowed, per tool+target): the exact-match guard
@@ -3425,6 +3454,9 @@ Continue from 'Next:', do not redo completed progress.`,
             spawnSubagents: (tasks: Array<{ prompt: string; role?: string; timeoutMs?: number; scratchpad?: string }>) => this.spawnSubagents(tasks),
           }
         : {}),
+      // Interactive questions are a top-level affordance (see above): deeper
+      // agents resolve ask_question to deterministic defaults instead.
+      ...(this.subagentDepth === 0 && this.promptUser ? { promptUser: this.promptUser } : {}),
       callerEmittedEvent: true,
     };
     this.events.emit({ type: 'tool:called', tool: tc.function.name, args, agentId: this.id, tool_call_id: tc.id });
@@ -4789,7 +4821,19 @@ Continue from 'Next:', do not redo completed progress.`,
     this.events.emit({ type: 'agent:completed', id: this.id, taskId: task.id });
     let doc;
     try {
-      doc = summarize(this.events.snapshot(), { goal: task.title });
+      // Summarize THIS run only: the bus is session-scoped, so slice off
+      // everything before the run-start marker — otherwise turn N's card
+      // inherits turn N-1's files/checks/failures. A trimmed-away marker (or
+      // no marker) falls back to the full snapshot.
+      const hist = this.events.snapshot();
+      const runEvents = this.runStartMarker !== undefined
+        ? (() => { const i = hist.indexOf(this.runStartMarker as MochiEvent); return i >= 0 ? hist.slice(i + 1) : hist; })()
+        : hist;
+      doc = summarize(runEvents, { goal: task.title });
+      // Fold the KNOWN outcome in: summarize() alone reports 'partial' for a
+      // clean Q&A turn (no task:completed event exists yet at this point).
+      doc.status = resolveRunStatus(doc, success, stopReason);
+      doc.turnKind = this.taskKind === 'chat' ? 'chat' : 'task';
     } catch {
       /* ignore summary error */
     }
@@ -4814,6 +4858,7 @@ Continue from 'Next:', do not redo completed progress.`,
       agentId: this.id,
       success,
       stopReason,
+      taskKind: this.taskKind ?? 'unknown',
       durationMs,
       toolCallsTotal: this.toolCallsTotal,
       tokensUsed: this.tokensUsed,

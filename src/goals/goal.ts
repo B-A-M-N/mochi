@@ -78,6 +78,10 @@ export class GoalEngine {
   /** MCH-79: optional hook that receives the run's BudgetEngine at run start
    *  so the host (Runtime) can surface a live per-model cost breakdown. */
   onBudget?: (b: import('../budget.js').BudgetEngine) => void;
+  /** Interactive user-prompt resolver (TUI option menu). Wired top-level runs
+   *  only; unset headless, where ask_question resolves defaults. Set by the
+   *  host via Runtime.setPromptUser (kept in sync on config swaps). */
+  promptUser?: import('../tools/user-prompt.js').PromptUserFn;
 
   /** MCH-81: per-task token/cost attribution, filled as tasks finish. */
   private taskCosts: Array<{ title: string; tokens: number; costUsd: number }> = [];
@@ -604,6 +608,7 @@ Return ONLY the JSON array, no markdown.`;
           config: this.config, workspace: this.workspace, events: this.events,
           cwd: this.cwd, context: reviewContext, abortSignal, budget, readCache,
           verifyBaseline: this.runBaseline,
+          promptUser: this.promptUser,
         });
         const reviewResult = await this.runAgentWithAutoResume(reviewAgent, goal, task, reviewContext, abortSignal);
         this.goalStats.tokens += reviewResult.tokensUsed;
@@ -786,6 +791,7 @@ Return ONLY the JSON array, no markdown.`;
       budget,
       readCache,
       verifyBaseline: this.runBaseline,
+      promptUser: this.promptUser,
     });
     // MCH-74: register as a steer target for the lifetime of the run.
     this.liveAgents.set(task.id, agent);

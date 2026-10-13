@@ -17,9 +17,13 @@ import { STREAM_LINE_CAP } from './state.js';
 function ev(partial: Record<string, unknown>): Record<string, unknown> { return partial; }
 
 describe('reduceEvent', () => {
-  it('builds an assistant transcript from message + chunks', () => {
+  it('builds an assistant transcript from message + chunks (bus user messages never render)', () => {
     const s = createTuiState();
-    reduceEvent(s, ev({ type: 'message', role: 'user', content: 'nice' }));
+    // Chatbox ownership: only the composer writes user lines. A message/user
+    // event arriving on the bus (history replay, harness cross-talk) must not
+    // render as a fake user message in the transcript.
+    expect(reduceEvent(s, ev({ type: 'message', role: 'user', content: 'nice' }))).toBe(false);
+    expect(s.lines.length).toBe(0);
     reduceEvent(s, ev({ type: 'message:chunk', content: 'Hello ' }));
     reduceEvent(s, ev({ type: 'message:chunk', content: 'world' }));
     expect(s.lines.map((l) => l.text).join('|')).toContain('Hello world');

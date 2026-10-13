@@ -6,6 +6,12 @@ import type { Tool } from './types.js';
 // free-form prose: reasoning is emitted for the transcript and (optionally)
 // surfaced as a note, but never treated as task output.
 //
+// Chatbox-ownership rule: think emits ONLY agent:reasoning (rendered as a
+// collapsed thought row). It must NEVER emit a `message` event — those render
+// as full chat lines, so every think call used to "type a message
+// automatically" into the user's chatbox. Only the user writes user lines;
+// only the model writes answer text; harness chatter stays in cards/logs.
+//
 // It performs no I/O, costs nothing, and is idempotent — purely a harness
 // affordance, so it is wired as a read-only tool.
 
@@ -27,12 +33,6 @@ export const thinkTool: Tool = {
       content: `[think] ${thought}\n`,
       agentId: ctx.agentId,
     });
-    ctx.events.emit({
-      type: 'message',
-      role: 'system',
-      content: `[think] ${thought}`,
-      agentId: ctx.agentId,
-    } as never);
     return '[acknowledged]';
   },
 };

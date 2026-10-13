@@ -130,45 +130,80 @@ export function spinnerColored(i: number): string {
 }
 
 /**
- * Animated Y2K cyber dither wave: liquid chrome pulse with harmonic
- * sinusoidal easing glides through a dithered matrix (░▒▓━▓▒░) framed
- * by cyber brackets and twinkling cosmic stars.
+ * Mochi Signature Metamorphic Core — Isometric Folding Lattice.
+ *
+ * An engineered geometric origami transformation: quadrant blocks shear across
+ * chiral diagonal boundaries, invert through negative space, and reconstruct
+ * like a self-compiling algorithmic origami reactor.
  */
-export function spinnerSweep(i: number, width = 8): string {
-  const w = Math.max(4, width);
-  const phase = (i * 0.28) % (Math.PI * 2);
-  const pos = Math.round((Math.sin(phase) * 0.5 + 0.5) * (w - 1));
-  const sparkLeft = SPARKLES[Math.abs(i) % SPARKLES.length];
-  const sparkRight = SPARKLES[(Math.abs(i) + 5) % SPARKLES.length];
-  const cLeft = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
-  const cRight = HARMONIC_STOPS[(Math.abs(i) + 4) % HARMONIC_STOPS.length];
+export const ORIGAMI_TWIN_GLYPHS = [
+  '▞▚', // Phase 0: Dual chiral shear (opposing diagonal quadrants)
+  '▛▟', // Phase 1: Negative space compression (outer corners anchor, center folds in)
+  '◰◳', // Phase 2: Interlocking tessellation fold (inner quadrant pockets open)
+  '▜▙', // Phase 3: Inverse chiral polarity (facets flip 90° across cleavage axis)
+  '▚▞', // Phase 4: Diagonal counter-shear (mirrors Phase 0)
+  '◢◣', // Phase 5: Isometric acute wedge ascent (converging toward apex)
+  '◬◭', // Phase 6: Bifurcated crystalline prism (engineered focal node)
+  '◤◥', // Phase 7: Inverted wedge divergence (unfolding downward)
+  '◲◱', // Phase 8: Lower quadrant compression
+  '◈◇', // Phase 9: Crystalline twin diamond state
+  '▦▩', // Phase 10: High-density orthogonal matrix synthesis
+  '▧▨', // Phase 11: Diagonal weave re-aligning with chiral origin
+];
+
+export const ORIGAMI_STREAM_FRAMES = [
+  { left: '▞', spine: '━', right: '▚', core: '◈', rLeft: '▚', rSpine: '━', rRight: '▞' },
+  { left: '▛', spine: '━', right: '▟', core: '◇', rLeft: '▟', rSpine: '━', rRight: '▛' },
+  { left: '◰', spine: '━', right: '◳', core: '◬', rLeft: '◳', rSpine: '━', rRight: '◰' },
+  { left: '▜', spine: '━', right: '▙', core: '◭', rLeft: '▙', rSpine: '━', rRight: '▜' },
+  { left: '◢', spine: '━', right: '◣', core: '◆', rLeft: '◢', rSpine: '━', rRight: '◣' },
+  { left: '◤', spine: '━', right: '◥', core: '◇', rLeft: '◤', rSpine: '━', rRight: '◥' },
+  { left: '◲', spine: '━', right: '◱', core: '◮', rLeft: '◱', rSpine: '━', rRight: '◲' },
+  { left: '▦', spine: '━', right: '▩', core: '◈', rLeft: '▦', rSpine: '━', rRight: '▩' },
+  { left: '▧', spine: '━', right: '▨', core: '◊', rLeft: '▨', rSpine: '━', rRight: '▧' },
+  { left: '▤', spine: '━', right: '▥', core: '◬', rLeft: '▥', rSpine: '━', rRight: '▤' },
+];
+
+/**
+ * Signature Focal Glyph: Compact twin-cell origami core flanked by subtle
+ * cyber star accents with harmonic phase lighting.
+ */
+export function signatureGlyph(i: number): string {
+  const g = ORIGAMI_TWIN_GLYPHS[Math.abs(i) % ORIGAMI_TWIN_GLYPHS.length];
+  const spark = SPARKLES[Math.abs(i) % SPARKLES.length];
+  const c1 = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+  const c2 = HARMONIC_STOPS[(Math.abs(i) + 3) % HARMONIC_STOPS.length];
+  return `${rgb(c1[0], c1[1], c1[2])}${T.bold}${spark}${T.reset} ${rgb(c2[0], c2[1], c2[2])}${T.bold}${g}${T.reset}`;
+}
+
+/**
+ * Mochi Signature Metamorphic Vector Synthesizer:
+ * Replaces the generic horizontal slider bar with an interlocking
+ * multidimensional origami array. Opposing chiral lobes fold dynamically
+ * across a transverse cleavage axis (━) around an illuminated diamond nucleus,
+ * bound by precision cyber brackets.
+ */
+export function spinnerSweep(i: number, _width = 8): string {
+  const f = ORIGAMI_STREAM_FRAMES[Math.abs(i) % ORIGAMI_STREAM_FRAMES.length];
+  const c1 = HARMONIC_STOPS[Math.abs(i) % HARMONIC_STOPS.length];
+  const c2 = HARMONIC_STOPS[(Math.abs(i) + 3) % HARMONIC_STOPS.length];
+  const c3 = HARMONIC_STOPS[(Math.abs(i) + 5) % HARMONIC_STOPS.length];
   const cBracket = HARMONIC_STOPS[(Math.abs(i) + 2) % HARMONIC_STOPS.length];
 
-  const cells: string[] = [];
-  for (let x = 0; x < w; x++) {
-    const dist = Math.abs(x - pos);
-    if (dist === 0) {
-      // Blazing illuminated chrome core
-      cells.push(`${rgb(255, 255, 255)}${T.bold}━${T.reset}`);
-    } else if (dist === 1) {
-      // Saturated dithered shoulder (75% density)
-      const c = HARMONIC_STOPS[(Math.abs(i) + x) % HARMONIC_STOPS.length];
-      cells.push(`${rgb(c[0], c[1], c[2])}${T.bold}▓${T.reset}`);
-    } else if (dist === 2) {
-      // Soft dithered falloff (50% density)
-      const c = HARMONIC_STOPS[(Math.abs(i) + x + 2) % HARMONIC_STOPS.length];
-      cells.push(`${rgb(c[0], c[1], c[2])}▒${T.reset}`);
-    } else {
-      // Ambient cyber grid background (25% dither)
-      cells.push(`${TRACK}░${T.reset}`);
-    }
-  }
+  const gateL = `${rgb(cBracket[0], cBracket[1], cBracket[2])}⦑${T.reset}`;
+  const gateR = `${rgb(cBracket[0], cBracket[1], cBracket[2])}⦒${T.reset}`;
 
-  const left = `${rgb(cLeft[0], cLeft[1], cLeft[2])}${T.bold}${sparkLeft}${T.reset}`;
-  const right = `${rgb(cRight[0], cRight[1], cRight[2])}${T.bold}${sparkRight}${T.reset}`;
-  const bLeft = `${rgb(cBracket[0], cBracket[1], cBracket[2])}«${T.reset}`;
-  const bRight = `${rgb(cBracket[0], cBracket[1], cBracket[2])}»${T.reset}`;
-  return `${left} ${bLeft}${cells.join('')}${bRight} ${right}`;
+  const lobeL = `${rgb(c1[0], c1[1], c1[2])}${T.bold}${f.left}${T.reset}` +
+                `${rgb(c2[0], c2[1], c2[2])}${f.spine}${T.reset}` +
+                `${rgb(c1[0], c1[1], c1[2])}${T.bold}${f.right}${T.reset}`;
+
+  const nucleus = `${rgb(255, 255, 255)}${T.bold}${f.core}${T.reset}`;
+
+  const lobeR = `${rgb(c3[0], c3[1], c3[2])}${T.bold}${f.rLeft}${T.reset}` +
+                `${rgb(c2[0], c2[1], c2[2])}${f.rSpine}${T.reset}` +
+                `${rgb(c3[0], c3[1], c3[2])}${T.bold}${f.rRight}${T.reset}`;
+
+  return `${gateL}${lobeL} ${nucleus} ${lobeR}${gateR}`;
 }
 
 export function thinkingLine(frame: number, note = '', elapsed?: string | number): string {
@@ -176,7 +211,7 @@ export function thinkingLine(frame: number, note = '', elapsed?: string | number
   const time_ = elapsed !== undefined && elapsed !== '' ? ` ${T.grayDark}·${T.reset} ${T.gray}${elapsed}${T.reset}` : '';
   const cText = HARMONIC_STOPS[(Math.abs(frame) + 2) % HARMONIC_STOPS.length];
   const thinkingGlow = `${rgb(cText[0], cText[1], cText[2])}${T.bold}Thinking…${T.reset}`;
-  return `${spinnerColored(frame)} ${thinkingGlow} ${spinnerSweep(frame, 8)}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
+  return `${signatureGlyph(frame)} ${thinkingGlow} ${spinnerSweep(frame, 8)}${note_}${time_} ${T.grayDark}(esc to cancel)${T.reset}`;
 }
 
 /** Empty-track color for gauge bars: near-black fixed RGB, deliberately NOT a
