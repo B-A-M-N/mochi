@@ -8,7 +8,9 @@ describe('browser tool driver', () => {
     // The driver is a plain-node script (no import of playwright) so the tool
     // can shell out to it without adding a runtime dep to the Bun binary.
     const DRIVER = driverScript();
-    expect(DRIVER.endsWith('scripts/browser-driver.mjs')).toBe(true);
+    // Normalize separators first: driverScript() returns a native path, and
+    // on win32 it contains backslashes that never match a forward-slash tail.
+    expect(DRIVER.replaceAll('\\', '/').endsWith('scripts/browser-driver.mjs')).toBe(true);
     expect(existsSync(DRIVER)).toBe(true);
   });
 

@@ -413,6 +413,16 @@ Return ONLY the JSON array, no markdown.`;
     return this.sessionStoreInstance;
   }
 
+  /** Release the lazy session store. Windows keeps an exclusive lock on an
+   *  open SQLite file — an unclosed store makes the workspace's .mochi dir
+   *  undeletable for the rest of the process lifetime. Safe to call twice. */
+  close(): void {
+    if (this.sessionStoreInstance) {
+      try { this.sessionStoreInstance.close(); } catch { /* already closed */ }
+      this.sessionStoreInstance = undefined;
+    }
+  }
+
   private recordSave(goal: Goal, task: Task, result: { summary: string }, _context: ContextEngine, sessionId?: string): void {
     try {
       const sid = sessionId ?? this.store.begin({ goalId: goal.id, role: task.role, objective: task.title });

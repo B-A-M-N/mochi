@@ -5,14 +5,20 @@ import { resolve } from 'node:path';
 
 // feedback.ts resolves ~/.mochi at module load — point HOME at a throwaway
 // directory BEFORE the first import so tests never touch the real store.
+// USERPROFILE too: os.homedir() on Windows reads USERPROFILE, NOT HOME, so
+// setting only HOME silently writes to the real runner home there.
 const home = mkdtempSync(resolve(tmpdir(), 'mochi-feedback-home-'));
 const priorHome = process.env.HOME;
+const priorProfile = process.env.USERPROFILE;
 process.env.HOME = home;
+process.env.USERPROFILE = home;
 const feedbackFile = resolve(home, '.mochi', 'feedback.jsonl');
 const fb = await import('./feedback.js');
 
 afterAll(() => {
   process.env.HOME = priorHome;
+  if (priorProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = priorProfile;
   rmSync(home, { recursive: true, force: true });
 });
 

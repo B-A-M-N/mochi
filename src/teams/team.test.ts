@@ -66,6 +66,7 @@ describe('runTeam', () => {
     const roles = new Set(tasks.map((t) => t.role));
     expect(roles.has('reviewer') || roles.has('tester')).toBe(true);
     await fake.close();
+    try { engine.close(); } catch { /* best-effort */ }
     rmSync(dir, { recursive: true, force: true });
   }, 120_000);
 });

@@ -265,7 +265,11 @@ export async function handleRpc(
       }
       case 'session/close': {
         const sid = String(params.sessionId ?? '');
+        const closed = sessions.get(sid);
         sessions.delete(sid);
+        // Release the session's SQLite handles — on Windows an open
+        // sessions.sqlite keeps the workspace directory locked forever.
+        try { closed?.runtime.close(); } catch { /* best-effort */ }
         return { id, result: {} };
       }
       case 'session/set_mode': {

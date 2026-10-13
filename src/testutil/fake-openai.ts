@@ -94,6 +94,7 @@ export async function startFakeOpenAI(script?: FakeScriptResponse[]): Promise<Fa
   const defaultResp: FakeScriptResponse = { content: 'done', finishReason: 'stop', promptTokens: 1, completionTokens: 1 };
 
   const server: Server = createServer(async (req, res) => {
+    if (process.env.MOCHI_EXEC_TRACE === '1') console.warn(`[fake-openai] ${req.method} ${req.url ?? '/'}`);
     let body = '';
     req.on('data', (c: Buffer) => { body += c.toString('utf8'); });
     req.on('end', async () => {

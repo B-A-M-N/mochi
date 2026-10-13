@@ -231,26 +231,39 @@ export class Runtime {
    *  with full context. Returns a human-readable confirmation. */
   branchSession(title?: string): string {
     const store = new SessionStore(this.cwd);
-    const parentId = this.activeSessionId;
-    if (!parentId) {
-      // No active session yet — a branch of nothing is just a new session.
-      this.activeSessionId = store.begin({ objective: title ?? 'Branched session' });
-      return `No prior conversation to branch from — started a fresh session ${this.activeSessionId.slice(0, 8)}.`;
+    try {
+      const parentId = this.activeSessionId;
+      if (!parentId) {
+        // No active session yet — a branch of nothing is just a new session.
+        this.activeSessionId = store.begin({ objective: title ?? 'Branched session' });
+        return `No prior conversation to branch from — started a fresh session ${this.activeSessionId.slice(0, 8)}.`;
+      }
+      const parent = store.list(200).find((s) => s.id === parentId);
+      const childId = store.begin({
+        parentId,
+        goalId: parent?.goalId ?? undefined,
+        role: parent?.role ?? undefined,
+        objective: title ?? (parent ? `Branch of: ${parent.objective.slice(0, 60)}` : 'Branched session'),
+      });
+      // Copy the parent transcript into the child so the branch resumes with
+      // full context (the parent_id link also records the lineage).
+      for (const m of store.messages(parentId)) {
+        store.append(childId, m.role, m.content);
+      }
+      this.activeSessionId = childId;
+      return `Branched session ${parentId.slice(0, 8)} → ${childId.slice(0, 8)} (${store.messages(childId).length} messages copied). You are now talking in the branch.`;
+    } finally {
+      // Windows locks an open SQLite file — release it or the workspace dir
+      // can never be deleted while this process lives.
+      store.close();
     }
-    const parent = store.list(200).find((s) => s.id === parentId);
-    const childId = store.begin({
-      parentId,
-      goalId: parent?.goalId ?? undefined,
-      role: parent?.role ?? undefined,
-      objective: title ?? (parent ? `Branch of: ${parent.objective.slice(0, 60)}` : 'Branched session'),
-    });
-    // Copy the parent transcript into the child so the branch resumes with
-    // full context (the parent_id link also records the lineage).
-    for (const m of store.messages(parentId)) {
-      store.append(childId, m.role, m.content);
-    }
-    this.activeSessionId = childId;
-    return `Branched session ${parentId.slice(0, 8)} → ${childId.slice(0, 8)} (${store.messages(childId).length} messages copied). You are now talking in the branch.`;
+  }
+
+  /** Release process-owned resources (session stores). Call before deleting
+   *  a workspace directory on Windows, where open SQLite handles keep an
+   *  exclusive lock on sessions.sqlite. Idempotent. */
+  close(): void {
+    try { this.goals.close(); } catch { /* best-effort */ }
   }
 
   /** Reset active conversation session. */

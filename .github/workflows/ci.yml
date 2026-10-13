@@ -57,6 +57,16 @@ jobs:
           bun-version: latest
       - run: npm ci
 
+      # Hosted Windows runners scan every spawned node/git/npm process with
+      # Defender real-time protection — the known cause of the 8-15x
+      # process-spawn inflation that made this leg never complete in 60+ runs.
+      # Best effort: if the runner policy refuses, the step is not fatal.
+      - name: Reduce Defender scan overhead (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - name: Build native accelerators (Rust + C++) so parity tests run
         # git-bash on Windows so `command -v` + POSIX paths work unchanged.
         shell: bash
@@ -127,7 +137,13 @@ jobs:
 
       - name: Tests (full suite)
         if: runner.os == 'Windows'
-        run: npx vitest run --reporter=dot --shard=${{ matrix.shard }}
+        env:
+          # Diagnosis/attribution pass: verbose streams every test as it
+          # completes, and the exec/fake-openai trace logs every spawn and
+          # model request — a hang shows its LAST start with no matching
+          # done line, naming the exact stuck command/request.
+          MOCHI_EXEC_TRACE: '1'
+        run: npx vitest run --reporter=verbose --shard=${{ matrix.shard }}
         continue-on-error: false
 
       - name: Build

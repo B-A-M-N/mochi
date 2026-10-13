@@ -96,6 +96,7 @@ describe('ACP streaming', () => {
     expect(updates.some((u) => u.includes('tool_call'))).toBe(true);
     expect(updates.some((u) => u.includes('agent_message_chunk'))).toBe(true);
     await fake.close();
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
     rmSync(dir, { recursive: true, force: true });
   }, 60_000);
 });
@@ -124,6 +125,7 @@ describe('ACP session/cancel', () => {
     // threw) or end_turn (fake provider finished before the abort was seen).
     expect(r.error).toBeUndefined();
     expect(['cancelled', 'end_turn']).toContain((r.result as any).stopReason);
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
     rmSync(dir, { recursive: true, force: true });
   }, 30_000);
 });
@@ -182,6 +184,8 @@ describe('ACP session/load', () => {
     expect(loaded.error).toBeUndefined();
     expect(sessions.get(sid)!.loadedGoal?.goalId).toBe(goal.id);
     await fake.close();
+    try { runtime.close(); } catch { /* best-effort */ }
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
     rmSync(dir, { recursive: true, force: true });
   }, 60_000);
 });
@@ -317,6 +321,7 @@ describe('ACP prompt text extraction + tool kinds', () => {
     expect(updates.some((u) => u.includes('tool_call_update'))).toBe(true);
 
     await fake.close();
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
     rmSync(dir, { recursive: true, force: true });
   }, 120_000);
 });

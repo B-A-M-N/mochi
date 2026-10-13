@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export interface ProjectRule {
   id: string;
@@ -16,7 +16,10 @@ export function parseRuleFile(filePath: string): ProjectRule | null {
   if (!existsSync(filePath)) return null;
   try {
     const raw = readFileSync(filePath, 'utf8');
-    const filename = filePath.split('/').pop() ?? 'rule';
+    // basename(), not split('/'): Windows paths use backslashes, and a split
+    // that never matches returns the FULL path as the "filename" (rule ids
+    // became absolute paths on win32).
+    const filename = basename(filePath) || 'rule';
     const id = filename.replace(/^\./, '').replace(/\.(md|mdc)$/, '') || filename;
     let content = raw;
     let title = id;

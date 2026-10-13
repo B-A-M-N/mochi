@@ -7,8 +7,17 @@ import { kvCache } from './kv-cache.js';
 import { nativeAssembleStream } from '../native/agent-protocol.js';
 
 function logBackoff(attempt: number, delayMs: number, err: unknown): void {
-  const detail = err instanceof Error ? err.message.split('\n')[0] : String(err);
-  console.warn(`[rate-limit] model request backoff #${attempt}: sleeping ${Math.round(delayMs)}ms (${detail.slice(0, 80)})`);
+  // Walk the cause chain: undici's bare `fetch failed` hides the actual
+  // reason (ECONNREFUSED vs ETIMEDOUT vs proxy vs TLS) — surface it.
+  const parts: string[] = [];
+  let cur: unknown = err;
+  for (let depth = 0; depth < 4 && cur !== undefined && cur !== null; depth++) {
+    const line = cur instanceof Error ? (cur.message.split('\n')[0] ?? '') : String(cur);
+    if (line && !parts.includes(line)) parts.push(line);
+    cur = cur instanceof Error ? cur.cause : undefined;
+  }
+  const detail = parts.join(' <- ') || String(err);
+  console.warn(`[rate-limit] model request backoff #${attempt}: sleeping ${Math.round(delayMs)}ms (${detail.slice(0, 200)})`);
 }
 
 export interface ProviderConfig {

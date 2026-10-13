@@ -93,9 +93,12 @@ export class HookManager {
     for (const [k, v] of Object.entries(context)) env[`MOCHI_${k.toUpperCase()}`] = v;
     // Central exec policy (timeout → SIGTERM → SIGKILL, output cap) instead
     // of a bare execFile: a hanging hook can no longer stall a run forever.
-    const { runArgv } = await import('./exec.js');
+    // Platform shell (cmd.exe on Windows, $SHELL/bash elsewhere) — a
+    // hardcoded 'sh -c' makes EVERY hook fail on win32 (sh is not a
+    // Windows binary), silently breaking the whole hook system there.
+    const { runShellString } = await import('./exec.js');
     try {
-      const r = await runArgv('sh', ['-c', command], { env, timeoutMs: 5000, maxOutput: 1024 * 1024 });
+      const r = await runShellString(command, { env, timeoutMs: 5000, maxOutput: 1024 * 1024 });
       const exitCode = r.code ?? (r.timedOut ? 124 : 1);
       return { allowed: exitCode === 0, exitCode, stdout: r.stdout, stderr: r.stderr };
     } catch {

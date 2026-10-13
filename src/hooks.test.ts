@@ -9,7 +9,12 @@ describe('HookManager', () => {
   it('runs after hooks and records output', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-hooks-'));
     const marker = resolve(dir, 'marker.txt');
-    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ after_edit: `touch ${marker}` }));
+    // Portable hook command: `touch` is not a cmd.exe builtin/binary on a
+    // stock Windows box, and a node -e one-liner nested in JSON+cmd quoting
+    // is fragile — a script file plus two quoted argv paths runs identically
+    // in sh and cmd.
+    writeFileSync(resolve(dir, 'mk-marker.cjs'), "require('node:fs').writeFileSync(process.argv[2], '');");
+    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ after_edit: `node "${resolve(dir, 'mk-marker.cjs')}" "${marker}"` }));
     const hooks = new HookManager(dir);
     expect(hooks.enabled('after_edit')).toBe(true);
     const results = await hooks.runAfter('after_edit', { file: 'a.ts' });
@@ -27,7 +32,8 @@ describe('HookManager', () => {
 
   it('treats successful before hooks as allowed', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-hooks-'));
-    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ before_edit: 'true' }));
+    // `exit 0` is the portable success (cmd.exe has no `true`).
+    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ before_edit: 'exit 0' }));
     const hooks = new HookManager(dir);
     const result = await hooks.runBefore('before_edit');
     expect(result.allowed).toBe(true);
@@ -44,8 +50,10 @@ const ALL_HOOKS: HookName[] = [
 describe('hook lifecycle coverage audit', () => {
   it('every HookName in the union fires through runBefore/runAfter', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-hooks-audit-'));
+    const mk = resolve(dir, 'mk-marker.cjs');
+    writeFileSync(mk, "require('node:fs').writeFileSync(process.argv[2], '');");
     const cfg: Record<string, string> = {};
-    for (const h of ALL_HOOKS) cfg[h] = `touch ${resolve(dir, h)}.marker`;
+    for (const h of ALL_HOOKS) cfg[h] = `node "${mk}" "${resolve(dir, `${h}.marker`)}"`;
     writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify(cfg));
     // Point CWD lookups away from the repo (which may carry its own hooks.json).
     const prevCwd = process.cwd();

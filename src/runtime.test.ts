@@ -10,7 +10,7 @@ import type { MochiConfig } from './types.js';
 
 function makeRepo(): string {
   const dir = mkdtempSync(resolve(tmpdir(), 'mochi-runtime-'));
-  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+  execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir });
   process.env.MOCHI_CONFIG_PATH = resolve(dir, 'config.json');
   return dir;
 }
@@ -39,6 +39,7 @@ describe('Runtime setMode', () => {
     const out = rt.setMode('spec');
     expect(out).toContain('SPEC MODE');
     expect(rt.config.mode).toBe('spec');
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -47,6 +48,7 @@ describe('Runtime setMode', () => {
     const out = rt.setMode('banana');
     expect(out).toMatch(/Unknown mode/);
     expect(out).toContain('spec');
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -56,6 +58,7 @@ describe('Runtime setMode', () => {
     rt.setMode('codemod');
     expect(rt.config.planMode).toBe(true);
     expect((rt.goals as any).config.planMode).toBe(true);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
   it('propagates explicit plan-mode transitions to the goal engine', () => {
@@ -66,6 +69,7 @@ describe('Runtime setMode', () => {
     rt.setPlanMode(undefined);
     expect(rt.config.planMode).toBeUndefined();
     expect((rt.goals as any).config.planMode).toBeUndefined();
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
   it('keeps the goal engine on the merged config when project settings exist', () => {
@@ -74,6 +78,7 @@ describe('Runtime setMode', () => {
     writeFileSync(resolve(dir, '.mochi', 'config.json'), JSON.stringify({ quiet: true }));
     const rt = Runtime.create({ cwd: dir });
     expect((rt.goals as any).config).toBe(rt.config);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 });
@@ -81,7 +86,7 @@ describe('Runtime setMode', () => {
 describe('Runtime review/fix (pipe composability)', () => {
   it('runtime.review returns a reviewer summary over piped input', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rt-review-'));
-    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir });
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ scripts: { test: 'node -e "process.exit(0)"' } }));
     const fake = await fakeServer();
     const rt = new Runtime({
@@ -99,12 +104,13 @@ describe('Runtime review/fix (pipe composability)', () => {
     const inputs = fake.requests.map((r: any) => JSON.stringify(r.body ?? '')).join('\n');
     expect(inputs).toContain('auth.ts');
     await fake.close();
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(dir, { recursive: true, force: true });
   }, 60000);
 
   it('runtime.fix runs a fix task with piped context', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rt-fix-'));
-    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email d@d && git config user.name d && git commit -q --allow-empty -m init', { cwd: dir });
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ scripts: { test: 'node -e "process.exit(0)"' } }));
     const fake = await fakeServer();
     const rt = new Runtime({
@@ -119,6 +125,7 @@ describe('Runtime review/fix (pipe composability)', () => {
     const inputs = fake.requests.map((r: any) => JSON.stringify(r.body ?? '')).join('\n');
     expect(inputs).toContain('src/index.ts:12');
     await fake.close();
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -137,6 +144,7 @@ describe('Runtime abort + interrupt', () => {
     );
     // With no tasks scheduled, runGoal completes quickly and records nothing.
     expect(result.summary).toBeDefined();
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -146,6 +154,7 @@ describe('Runtime abort + interrupt', () => {
     expect(signal.aborted).toBe(false);
     rt.abort('stop');
     expect(signal.aborted).toBe(true);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -174,6 +183,7 @@ describe('Runtime abort + interrupt', () => {
 
     rt.newSession();
     expect(rt.activeSessionId).toBeUndefined();
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
     delete process.env.MOCHI_REASONING;
   });
@@ -182,6 +192,7 @@ describe('Runtime abort + interrupt', () => {
     delete process.env.MOCHI_REASONING;
     const rt = Runtime.create({ cwd: makeRepo() });
     expect(rt.getReasoning()).toBe('medium');
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -196,6 +207,7 @@ describe('Runtime abort + interrupt', () => {
     expect(promptCallCount).toBeLessThan(10);
     expect(res.summaries.length).toBeLessThan(10);
     expect(res.finalSummary).toContain('All tasks completed cleanly');
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -213,6 +225,7 @@ describe('Runtime abort + interrupt', () => {
     expect(prompts[1]).toContain('<VERDICT>');
     // The old broken nudge must be gone.
     expect(prompts.every((p) => !/Continue: refine, fix remaining issues/.test(p))).toBe(true);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -227,6 +240,7 @@ describe('Runtime abort + interrupt', () => {
     expect(calls).toBe(2); // pass 1 + pass 2 (DONE) then stop — never reaches 10
     expect(res.summaries.length).toBe(2);
     expect(res.finalSummary).toContain('<VERDICT>DONE</VERDICT>');
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -242,6 +256,7 @@ describe('Runtime abort + interrupt', () => {
     const res = await rt.autoImprove('Harden the parser', 4);
     expect(calls).toBe(4);
     expect(res.summaries.length).toBe(4);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 
@@ -258,6 +273,7 @@ describe('Runtime abort + interrupt', () => {
     // Pass 1 sets priorSummary; Pass 2 is identical to pass 1 -> stagnation += 2 -> break. Never reaches 10.
     expect(calls).toBe(2);
     expect(res.summaries.length).toBe(2);
+    try { rt.close(); } catch { /* best-effort */ }
     rmSync(rt.cwd, { recursive: true, force: true });
   });
 });
@@ -265,7 +281,7 @@ describe('Runtime abort + interrupt', () => {
 describe('Runtime approvePlan', () => {
   it('records whether a pending decomposition was made in plan mode', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-plan-pending-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     const fake = await startFakeOpenAI([{
       content: JSON.stringify([{
         title: 'Create approved file',
@@ -298,7 +314,7 @@ describe('Runtime approvePlan', () => {
 
   it('executes a pending plan in act mode even when the runtime is in plan mode', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-act-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     const fake = await startFakeOpenAI([
       {
         content: 'Creating the approved file now.',
@@ -342,7 +358,7 @@ describe('Runtime approvePlan', () => {
 
   it('replaces a plan-mode pending decomposition with executable tasks on approval', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-approve-replan-'));
-    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir, shell: '/bin/sh' });
+    execSync('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init', { cwd: dir });
     let wrote = false;
     const fake = await startFakeOpenAI([{
       sticky: true,

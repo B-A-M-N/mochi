@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Set the override BEFORE importing memory-store (it binds MEMORY_FILE at
@@ -7,7 +8,7 @@ import { join } from 'node:path';
 // bundles several test files into one process, a sibling's static import may
 // bind first — so statements below carry a random suffix to sidestep both
 // real-store dedup and cross-run dedup regardless of which file binds.
-const tmpFile = join(mkdtempSync('/tmp/mochi-mem-'), 'memory.jsonl');
+const tmpFile = join(mkdtempSync(join(tmpdir(), 'mochi-mem-')), 'memory.jsonl');
 process.env['MOCHI_MEMORY_FILE'] = tmpFile;
 const { addFact, recallFacts, memorySimilarity } = await import('./memory/memory-store.js');
 

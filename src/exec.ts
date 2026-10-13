@@ -60,6 +60,11 @@ function finishSpawn(
 ): Promise<ExecResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const killGraceMs = opts.killGraceMs ?? 1500;
+  // MOCHI_EXEC_TRACE=1 logs every spawn and outcome — the ONLY way to see
+  // WHICH command a hung run is stuck on (a hang prints start, never done).
+  if (process.env.MOCHI_EXEC_TRACE === '1') {
+    console.warn(`[exec] start :: ${cmd.slice(0, 160)}${opts.cwd ? ` (cwd=${opts.cwd})` : ''}`);
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     let timedOut = false;
@@ -77,6 +82,9 @@ function finishSpawn(
       // the timeout/cancel truth.
       const wasTimedOut = extra?.timedOut ?? timedOut;
       const wasCancelled = extra?.cancelled ?? cancelled;
+      if (process.env.MOCHI_EXEC_TRACE === '1') {
+        console.warn(`[exec] done  :: ${Math.round(durationMs)}ms code=${code}${wasTimedOut ? ' TIMEOUT' : ''}${wasCancelled ? ' CANCELLED' : ''} :: ${cmd.slice(0, 160)}`);
+      }
       try {
         opts.onAudit?.({ cmd: cmd.slice(0, 200), code, timedOut: wasTimedOut, durationMs });
       } catch { /* audit must never break execution */ }

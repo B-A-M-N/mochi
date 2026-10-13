@@ -95,8 +95,8 @@ describe('mutation.runMutationCheck', () => {
     const result = await runMutationCheck(
       dir,
       cmd,
-      async (c) => { try { execSync(c, { cwd: dir, shell: '/bin/sh' }); return 0; } catch { return 1; } },
-      async (c) => String(execSync(c, { cwd: dir, shell: '/bin/sh' }) ?? ''),
+      async (c) => { try { execSync(c, { cwd: dir }); return 0; } catch { return 1; } },
+      async (c) => String(execSync(c, { cwd: dir }) ?? ''),
     );
     expect(result.applied).toBe(true);
     expect(result.killed).toBe(true);
@@ -112,8 +112,8 @@ describe('mutation.runMutationCheck', () => {
     const result = await runMutationCheck(
       dir,
       cmd,
-      async (c) => { try { execSync(c, { cwd: dir, shell: '/bin/sh' }); return 0; } catch { return 1; } },
-      async (c) => String(execSync(c, { cwd: dir, shell: '/bin/sh' }) ?? ''),
+      async (c) => { try { execSync(c, { cwd: dir }); return 0; } catch { return 1; } },
+      async (c) => String(execSync(c, { cwd: dir }) ?? ''),
     );
     // The '+'-flip only matters if the mutated file is actually targeted; the
     // point of this test is that a .py file is now a viable mutation target.
@@ -143,8 +143,8 @@ describe('mutation.runMutationCheck', () => {
     const result = await runMutationCheck(
       dir,
       cmd,
-      async (c) => { try { execSync(c, { cwd: dir, shell: '/bin/sh' }); return 0; } catch { return 1; } },
-      async (c) => String(execSync(c, { cwd: dir, shell: '/bin/sh' }) ?? ''),
+      async (c) => { try { execSync(c, { cwd: dir }); return 0; } catch { return 1; } },
+      async (c) => String(execSync(c, { cwd: dir }) ?? ''),
       ['b-in-scope.js'],
     );
     expect(result.applied).toBe(true);

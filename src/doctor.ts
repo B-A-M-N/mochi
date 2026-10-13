@@ -120,7 +120,10 @@ export async function doctorReport(opts: {
   const cronJobs = listJobs(opts.workspaceDir).length;
   let sessionCount = 0;
   if (sqlite) {
-    try { sessionCount = new SessionStore(opts.workspaceDir).list().length; } catch { /* store not initialised yet */ }
+    try {
+      const store = new SessionStore(opts.workspaceDir);
+      try { sessionCount = store.list().length; } finally { store.close(); }
+    } catch { /* store not initialised yet */ }
   }
 
   // Skill regression doctor (MCH-20): scan the skills directories for degraded
