@@ -34,29 +34,22 @@ function tmpFile(name: string, body: string): string {
   return p;
 }
 
-/** Executable fixture that spawnSync can actually launch on every OS. Posix
- *  uses a shebang script; Windows cannot spawn scripts directly
- *  (extensionless files ENOENT, .cmd/.bat EINVAL without a shell), so it
- *  drives a real executable — powershell.exe, present on every Windows —
- *  with a generated .ps1 (leadArgs carry the -File invocation; the test's
- *  own args follow verbatim). */
+/** Executable fixture that spawnSync can actually launch on EVERY OS.
+ *  Windows cannot spawn scripts directly — extensionless files ENOENT,
+ *  .cmd/.bat EINVAL without a shell — so the fixture drives the node binary
+ *  running the tests (process.execPath: a real file on every platform) with
+ *  a generated .js script. The test's own args follow the script path, and
+ *  since they arrive after a real argv[2] they can never collide with node
+ *  option parsing (`--quiet` stays a test arg, not a node flag). */
 function tmpExec(exitCode: number, marker?: string): { bin: string; leadArgs: string[] } {
   const dir = mkdtempSync(join(tmpdir(), 'mochi-dispatch-'));
   tmpDirs.push(dir);
-  if (process.platform === 'win32') {
-    const script = join(dir, 'mochi-standalone.ps1');
-    const lines = marker
-      ? [`$args | ForEach-Object { $_ } | Out-File -Encoding ascii -FilePath '${marker}'`, `exit ${exitCode}`]
-      : [`exit ${exitCode}`];
-    writeFileSync(script, lines.join('\r\n') + '\r\n');
-    return { bin: 'powershell.exe', leadArgs: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script] };
-  }
-  const p = join(dir, 'mochi-standalone');
-  writeFileSync(p, marker
-    ? `#!/bin/sh\nprintf '%s\\n' "$@" > "${marker}"\nexit ${exitCode}\n`
-    : `#!/bin/sh\nexit ${exitCode}\n`);
-  chmodSync(p, 0o755);
-  return { bin: p, leadArgs: [] };
+  const script = join(dir, 'mochi-standalone.js');
+  const body = marker
+    ? `const fs = require('node:fs');\nfs.appendFileSync(${JSON.stringify(marker)}, process.argv.slice(2).join('\\n') + '\\n');\nprocess.exit(${exitCode});\n`
+    : `process.exit(${exitCode});\n`;
+  writeFileSync(script, body);
+  return { bin: process.execPath, leadArgs: [script] };
 }
 
 afterEach(() => {

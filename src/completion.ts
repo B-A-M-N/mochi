@@ -125,7 +125,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     ],
   },
   { name: 'chameleon', description: 'Removed standalone — engine runs auto + via --enhance' },
-  { name: 'self-train', description: 'Self-review loop', aliases: ['selftrain', 'train'] },
+  { name: 'self-train', description: 'Self-review loop (--schedule for nightly learning)', aliases: ['selftrain', 'train'] },
   { name: 'speculate', description: 'Speculative execution' },
   { name: 'usage', description: 'Token usage and cost' },
   { name: 'feedback', description: 'Rate mochi good/bad (feeds self-correction)' },

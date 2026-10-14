@@ -647,6 +647,33 @@ async function main() {
   if (first === 'self-train' || first === 'selftrain' || first === 'train') {
     // Continuous self-improvement: cycles of self-review until verified done,
     // then a skill-curator pass. Optional focus text after the cycle count.
+    // --schedule "<spec>" instead installs a recurring cron job (default
+    // daily) so learning compounds unattended. Unit in
+    // ./self-train-schedule.js; this stays a thin adapter.
+    if (flags.schedule !== undefined) {
+      const { validateTrainSchedule, trainSchedule, trainCronPrompt } = await import('./self-train-schedule.js');
+      const bad = validateTrainSchedule(flags.schedule === true ? undefined : flags.schedule);
+      if (bad) { console.error(bad); process.exit(1); }
+      const rest = positional.slice(1);
+      const focus = (rest.length && /^\d+$/.test(rest[0]) ? rest.slice(1) : rest).join(' ').trim() || undefined;
+      const { startDaemon, daemonRunning, readDaemonInfo } = await import('./daemon/daemon.js');
+      const wsDir = runtime.workspace.dir;
+      let info = readDaemonInfo(wsDir);
+      if (!info || !daemonRunning(wsDir)) {
+        const r = await startDaemon({ cwd, config: configOverrides });
+        if (!r.ok) { console.error(`Failed to start daemon: ${r.error}`); process.exit(1); }
+        info = readDaemonInfo(wsDir);
+      }
+      const res = await fetch(`http://127.0.0.1:${info?.port}/api/cron`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${info?.token}` },
+        body: JSON.stringify({ action: 'add', prompt: trainCronPrompt(focus), schedule: trainSchedule(flags.schedule === true ? undefined : flags.schedule) }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; id?: string };
+      if (!res.ok || data.error) { console.error(data.error ?? 'Daemon error'); process.exit(1); }
+      console.log(`Nightly learning on: ${trainSchedule(flags.schedule === true ? undefined : flags.schedule)} (job ${data.id}). Manage with: mochi daemon cron list|remove.`);
+      return;
+    }
     const rest = positional.slice(1);
     const cycles = rest.length && /^\d+$/.test(rest[0]) ? Number(rest[0]) : 3;
     const focus = (rest.length && /^\d+$/.test(rest[0]) ? rest.slice(1) : rest).join(' ').trim() || undefined;
