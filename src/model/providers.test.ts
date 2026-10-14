@@ -126,6 +126,23 @@ describe('providers', () => {
     }
   });
 
+  it('every listed model id survives the router unchanged (dead-model class)', async () => {
+    // Static audit as a test: normalizeModelName must be the identity for
+    // every table id (a mangled wire id 404s), and every id must match the
+    // table under startup-check's bare-id comparison. Caught github-models'
+    // vendor-prefixed ids being stripped to bare ids.
+    const { normalizeModelName } = await import('./router.js');
+    const { bareModelId } = await import('./startup-check.js');
+    for (const p of PROVIDERS) {
+      for (const m of p.models) {
+        expect(normalizeModelName(m, p.baseUrl), `${p.id}: wire id mangled for ${m}`).toBe(m);
+        const bare = bareModelId(m, p.baseUrl);
+        const listed = p.models.some((x) => x === bare || x === m || bareModelId(x, p.baseUrl) === bare);
+        expect(listed, `${p.id}: ${m} fails the startup model match`).toBe(true);
+      }
+    }
+  });
+
   it('provider ids are unique (no shadowed entries)', () => {
     const ids = PROVIDERS.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -135,6 +152,8 @@ describe('providers', () => {
     const { normalizeModelName } = await import('./router.js');
     // Aggregators require vendor/model form — stripping 404s (novita case).
     expect(normalizeModelName('deepseek/deepseek-v4.1-flash', 'https://api.novita.ai/openai/v1')).toBe('deepseek/deepseek-v4.1-flash');
+    expect(normalizeModelName('openai/gpt-4.1', 'https://models.github.ai/inference')).toBe('openai/gpt-4.1');
+    expect(normalizeModelName('anthropic/claude-sonnet-4-5', 'https://models.github.ai/inference')).toBe('anthropic/claude-sonnet-4-5');
     expect(normalizeModelName('Qwen/Qwen3-235B-A22B', 'https://api.studio.nebius.ai/v1')).toBe('Qwen/Qwen3-235B-A22B');
     expect(normalizeModelName('meta-llama/Llama-3.3-70B-Instruct-Turbo', 'https://api.together.xyz/v1')).toBe('meta-llama/Llama-3.3-70B-Instruct-Turbo');
     // Direct endpoints still want bare ids.

@@ -40,7 +40,7 @@ export function normalizeModelName(rawModel: string, baseUrl?: string): string {
   // Qwen/…, Together's meta-llama/…) are exempt from stripping: stripping
   // deepseek/deepseek-v4.1-flash to deepseek-v4.1-flash 404s on Novita.
   const isOpenRouter = Boolean(baseUrl && baseUrl.includes('openrouter.ai'));
-  const needsVendorPrefix = Boolean(baseUrl && /openrouter\.ai|novita\.ai|nebius|together\.xyz|fireworks\.ai|deepinfra\.com/i.test(baseUrl));
+  const needsVendorPrefix = Boolean(baseUrl && /openrouter\.ai|novita\.ai|nebius|together\.xyz|fireworks\.ai|deepinfra\.com|models\.github\.ai/i.test(baseUrl));
   if (!isOpenRouter && !needsVendorPrefix) {
     m = m.replace(/^(?:freeinference|freeinforge|opencode-go|opencode|zen|go|openai|deepseek|zhipu|zai|anthropic|google|gemini)\//i, '');
   }
