@@ -5,6 +5,9 @@ description: Triage an inbox and draft professional email — sorting by action 
 
 # Email Communication Procedure
 
+## Trigger / when to use
+Load this skill when triaging an inbox, drafting work email, or handling follow-ups and tone-sensitive messages.
+
 ## 1. Triage before replying
 Sort every message into three piles: needs my action (with a deadline), waiting on someone else, and informational (archive after reading). Never reply in inbox order — answer by deadline, oldest first. If a message needs >5 minutes, reply with when you'll answer fully instead of going silent.
 

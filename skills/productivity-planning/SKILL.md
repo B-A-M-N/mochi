@@ -5,6 +5,9 @@ description: Turn goals into executable plans with mochi's todo, goal, and check
 
 # Productivity Planning Procedure
 
+## Trigger / when to use
+Load this skill when planning work, breaking down a project, setting goals, or running a daily/weekly review.
+
 ## 1. Write the outcome, not the activity
 Define done as an observable state (`inbox at zero`, `draft sent to Ana`) with a date — never as effort (`work on email`). If done can't be observed, the goal is a wish; shrink it until it fits one verifiable sentence.
 

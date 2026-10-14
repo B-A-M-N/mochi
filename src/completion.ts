@@ -137,7 +137,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     ],
   },
   { name: 'dashboard', description: 'Open dashboard', aliases: ['web'] },
-  { name: 'discord', description: 'Discord gateway' },
+  { name: 'discord', description: 'Discord gateway (run: live bot, status: config check)' },
   { name: 'ambient', description: 'Ambient agent mode' },
   { name: 'termix', description: 'Multi-agent broadcast' },
   { name: 'bg', description: 'Background tasks' },

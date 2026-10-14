@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { lintSkillDoc } from './skill-lint.js';
 import type { Tool } from '../tools/types.js';
 
 /** Where agent-created + returned skills live, relative to the project dir. */
@@ -214,6 +215,15 @@ export function writeSkill(projectDir: string, input: CreateInput): WriteResult 
     if (!name) return { ok: false, error: 'name is required' };
     if (!input.description) return { ok: false, error: 'description is required' };
     if (!input.body || !input.body.trim()) return { ok: false, error: 'body is required' };
+    // Safety gate (placeholders, injection language): the same rules the whole
+    // bundled library passes. Size/procedure quality stays with
+    // assessSkillQuality below (richer messages, existing contract) — this
+    // gate only blocks content that must never persist.
+    const lint = lintSkillDoc(name, input.description, input.body);
+    const unsafe = lint.issues.filter((i) => i.severity === 'error' && (i.rule === 'no-injection' || i.rule === 'no-placeholders'));
+    if (unsafe.length > 0) {
+      return { ok: false, error: `Skill lint failed:\n${unsafe.map((i) => `[${i.severity}] ${i.rule}: ${i.message}`).join('\n')}` };
+    }
     const quality = assessSkillQuality(input.description, input.body);
     if (!quality.passed) {
       return { ok: false, quality, error: `Skill quality gate failed (${quality.score}/100): ${quality.missing.join('; ')}` };

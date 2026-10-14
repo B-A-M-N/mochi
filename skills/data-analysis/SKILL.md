@@ -5,6 +5,9 @@ description: Explore and summarize tabular data (CSV/Excel/SQLite) with Python â
 
 # Data Analysis Procedure
 
+## Trigger / when to use
+Load this skill when asked what a dataset shows, or to explore, clean, aggregate, or summarize tabular data.
+
 ## 1. Profile before analyzing
 Load with pandas (`read_csv` with explicit `dtype` and `parse_dates`), then report shape, dtypes, null counts, and duplicates. Check date ranges and categorical cardinality. Never aggregate before knowing what is missing â€” nulls silently become wrong answers.
 

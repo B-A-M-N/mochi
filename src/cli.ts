@@ -1330,6 +1330,40 @@ async function main() {
       console.error('No Discord bot configuration found. Set DISCORD_BOT_TOKEN in .env, ~/.mochi/.env, or ~/.hermes/.env.');
       process.exit(1);
     }
+    const sub = positional[1] ?? 'status';
+    if (sub === 'run') {
+      // Live gateway: websocket → MESSAGE_CREATE → runtime.goal → reply.
+      // Only prefix/mention messages are answered; everything else is ignored.
+      // Needs the Message Content intent in the dev portal for bodies.
+      const { runDiscordGateway } = await import('./discord.js');
+      console.log(`🍡 Mochi Discord Gateway connecting with prefix "${cfg.prefix || '!mochi'}" (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      let sock: { close(): void } | undefined;
+      process.once('SIGINT', () => { try { sock?.close(); } catch { /* already dead */ } ctl.abort(); });
+      const summary = await runDiscordGateway(cfg, runtime, {
+        createSocket: (url: string) => {
+          const ws = new WebSocket(url);
+          const s = {
+            send: (t: string) => ws.send(t),
+            close: () => ws.close(),
+            onopen: null as (() => void) | null,
+            onmessage: null as ((data: string) => void) | null,
+            onclose: null as (() => void) | null,
+            onerror: null as ((err: unknown) => void) | null,
+          };
+          ws.onopen = () => s.onopen?.();
+          ws.onmessage = (ev: MessageEvent) => s.onmessage?.(typeof ev.data === 'string' ? ev.data : String(ev.data));
+          ws.onclose = () => s.onclose?.();
+          ws.onerror = () => s.onerror?.('websocket error');
+          sock = s;
+          return s;
+        },
+        onLog: (line: string) => console.log(line),
+        signal: ctl.signal,
+      });
+      console.log(`Discord gateway stopped (${summary.messages} messages handled, ${summary.reconnects} reconnects).`);
+      return;
+    }
     console.log(`🍡 Mochi Discord Gateway configured with prefix "${cfg.prefix || '!mochi'}".`);
     console.log(`Bot Token: ${cfg.token.slice(0, 10)}... (whitelisting: ${cfg.allowAllUsers ? 'all users' : (cfg.allowedUserIds?.length ?? 0) + ' users'})`);
     return;

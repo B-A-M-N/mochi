@@ -5,6 +5,9 @@ description: Write stories, essays, marketing copy, and scripts with structure-f
 
 # Creative Writing Procedure
 
+## Trigger / when to use
+Load this skill when the user asks for stories, essays, marketing copy, scripts, or revisions of any non-code prose.
+
 ## 1. Lock the brief before drafting
 Ask (or infer and state): audience, length, tone, and the one idea the reader must keep. A draft without a brief drifts — restate the brief in one line and get a nod before writing.
 
