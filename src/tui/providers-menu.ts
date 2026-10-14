@@ -72,6 +72,15 @@ function detailsText(p: Provider, activeId: string, envLookup: (k: string) => st
   return head.join('\n');
 }
 
+/** Which local OAuth/CLI login a provider supports (real device/npmless flows
+ *  handled by the user's own CLIs — never mochi's fake client_ids). Null for
+ *  API-key-only providers. */
+export function oauthLoginHint(p: Provider): { label: string; command: string } | null {
+  if (p.id === 'github-models') return { label: 'Login with GitHub OAuth', command: 'gh auth login' };
+  if (p.id === 'huggingface') return { label: 'Login with Hugging Face', command: 'huggingface-cli login' };
+  return null;
+}
+
 function rowText(p: Provider, activeId: string): string {
   const active = p.id === activeId;
   const badge = active ? `${T.lime}[ACTIVE]${T.reset} ` : '        ';
@@ -85,16 +94,20 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
   const showProvider = async (p: Provider): Promise<void> => {
     push('system', detailsText(p, deps.activeProvider, deps.envLookup, deps.storedKey));
     scheduleRender();
-    // Key actions live here so a provider can be re-authed or cleared
-    // without leaving the browser.
+    // Key actions live here so a provider can be re-authed, OAuth-logged-in,
+    // or cleared without leaving the browser. The OAuth item only appears
+    // for providers with a real local flow (gh, huggingface-cli) — nothing
+    // fake is ever offered.
+    const oauth = oauthLoginHint(p);
+    const actions: Array<{ label: string; run: () => Promise<void> }> = [
+      { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
+      ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthLogin(deps, p, oauth) }] : []),
+      { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
+      { label: 'Done', run: async () => {} },
+    ];
     setMenuSelected(0);
-    const action = await openMenu(`${p.name} · key actions`, [
-      'Re-authenticate key',
-      'Clear stored key',
-      'Done',
-    ]);
-    if (action === 0) await reauthenticate(deps, p);
-    else if (action === 1) await clearStoredKey(deps, p);
+    const action = await openMenu(`${p.name} · key actions`, actions.map((a) => a.label));
+    if (action >= 0 && action < actions.length) await actions[action].run();
   };
 
   if (arg) {
@@ -128,13 +141,49 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
 
 /** Re-authenticate one provider: model select → key entry → persist. */
 async function reauthenticate(deps: ProvidersMenuDeps, p: Provider): Promise<void> {
+  await authenticateKey(deps, p, await selectModel(deps, p));
+}
+
+/** OAuth login for providers with a real local flow (gh, huggingface-cli):
+ *  model select → pull the CLI token → probe → persist. When the CLI isn't
+ *  authed, it says the exact command to run instead of failing cryptically. */
+async function oauthLogin(deps: ProvidersMenuDeps, p: Provider, oauth: { label: string; command: string }): Promise<void> {
+  const { push, scheduleRender } = deps;
+  const token = await deps.getAmbientKey(p.id);
+  if (!token) {
+    push('error', `${oauth.label} needs \`${oauth.command}\` first: run it in a shell, then choose this action again.`);
+    scheduleRender();
+    return;
+  }
+  await verifyAndStore(deps, p, await selectModel(deps, p), token, 'oauth');
+}
+
+/** Model picker shared by re-auth and OAuth login (default preselected). */
+async function selectModel(deps: ProvidersMenuDeps, p: Provider): Promise<string> {
   const { openMenu, setMenuSelected } = deps;
   const modelItems = p.models.map((m) => `${m.padEnd(36)}`);
   const defIdx = p.models.indexOf(p.defaultModel);
   setMenuSelected(Math.max(0, defIdx >= 0 ? defIdx : 0));
   const modelIdx = await openMenu(`${p.name} · Select Model`, modelItems);
-  const model = modelIdx >= 0 && modelIdx < p.models.length ? p.models[modelIdx] : p.defaultModel;
-  await authenticateKey(deps, p, model);
+  return modelIdx >= 0 && modelIdx < p.models.length ? p.models[modelIdx] : p.defaultModel;
+}
+
+/** Probe-then-persist shared by API-key and OAuth logins. Rejected keys are
+ *  never stored; unreachable endpoints store with a warning. */
+async function verifyAndStore(deps: AuthDeps, p: Provider, model: string, apiKey: string, source: string): Promise<void> {
+  const { push, scheduleRender } = deps;
+  const v = await deps.verifyKey(p.id, p.baseUrl, p.kind, apiKey);
+  if (!v.ok && v.reason === 'auth') {
+    push('error', `Key rejected by ${p.name}: ${v.message} Not stored — check the key and try again.`);
+    scheduleRender();
+    return;
+  }
+  if (!v.ok) push('system', `Warning: could not verify the key (${v.message}) — storing anyway.`);
+  else push('system', `Verified key with ${p.name}${source === 'oauth' ? ' (OAuth token from local CLI auth)' : ''}.`);
+  scheduleRender();
+  const desc = await deps.persistLogin(p.id, apiKey, model);
+  push('system', desc);
+  scheduleRender();
 }
 
 /** Shared key entry used by /providers re-auth AND /login (imported by
@@ -176,18 +225,7 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
     return;
   }
   if (!apiKey) { push('error', 'No API key provided.'); scheduleRender(); return; }
-  const v = await deps.verifyKey(p.id, p.baseUrl, p.kind, apiKey);
-  if (!v.ok && v.reason === 'auth') {
-    push('error', `Key rejected by ${p.name}: ${v.message} Not stored — check the key and try again.`);
-    scheduleRender();
-    return;
-  }
-  if (!v.ok) push('system', `Warning: could not verify the key (${v.message}) — storing anyway.`);
-  else push('system', `Verified key with ${p.name}${source === 'oauth' ? ' (OAuth token from local CLI auth)' : ''}.`);
-  scheduleRender();
-  const desc = await deps.persistLogin(p.id, apiKey, model);
-  push('system', desc);
-  scheduleRender();
+  await verifyAndStore(deps, p, model, apiKey, source);
 }
 
 /** Clear one provider's stored file key (env keys are reported, not touched). */

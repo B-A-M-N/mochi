@@ -1,6 +1,6 @@
 // providersMenu with scripted UI fns (tools-menu pattern).
 import { describe, it, expect } from 'vitest';
-import { providersMenu, matchProviders, keyStateText } from './providers-menu.js';
+import { providersMenu, matchProviders, keyStateText, oauthLoginHint } from './providers-menu.js';
 import { providerById } from '../model/providers.js';
 import type { LineKind } from './state.js';
 
@@ -41,6 +41,15 @@ describe('matchProviders', () => {
   });
 });
 
+describe('oauthLoginHint (only real local flows are offered)', () => {
+  it('names the CLI command for github-models and huggingface, null elsewhere', () => {
+    expect(oauthLoginHint(providerById('github-models')!)).toEqual({ label: 'Login with GitHub OAuth', command: 'gh auth login' });
+    expect(oauthLoginHint(providerById('huggingface')!)).toEqual({ label: 'Login with Hugging Face', command: 'huggingface-cli login' });
+    expect(oauthLoginHint(providerById('openai')!)).toBeNull();
+    expect(oauthLoginHint(providerById('upstage')!)).toBeNull();
+  });
+});
+
 describe('keyStateText (never prints key material)', () => {
   it('reports env/file/missing without leaking values', () => {
     const p = providerById('openai')!;
@@ -69,9 +78,44 @@ describe('providersMenu', () => {
   });
 
   it('shows the gh OAuth path for github-models', async () => {
-    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 2 : -1) });
+    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 3 : -1) });
     await providersMenu(d, '/providers github-models');
     expect(lines.some((l) => l.text.includes('gh auth login'))).toBe(true);
+  });
+
+  it('OAuth action lists the visible login item only where a real flow exists', async () => {
+    const seen: string[][] = [];
+    const gh = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 3; } });
+    await providersMenu(gh.d, '/providers github-models');
+    expect(seen[0]).toHaveLength(4);
+    expect(seen[0][1]).toContain('Login with GitHub OAuth');
+    const plain = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 2; } });
+    await providersMenu(plain.d, '/providers upstage');
+    expect(seen[1]).toHaveLength(3);
+    expect(seen[1].some((i) => i.includes('OAuth'))).toBe(false);
+  });
+
+  it('OAuth action persists the CLI token after probing it', async () => {
+    const { d, lines, persisted } = deps({
+      openMenu: async (t: string) => (t.includes('key actions') ? 1 : 0),
+      getAmbientKey: async () => 'ghp-oauth-token',
+      verifyKey: async () => ({ ok: true, message: 'verified' }),
+    });
+    await providersMenu(d, '/providers github-models');
+    expect(persisted).toEqual([{ id: 'github-models', key: 'ghp-oauth-token', model: 'openai/gpt-4.1' }]);
+    expect(lines.some((l) => l.text.includes('OAuth token from local CLI auth'))).toBe(true);
+    expect(lines.join('\n')).not.toContain('ghp-oauth-token');
+  });
+
+  it('OAuth action without CLI auth names the exact command, stores nothing', async () => {
+    const { d, lines, persisted } = deps({
+      openMenu: async (t: string) => (t.includes('key actions') ? 1 : 0),
+      getAmbientKey: async () => undefined,
+    });
+    await providersMenu(d, '/providers github-models');
+    expect(persisted).toEqual([]);
+    const err = lines.find((l) => l.kind === 'error');
+    expect(err?.text).toContain('gh auth login');
   });
 
   it('nomatch errors honestly', async () => {
