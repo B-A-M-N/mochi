@@ -231,6 +231,10 @@ Usage:
   mochi bg [list|logs|kill]          # manage async background tasks
   mochi discord [run|status]         # run Discord bot gateway
   mochi telegram [run|status]        # run Telegram bot gateway (HTTP long-poll)
+  mochi slack [run|webhook|status]   # run Slack gateway (polling or Events API webhook)
+  mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
+  mochi skills [list|lint]           # list and validate skills
+  mochi providers                   # list AI model providers
   mochi dashboard | mochi web        # open web dashboard in browser
   mochi plugin add <dir>|remove <name>|list        # spec 12-E plugin registry
   mochi security | mochi audit       # static security and credential audit

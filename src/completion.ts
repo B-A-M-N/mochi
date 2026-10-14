@@ -39,6 +39,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     subcommands: [
       { name: 'list', description: 'List skills' },
       { name: 'search', description: 'Search skills' },
+      { name: 'lint', description: 'Lint skill files (frontmatter, steps, quality)' },
       { name: 'audit', description: 'Skill health report' },
       { name: 'repo', description: 'Shared skill registry' },
       { name: 'import', description: 'Import skills' },
@@ -144,7 +145,11 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'dashboard', description: 'Open dashboard', aliases: ['web'] },
   { name: 'discord', description: 'Discord gateway (run: live bot, status: config check)' },
   { name: 'telegram', description: 'Telegram gateway (run: live bot, status: config check)' },
-  { name: 'slack', description: 'Slack gateway (run: live bot, status: config check)' },
+  { name: 'slack', description: 'Slack gateway (run: polling, webhook: Events API, status: config check)', subcommands: [
+      { name: 'run', description: 'Polling gateway' },
+      { name: 'webhook', description: 'Events API HTTP webhook server' },
+      { name: 'status', description: 'Config check' },
+    ] },
   { name: 'ambient', description: 'Ambient agent mode' },
   { name: 'termix', description: 'Multi-agent broadcast' },
   { name: 'bg', description: 'Background tasks' },
