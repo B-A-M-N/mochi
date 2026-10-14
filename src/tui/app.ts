@@ -2767,26 +2767,66 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     state.menuSelected = Math.max(0, defIdx >= 0 ? defIdx : 0);
     const modelIdx = await openMenu(`${prov.name} · Select Default Model`, modelItems);
     const model = modelIdx >= 0 ? prov.models[modelIdx] : prov.defaultModel;
-    const envKey = prov.envKey ? process.env[prov.envKey] : undefined;
-    const storedKey = runtime.config.model.provider === prov.id ? runtime.config.model.apiKey : undefined;
-    const apiKey = envKey || storedKey || await ask(`${prov.name} API Key:`);
-    if (!apiKey && prov.envKey) { push('error', `No API key for ${prov.id}. Set $${prov.envKey} or enter one.`); return; }
-    if (!apiKey) { push('error', 'No API key provided.'); return; }
-    // Real auth: prove keyed credentials before storing. Rejected keys are
-    // never persisted; unreachable endpoints store with a warning.
-    if (prov.envKey) {
-      const { verifyApiKey } = await import('../model/auth-verify.js');
-      const v = await verifyApiKey({ provider: prov.id, baseUrl: prov.baseUrl, apiKey, kind: prov.kind });
-      if (!v.ok && v.reason === 'auth') {
-        push('error', `Key rejected by ${prov.name}: ${v.message} Not stored — check the key and try again.`);
-        scheduleRender();
-        return;
-      }
-      if (!v.ok) push('system', `Warning: could not verify the key (${v.message}) — storing anyway.`);
-      else push('system', `Verified key with ${prov.name}.`);
-      scheduleRender();
+    // Key entry is the shared unit (same replace/keep/OAuth semantics as
+    // /providers re-auth) — app.ts never forks its own copy.
+    const { authenticateKey } = await import('./providers-menu.js');
+    await authenticateKey(authDeps(), prov, model || prov.defaultModel);
+  }
+
+  /** Shared key-entry effects for loginFlow and providerMenu (one wiring). */
+  function authDeps() {
+    return {
+      push, scheduleRender, ask,
+      setMenuSelected: (i: number) => { state.menuSelected = i; },
+      activeProvider: runtime.config.model.provider,
+      envLookup: (k: string) => process.env[k],
+      storedKey: runtime.config.model.apiKey,
+      getAmbientKey,
+      verifyKey: async (providerId: string, baseUrl: string, kind: import('../model/providers.js').ProviderKind, key: string) => {
+        const { verifyApiKey } = await import('../model/auth-verify.js');
+        const v = await verifyApiKey({ provider: providerId, baseUrl, apiKey: key, kind });
+        return v.ok ? { ok: true, message: 'verified' } : { ok: false, reason: v.reason, message: v.message };
+      },
+      persistLogin: (id: string, key: string, model: string) => run(() => runtime.loginProvider(id, key, model)),
+      switchProvider: (id: string, model: string) => run(() => runtime.useProvider(id, model)),
+      persistCleared,
+    };
+  }
+
+  /** OAuth/CLI-sourced tokens: `gh auth token` for GitHub Models (real device
+   *  flow, handled by gh) and the huggingface-cli cache for Hugging Face.
+   *  Everything else returns undefined (API keys only). Never throws. */
+  async function getAmbientKey(id: string): Promise<string | undefined> {
+    if (id === 'github-models') {
+      try {
+        const out = await new Promise<string>((res, rej) =>
+          execFile('gh', ['auth', 'token'], { timeout: 8000 }, (e, stdout) => (e ? rej(e) : res(String(stdout).trim()))));
+        return out || undefined;
+      } catch { return undefined; }
     }
-    await run(async () => runtime.loginProvider(prov.id, apiKey, model || prov.defaultModel));
+    if (id === 'huggingface') {
+      try {
+        const { readFileSync, existsSync } = await import('node:fs');
+        const { homedir } = await import('node:os');
+        const f = resolve(homedir(), '.cache/huggingface/token');
+        if (existsSync(f)) {
+          const t = readFileSync(f, 'utf8').trim();
+          return t || undefined;
+        }
+      } catch { /* fall through */ }
+      return undefined;
+    }
+    return undefined;
+  }
+
+  function persistCleared(): Promise<void> {
+    // Dynamic import keeps the TUI graph lean (same modules cli-auth uses).
+    return import('../model/providers.js').then(({ loadConfigFile, saveConfigFile }) => {
+      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+      if (cfg.model) delete cfg.model.apiKey;
+      saveConfigFile(cfg as never);
+      runtime.config.model.apiKey = undefined;
+    });
   }
 
   async function providerMenu(line = '/providers') {
@@ -2794,26 +2834,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // dispatcher). Browse details plus key actions: re-authenticate
     // (live-probed, like /login) and clear the stored key.
     const { providersMenu } = await import('./providers-menu.js');
-    const { verifyApiKey } = await import('../model/auth-verify.js');
-    const { loadConfigFile, saveConfigFile } = await import('../model/providers.js');
-    await providersMenu({
-      openMenu, push, scheduleRender, ask,
-      setMenuSelected: (i: number) => { state.menuSelected = i; },
-      activeProvider: runtime.config.model.provider,
-      envLookup: (k: string) => process.env[k],
-      storedKey: runtime.config.model.apiKey,
-      verifyKey: async (providerId, baseUrl, kind, key) => {
-        const v = await verifyApiKey({ provider: providerId, baseUrl, apiKey: key, kind });
-        return v.ok ? { ok: true, message: 'verified' } : { ok: false, reason: v.reason, message: v.message };
-      },
-      persistLogin: (id, key, model) => run(() => runtime.loginProvider(id, key, model)),
-      persistCleared: () => {
-        const cfg = loadConfigFile() as { model?: { apiKey?: string } };
-        if (cfg.model) delete cfg.model.apiKey;
-        saveConfigFile(cfg as never);
-        runtime.config.model.apiKey = undefined;
-      },
-    }, line);
+    await providersMenu({ openMenu, ...authDeps() }, line);
   }
 
   async function modelMenu() {
