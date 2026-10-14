@@ -66,12 +66,23 @@ function escapeRegex(s: string): string {
 async function ripgrep(cwd: string, query: string, glob?: string): Promise<string | null> {
   const nat = await nativeSearch(cwd, query, glob);
   if (nat) return nat;
-  return new Promise((resolve) => {
+  return new Promise((resolvePromise) => {
     const args = ['-n', '--no-heading', '--color=never', '-F', query];
     if (glob) {
       args.push('-g', glob);
     } else {
       args.push('-g', '!{dist,build,.next,coverage,node_modules,.cache,.npm-global,.hermes,.gemini,.local,.config}/**');
+      if (cwd === homedir()) {
+        try {
+          const topEntries = readdirSync(cwd);
+          for (const entry of topEntries) {
+            if (entry.startsWith('.')) continue;
+            if (existsSync(resolve(cwd, entry, '.git'))) {
+              args.push('-g', `!${entry}/**`);
+            }
+          }
+        } catch {}
+      }
     }
     const proc = spawn('rg', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
@@ -84,10 +95,10 @@ async function ripgrep(cwd: string, query: string, glob?: string): Promise<strin
     proc.stderr.on('data', (c) => { err += String(c); });
     proc.on('close', (code) => {
       clearTimeout(timer);
-      if (code !== 0 && out.length === 0) return resolve(null);
-      resolve(clipToolOutput(over ? out + '\n... [truncated by mochi]' : out.trim()));
+      if (code !== 0 && out.length === 0) return resolvePromise(null);
+      resolvePromise(clipToolOutput(over ? out + '\n... [truncated by mochi]' : out.trim()));
     });
-    proc.on('error', () => { clearTimeout(timer); resolve(null); });
+    proc.on('error', () => { clearTimeout(timer); resolvePromise(null); });
   });
 }
 
@@ -102,6 +113,7 @@ function* walkFiles(root: string, dir: string, budget: { seen: number; max: numb
     let st: ReturnType<typeof statSync>;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) {
+      if (dir === homedir() && existsSync(resolve(full, '.git'))) continue;
       yield* walkFiles(root, full, budget);
     } else if (st.size < 5_000_000) {
       budget.seen++;

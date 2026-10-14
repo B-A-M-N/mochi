@@ -9,6 +9,7 @@ import { nativePlanCompaction, nativeTokensCount } from './native/agent-protocol
 import type { PlanRequestMessage } from './native/agent-protocol.js';
 import { classifyTaskKind, kindHint, isSimpleScriptTask } from './core/taskkind.js';
 import type { ChatMessage, MochiConfig, RepoInfo, Task, ToolDefinition } from './types.js';
+import { contentText } from './types.js';
 import {TOOL_ALIASES, normalizeToolArgs} from './tools/index.js';
 import { getCachedScaffold } from './cognitive/chameleon.js';
 import { isMode, modeInstruction } from './modes.js';
@@ -279,16 +280,17 @@ export class ContextEngine {
   private lastReportedPromptTokens: number | null = null;
 
   addMessage(message: ChatMessage) {
-    if (!this.initialUserPrompt && message.role === 'user' && typeof message.content === 'string' && message.content.trim()) {
-      const trimmed = message.content.trim();
+    const msg = message.tool_calls ? { ...message, tool_calls: [...message.tool_calls] } : message;
+    if (!this.initialUserPrompt && msg.role === 'user' && typeof msg.content === 'string' && msg.content.trim()) {
+      const trimmed = msg.content.trim();
       if (!trimmed.startsWith('[MODE:')) {
         this.initialUserPrompt = trimmed;
       }
     }
     // Phase 2: mine file-op tool calls so read/edited sets survive compaction.
-    this.trackFileOp(message);
-    if (message.role === 'tool' && typeof message.content === 'string') {
-      const text = message.content;
+    this.trackFileOp(msg);
+    if (msg.role === 'tool' && typeof msg.content === 'string') {
+      const text = msg.content;
       const hasErrors =
         /error(\[[A-Za-z0-9_-]+\])?:/i.test(text) ||
         /\bFAIL\b/.test(text) ||
@@ -299,7 +301,7 @@ export class ContextEngine {
 
       if ((text.length > 2000 || text.split('\n').length > 35) && hasErrors) {
         const condensed = condenseOutput(text, { maxLines: 50, preserveContext: 3 });
-        this.messages.push({ ...message, content: condensed.condensed });
+        this.messages.push({ ...msg, content: condensed.condensed });
         return;
       }
 
@@ -312,12 +314,12 @@ export class ContextEngine {
           const tailLines = lines.slice(-keepTail);
           const omitted = lines.length - keepHead - keepTail;
           const folded = `${headLines.join('\n')}\n\n… [mochi: ${omitted > 0 ? `${omitted} lines ` : ''}output folded (${text.length.toLocaleString('en-US')} chars) to conserve context tokens — narrow the query or use offset/limit] …\n\n${tailLines.join('\n')}`;
-          this.messages.push({ ...message, content: folded });
+          this.messages.push({ ...msg, content: folded });
           return;
         }
       }
     }
-    this.messages.push(message);
+    this.messages.push(msg);
   }
 
   getMessages(): readonly ChatMessage[] {
@@ -669,6 +671,22 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     if (this.state.knownErrors.length) lines.push(`Known errors: ${this.state.knownErrors.join('; ')}`);
     if (this.state.importantDecisions.length) lines.push(`Important decisions: ${this.state.importantDecisions.join('; ')}`);
     if (this.state.constraints.length) lines.push(`Constraints: ${this.state.constraints.join('; ')}`);
+    // Persist and surface active todo items on every turn (Claude Code discipline)
+    try {
+      const todoPath = resolve(this.projectRoot, '.mochi', 'state', 'todo.json');
+      if (existsSync(todoPath)) {
+        const raw = readFileSync(todoPath, 'utf8');
+        const todos = JSON.parse(raw) as Array<{ order: number; status: string; title: string; notes?: string }>;
+        if (Array.isArray(todos) && todos.length > 0) {
+          const formatted = todos
+            .map((t) => `${t.order}. [${t.status === 'done' ? 'x' : t.status === 'in_progress' ? '-' : ' '}] ${t.title}${t.notes ? ` -- ${t.notes}` : ''}`)
+            .join('\n');
+          lines.push(`## Active Plan & Todo Checklist (Current Execution Ledger)\n${formatted}`);
+        }
+      }
+    } catch {
+      // ignore todo loading error
+    }
     // MCH-85: the loop-detector stop directive is history-dependent (it trips
     // and un-trips as the conversation evolves). It used to sit inside the
     // STABLE system prompt, where every trip/untrip flipped bytes in the
@@ -740,6 +758,45 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
       }
       remaining -= tokens;
       recent.unshift(m);
+    }
+
+    // Clean up any leading orphaned tool messages whose parent assistant was evicted
+    const validCallIds = new Set<string>();
+    for (const m of recent) {
+      if (m.role === 'assistant' && m.tool_calls) {
+        for (const tc of m.tool_calls) validCallIds.add(tc.id);
+      }
+    }
+    while (recent.length > 0 && recent[0].role === 'tool' && (!recent[0].tool_call_id || !validCallIds.has(recent[0].tool_call_id))) {
+      const orphaned = recent.shift();
+      if (orphaned && typeof orphaned.content === 'string' && orphaned.name && orphaned.content.length > 300 && evictedDense.length < RESCUE_MAX) {
+        evictedDense.push({ name: orphaned.name, content: orphaned.content, tokens: approxTokens(JSON.stringify(orphaned)) });
+      }
+    }
+
+    // Claude Code North Star Anchor: ensure the original user goal is never lost across turns
+    const rootGoal = this.initialUserPrompt || this.state.goal;
+    if (rootGoal) {
+      const promptInRecent = recent.some((m) =>
+        m.role === 'user' && typeof m.content === 'string' && m.content.includes(rootGoal)
+      );
+      if (!promptInRecent) {
+        const anchor = `[ROOT USER GOAL - NORTH STAR & PRIMARY ANCHOR]:\n${rootGoal}`;
+        const firstUserIdx = recent.findIndex((m) => m.role === 'user');
+        if (firstUserIdx >= 0) {
+          recent[firstUserIdx] = {
+            ...recent[firstUserIdx],
+            content: `${anchor}\n\n---\n[CURRENT TURN]:\n${contentText(recent[firstUserIdx])}`,
+          };
+        } else {
+          // No user message exists yet in recent. Insert after all leading system messages.
+          let insertIdx = 0;
+          while (insertIdx < recent.length && recent[insertIdx].role === 'system') {
+            insertIdx++;
+          }
+          recent.splice(insertIdx, 0, { role: 'user', content: anchor });
+        }
+      }
     }
 
     const messages: ChatMessage[] = [
@@ -900,7 +957,8 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   private stateLedger(): string {
     const s = this.state;
     const parts: string[] = [];
-    if (s.goal) parts.push(`Goal: ${s.goal}`);
+    const rootGoal = this.initialUserPrompt || s.goal;
+    if (rootGoal) parts.push(`Root User Goal: ${rootGoal}`);
     if (s.filesModified.length) parts.push(`Files modified: ${s.filesModified.join(', ')}`);
     if (s.knownErrors.length) parts.push(`Known errors: ${s.knownErrors.join('; ')}`);
     if (s.importantDecisions.length) parts.push(`Decisions: ${s.importantDecisions.join('; ')}`);

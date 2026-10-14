@@ -117,6 +117,7 @@ async function* walk(
     if (e.isDirectory()) {
       if (!allowsHidden && e.name.startsWith('.')) continue;
       if (SKIP_DIRS.has(e.name)) continue;
+      if (dir === homedir() && existsSync(resolve(dir, e.name, '.git'))) continue;
       subdirs.push(e.name);
       continue;
     }

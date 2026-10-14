@@ -63,4 +63,33 @@ describe('anthropic prompt-cache breakpoints', () => {
     expect(JSON.stringify(body.messages)).not.toContain('[object Object]');
     expect(JSON.stringify(body.messages)).toContain('look');
   });
+
+  it('merges adjacent same-role messages so Anthropic turns strictly alternate', async () => {
+    const captured: { body?: unknown } = {};
+    stubFetch(captured);
+    const p = createAnthropicProvider({ baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'k' });
+    await p.chat([
+      { role: 'user', content: 'first prompt' },
+      { role: 'user', content: 'second prompt' },
+    ], []);
+    const body = captured.body as { messages: Array<{ role: string; content: unknown }> };
+    expect(body.messages.length).toBe(1);
+    expect(body.messages[0].role).toBe('user');
+    expect(JSON.stringify(body.messages[0].content)).toContain('first prompt');
+    expect(JSON.stringify(body.messages[0].content)).toContain('second prompt');
+  });
+
+  it('safely maps tool messages without tool_call_id as text blocks', async () => {
+    const captured: { body?: unknown } = {};
+    stubFetch(captured);
+    const p = createAnthropicProvider({ baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'k' });
+    await p.chat([
+      { role: 'tool', content: 'orphaned tool output', name: 'shell' },
+    ], []);
+    const body = captured.body as { messages: Array<{ role: string; content: Array<{ type: string; text?: string }> }> };
+    expect(body.messages.length).toBe(1);
+    expect(body.messages[0].role).toBe('user');
+    expect(body.messages[0].content[0].type).toBe('text');
+    expect(body.messages[0].content[0].text).toContain('[tool output: shell] orphaned tool output');
+  });
 });

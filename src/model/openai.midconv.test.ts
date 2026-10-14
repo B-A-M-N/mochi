@@ -92,4 +92,22 @@ describe('openai adapter mid-conversation system messages', () => {
     expect(sent[4].role).toBe('user');
     expect(sent[4].content).toContain('[system notice]');
   });
+
+  it('safely converts orphaned tool messages (missing parent assistant) to user messages', async () => {
+    const { port, bodies } = await startCapture();
+    const provider = createProvider({
+      provider: 'freeinference', baseUrl: `http://localhost:${port}`, model: 'qwen3.6-35b', apiKey: 'k',
+    } as any);
+    const messages = [
+      { role: 'system' as const, content: 'You are Mochi.' },
+      { role: 'tool' as const, tool_call_id: 'orphaned_1', content: 'orphaned result', name: 'read' },
+      { role: 'user' as const, content: 'Next step.' },
+    ] as any;
+    const res = await provider.chat(messages, [], {});
+    expect(res.content).toBe('ok');
+    const sent = bodies[0].messages as any[];
+    // Orphaned tool response becomes a user message instead of invalid leading tool
+    expect(sent[1].role).toBe('user');
+    expect(sent[1].content).toContain('[tool output: read] orphaned result');
+  });
 });

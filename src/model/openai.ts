@@ -92,22 +92,43 @@ export function createOpenAIProvider(config: ProviderConfig) {
 
   function mapMessages(messages: ChatMessage[]): Record<string, unknown>[] {
     const out: Record<string, unknown>[] = [];
+    const declaredToolCallIds = new Set<string>();
     let reuseLen = 0;
     if (lastMapped) {
       const max = Math.min(lastMapped.src.length, messages.length - 1); // tail must be fresh (cache_control on last)
       while (reuseLen < max && lastMapped.src[reuseLen] === messages[reuseLen]) reuseLen++;
       if (reuseLen > 0) {
-        for (let i = 0; i < reuseLen; i++) out.push(lastMapped!.out[i]);
+        for (let i = 0; i < reuseLen; i++) {
+          const item = lastMapped!.out[i];
+          out.push(item);
+          const itemCalls = (item as any).tool_calls || (item as any).toolCalls;
+          if (item.role === 'assistant' && Array.isArray(itemCalls)) {
+            for (const tc of itemCalls) {
+              const id = tc.id || tc.tool_call_id;
+              if (id) declaredToolCallIds.add(id);
+            }
+          }
+        }
       }
     }
     for (let i = reuseLen; i < messages.length; i++) {
       const m = messages[i];
-      if (m.role === 'tool') {
-        out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: contentText(m) });
+      const tcs = m.tool_calls || (m as any).toolCalls;
+      if (m.role === 'assistant' && Array.isArray(tcs)) {
+        for (const tc of tcs) {
+          const id = tc.id || tc.tool_call_id;
+          if (id) declaredToolCallIds.add(id);
+        }
+        out.push({ role: 'assistant', content: contentText(m) || null, tool_calls: tcs });
         continue;
       }
-      if (m.role === 'assistant' && m.tool_calls) {
-        out.push({ role: 'assistant', content: contentText(m) || null, tool_calls: m.tool_calls });
+      if (m.role === 'tool') {
+        if (m.tool_call_id && declaredToolCallIds.has(m.tool_call_id)) {
+          out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: contentText(m) });
+        } else {
+          // Orphaned tool response: convert to user message with tool notice so provider doesn't reject with 400
+          out.push({ role: 'user', content: `[tool output: ${m.name || 'tool'}] ${contentText(m)}` });
+        }
         continue;
       }
       // Some OpenAI-compatible models (observed: qwen3.6-35b on
@@ -183,10 +204,11 @@ export function createOpenAIProvider(config: ProviderConfig) {
       else options.signal.addEventListener('abort', onAbort, { once: true });
     }
 
+    const isReasoning = /reason|r1|deepseek|glm|o1|o3|o4|think/i.test(model);
     const headerTimeoutRaw = Number(process.env.MOCHI_MODEL_HEADERS_TIMEOUT_MS);
     const headerTimeoutMs = Number.isFinite(headerTimeoutRaw) && headerTimeoutRaw > 0
       ? Math.max(100, headerTimeoutRaw)
-      : 25_000;
+      : (isReasoning ? 45_000 : 25_000);
     const headerTimer = setTimeout(() => signal.abort(new Error(`Model response headers stalled for ${headerTimeoutMs}ms`)), headerTimeoutMs);
 
     // Rate-limit + transient-failure safe fetch: only the request is retried
@@ -241,9 +263,10 @@ export function createOpenAIProvider(config: ProviderConfig) {
     // STALL_TIMEOUT_MS. This measurably raises token throughput on chatty
     // providers vs. a Promise.race around every chunk.
     const stallTimeoutRaw = Number(process.env.MOCHI_MODEL_STALL_TIMEOUT_MS);
+    const defaultStallMs = isReasoning ? 60_000 : 35_000;
     const STALL_TIMEOUT_MS = Number.isFinite(stallTimeoutRaw) && stallTimeoutRaw > 0
       ? Math.max(1000, stallTimeoutRaw)
-      : 20_000;
+      : defaultStallMs;
     let lastChunkAt = Date.now();
     let stalled = false;
     const stallInterval = setInterval(() => {

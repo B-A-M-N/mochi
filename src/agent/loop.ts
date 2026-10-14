@@ -265,9 +265,9 @@ export { expectsFileOutput, isGreenfieldTask };
  *  into sibling projects or unrelated session stores, reasons deeply before coding, and
  *  rigorously verifies its changes. */
 export const TASK_FOCUS_PROTOCOL = [
-  '# TASK EXECUTION & OPERATIONAL AUTONOMY PROTOCOL',
-  'You are executing an engineering task with full local administrative and system authority.',
-  '1. FULL SYSTEM ACCESS: You have complete access to the project workspace, home directory, and host environment. Read, search, inspect, or modify files anywhere on the system AS REQUIRED BY THE USER\'S OBJECTIVE. Every file you create or change must serve that objective — never wander into unrelated projects, files, or features mid-task.',
+  '# TASK EXECUTION & OPERATIONAL AUTONOMY PROTOCOL (CLAUDE CODE DISCIPLINE)',
+  'You are executing an engineering task with full local developer and administrative authority.',
+  '1. WORKSPACE ANCHOR & CONTAINMENT: All file operations (read, edit, write, patch, search, glob) MUST strictly remain confined within the active project workspace. NEVER explore, search, or modify files in other repositories, parent directories, or sibling directories in the home directory (~/) unless the user explicitly gave an external path or named an external project in their request.',
   '2. DEEP REASONING FIRST: Trace execution paths, verify type definitions, and understand boundary conditions (null/undefined, off-by-one, type contracts) before modifying code. Use the `think` tool for non-trivial logic.',
   '3. SURGICAL PRECISION: Prefer `edit` or `patch` for targeted, clean changes. Fit seamlessly into existing code styles and types. Never leave lazy placeholders or half-implemented stubs.',
   '4. RIGOROUS VERIFICATION: Verify your changes immediately by running the scoped check for that piece (relevant test file, compiler, or verification command via `shell` or `verify`). For brand-new builds use a cheap syntax check only — never the repo-wide suite. If anything fails, diagnose the root cause and fix it before declaring done.',
@@ -1982,9 +1982,7 @@ Continue from 'Next:', do not redo completed progress.`,
       if (response.toolCalls && response.toolCalls.length > 0) {
         sm.enter('tool-exec');
         sm.recordToolCalls(response.toolCalls.length);
-        // Model-echoed ANSI junk (the model copying its own colored tool
-        // output) must not be enshrined in the context either.
-        this.context.addMessage({ role: 'assistant', content: scrubAnsiFragments(response.content ?? ''), tool_calls: response.toolCalls });
+        this.context.addMessage({ role: 'assistant', content: scrubAnsiFragments(response.content ?? ''), tool_calls: [...response.toolCalls] });
         // Plan mode: allow read-only research, but veto any mutating tool and
         // steer the model back to producing a plan. Every vetoed call still
         // gets a tool response (providers reject dangling tool_call_ids), and
@@ -2891,7 +2889,8 @@ Continue from 'Next:', do not redo completed progress.`,
    *      but still serially with read-only/mutating groups so their $PWD /
    *      env stays consistent.
    */
-  private async executeToolCalls(batch: ToolCall[]): Promise<void> {
+  private async executeToolCalls(batchInput: ToolCall[]): Promise<void> {
+    const batch = [...batchInput];
     while (batch.length > 0) {
       if (this.abortSignal?.aborted) return;
       const head = batch[0];

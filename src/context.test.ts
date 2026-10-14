@@ -228,5 +228,68 @@ describe('conditional tool guidelines (VNext P1.3)', () => {
     expect(body).toContain('const handler');
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it('preserves the root user objective anchor when turns are evicted from the recent window', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-'));
+    const engine = makeEngine(dir, {
+      safety: { contextBudgetTokens: 4000, maxIterations: 50, maxRuntimeMinutes: 10, mode: 'safe' as const },
+    } as any);
+    engine.addMessage({ role: 'user', content: 'Build a production web server' });
+    // Add dense turns to force the initial user message out of the recent window
+    for (let i = 0; i < 20; i++) {
+      engine.addMessage({ role: 'assistant', content: `step output with code:\n${'const x = 1; '.repeat(80)} ${i}` });
+      engine.addMessage({ role: 'user', content: `next instruction:\n${'please continue work '.repeat(80)} ${i}` });
+    }
+    const p = engine.buildPacket(NO_TOOLS);
+    const userMessages = p.messages.filter((m) => m.role === 'user');
+    expect(userMessages.length).toBeGreaterThan(0);
+    const firstUser = userMessages[0];
+    expect(String(firstUser.content)).toContain('[ROOT USER GOAL - NORTH STAR & PRIMARY ANCHOR]');
+    expect(String(firstUser.content)).toContain('Build a production web server');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('renders active todo list from .mochi/state/todo.json into the state prompt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-'));
+    const stateDir = join(dir, '.mochi', 'state');
+    mkdirSync(stateDir, { recursive: true });
+    const todos = [
+      { order: 1, status: 'done', title: 'Plan architecture' },
+      { order: 2, status: 'in_progress', title: 'Implement core parser', notes: 'almost done' },
+      { order: 3, status: 'pending', title: 'Write unit tests' },
+    ];
+    writeFileSync(join(stateDir, 'todo.json'), JSON.stringify(todos));
+    const engine = makeEngine(dir);
+    engine.setGoal('Build compiler');
+    const p = engine.buildPacket(NO_TOOLS);
+    const stateMsg = p.messages.find((m) => m.role === 'system' && String(m.content).includes('Active Plan & Todo Checklist'));
+    expect(stateMsg).toBeDefined();
+    const content = String(stateMsg!.content);
+    expect(content).toContain('1. [x] Plan architecture');
+    expect(content).toContain('2. [-] Implement core parser -- almost done');
+    expect(content).toContain('3. [ ] Write unit tests');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('prunes leading orphaned tool messages when slicing the recent window', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-'));
+    const engine = makeEngine(dir, {
+      safety: { contextBudgetTokens: 4000, maxIterations: 50, maxRuntimeMinutes: 10, mode: 'safe' as const },
+    } as any);
+    // Add messages where an assistant makes a tool call, and many turns push the assistant out
+    engine.addMessage({ role: 'user', content: 'run tool' });
+    engine.addMessage({ role: 'assistant', content: '', tool_calls: [{ id: 'old_call', type: 'function', function: { name: 'read', arguments: '{}' } }] });
+    engine.addMessage({ role: 'tool', tool_call_id: 'old_call', content: 'file data', name: 'read' });
+    for (let i = 0; i < 20; i++) {
+      engine.addMessage({ role: 'user', content: `next ${i}` });
+      engine.addMessage({ role: 'assistant', content: `done ${i}` });
+    }
+    const p = engine.buildPacket(NO_TOOLS);
+    // The first non-system message must NOT be an orphaned tool message
+    const nonSys = p.messages.filter((m) => m.role !== 'system');
+    expect(nonSys.length).toBeGreaterThan(0);
+    expect(nonSys[0].role).not.toBe('tool');
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 

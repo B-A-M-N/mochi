@@ -27,6 +27,12 @@ export function createAnthropicProvider(config: ProviderConfig) {
   const bodyMsg = (m: ChatMessage) => {
     if (m.role === 'system') return null;
     if (m.role === 'tool') {
+      if (!m.tool_call_id) {
+        return {
+          role: 'user',
+          content: [{ type: 'text', text: `[tool output: ${m.name || 'tool'}] ${contentText(m)}` }],
+        };
+      }
       return {
         role: 'user',
         content: [
@@ -83,11 +89,32 @@ export function createAnthropicProvider(config: ProviderConfig) {
         : (reasoning === 'medium') ? 4096 : 0)
       : 0;
 
+    const rawMsgs = messages.map(bodyMsg).filter(Boolean) as Array<{ role: string; content: any }>;
+    const mergedMsgs: Array<{ role: string; content: any }> = [];
+    for (const m of rawMsgs) {
+      const prev = mergedMsgs[mergedMsgs.length - 1];
+      if (prev && prev.role === m.role) {
+        const prevContent = Array.isArray(prev.content)
+          ? prev.content
+          : typeof prev.content === 'string'
+            ? [{ type: 'text', text: prev.content }]
+            : [prev.content];
+        const newContent = Array.isArray(m.content)
+          ? m.content
+          : typeof m.content === 'string'
+            ? [{ type: 'text', text: m.content }]
+            : [m.content];
+        prev.content = [...prevContent, ...newContent];
+      } else {
+        mergedMsgs.push(m);
+      }
+    }
+
     const body: Record<string, unknown> = {
       model,
       max_tokens: thinkingBudget > 0 ? Math.max(16384, thinkingBudget + 4096) : 8192,
       system: sysMsg(messages) || undefined,
-      messages: messages.map(bodyMsg).filter(Boolean),
+      messages: mergedMsgs,
       stream: false,
       ...(thinkingBudget > 0 ? { thinking: { type: 'enabled', budget_tokens: thinkingBudget } } : {}),
       ...(tools.length ? { tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: { type: 'object', properties: Object.fromEntries(t.parameters.map((p) => [p.name, { type: p.type, description: p.description }])), required: t.parameters.filter((x) => x.required).map((x) => x.name) } })) } : {}),
