@@ -27,7 +27,7 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     const probing = !!flags.probe;
     // Per-provider stored keys (keyring first, legacy active slot second) so
     // every provider reports its real source — not just the active one.
-    const { loadKeyring, storedKeyForProvider } = await import('./model/keyring.js');
+    const { loadKeyring, storedKeyForProvider, accountsFor, activeAccountName } = await import('./model/keyring.js');
     const ring = loadKeyring();
     const legacyKey = runtime.config.model.apiKey;
     const storedFor = (pid: string) => storedKeyForProvider(ring, pid, activeId, legacyKey);
@@ -35,7 +35,9 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
       const src = keySource(p, activeId, p.envKey ? lookup(p.envKey) : undefined, storedFor(p.id), isKeyUsable);
       const mark = p.id === activeId ? '*' : ' ';
       const state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
-      return `${mark}${p.id.padEnd(16)} ${state}`;
+      const n = accountsFor(p.id).length;
+      const extra = n > 1 ? `  (${n} accounts, active: ${activeAccountName(p.id)})` : '';
+      return `${mark}${p.id.padEnd(16)} ${state}${extra}`;
     });
     if (probing) {
       const probed = await Promise.all(PROVIDERS.map(async (p, i) => {

@@ -71,3 +71,20 @@ describe('Slack gateway', () => {
     expect(summary.stopped).toBe(false);
   });
 });
+
+describe('Slack webhook helpers', () => {
+  it('url_verification challenge echoed', async () => {
+    const { handleSlackWebhookChallenge, verifySlackSignature, processSlackEvent } = await import('./slack.js');
+    expect(handleSlackWebhookChallenge(JSON.stringify({ type: 'url_verification', challenge: 'xyz' }))).toBe('xyz');
+    expect(handleSlackWebhookChallenge(JSON.stringify({ type: 'event_callback' }))).toBeNull();
+
+    // process event dispatches and replies
+    const cfg: any = { token: 'x', channels: ['C'], allowedUserIds: [], prefix: '/ask', signingSecret: 's' };
+    const runtime: any = { goal: async () => 'done', config: { model: { model: 'm' } }, usage: { total: () => ({ tokensIn: 0, tokensOut: 0, costUsd: 0 }) } };
+    const send = vi.fn(async () => true);
+    const handled = await processSlackEvent(cfg, runtime, { event: { type: 'message', channel: 'C', user: 'U', text: '/ask hi' } }, { send });
+    expect(handled).toBe(true);
+    expect(send).toHaveBeenCalled();
+  });
+});
+

@@ -17,6 +17,7 @@ export interface SlackConfig {
   channels: string[];
   allowedUserIds?: string[];
   prefix?: string;
+  signingSecret?: string;
 }
 
 interface HttpLike {
@@ -60,7 +61,8 @@ export function loadSlackConfig(cwd: string): SlackConfig | null {
   const allowedUserIds = (envMap.get('SLACK_ALLOWED_USERS') || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   const prefix = envMap.get('SLACK_PREFIX') || '/ask';
-  return { token, channels, allowedUserIds, prefix };
+  const signingSecret = envMap.get('SLACK_SIGNING_SECRET');
+  return { token, channels, allowedUserIds, prefix, signingSecret };
 }
 
 /** Send a message (Slack recommends splitting long text; we cap ~3900). */
@@ -207,4 +209,118 @@ export async function runSlackGateway(
     await sleepMs(opts.pollIntervalMs ?? 5000);
   }
   return { messages, updates, stopped: false };
+}
+
+
+import { createServer } from 'node:http';
+import crypto from 'node:crypto';
+
+export function verifySlackSignature(
+  secret: string | undefined,
+  body: string,
+  timestamp: string | undefined,
+  signature: string | undefined,
+): boolean {
+  if (!secret) return true;
+  if (!signature || !timestamp) return false;
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(`v0:${timestamp}:${body}`);
+  const digest = `v0=${hmac.digest('hex')}`;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+export interface SlackWebhookOpts {
+  port?: number;
+  path?: string;
+  onLog?: (line: string) => void;
+  fetchJson?: (url: string, init?: RequestInit) => Promise<HttpLike>;
+  send?: (channel: string, text: string) => Promise<boolean>;
+}
+
+export interface SlackWebhookSummary { requests: number; events: number; stopped: boolean }
+
+export async function processSlackEvent(
+  cfg: SlackConfig,
+  runtime: Runtime,
+  payload: any,
+  opts?: { fetchJson?: (url: string, init?: RequestInit) => Promise<HttpLike>; send?: (channel: string, text: string) => Promise<boolean> },
+): Promise<boolean> {
+  const fetchJson = opts?.fetchJson ?? (fetch as never);
+  const send = opts?.send ?? ((channel: string, text: string) => sendSlackMessage(cfg.token, channel, text, fetchJson));
+  const ev = payload?.event;
+  if (!ev || ev.type !== 'message' || ev.bot_id || ev.subtype) return false;
+  if (!ev.text || !ev.channel) return false;
+  const reply = await handleSlackMessage(
+    { authorId: String(ev.user ?? ''), text: String(ev.text), channel: String(ev.channel) },
+    cfg, runtime,
+  );
+  if (!reply) return false;
+  return send(String(ev.channel), reply);
+}
+
+export function handleSlackWebhookChallenge(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && parsed.type === 'url_verification' && typeof parsed.challenge === 'string') {
+      return parsed.challenge;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function runSlackWebhook(
+  cfg: SlackConfig,
+  runtime: Runtime,
+  opts?: SlackWebhookOpts,
+): Promise<SlackWebhookSummary> {
+  const onLog = opts?.onLog ?? (() => {});
+  const fetchJson = opts?.fetchJson ?? (fetch as never);
+  const send = opts?.send ?? ((channel: string, text: string) => sendSlackMessage(cfg.token, channel, text, fetchJson));
+  const port = opts?.port ?? 3000;
+  const path = opts?.path ?? '/slack/events';
+  let requests = 0;
+  let events = 0;
+  return await new Promise<SlackWebhookSummary>((resolvePromise) => {
+    const server = createServer(async (req, res) => {
+      if (req.url !== path) {
+        res.statusCode = 404; res.end(); return;
+      }
+      let raw = '';
+      req.on('data', (chunk: Buffer) => { raw += chunk.toString('utf8'); });
+      req.on('end', async () => {
+        requests++;
+        const headers = req.headers;
+        const ts = String(headers['x-slack-request-timestamp'] ?? '');
+        const sig = String(headers['x-slack-signature'] ?? '');
+        if (cfg.signingSecret && !verifySlackSignature(cfg.signingSecret, raw, ts, sig)) {
+          onLog('slack webhook: bad signature');
+          res.statusCode = 401; res.end(); return;
+        }
+        const challenge = handleSlackWebhookChallenge(raw);
+        if (challenge) {
+          res.setHeader('content-type', 'text/plain');
+          res.statusCode = 200; res.end(challenge); return;
+        }
+        try {
+          const payload = JSON.parse(raw || '{}');
+          const handled = await processSlackEvent(cfg, runtime, payload, { fetchJson, send });
+          if (handled) events++;
+          res.statusCode = 200; res.end('ok');
+        } catch (e) {
+          onLog(`slack webhook: parse error (${e instanceof Error ? e.message : String(e)})`);
+          res.statusCode = 400; res.end();
+        }
+      });
+    });
+    server.listen(port, () => onLog(`Slack webhook listening on :${port}${path}`));
+    server.on('close', () => resolvePromise({ requests, events, stopped: true }));
+  });
 }

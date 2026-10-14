@@ -5,7 +5,7 @@ import { findProjectRoot } from '../repo/repo.js';
 import { Runtime } from '../runtime.js';
 import type { MochiEvent } from '../types.js';
 import { PROVIDERS, providerById } from '../model/providers.js';
-import { loadKeyring, storedKeyForProvider, deleteKeyringKey } from '../model/keyring.js';
+import { loadKeyring, storedKeyForProvider, deleteKeyringKey, accountsFor as accountsForKr, activeAccountName as activeAccountForKr, switchAccount as switchAccountKr, deleteAccount as deleteAccountKr } from '../model/keyring.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
@@ -2842,6 +2842,28 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       persistLogin: (id: string, key: string, model: string, source: 'api-key' | 'oauth') => run(() => runtime.loginProvider(id, key, model, source)),
       switchProvider: (id: string, model: string) => run(() => runtime.useProvider(id, model)),
       persistCleared,
+      storedAccountsFor: (pid: string) => accountsForKr(pid),
+      activeAccountFor: (pid: string) => activeAccountForKr(pid),
+      switchAccount: async (pid: string, account: string) => {
+        if (!switchAccountKr(pid, account)) throw new Error(`Unknown account "${account}" for ${pid}.`);
+        if (pid === runtime.config.model.provider) {
+          try {
+            const ring = loadKeyring();
+            const newKey = ring[pid]?.key;
+            runtime.config.model.apiKey = newKey;
+            const { loadConfigFile, saveConfigFile } = await import('../model/providers.js');
+            const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+            if (cfg.model && newKey) cfg.model.apiKey = newKey;
+            if (cfg.model && !newKey) delete cfg.model.apiKey;
+            saveConfigFile(cfg as never);
+            await runtime.useProvider(pid, runtime.config.model.model);
+          } catch { /* best effort */ }
+        }
+        return `Switched active account for ${pid} to "${account}".`;
+      },
+      deleteAccount: async (pid: string, account: string) => {
+        try { deleteAccountKr(pid, account); } catch { /* best effort */ }
+      },
     };
   }
 

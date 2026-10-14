@@ -51,6 +51,11 @@ export interface AuthDeps {
   switchProvider: (providerId: string, model: string) => Promise<string>;
   /** Persist a cleared key for one provider (keyring entry + legacy slot). */
   persistCleared: (providerId: string) => Promise<void>;
+  /** Multi-account: optional account operations. */
+  storedAccountsFor?: (providerId: string) => string[];
+  activeAccountFor?: (providerId: string) => string;
+  switchAccount?: (providerId: string, account: string) => Promise<string>;
+  deleteAccount?: (providerId: string, account: string) => Promise<void>;
 }
 
 /** Names sorted for the browser, optionally filtered by a query. Pure. */
@@ -110,9 +115,27 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
       // for providers with a real local flow (gh, huggingface-cli) — nothing
       // fake is ever offered.
       const oauth = oauthLoginHint(p);
+      const accountCount = deps.storedAccountsFor ? deps.storedAccountsFor(p.id).length : 0;
       const actions: Array<{ label: string; run: () => Promise<void> }> = [
         { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
         ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthWizard(deps, p, oauth) }] : []),
+        ...(accountCount > 1 && deps.switchAccount ? [{
+          label: `Switch active account (${accountCount})`, run: async () => {
+            const acs = deps.storedAccountsFor!(p.id);
+            const active = deps.activeAccountFor ? deps.activeAccountFor(p.id) : acs[0];
+            const names = acs.map((a) => (a === active ? `${a} *` : a));
+            deps.setMenuSelected(0);
+            const idx = await deps.openMenu(`${p.name} · accounts`, names);
+            if (idx < 0 || idx >= acs.length) return;
+            try {
+              const desc = await deps.switchAccount!(p.id, acs[idx]);
+              deps.push('system', desc);
+            } catch (e) {
+              deps.push('error', `Account switch failed: ${(e instanceof Error ? e.message : String(e))}`);
+            }
+            deps.scheduleRender();
+          },
+        }] : []),
         ...(p.consoleUrl ? [{ label: 'Open key page in browser', run: () => openKeyPage(deps, p) }] : []),
         { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
         { label: 'Done', run: async () => {} },

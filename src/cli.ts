@@ -1486,6 +1486,16 @@ async function main() {
       console.log(`Slack gateway stopped (${summary.updates} updates, ${summary.messages} answered).`);
       return;
     }
+    if (sub === 'webhook') {
+      const port = Number(flags.port) || 3000;
+      const { runSlackWebhook } = await import('./slack.js');
+      console.log(`🍡 Mochi Slack webhook listening on :${port}/slack/events (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      process.once('SIGINT', () => ctl.abort());
+      const summary = await runSlackWebhook(scfg, runtime, { port, onLog: (line: string) => console.log(line), fetchJson: fetch as never });
+      console.log(`Slack webhook stopped (${summary.requests} requests, ${summary.events} events).`);
+      return;
+    }
     console.log(`🍡 Mochi Slack gateway configured for channels "${scfg.channels.join(', ')}" with prefix "${scfg.prefix}".`);
     console.log(`Bot Token: ${scfg.token.slice(0, 10)}...`);
     return;
