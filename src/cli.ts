@@ -232,6 +232,7 @@ Usage:
   mochi discord [run|status]         # run Discord bot gateway
   mochi telegram [run|status]        # run Telegram bot gateway (HTTP long-poll)
   mochi slack [run|webhook|status]   # run Slack gateway (polling or Events API webhook)
+  mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers
@@ -1952,6 +1953,51 @@ async function main() {
     }
     console.error(`Unknown mcp command "${sub}". Use: mochi mcp [list|search <q>|add <spec>|remove <id>|test [id]]`);
     process.exit(1);
+  }
+  if (first === 'update' || first === 'upgrade' || first === 'self-update') {
+    const compareSemver = (a: string, b: string): number => {
+      const pa = a.split('.').map((n) => Number(n) || 0);
+      const pb = b.split('.').map((n) => Number(n) || 0);
+      for (let i = 0; i < 3; i++) {
+        if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+      }
+      return 0;
+    };
+    const explicitApply = flags.apply === true || flags.yes === true;
+    const checkOnly = flags.check === true || !explicitApply;
+    const url = 'https://api.github.com/repos/xanstomper/mochi/releases/latest';
+    const res = await fetch(url, { headers: { 'user-agent': `mochi/${VERSION}` } });
+    if (!res || !res.ok) {
+      console.error(`Could not check for updates (${res?.status ?? 'network error'}).`);
+      return;
+    }
+    const data = (await res.json()) as { tag_name?: string; name?: string; html_url?: string; body?: string };
+    const latest = String(data.tag_name ?? data.name ?? '').replace(/^v/i, '');
+    console.log(`Current: ${VERSION}`);
+    console.log(`Latest:  ${latest}`);
+    const isNewer = compareSemver(latest, VERSION) > 0;
+    if (!isNewer) {
+      console.log('Already up to date.');
+      return;
+    }
+    console.log(`New release available: ${data.html_url ?? ''}`);
+    console.log('Release notes:');
+    console.log((data.body ?? '(no notes provided)').split('\\n').slice(0, 40).join('\\n'));
+    if (checkOnly) {
+      console.log('\\nRun `mochi update --apply` (or re-run the install.sh) to install it.');
+      return;
+    }
+    // Apply via the official installer; user keeps control of credentials.
+    const { execFileSync } = await import('node:child_process');
+    try {
+      console.log('Running installer...');
+      execFileSync('bash', ['-c', 'curl -fsSL https://raw.githubusercontent.com/xanstomper/mochi/main/install.sh | bash'], { stdio: 'inherit' });
+      console.log('Update complete. Restart mochi (and `hash -r`).');
+    } catch (e) {
+      console.error(`Update failed: ${(e as Error).message}`);
+      console.error('Manual upgrade: cd ~/mochi && git pull && npm install && npm run build:native');
+    }
+    return;
   }
   if (first === 'doctor') {
     const { doctorReport, formatDoctor, repairDoctor } = await import('./doctor.js');
