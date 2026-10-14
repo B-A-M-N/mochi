@@ -1,6 +1,21 @@
-# v0.25.0 — Providers, Density & Trust
+# v0.25.0 — Providers, Density, Trust & Team Workflow
 
-**Headline:** 32 model providers, 24 verified MCP servers, 84 lint-clean skills, real per-provider auth — and the Windows CI leg green for the first time ever.
+**Headline:** 32 model providers, 24 verified MCP servers, 84 lint-clean skills, real per-provider auth, 23 full re-skin themes, and a headless PR-review workflow for CI — with the Windows CI leg green for the first time ever.
+
+## 23 themes, each a full re-skin
+
+- Every theme now owns its canvas background, so switching repaints the whole terminal — not just the accents. `mochi-purple` keeps the true-black mandate; `paper-light`/`sorbet` are the light pair.
+- All 23 signature accents and all 23 body-text colors are unique (enforced by tests) — no two themes read the same. Non-obvious names (`Abyss`, `Mirage`, `Ember`, `Lagoon`, `CRT`, `Phosphor`, `Noir`, `Dune`, `Glacier`, `Claret`, `Afterhours`, `Moth`, `Gilt`, `Orchid`, `Paper`) while the persisted ids never change, so saved preferences keep working.
+- Tab-bar chrome (pill, titles, close glyphs, branch badge) was hardcoded purple/gray and now follows the theme.
+
+## PR review workflow (agent + CI)
+
+- New `review_pr` tool: fetches any GitHub PR (metadata + diff) via the ambient `gh` CLI, runs the harness hygiene scan, and reports a structured review with a correctness/security/performance lens. Read-only by default; `post=true` leaves a summary comment. It never approves or merges — that stays a human keystroke.
+- Headless for CI: `mochi pr review <n> [--repo owner/name] [--focus …] [--post] [--json]` exits 0 (reviewed) / 1 (couldn't fetch) / 2 (internal), with a `{ok, pr, findings, report}` JSON payload for bots. `mochi pr <n>` still drives the existing issue→PR pipeline.
+
+## Notebook tool
+
+- Jupyter `.ipynb` by cell (read/edit/insert/delete/clear_outputs). Hand-editing notebook JSON by line ranges corrupts cells, so this is the only supported path. nbformat-4 validated; outputs are never pasted back as blobs.
 
 ## Providers (21 → 32)
 
