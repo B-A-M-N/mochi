@@ -658,5 +658,45 @@
     "name": "reading-unfamiliar-code",
     "path": "reading-unfamiliar-code",
     "description": "Get productive in an unfamiliar codebase fast — entry points, call graphs, and the five-question map. Use when onboarding to a new repo or subsystem."
+  },
+  {
+    "name": "domain-driven-design",
+    "path": "domain-driven-design",
+    "description": "Model complex domains with bounded contexts, aggregates, and domain events. Use when building business software with complex rules and many interacting concepts."
+  },
+  {
+    "name": "clean-architecture",
+    "path": "clean-architecture",
+    "description": "Structure systems with dependencies pointing inward — entities, use cases, interfaces, and frameworks at the edges. Use when building systems that must survive changing frameworks, UIs, and databases."
+  },
+  {
+    "name": "microservices-patterns",
+    "path": "microservices-patterns",
+    "description": "Build distributed systems that survive partial failure — service boundaries, sagas, and inter-service communication. Use when splitting a monolith or building a system that must scale and deploy independently."
+  },
+  {
+    "name": "event-driven-architecture",
+    "path": "event-driven-architecture",
+    "description": "Design systems around events — producers, consumers, and the event contract that decouples them. Use when building reactive, scalable, or loosely coupled systems."
+  },
+  {
+    "name": "testing-strategy",
+    "path": "testing-strategy",
+    "description": "Decide what to test and how much — the test pyramid, risk-based coverage, and where each kind of test earns its cost. Use when planning tests for a system or pushing back on \"100% coverage\"."
+  },
+  {
+    "name": "mocking-strategies",
+    "path": "mocking-strategies",
+    "description": "Use test doubles deliberately — what to mock, what never to mock, and how to avoid tests that verify the mock. Use when writing unit tests with dependencies."
+  },
+  {
+    "name": "error-budgets-slos",
+    "path": "error-budgets-slos",
+    "description": "Run reliability with error budgets and SLOs — define targets, measure burn rate, and gate releases on user impact. Use when operating a service where reliability is a feature."
+  },
+  {
+    "name": "chaos-engineering",
+    "path": "chaos-engineering",
+    "description": "Prove a system survives failure by injecting it deliberately — game days, fault injection, and steady-state hypotheses. Use when you need evidence, not hope, that a system is resilient."
   }
 ]
