@@ -1,6 +1,11 @@
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
-import { resolve, relative, join } from 'node:path';
+import { resolve, relative, join, extname } from 'node:path';
 import type { Tool } from './types.js';
+
+// Extensions the AST renamer can parse as real syntax (rename touches only
+// true identifiers — never comments or strings). Everything else uses the
+// word-boundary regex below, which is the honest fallback for non-TS languages.
+const AST_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'out', 'target', '.mochi', '.next',
@@ -71,9 +76,14 @@ export const renameSymbolTool: Tool = {
     }
 
     const pattern = new RegExp(`\\b${escapeRegExp(oldName)}\\b`, 'g');
-    const mutatedFiles: { rel: string; count: number }[] = [];
+    const mutatedFiles: { rel: string; count: number; mode: 'ast' | 'regex' }[] = [];
     let totalReplacements = 0;
     const preview = Boolean(args.preview);
+
+    // AST renamer (lazy): rewrites only true identifiers in TS/JS, so it
+    // never corrupts comments, strings, or markdown prose. Falls back to the
+    // word-boundary regex for non-TS files (labeled in the report).
+    const { renameSymbolInSource } = await import('../core/symbol-defs.js');
 
     for (const f of files) {
       let content: string;
@@ -83,13 +93,35 @@ export const renameSymbolTool: Tool = {
         continue;
       }
 
-      const matches = content.match(pattern);
-      if (!matches || matches.length === 0) continue;
+      let replaced: string;
+      let count: number;
+      let mode: 'ast' | 'regex';
+      if (AST_EXTS.has(extname(f).toLowerCase())) {
+        const ast = renameSymbolInSource(relative(ctx.cwd, f).split('\\').join('/'), content, oldName, newName);
+        if (ast === null) {
+          // Compiler unavailable or unparsable: use the regex but say so.
+          const m = content.match(pattern);
+          if (!m) continue;
+          replaced = content.replace(pattern, newName);
+          count = m.length;
+          mode = 'regex';
+        } else {
+          if (ast.count === 0) continue;
+          replaced = ast.content;
+          count = ast.count;
+          mode = 'ast';
+        }
+      } else {
+        const m = content.match(pattern);
+        if (!m) continue;
+        replaced = content.replace(pattern, newName);
+        count = m.length;
+        mode = 'regex';
+      }
 
-      const replaced = content.replace(pattern, newName);
       const rel = relative(ctx.cwd, f);
-      mutatedFiles.push({ rel, count: matches.length });
-      totalReplacements += matches.length;
+      mutatedFiles.push({ rel, count, mode });
+      totalReplacements += count;
 
       if (!preview) {
         writeFileSync(f, replaced, 'utf8');
@@ -103,12 +135,17 @@ export const renameSymbolTool: Tool = {
       return `Symbol "${oldName}" was not found in any code files under ${args.path ?? '.'}.`;
     }
 
-    const fileSummary = mutatedFiles.map((m) => `  - ${m.rel} (${m.count} replacement${m.count !== 1 ? 's' : ''})`).join('\n');
+    const astCount = mutatedFiles.filter((m) => m.mode === 'ast').length;
+    const regexCount = mutatedFiles.length - astCount;
+    const modeNote = astCount > 0
+      ? `\n(${astCount} file(s) renamed via AST — comments/strings left untouched; ${regexCount} via word-boundary regex)`
+      : `\n(${regexCount} file(s) renamed via word-boundary regex — verify no comments/strings were affected)`;
+    const fileSummary = mutatedFiles.map((m) => `  - ${m.rel} (${m.count} replacement${m.count !== 1 ? 's' : ''}${m.mode === 'regex' ? ', regex' : ''})`).join('\n');
     if (preview) {
-      return `[PREVIEW] Would rename "${oldName}" -> "${newName}" across ${mutatedFiles.length} file(s) (${totalReplacements} total occurrence(s)):\n${fileSummary}`;
+      return `[PREVIEW] Would rename "${oldName}" -> "${newName}" across ${mutatedFiles.length} file(s) (${totalReplacements} total occurrence(s)):\n${fileSummary}${modeNote}`;
     }
 
-    return `Renamed "${oldName}" -> "${newName}" across ${mutatedFiles.length} file(s) (${totalReplacements} total occurrence(s)):\n${fileSummary}`;
+    return `Renamed "${oldName}" -> "${newName}" across ${mutatedFiles.length} file(s) (${totalReplacements} total occurrence(s)):\n${fileSummary}${modeNote}`;
   },
 };
 
