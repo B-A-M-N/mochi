@@ -141,6 +141,66 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     log(`Imported ${stored.length} key(s)${stored.length ? `: ${stored.join(', ')}` : ''}${skipped.length ? ` (skipped unknown/empty: ${skipped.join(', ')})` : ''}. Keys are stored unverified — run \`mochi auth status --probe\` to verify.`);
     return;
   }
-  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider] | reset [provider] | export | import [file|-]] (authenticate with: mochi login <provider>; change a key by logging in again)`);
+  if (sub === 'switch') {
+    const provider = positional[2];
+    const account = positional[3];
+    if (!provider || !account) {
+      error('Usage: mochi auth switch <provider> <account>');
+      exit(1);
+    }
+    if (!providerById(provider)) { error(`Unknown provider: ${provider}`); exit(1); }
+    const { switchAccount, loadKeyring } = await import('./model/keyring.js');
+    if (!switchAccount(provider, account)) {
+      error(`No account named "${account}" for ${provider}. List with: mochi auth accounts ${provider}`);
+      exit(1);
+    }
+    // Sync the active config slot when switching a key of the active provider.
+    if (provider === activeId) {
+      const ring = loadKeyring();
+      const newKey = ring[provider]?.key;
+      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+      if (cfg.model && newKey) cfg.model.apiKey = newKey;
+      if (cfg.model && !newKey) delete cfg.model.apiKey;
+      saveConfigFile(cfg as never);
+      runtime.config.model.apiKey = newKey;
+    }
+    log(`Switched active account for ${provider} to "${account}".`);
+    return;
+  }
+  if (sub === 'accounts') {
+    const target = positional[2] ?? activeId;
+    if (!providerById(target)) { error(`Unknown provider: ${target}`); exit(1); }
+    const { accountsFor, activeAccountName } = await import('./model/keyring.js');
+    const names = accountsFor(target);
+    if (!names.length) { log(`No stored accounts for ${target}. Login with: mochi login ${target} --account <name>`); return; }
+    const active = activeAccountName(target);
+    for (const n of names) log(`${n === active ? '*' : ' '} ${n}`);
+    log(`\n* = active. Login a new account with: mochi login ${target} --account <name>`);
+    return;
+  }
+  if (sub === 'account' && positional[2] === 'delete') {
+    const provider = positional[3];
+    const account = positional[4] ?? 'default';
+    if (!provider) { error('Usage: mochi auth account delete <provider> [account]'); exit(1); }
+    if (!providerById(provider)) { error(`Unknown provider: ${provider}`); exit(1); }
+    const { deleteAccount, loadKeyring } = await import('./model/keyring.js');
+    if (!deleteAccount(provider, account)) {
+      error(`No account "${account}" for ${provider}.`);
+      exit(1);
+    }
+    log(`Removed account "${account}" from ${provider}.`);
+    // Sync config slot when removing an account from the active provider.
+    if (provider === activeId) {
+      const ring = loadKeyring();
+      const newKey = ring[provider]?.key;
+      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+      if (cfg.model && newKey) cfg.model.apiKey = newKey;
+      if (cfg.model && !newKey) delete cfg.model.apiKey;
+      saveConfigFile(cfg as never);
+      runtime.config.model.apiKey = newKey;
+    }
+    return;
+  }
+  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | accounts [provider] | switch <provider> <account> | logout [provider] | reset [provider] | export | import [file|-]] (authenticate with: mochi login <provider> [--account name]; change a key by logging in again)`);
   exit(1);
 }

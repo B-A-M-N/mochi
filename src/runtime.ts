@@ -834,13 +834,13 @@ export class Runtime {
     return describeConfig(this.config);
   }
 
-  async loginProvider(provider: string, apiKey: string, model?: string, source: 'api-key' | 'oauth' = 'api-key') {
+  async loginProvider(provider: string, apiKey: string, model?: string, source: 'api-key'| 'oauth' = 'api-key', account?: string) {
     try {
       const { resetCapabilityRegistry } = await import('./model/router.js');
       resetCapabilityRegistry();
     } catch { /* best effort */ }
     const saved = currentConfig();
-    this.config = doLogin(saved, provider, apiKey, model, source);
+    this.config = doLogin(saved, provider, apiKey, model, source, account);
     if (!this.config.reasoning) {
       this.config.reasoning = 'max';
     }

@@ -1,6 +1,6 @@
 import type { MochiConfig, ModelProfile } from '../types.js';
 import {PROVIDERS, providerById, loadConfigFile, saveConfigFile} from './providers.js';
-import { setKeyringKey } from './keyring.js';
+import { setKeyringKey, setAccount } from './keyring.js';
 import { normalizeModelName } from './router.js';
 
 export interface ProviderSelection {
@@ -75,14 +75,16 @@ export function setProvider(config: MochiConfig, selection: ProviderSelection): 
   return cfg;
 }
 
-export function login(config: MochiConfig, providerId: string, apiKey: string, model?: string, source: 'api-key' | 'oauth' = 'api-key'): MochiConfig {
+export function login(config: MochiConfig, providerId: string, apiKey: string, model?: string, source: 'api-key' | 'oauth' = 'api-key', account?: string): MochiConfig {
   const p = providerById(providerId);
   if (!p) throw new Error(`Unknown provider: ${providerId}`);
   // Own the key per provider (keyring): switching providers later must not
   // lose it, and logout/reset can clear any provider — not just the active
-  // one. The single config slot below keeps working as before.
+  // one. Account names allow multiple identities per provider (--account).
+  // The single config slot below keeps working as before.
   try {
-    setKeyringKey(p.id, apiKey, source);
+    if (account) setAccount(p.id, account, apiKey, source);
+    else setKeyringKey(p.id, apiKey, source);
   } catch { /* keyring is best-effort; the config slot still lands */ }
   return setProvider(config, {
     provider: p.id,

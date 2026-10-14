@@ -15,10 +15,19 @@ import { configFilePath } from './providers.js';
 
 export type KeyringType = 'api-key' | 'oauth';
 
+export interface AccountKeyringEntry {
+  type: KeyringType;
+  key: string;
+  updatedAtMs: number;
+}
 export interface KeyringEntry {
   type: KeyringType;
   key: string;
   updatedAtMs: number;
+  /** Multi-account: named accounts. Optional for legacy flat entries. */
+  accounts?: Record<string, AccountKeyringEntry>;
+  /** Name of the active account. Defaults to the first entry. */
+  activeAccount?: string;
 }
 
 export type Keyring = Record<string, KeyringEntry>;
@@ -44,7 +53,28 @@ export function loadKeyring(): Keyring {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const ring: Keyring = {};
     for (const [id, entry] of Object.entries(parsed as Record<string, unknown>)) {
-      if (isEntry(entry)) ring[id] = { type: entry.type, key: entry.key, updatedAtMs: typeof entry.updatedAtMs === 'number' ? entry.updatedAtMs : 0 };
+      if (!isEntry(entry)) continue;
+      const raw = entry as unknown as Record<string, unknown>;
+      const rawAccounts = raw.accounts;
+      const accounts: Record<string, AccountKeyringEntry> = {};
+      if (rawAccounts && typeof rawAccounts === 'object' && !Array.isArray(rawAccounts)) {
+        for (const [aname, arentry] of Object.entries(rawAccounts as Record<string, unknown>)) {
+          const e = (arentry as unknown) as Record<string, unknown> | null;
+          if (e && (e.type === 'api-key' || e.type === 'oauth') && typeof e.key === 'string' && e.key.length > 0) {
+            accounts[aname] = { type: e.type, key: e.key, updatedAtMs: typeof e.updatedAtMs === 'number' ? e.updatedAtMs : 0 };
+          }
+        }
+      }
+      const hasAccounts = Object.keys(accounts).length > 0;
+      ring[id] = {
+        type: entry.type,
+        key: entry.key,
+        updatedAtMs: typeof entry.updatedAtMs === 'number' ? entry.updatedAtMs : 0,
+        accounts: hasAccounts ? accounts : undefined,
+        activeAccount: typeof raw.activeAccount === 'string'
+          ? (raw.activeAccount as string)
+          : (hasAccounts ? Object.keys(accounts)[0] : undefined),
+      };
     }
     return ring;
   } catch {
@@ -67,12 +97,11 @@ export function getKeyringKey(ring: Keyring, providerId: string): string | undef
   return ring[providerId]?.key;
 }
 
-/** Store (or overwrite) one provider's key. */
+/** Store (or overwrite) one provider's key — operates on the active account
+ *  (or 'default' when none exists yet). Plain `mochi login` re-auths the
+ *  active account without touching other named accounts. */
 export function setKeyringKey(providerId: string, key: string, type: KeyringType = 'api-key'): Keyring {
-  const ring = loadKeyring();
-  ring[providerId] = { type, key, updatedAtMs: Date.now() };
-  saveKeyring(ring);
-  return ring;
+  return setAccount(providerId, activeAccountName(providerId) || 'default', key, type);
 }
 
 /** Delete one provider's key. True when an entry existed. */
@@ -106,3 +135,111 @@ export function keyringMode(): number | null {
     return null;
   }
 }
+
+// ---------- Multi-account support ----------
+export interface AccountSelector {
+  readonly accounts: string[];
+  readonly active: string;
+}
+
+export function accountsFor(providerId: string): string[] {
+  const ring = loadKeyring();
+  const e = ring[providerId];
+  if (!e) return [];
+  if (!e.accounts || Object.keys(e.accounts).length === 0) {
+    // Legacy flat entry counts as a single (default) account.
+    return e.key ? ['default'] : [];
+  }
+  return Object.keys(e.accounts);
+}
+
+export function activeAccountName(providerId: string): string {
+  const ring = loadKeyring();
+  const e = ring[providerId];
+  if (!e) return 'default';
+  if (e.activeAccount) return e.activeAccount;
+  if (e.accounts && Object.keys(e.accounts).length > 0) return Object.keys(e.accounts)[0];
+  return 'default';
+}
+
+function ensureAccountsEntry(ring: Keyring, providerId: string): KeyringEntry {
+  const e = ring[providerId];
+  if (!e) {
+    const created: KeyringEntry = { type: 'api-key', key: '', updatedAtMs: 0, accounts: {}, activeAccount: undefined };
+    ring[providerId] = created;
+    return created;
+  }
+  if (!e.accounts) {
+    // Migrate a flat/legacy entry into the accounts model lazily.
+    e.accounts = e.key ? { default: { type: e.type, key: e.key, updatedAtMs: e.updatedAtMs } } : {};
+    if (!e.activeAccount) e.activeAccount = e.key ? 'default' : undefined;
+  }
+  return e;
+}
+
+export function setAccount(providerId: string, name: string, key: string, type: KeyringType = 'api-key'): Keyring {
+  const ring = loadKeyring();
+  const e = ensureAccountsEntry(ring, providerId);
+  const safeName = name.trim() || 'default';
+  e.accounts![safeName] = { type, key, updatedAtMs: Date.now() };
+  e.activeAccount = safeName;
+  e.type = type;
+  e.key = key;
+  e.updatedAtMs = Date.now();
+  saveKeyring(ring);
+  return ring;
+}
+
+export function switchAccount(providerId: string, name: string): boolean {
+  const ring = loadKeyring();
+  const e = ring[providerId];
+  if (!e) return false;
+  if (!e.accounts) ensureAccountsEntry(ring, providerId);
+  const accounts = e.accounts ?? {};
+  if (!Object.prototype.hasOwnProperty.call(accounts, name)) return false;
+  e.activeAccount = name;
+  const a = accounts[name];
+  e.type = a.type;
+  e.key = a.key;
+  e.updatedAtMs = a.updatedAtMs;
+  saveKeyring(ring);
+  return true;
+}
+
+export function deleteAccount(providerId: string, name: string): boolean {
+  const ring = loadKeyring();
+  const e = ring[providerId];
+  if (!e) return false;
+  if (!e.accounts) ensureAccountsEntry(ring, providerId);
+  const accounts = e.accounts ?? {};
+  if (!Object.prototype.hasOwnProperty.call(accounts, name)) {
+    // legacy single flat account named 'default': treat delete as deleteKeyringKey
+    if (name === 'default' && 'key' in e && e.key) {
+      delete ring[providerId];
+      saveKeyring(ring);
+      return true;
+    }
+    return false;
+  }
+  delete accounts[name];
+  const remaining = Object.keys(accounts);
+  if (remaining.length === 0) {
+    delete ring[providerId];
+    saveKeyring(ring);
+    return true;
+  }
+  if (e.activeAccount === name) {
+    const next = remaining[0];
+    e.activeAccount = next;
+    const a = accounts[next];
+    e.type = a.type;
+    e.key = a.key;
+    e.updatedAtMs = a.updatedAtMs;
+  }
+  e.accounts = accounts;
+  saveKeyring(ring);
+  return true;
+}
+
+/** Original setKeyringKey now delegates to the active account (default when
+ *  none), preserving both the flat on-disk shape and the multi-account model. */

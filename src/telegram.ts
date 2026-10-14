@@ -77,7 +77,10 @@ export async function sendTelegramMessage(
 
 export interface TelegramUpdate {
   update_id: number;
-  message?: { message_id: number; chat: { id: number | string }; from?: { id: number | string; is_bot?: boolean }; text?: string };
+  message?: { message_id: number; chat: { id: number | string; type?: string }; from?: { id: number | string; is_bot?: boolean; username?: string }; text?: string };
+  edited_message?: { message_id: number; chat: { id: number | string; type?: string }; from?: { id: number | string; is_bot?: boolean }; text?: string };
+  channel_post?: { message_id: number; chat: { id: number | string; type?: string }; from?: { id: number | string; is_bot?: boolean }; text?: string };
+  edited_channel_post?: { message_id: number; chat: { id: number | string; type?: string }; from?: { id: number | string; is_bot?: boolean }; text?: string };
 }
 
 /** Compose one reply (help / status / goal), mirroring the Discord surface. */
@@ -174,9 +177,11 @@ export async function runTelegramGateway(
       continue;
     }
     for (const up of batch) {
-      offset = up.update_id + 1;
+      if (!up || typeof up !== 'object') continue;
+      const uid = Number.isFinite(up.update_id) ? (up.update_id as number) : (Number(offset) || 0);
+      offset = uid + 1;
       updates++;
-      const m = up.message;
+      const m = up.message ?? up.edited_message ?? up.channel_post ?? up.edited_channel_post;
       if (!m || m.from?.is_bot || !m.text) continue;
       if (m.text.trim() === '/stop') {
         log('telegram: stop requested by operator.');

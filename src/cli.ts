@@ -1423,6 +1423,30 @@ async function main() {
     console.log(`Bot Token: ${tcfg.token.slice(0, 10)}... (whitelisting: ${tcfg.allowAllUsers ? 'all users' : (tcfg.allowedUserIds?.length ?? 0) + ' users'})`);
     return;
   }
+  if (first === 'slack') {
+    const { loadSlackConfig, runSlackGateway } = await import('./slack.js');
+    const scfg = loadSlackConfig(cwd);
+    if (!scfg) {
+      console.error('No Slack bot configuration found. Set SLACK_BOT_TOKEN (xoxb-...) and SLACK_CHANNEL in .env, ~/.mochi/.env, or ~/.hermes/.env.');
+      process.exit(1);
+    }
+    const sub = positional[1] ?? 'status';
+    if (sub === 'run') {
+      console.log(`🍡 Mochi Slack gateway polling channels "${scfg.channels.join(', ')}" with prefix "${scfg.prefix}" (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      process.once('SIGINT', () => ctl.abort());
+      const summary = await runSlackGateway(scfg, runtime, {
+        fetchJson: fetch as never,
+        onLog: (line: string) => console.log(line),
+        signal: ctl.signal,
+      });
+      console.log(`Slack gateway stopped (${summary.updates} updates, ${summary.messages} answered).`);
+      return;
+    }
+    console.log(`🍡 Mochi Slack gateway configured for channels "${scfg.channels.join(', ')}" with prefix "${scfg.prefix}".`);
+    console.log(`Bot Token: ${scfg.token.slice(0, 10)}...`);
+    return;
+  }
   if (first === 'security' || first === 'audit') {
     const { runSecurityAudit, formatSecurityReport } = await import('./tools/security-audit.js');
     const findings = runSecurityAudit(cwd);
@@ -1743,7 +1767,8 @@ async function main() {
       if (!v.ok) console.error(`Warning: could not verify the key (${v.message}) — storing anyway.`);
       else console.log(`Verified key with ${p.name}.`);
     }
-    const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel) : await runtime.useProvider(p.id, model || p.defaultModel);
+    const account = typeof flags.account === 'string' && flags.account.length ? flags.account : undefined;
+    const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel, 'api-key', account) : await runtime.useProvider(p.id, model || p.defaultModel);
     const { redact } = await import('./security/security.js');
     console.log(redact(info));
     return;
