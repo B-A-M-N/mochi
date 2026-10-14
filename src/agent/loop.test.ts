@@ -2391,6 +2391,40 @@ describe('scope fence (drift guard — out-of-scope writes vetoed)', () => {
       rmSync(resolve(home, `${tag}-sib`), { recursive: true, force: true });
     }
   });
+
+  it('stops after 5 consecutive vetoes instead of burning the iteration budget', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-veto-breaker-'));
+    // Vary the path each turn so the identical-tool guard stays out of it —
+    // this isolates the veto-streak breaker (every call still violates the
+    // same fileScope, so each one vetoes).
+    const turns = Array.from({ length: 5 }, (_, i) => ({
+      content: `Still drifting (${i + 1}).`,
+      toolCalls: [{ id: `w-s${i}`, type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: `../other/stuck${i}.txt`, content: 'x' }) } }],
+      finishReason: 'tool_calls',
+    }));
+    const fake = await startFakeOpenAI(turns);
+    try {
+      const config = makeConfig(dir, fake.url);
+      config.safety.maxIterations = 40; // budget is NOT the binding constraint here
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create app.js');
+      const task = createTask('Create app.js', 'Create app.js.');
+      task.fileScope = ['app.js'];
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(result.success).toBe(false);
+      expect(result.stopReason).toBe('pulse_abort');
+      expect(existsSync(resolve(dir, 'other'))).toBe(false);
+      // 5 scripted turns only: the run must stop on the breaker, never ask
+      // for a 6th turn (proves the budget wasn't what stopped it).
+      expect(fake.requests.length).toBeLessThanOrEqual(5);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('shell-mutation detection (git baseline vs fileChanged)', () => {

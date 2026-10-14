@@ -3801,6 +3801,7 @@ Continue from 'Next:', do not redo completed progress.`,
       if (args.cwd) {
         const targetCwd = String(args.cwd);
         if (this.isSiblingProject(targetCwd) && !this.isPromptAuthorized(targetCwd)) {
+          this.scopeVetoCount++;
           this.context.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
@@ -3813,6 +3814,7 @@ Continue from 'Next:', do not redo completed progress.`,
         const absCwd = this.resolveTargetPath(targetCwd);
         const inTmp = this.isTmpPath(absCwd);
         if (resolve(this.workspace.root) !== resolve(homedir()) && !this.isInsideWorkspace(targetCwd) && !inTmp && !this.isPromptAuthorized(targetCwd)) {
+          this.scopeVetoCount++;
           this.context.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
@@ -3830,6 +3832,7 @@ Continue from 'Next:', do not redo completed progress.`,
       for (const match of cdMatches) {
         const cdTarget = match[1];
         if (this.isSiblingProject(cdTarget) && !this.isPromptAuthorized(cdTarget)) {
+          this.scopeVetoCount++;
           this.context.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
@@ -3844,6 +3847,7 @@ Continue from 'Next:', do not redo completed progress.`,
       for (const match of gitCMatches) {
         const gitTarget = match[1];
         if (this.isSiblingProject(gitTarget) && !this.isPromptAuthorized(gitTarget)) {
+          this.scopeVetoCount++;
           this.context.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
@@ -4496,6 +4500,13 @@ Continue from 'Next:', do not redo completed progress.`,
     // 3 consecutive empties); no dead counter check here.
     if (this.consecutiveToolErrorsCount >= 8 && !this.fileChanged) {
       return { abort: true, reason: `Too many consecutive tool failures (${this.consecutiveToolErrorsCount}) without file changes. Stopping.` };
+    }
+    // Veto-stall breaker: vetoed calls change nothing by construction, so a
+    // streak of 5 means the model is stuck arguing with the guardrails, not
+    // working. Stop with an honest verdict instead of burning maxIterations.
+    // (The streak resets on any successful mutation — see runMoolCall.)
+    if (this.scopeVetoCount >= 5) {
+      return { abort: true, reason: `Stalled on guardrails: ${this.scopeVetoCount} consecutive vetoed calls with no successful work. Stopping.` };
     }
     this.events.emit({ type: 'pulse', state: this.context.state });
     return { abort: false };
