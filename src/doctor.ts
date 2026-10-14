@@ -23,7 +23,7 @@ export interface SkillHealthEntry {
 export interface DoctorReport {
   version: string;
   providerReachable?: boolean;
-  runtime: { node: string; sqlite: boolean };
+  runtime: { engine: string; node: string; sqlite: boolean };
   model: {
     provider: string;
     keySet: boolean;
@@ -211,7 +211,17 @@ export async function doctorReport(opts: {
   const report: DoctorReport = {
     version: opts.version ?? 'unknown',
     providerReachable,
-    runtime: { node: process.version, sqlite },
+    // The true engine, not process.version: the compiled Bun binary reports a
+    // Node-compatible `process.version` (v24.x) while running Bun — printing
+    // "on node v24.3.0" from the standalone binary was simply false and read
+    // as "Mochi runs under Node" in every doctor screenshot.
+    runtime: {
+      engine: (process.versions as Record<string, string | undefined>).bun
+        ? `bun ${(process.versions as Record<string, string | undefined>).bun}`
+        : `node ${process.version}`,
+      node: process.version,
+      sqlite,
+    },
     model: { provider: opts.provider, keySet: Boolean(opts.apiKey), keySource: opts.apiKey ? 'env/config' : 'unset', baseUrl: opts.baseUrl, model: opts.model },
     index: { sqlite, codegraph: sqlite ? 'ready' : 'unavailable' },
     daemon: { running: opts.daemon?.running ?? false, port: opts.daemon?.port, jobs: cronJobs },
@@ -316,7 +326,7 @@ export function formatDoctor(r: DoctorReport): string {
     ? 'no skills installed'
     : `${r.skills.healthy}/${r.skills.total} healthy${r.skills.degraded.length > 0 ? ` (${r.skills.degraded.length} degraded)` : ''}`;
   return [
-    `Mochi doctor v${r.version} on node ${r.runtime.node}`,
+    `Mochi doctor v${r.version} on ${r.runtime.engine ?? `node ${r.runtime.node}`}${process.env.MOCHI_LAUNCHER === 'rust' ? ' (rust launcher)' : ''}`,
     '',
     `  model         ${r.model.provider} @ ${r.model.baseUrl}  (${r.model.model})`,
     `  api key       ${ok(r.model.keySet)} ${r.model.keySource}`,

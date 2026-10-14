@@ -381,14 +381,27 @@ export function createOpenAIProvider(config: ProviderConfig) {
     // runtime for the Map-fold (1 stdio round-trip, off the JS hot path).
     // Falls back to the inlined TS fold when the runtime is unavailable.
     const native = await nativeAssembleStream(chunks as unknown as Record<string, unknown>[]).catch(() => null);
+    // Usage parity with the streaming path: the final chunk carries the
+    // API-reported input/output counts (plus cached/cost fields). The native
+    // fold re-reads those same chunks but can come back zeroed (older
+    // runtimes), so prefer the chunk-reported numbers and keep the native
+    // counts only as a backstop.
+    const lastUsage = chunks[chunks.length - 1]?.usage;
     if (native) {
       const tool_calls = native.toolCalls.map((a) => ({ id: a.id, type: 'function' as const, function: { name: a.name, arguments: a.arguments } }));
+      const promptTokens = lastUsage?.promptTokens || native.promptTokens;
+      const completionTokens = lastUsage?.completionTokens || native.completionTokens;
       return {
         content: native.content,
         reasoningContent: native.reasoning || undefined,
         toolCalls: tool_calls.length ? tool_calls : undefined,
         finishReason: native.finishReason ?? chunks[chunks.length - 1]?.finishReason,
-        usage: { promptTokens: native.promptTokens, completionTokens: native.completionTokens, totalTokens: native.promptTokens + native.completionTokens },
+        usage: {
+          ...(lastUsage ?? {}),
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
       };
     }
     const content = chunks.map((c) => c.content || '').join('');
@@ -406,7 +419,7 @@ export function createOpenAIProvider(config: ProviderConfig) {
       }
     }
     const tool_calls = [...callsByIndex.values()].map((a) => ({ id: a.id, type: 'function' as const, function: { name: a.name, arguments: a.args } }));
-    const usage = chunks[chunks.length - 1]?.usage;
+    const usage = lastUsage;
     return {
       content,
       reasoningContent,

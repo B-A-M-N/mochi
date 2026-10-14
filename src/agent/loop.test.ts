@@ -890,9 +890,12 @@ describe('Agent', () => {
     const agent = new Agent({ id: 'review-terse', role: 'coder', config, workspace, events: bus, cwd: dir, context });
     const result = await agent.run(task);
     expect(result.success).toBe(true);
-    // The final "done" answer must be streamed exactly once (2 chunks from the
-    // fake's split), not repeated by a self-review misclassification loop.
-    expect(chunks.join('')).toBe('Done.');
+    // The tool-turn narration ("Editing.") streams exactly once — real
+    // providers emit content alongside tool calls, which the fake's encoder
+    // used to drop — and the final "done" answer must be streamed exactly
+    // once (2 chunks from the fake's split), not repeated by a self-review
+    // misclassification loop.
+    expect(chunks.join('')).toBe('Editing.Done.');
     // Only a handful of model calls: write turn, the answer, one self-review.
     expect(fake.requests.length).toBeLessThanOrEqual(4);
     await fake.close();
@@ -2386,6 +2389,147 @@ describe('scope fence (drift guard — out-of-scope writes vetoed)', () => {
       await fake.close();
       rmSync(wsRoot, { recursive: true, force: true });
       rmSync(resolve(home, `${tag}-sib`), { recursive: true, force: true });
+    }
+  });
+});
+
+describe('shell-mutation detection (git baseline vs fileChanged)', () => {
+  it('flags shell-side workspace divergence even though fileChanged stays false', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-shell-mutation-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir });
+    try {
+      const config = makeConfig(dir, 'http://localhost:0');
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const agent = new Agent({ id: 'shell-mutation-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      await (agent as any).captureGitBaseline();
+      // The model mutates via shell: fileChanged is only ever set by
+      // write/edit/delete/patch, so the old gates saw "nothing happened".
+      writeFileSync(resolve(dir, 'generated.txt'), 'x');
+      (agent as any).shellProbePending = true;
+      expect((agent as any).fileChanged).toBe(false);
+      expect(await (agent as any).shellMovedWorkspace()).toBe(true);
+      // Monotonic for the run: reverting the file does not un-see it.
+      rmSync(resolve(dir, 'generated.txt'));
+      expect((agent as any).shellWorkspaceMoved).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not count harness bookkeeping paths (.mochi/) as shell mutations', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-harness-paths-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir });
+    try {
+      const config = makeConfig(dir, 'http://localhost:0');
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const agent = new Agent({ id: 'harness-paths-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      await (agent as any).captureGitBaseline();
+      // Harness writes (workspace logs/state) must never look like progress.
+      mkdirSync(resolve(dir, '.mochi', 'logs'), { recursive: true });
+      writeFileSync(resolve(dir, '.mochi', 'logs', 'run.jsonl'), '{}');
+      (agent as any).shellProbePending = true;
+      expect(await (agent as any).shellMovedWorkspace()).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('verify() and shouldSelfReview() stop short-circuiting after a shell mutation', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-shell-verify-'));
+    execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir });
+    try {
+      const config = makeConfig(dir, 'http://localhost:0');
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const task = createTask('Regenerate the artifact', 'Regenerate the artifact.');
+      const agent = new Agent({ id: 'shell-verify-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      await (agent as any).captureGitBaseline();
+      // No divergence yet: both gates skip review/verification as before.
+      expect(await (agent as any).shouldSelfReview(task)).toBe(false);
+      // Shell-side mutation: fileChanged stays false, but git proves movement.
+      writeFileSync(resolve(dir, 'artifact.txt'), 'v1');
+      (agent as any).shellProbePending = true;
+      expect((agent as any).fileChanged).toBe(false);
+      expect(await (agent as any).shouldSelfReview(task)).toBe(true);
+      const v = await (agent as any).verify(task, {});
+      expect(v.summary).not.toBe('No changes made to verify.');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('bounded recovery retries', () => {
+  it('bounds context-limit retries and stops honestly instead of spinning forever', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-ctx-limit-'));
+    const ctxErr = { status: 400, message: "This model's maximum context length is 8192 tokens. Please shorten the prompt." };
+    // Sticky + respondFn: EVERY request errors with a context overflow, forever.
+    // The old code re-consumed the same iteration (`i = Math.max(0, i-1)`)
+    // with no cap — compaction can never shrink a single too-large message,
+    // so the run spun for hours without ever hitting maxIterations. It must
+    // now terminate with an honest error after the bounded retry budget.
+    const fake = await startFakeOpenAI([{ sticky: true, respondFn: () => ({ error: ctxErr }) }]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const events = new EventBus();
+      context.setGoal('Create greeting.txt');
+      const task = createTask('Create greeting.txt', 'Create greeting.txt containing hello mochi.');
+      const agent = new Agent({ id: 'ctx-limit-agent', role: 'coder', config, workspace, events, cwd: dir, context });
+      const result = await agent.run(task);
+      expect(result.stopReason).toBe('model_error');
+      const logs = events.snapshot()
+        .filter((e): e is Extract<typeof e, { type: 'agent:log' }> => e.type === 'agent:log')
+        .map((e) => e.message);
+      // The compaction path must actually be entered (the dead-provider retry
+      // wrapper strips the API detail line, which is what used to route
+      // context overflows into the generic failover loop instead).
+      expect(logs.some((m) => m.startsWith('[context-limit]'))).toBe(true);
+      expect(fake.requests.length).toBeLessThanOrEqual(50);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('chat task tool-cap finish', () => {
+  it('finishes with the model\'s real last answer, not a canned placeholder', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-chat-cap-'));
+    writeFileSync(resolve(dir, 'notes.txt'), 'mochi notes');
+    const readCall = (id: string) => ({ id, type: 'function' as const, function: { name: 'read', arguments: JSON.stringify({ path: 'notes.txt' }) } });
+    const finalAnswer = 'Final synthesis of the gathered context.';
+    const fake = await startFakeOpenAI([
+      { content: 'Gathering context first.', toolCalls: [readCall('r-1')], finishReason: 'tool_calls' },
+      { content: 'Still gathering.', toolCalls: [readCall('r-2')], finishReason: 'tool_calls' },
+      { content: 'Nearly there.', toolCalls: [readCall('r-3')], finishReason: 'tool_calls' },
+      { content: 'One more read.', toolCalls: [readCall('r-4')], finishReason: 'tool_calls' },
+      { content: finalAnswer, toolCalls: [readCall('r-5')], finishReason: 'tool_calls' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('hello');
+      // <=16 words starting with "hello" classifies as a chat/answer task.
+      const task = createTask('hello there', 'hello, how does the notes system work?');
+      const agent = new Agent({ id: 'chat-cap-agent', role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(result.success).toBe(true);
+      expect(result.stopReason).toBe('completed');
+      expect(result.summary).not.toContain('Synthesized answer');
+      expect(result.summary).toContain(finalAnswer);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

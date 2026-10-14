@@ -36,7 +36,7 @@ import type { MochiConfig } from './types.js';
 // Resolve the version from package.json when running from source; when Mochi is
 // compiled to a standalone binary there is no package.json next to it, so fall
 // back to the constant (kept in sync with package.json at build time).
-let VERSION = '0.26.0';
+let VERSION = '0.27.0';
 try {
   const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../package.json');
   VERSION = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
@@ -164,10 +164,14 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
   if (flags.verbose) overrides.verbose = true;
   if (flags.debug) overrides.debug = true;
   if (flags.reasoning) {
-    const lvl = String(flags.reasoning).toLowerCase();
+    const raw = String(flags.reasoning).toLowerCase();
+    // `med` is a documented alias (help text + `mochi reasoning [low|med|…]`
+    // + the compile-prompt tool all accept it) — map it instead of silently
+    // degrading the flag to auto.
+    const lvl = raw === 'med' ? 'medium' : raw;
     const valid: readonly string[] = ['low', 'medium', 'high', 'max', 'off', 'auto'];
     overrides.reasoning = (valid.includes(lvl) ? lvl : 'auto') as import('./types.js').ReasoningLevel;
-    if (lvl !== overrides.reasoning) console.error(`Unknown reasoning level "${lvl}" — using auto.`);
+    if (lvl !== overrides.reasoning) console.error(`Unknown reasoning level "${raw}" — using auto.`);
   }
   // Plan mode: `--plan` (a dashed boolean; the bare `plan` subcommand
   // is positional and unaffected) makes every agent in the run research and
@@ -248,12 +252,15 @@ Usage:
   mochi tui
   mochi term [--title T] [--geometry COLSxROWS] [--dry-run] [-- <mochi args>]  # open Mochi in its own native terminal window
   mochi completion <bash|zsh|fish>   # print shell completion script
+  mochi runtime [--json]             # which engine, launcher, and rust core am I on
+  mochi node <args…>                 # force the Node engine (dist/cli.js)
+  mochi standalone <args…>           # force the Bun standalone engine
   mochi "<prompt>" --plan            # plan mode: research + return a plan, no edits
 
 Options:
   -p, --print             Print response and exit
   --auto                  Autonomous mode
-  --reasoning <level>     Reasoning effort: low|medium|high|max
+  --reasoning <level>     Reasoning effort: low|medium|high|max|off|auto (alias: med=medium)
   --provider <name>       Model provider
   --model <id>            Model ID
   --api-key <key>         API key
@@ -309,6 +316,27 @@ async function main() {
   // Ultra-fast path for info queries (version, help): exit immediately in <3ms
   if (flags.h || flags.help) { printHelp(); return; }
   if (flags.version || positional[0] === 'version') { console.log(VERSION); return; }
+
+  // ── Engine dispatch — `mochi node …` / `mochi standalone …` ──────────────
+  // Must be honored HERE (before any engine work) so the subcommands behave
+  // identically whether the entry is the Rust launcher (which strips them and
+  // execs the engine itself), the npm bin, `node dist/cli.js`, or the
+  // standalone binary. The subcommand has to be the FIRST argument — the Rust
+  // launcher dispatches on the same position, so both entries agree.
+  const engineSub = process.argv[2];
+  if (engineSub === 'node' || engineSub === 'standalone') {
+    const { handleEngineArg } = await import('./runtime-dispatch.js');
+    const r = handleEngineArg(engineSub, process.argv.slice(3));
+    if (!r.continue) process.exit(r.exitCode ?? 0);
+    // Already on that engine: fall through and run normally.
+  }
+  if (positional[0] === 'runtime') {
+    const { runtimeReport, formatRuntimeReport } = await import('./runtime-dispatch.js');
+    const report = await runtimeReport(VERSION);
+    if (flags.json) console.log(JSON.stringify(report, null, 2));
+    else console.log(formatRuntimeReport(report));
+    return;
+  }
 
   // Dist freshness guard: when running the compiled dist/ tree (the global
   // `mochi` shim) and src/*.ts is newer than the last build, rebuild once so

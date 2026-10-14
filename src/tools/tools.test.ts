@@ -12,7 +12,7 @@ import { sessionRecallTool } from './session-recall.js';
 import { searchReplaceMultiTool } from './search-replace-multi.js';
 import { analyzeCodeTool } from './analyze-code.js';
 import { EventBus } from '../events.js';
-import type { ToolContext, ReadCache } from './types.js';
+import type { ToolContext, ReadCache, Tool } from './types.js';
 import type { MochiConfig } from '../types.js';
 
 function ctx(cwd: string): ToolContext {
@@ -296,5 +296,79 @@ describe('tool aliases and argument normalization', () => {
     const globRes = await executeTool('find_files', { Pattern: '*.ts' }, c, tools);
     expect(globRes.error).toBeUndefined();
     expect(globRes.output).toContain('demo.ts');
+  });
+});
+
+describe('image inlining cap', () => {
+  it('still returns a data URI for small images', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-img-'));
+    writeFileSync(resolve(dir, 'small.png'), Buffer.alloc(64, 0x89));
+    const out = await readTool.execute({ path: resolve(dir, 'small.png') }, ctx(dir));
+    expect(out).toContain('Image file:');
+    expect(out).toContain('data:image/png;base64,');
+  });
+
+  it('refuses to inline an image over the 4MB cap and reports the facts', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-imgbig-'));
+    const big = Buffer.alloc(4 * 1024 * 1024 + 1, 0x41);
+    // PNG IHDR lives at a fixed offset — cheap dimensions for the note.
+    big.writeUInt32BE(1920, 16);
+    big.writeUInt32BE(1080, 20);
+    writeFileSync(resolve(dir, 'big.png'), big);
+
+    const out = await readTool.execute({ path: resolve(dir, 'big.png') }, ctx(dir));
+    expect(out).toContain('Image too large to inline');
+    expect(out).toContain('big.png');
+    expect(out).toContain(`${4 * 1024 * 1024 + 1} bytes`);
+    expect(out).toContain('1920x1080');
+    expect(out).not.toContain('data:image');
+    expect(out.length).toBeLessThan(1000); // note, not a blob
+  });
+});
+
+describe('executeTool surfaces partial output from thrown tools', () => {
+  const flakyTool = (err: unknown): Tool => ({
+    def: { name: 'flaky', description: 'does work then throws', parameters: [] },
+    execute: async () => { throw err; },
+  });
+
+  it('keeps stdout/stderr carried on the error object instead of dropping it', async () => {
+    const { executeTool } = await import('./index.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-partial-'));
+    const err = Object.assign(new Error('command failed'), {
+      stdout: 'compiled 12 modules\npartial line from stdout',
+      stderr: 'boom on stderr',
+    });
+    const tools = new Map<string, Tool>([['flaky', flakyTool(err)]]);
+
+    const res = await executeTool('flaky', {}, ctx(dir), tools);
+    expect(res.error).toBe('command failed'); // message shaping unchanged
+    expect(res.output).toContain('partial line from stdout');
+    expect(res.output).toContain('boom on stderr');
+  });
+
+  it('recovers recorded output/result fields and cause chains', async () => {
+    const { executeTool } = await import('./index.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-partial2-'));
+    const recorded = Object.assign(new Error('mutated then failed'), { output: 'wrote 3 files before the throw' });
+    const wrapped = new Error('tool exploded', { cause: Object.assign(new Error('root'), { result: 'result tail' }) });
+    const tools = new Map<string, Tool>([['flaky', flakyTool(recorded)], ['wrapped', flakyTool(wrapped)]]);
+
+    const rec = await executeTool('flaky', {}, ctx(dir), tools);
+    expect(rec.output).toContain('wrote 3 files before the throw');
+
+    const viaCause = await executeTool('wrapped', {}, ctx(dir), tools);
+    expect(viaCause.error).toBe('tool exploded');
+    expect(viaCause.output).toContain('result tail');
+  });
+
+  it('leaves plain errors unchanged (no partial output to surface)', async () => {
+    const { executeTool } = await import('./index.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-partial3-'));
+    const tools = new Map<string, Tool>([['flaky', flakyTool(new Error('plain boom'))]]);
+
+    const res = await executeTool('flaky', {}, ctx(dir), tools);
+    expect(res.error).toBe('plain boom');
+    expect(res.output).toBe('');
   });
 });

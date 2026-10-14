@@ -126,7 +126,7 @@ Most terminal agents are either thin wrappers around one model call, or heavywei
 | | What that means in practice |
 |---|---|
 | **Autonomous by default** | Give it a goal; it plans, executes, verifies, recovers, and reports. `--auto` for hands-off, `--plan` for read-only research. |
-| **Verified work, not vibes** | Every task runs through verification gates: baseline comparison so pre-existing repo debt doesn't fail correct work, an independent verifier, an outcome judge, and rule-based BLOCK on unverified changes. |
+| **Verified work, not vibes** | Every task runs through verification gates: baseline comparison so pre-existing repo debt doesn't fail correct work, proportionate auto-detected test runs, diff-hygiene and self-review gates, and rule-based BLOCK on unverified changes — goal/DAG tasks additionally get an independent verifier and a model outcome judge. |
 | **Honest accounting** | Budgets on tokens, cost, wall time, tool calls, model calls, and agent count. Structured stop reasons (`completed` / `aborted` / `runtime_limit` / `budget` / `model_error`) on every run. |
 | **Recovery is a first-class path** | Failover across providers, key-pool rotation, model auto-escalation after repeated verification failures, warm-start resume with prior transcript injection, and local learning of successful recovery strategies. |
 | **The model sees its own struggles** | The harness detects consecutive tool errors, repeated identical results, empty responses, and verification loops — and injects a STRUGGLE STATE + escape-plan directive into the model's own prompt before the next move. |
@@ -334,7 +334,7 @@ The runtime loop is `preflight → model → tools → verify → recover → pu
 1. **Preflight** — context packet built in ~325 ms cold (batched binary probing, fingerprint-cached rules/memory so multi-hundred-iteration tasks don't re-read disk every call).
 2. **Model** — tiered tool advertising (21 lean tools / ~3K tokens on the first call, 7 for chat, 16 for research, 65 on demand via `load_tools` recovery), speculative preflight on hard tasks, streaming with mid-stream Ctrl-C abort on the wire.
 3. **Tools** — 70+ tools through a permission-gated bus; every shell command risk-classified (17 destructive + 16 network patterns); output folded head/tail through the Rust core; secrets redacted on every output, trace line, and disk write.
-4. **Verify** — baseline + proportionate verification, independent verifier, outcome judge with rule-based veto on contradictory PASSes.
+4. **Verify** — baseline + proportionate verification (goal-engine tasks add the independent verifier and outcome judge with rule-based veto on contradictory PASSes).
 5. **Recover** — provider failover, key rotation, model auto-escalation, checkpoint/rollback, warm-start resume.
 6. **Pulse / Struggle injection** — consecutive tool errors, repeated identical tool results (3+ reads of the same content), empty responses, and verification loops are surfaced to the model as a STRUGGLE STATE system message plus an escape-plan directive, so a struggling model never starts its next turn blind to its own failure history. Healthy runs pay nothing (zero-cost no-op).
 

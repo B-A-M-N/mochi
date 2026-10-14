@@ -409,6 +409,23 @@ export class Agent {
   private lastLessons: Lesson[] = [];
   private anchor = new AnchorEngine();
   private fileChanged = false;
+  /** Shell mutations (`sed -i`, `npm create`, `git apply`, `> file`, …) never
+   *  set fileChanged — only write/edit/delete/patch do — so verify()'s
+   *  "No changes made to verify" short-circuit and shouldSelfReview()'s gate
+   *  both lied for shell-driven runs. `git status --porcelain` is snapshotted
+   *  right before the model loop; a later divergence proves the workspace
+   *  moved without a tracked mutation. Best effort: a non-git workspace or a
+   *  failed probe leaves the baseline null and detection simply stays off. */
+  private gitBaseline: string | null = null;
+  /** Monotonic per-run: once a shell-side divergence is seen it stays true. */
+  private shellWorkspaceMoved = false;
+  /** Set whenever a non-read-only tool runs, so the git probe only re-runs
+   *  after a potential mutation instead of once per read-only iteration. */
+  private shellProbePending = false;
+  /** Bounded context-limit compaction retries (mirrors rateLimitRetries):
+   *  the old uncapped `i = Math.max(0, i-1)` retry re-consumed the same
+   *  iteration forever when compaction could not shrink the prompt. */
+  private contextLimitRetries = 0;
   /** Checkpoint taken before the first file edit, restored if verification
    *  fails repeatedly so a broken agent run never leaves the tree dirty. */
   private preEditCheckpoint?: CheckpointResult;
@@ -1002,8 +1019,14 @@ Continue from 'Next:', do not redo completed progress.`,
     if (taskKind !== 'chat' && !this.planMode && !this.compilerInjected) {
       this.compilerInjected = true;
       const resolvedTier = this.resolveReasoning(task);
-      const allowCompiler = Boolean(
-        process.env.MOCHI_PROMPT_COMPILER === '1' ||
+      // MOCHI_PROMPT_COMPILER is a real 0/1 toggle: `0` force-disables the
+      // compiler everywhere (the old check only honored `=1`, so the documented
+      // escape hatch was dead outside vitest — `!process.env.VITEST` alone made
+      // it always-true in production), `=1` force-enables it inside tests, and
+      // unset keeps the default (enabled outside tests).
+      const compilerEnv = process.env.MOCHI_PROMPT_COMPILER;
+      const allowCompiler = compilerEnv !== '0' && Boolean(
+        compilerEnv === '1' ||
         this.config.mode === 'spec' ||
         !process.env.VITEST
       );
@@ -1092,6 +1115,9 @@ Continue from 'Next:', do not redo completed progress.`,
     // Delivered background results: task ids already surfaced to the model,
     // so each completion is injected exactly once.
     const bgDelivered = new Set<string>();
+    // Shell-mutation baseline: as late as possible (all harness setup writes
+    // to .mochi/ already happened) but before the model can touch anything.
+    await this.captureGitBaseline();
     for (let i = 0; i < maxIterations; i++) {
       // Hot-reload agent-authored tools (tool_factory): if the agent created,
       // patched, or removed one last iteration, merge it into the live toolset
@@ -1739,7 +1765,15 @@ Continue from 'Next:', do not redo completed progress.`,
           }
           response = retryRaced;
         } catch (retryErr) {
-          const rMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          const rMsgRaw = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          // Classify on BOTH attempts' errors: once the provider is marked
+          // dead after the first failure, the retry short-circuits with
+          // "Provider X is marked dead (<first line>…)" — dropping the API
+          // detail line (e.g. "maximum context length") that identifies the
+          // failure class. That sent context overflows into the generic
+          // failover loop instead of the compaction path (outer `message` is
+          // the full first-attempt error and is lexically in scope here).
+          const rMsg = rMsgRaw.includes(message) ? rMsgRaw : `${rMsgRaw}\n${message}`;
 
           // Caller cancellation (Ctrl-C / runtime shutdown) is never retried
           // and never failed over: respect the reason and stop.
@@ -1835,10 +1869,27 @@ Continue from 'Next:', do not redo completed progress.`,
 
           // Context limit exceeded: compact history immediately and retry seamlessly.
           if (/context.*length|maximum context|prompt is too long|token.*limit|too many tokens|context_length_exceeded/i.test(rMsg)) {
+            this.contextLimitRetries++;
+            if (this.contextLimitRetries > 3) {
+              // Compaction is not shrinking the prompt (e.g. a single message
+              // larger than the window): the `i - 1` retry below re-consumes
+              // the SAME iteration forever — observed 240-minute spins that
+              // never hit maxIterations. Fail over to another model once;
+              // otherwise stop honestly instead of looping.
+              const altCtx = this.pickAlternateModel();
+              if (altCtx) {
+                this.events.emit({ type: 'agent:log', agentId: this.id, message: `[context-limit] compaction ineffective; failing over to ${altCtx}` });
+                this.setActiveModel(altCtx);
+                this.contextLimitRetries = 0;
+                i = Math.max(0, i - 1);
+                continue;
+              }
+              return this.finish(task, false, `Context window limit hit ${this.contextLimitRetries - 1}x and compaction did not shrink the prompt (${rMsg.slice(0, 200)}).`, 'model_error');
+            }
             this.events.emit({
               type: 'agent:log',
               agentId: this.id,
-              message: `[context-limit] Model context window reached (${rMsg.slice(0, 80)}). Auto-compacting history and retrying...`,
+              message: `[context-limit] Model context window reached (${rMsg.slice(0, 80)}). Auto-compacting history and retrying... (${this.contextLimitRetries}/3)`,
             });
             await this.checkpointAndCompact('floor');
             i = Math.max(0, i - 1);
@@ -1942,6 +1993,7 @@ Continue from 'Next:', do not redo completed progress.`,
         this.rateLimitRetries = 0;
         this.cooldownRetries = 0;
         this.stallRetries = 0;
+        this.contextLimitRetries = 0;
         this.stallRetriesByKey.delete(this.stallKey());
       }
       
@@ -2155,7 +2207,12 @@ Continue from 'Next:', do not redo completed progress.`,
           this.failureClusterSig = null;
           this.failureClusterCount = 0;
         }
-        if (isCycle && !isAllReadOnly && !this.fileChanged) {
+        // NOTE: no `!this.fileChanged` gate here — the old one disabled the
+        // oscillation guard for the rest of the run after the FIRST edit, so a
+        // model that edited once then ping-ponged A-B-A-B on failing calls was
+        // never cut short. Successful mutations still reset cycleNudges in
+        // trackFileChange(), so legitimate batch work keeps flowing.
+        if (isCycle && !isAllReadOnly) {
           this.cycleNudges++;
           if (this.cycleNudges >= 3) {
             return this.finish(task, false, 'Loop guard: stopped after detecting an oscillatory tool loop.', 'tool_loop');
@@ -2188,10 +2245,14 @@ Continue from 'Next:', do not redo completed progress.`,
         // same mutating tool without a file change would finish the task as a
         // tool_loop — which made multi-file refactors (10 edits to 10 files)
         // and shell pipelines that re-invoke the same binary impossible.
-        // New rule: only fire when (a) no file changed yet AND (b) more than
-        // 12 calls to the same mutating tool happened AND (c) the SAME error
-        // has repeated 3+ times. Read-only tools are excluded entirely.
-        if (!this.fileChanged) {
+        // New rule: only fire when (a) more than 12 calls to the same mutating
+        // tool happened AND (b) the SAME error has repeated 3+ times
+        // (consecutiveToolErrors entries are deleted on success, so "no
+        // progress" is implied by the error requirement). The old clause
+        // "(a) no file changed yet" is gone: it disabled this breaker for the
+        // rest of the run after the FIRST edit, letting post-edit stuck loops
+        // with changing arguments spin unbounded. Read-only tools excluded.
+        {
           let mutatingRepeats = 0;
           let mutatingTool = '';
           let sameErrorRepeats = 0;
@@ -2226,7 +2287,22 @@ Continue from 'Next:', do not redo completed progress.`,
               content: 'You have gathered sufficient context for this chat query. Synthesize your findings and provide your direct answer now without making any further tool calls.',
             });
           } else if (this.chatToolRounds >= 5) {
-            return this.finish(task, true, 'Synthesized answer for chat query.', 'completed');
+            // Finish with the model's REAL prose, never a canned placeholder:
+            // this string becomes the run's final summary, and users literally
+            // saw "Synthesized answer for chat query." as their entire result.
+            const msgs = this.context.getMessages();
+            let lastText = '';
+            for (let mi = msgs.length - 1; mi >= 0; mi--) {
+              const m = msgs[mi];
+              if (m.role !== 'assistant') continue;
+              const t = (typeof m.content === 'string' ? m.content : contentText(m)).trim();
+              if (t) { lastText = t; break; }
+            }
+            if (!lastText) lastText = (response.content ?? '').trim();
+            const summary = scrubAnsiFragments(lastText
+              ? (lastText.length > 1500 ? `${lastText.slice(0, 1500)}…` : lastText)
+              : 'Answered from gathered context.');
+            return this.finish(task, true, summary, 'completed');
           }
         }
         // Global tool-call ceiling: was 40, raised to 200 because large multi-file
@@ -2486,7 +2562,7 @@ Continue from 'Next:', do not redo completed progress.`,
         // test-blind holes (accidental deletions, dead code, wrong constants,
         // pasted hacks) before we declare done. When it finds a real issue we
         // keep looping so the fix gets verified in the next iteration.
-        if (!this.planMode && this.shouldSelfReview(task)) {
+        if (!this.planMode && (await this.shouldSelfReview(task))) {
           const review = await this.selfReview(task, repo);
           if (review.issue) {
             this.selfReviewCount++;
@@ -2892,6 +2968,11 @@ Continue from 'Next:', do not redo completed progress.`,
    *  (the model recreating the file via shell). */
   private trackFileChange(name: string, args: Record<string, unknown>, toolResult?: { output?: string; error?: unknown }) {
     const canonical = TOOL_ALIASES[name] || name;
+    // Any non-read-only tool MIGHT have moved the workspace (shell, MCP, …) —
+    // arm the git probe so shellMovedWorkspace() re-checks on the next gate.
+    // Failed calls count too: partial shell mutations are exactly the case
+    // fileChanged misses.
+    if (!this.isReadOnly(canonical)) this.shellProbePending = true;
     if (['write', 'edit', 'delete', 'patch'].includes(canonical)) {
       if (toolResult?.error) {
         this.failedMutation = true;
@@ -2903,6 +2984,11 @@ Continue from 'Next:', do not redo completed progress.`,
       this.consecutiveToolErrorsCount = 0;
       this.cycleNudges = 0;
       this.nudgeInjections = 0;
+      // Real progress invalidates read-veto memory: re-reading a file the
+      // model just changed is legitimate, but readTargetCounts never reset
+      // (n >= 4 vetoed forever), turning every later re-read into a blocked
+      // no-op and strangling multi-step workflows.
+      this.readTargetCounts.clear();
       const path = String(args.path ?? '');
       if (path) this.context.addModifiedFile(resolve(this.cwd, path));
     }
@@ -4175,7 +4261,11 @@ Continue from 'Next:', do not redo completed progress.`,
     if (taskKind === 'chat' || taskKind === 'research' || taskKind === 'plan' || this.planMode) {
       return { passed: true, summary: `No verification required for ${taskKind} task.` };
     }
-    if (!this.fileChanged && !task.verificationCommand) {
+    // Refresh the shell-mutation flag BEFORE any gate consults it: the model
+    // may have mutated the workspace entirely via shell (`sed -i`, scaffolds),
+    // which never sets fileChanged.
+    await this.shellMovedWorkspace();
+    if (!this.fileChanged && !this.shellWorkspaceMoved && !task.verificationCommand) {
       return { passed: true, summary: 'No changes made to verify.' };
     }
 
@@ -4898,6 +4988,57 @@ Continue from 'Next:', do not redo completed progress.`,
     return this.gitWorkspace;
   }
 
+  /** Extract the meaningful `git status --porcelain` lines from the shell
+   *  tool's `exit_code/stdout/stderr` envelope and strip harness-bookkeeping
+   *  paths (the workspace dir and audit logs) so harness writes never count
+   *  as a model-side shell mutation. Comparing the extracted LINES (not the
+   *  raw envelope) is load-bearing: the envelope swaps the status body for a
+   *  literal "(empty)" placeholder and leaves blank lines around it, so raw
+   *  comparison flagged "status line appeared where (empty) used to be". */
+  private filterHarnessStatus(envelope: string): string {
+    const rel = relative(this.cwd, this.workspace.dir);
+    const prefixes = ['.mochi', '.mochi-audit', ...(rel && rel !== '.' && !rel.startsWith('..') && !isAbsolute(rel) ? [rel] : [])];
+    const bodyMatch = /^exit_code: \d+\nstdout:\n([\s\S]*?)\nstderr:/m.exec(envelope);
+    const body = bodyMatch ? bodyMatch[1] : envelope;
+    return body
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => {
+        if (!line.trim() || line === '(empty)') return false;
+        const path = line.slice(3); // porcelain v1: "XY <path>" (2 status chars + space)
+        return !prefixes.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + sep));
+      })
+      .join('\n');
+  }
+
+  /** Snapshot `git status --porcelain` right before the model loop (after all
+   *  harness setup writes) as the baseline for shell-mutation detection. */
+  private async captureGitBaseline(): Promise<void> {
+    if (!this.isGitWorkspace()) return;
+    try {
+      const out = await this.runShell('git status --porcelain', 15);
+      if (!/^exit_code: 0\b/.test(out)) return;
+      this.gitBaseline = this.filterHarnessStatus(out);
+    } catch { /* best effort: detection stays off */ }
+  }
+
+  /** Did the workspace diverge from the run-start baseline WITHOUT a tracked
+   *  write/edit/delete/patch (i.e. the model mutated via shell)? Probes are
+   *  throttled to "after a non-read-only tool ran"; the answer is monotonic
+   *  for the run. Never throws — a git failure means "no divergence known". */
+  private async shellMovedWorkspace(): Promise<boolean> {
+    if (this.shellWorkspaceMoved) return true;
+    if (this.gitBaseline === null || !this.shellProbePending) return false;
+    try {
+      const out = await this.runShell('git status --porcelain', 15);
+      if (/^exit_code: 0\b/.test(out) && this.filterHarnessStatus(out) !== this.gitBaseline) {
+        this.shellWorkspaceMoved = true;
+      }
+    } catch { /* best effort */ }
+    this.shellProbePending = false;
+    return this.shellWorkspaceMoved;
+  }
+
   /** Self-review only pays off when the agent actually changed files this run.
    *  Pure answer/research tasks skip it (nothing to review). */
   /** Gather hygiene findings from tracked diff + untracked new files. Best
@@ -4928,8 +5069,10 @@ Continue from 'Next:', do not redo completed progress.`,
     }
   }
 
-  private shouldSelfReview(_task: Task): boolean {
-    if (!this.fileChanged) return false;
+  private async shouldSelfReview(_task: Task): Promise<boolean> {
+    // Shell mutations never set fileChanged — consult the git baseline too,
+    // or a shell-driven change (`sed -i`, generators) never gets reviewed.
+    if (!this.fileChanged && !(await this.shellMovedWorkspace())) return false;
     // Bound the cost: after two review cycles the model is clearly not going
     // to move; stop burning tokens on it.
     return this.selfReviewCount < 2;

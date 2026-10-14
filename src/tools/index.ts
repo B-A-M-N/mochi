@@ -1,5 +1,6 @@
 import type {MochiConfig} from '../types.js';
 import type { ToolContext, Tool } from './types.js';
+import { clipToolOutput } from './output-budget.js';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { readTool } from './read.js';
@@ -552,6 +553,43 @@ export function validateArgs(tool: Tool, args: Record<string, unknown>): string 
   return undefined;
 }
 
+// Partial-output recovery for the generic tool catch below. A tool that
+// throws AFTER doing real work (a child_process exec that printed then
+// failed, a formatter that mutated then blew up) carries the evidence on the
+// error object — exec-family failures attach stdout/stderr, some tools stuff
+// `output`/`result` on before rethrowing, and `cause` may hold the original.
+// Pull a bounded tail of it out so the failure result shows what happened,
+// not just the message. The message itself is left untouched: error
+// signatures, recovery-hint matching, and the failure ledger only see it.
+function partialOutputFrom(err: unknown): string {
+  if (!err || typeof err !== 'object') return '';
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  const visit = (e: unknown, depth: number): void => {
+    if (!e || typeof e !== 'object' || depth > 1 || seen.has(e)) return;
+    seen.add(e);
+    const rec = e as Record<string, unknown>;
+    const add = (label: string, v: unknown) => {
+      const s = typeof v === 'string' ? v : Buffer.isBuffer(v) ? v.toString('utf8') : '';
+      if (s.trim()) parts.push(`${label}:\n${s.trimEnd()}`);
+    };
+    add('stdout', rec.stdout);
+    add('stderr', rec.stderr);
+    if (parts.length === 0) {
+      add('output', rec.output);
+      add('partialOutput', rec.partialOutput);
+      add('result', rec.result);
+    }
+    if (parts.length === 0) visit(rec.cause, depth + 1);
+  };
+  visit(err, 0);
+  if (parts.length === 0) return '';
+  const joined = parts.join('\n');
+  // Same budget every other tool result gets: keep the head (first error) and
+  // the tail (final summary), elide the middle — never dump a raw firehose.
+  return `Partial output before the error:\n${clipToolOutput(joined)}`;
+}
+
 export async function executeTool(
   rawName: string,
   rawArgs: Record<string, unknown>,
@@ -596,7 +634,13 @@ export async function executeTool(
   } catch (err) {
     const durationMs = Math.round(performance.now() - start);
     const error = err instanceof Error ? err.message : String(err);
+    // Don't discard what the tool produced before it threw: surface any
+    // partial stdout/stderr/result carried on the error as `output` (the
+    // agent loop renders it as `Error: <msg>\n<partial>`, same as the shell
+    // nonzero-exit path). Empty when the error carries nothing extra, so the
+    // plain-message shape is unchanged.
+    const output = partialOutputFrom(err);
     ctx.events.emit({ type: 'tool:failed', tool: name, error, agentId: ctx.agentId });
-    return { output: '', error, durationMs };
+    return { output, error, durationMs };
   }
 }

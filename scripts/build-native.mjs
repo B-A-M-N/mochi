@@ -9,7 +9,7 @@
 // degrades parity features instead of failing the build. CI separately
 // asserts that the binaries exist when both toolchains are present.
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,7 +27,26 @@ const best = (label, fn) => {
   return ok;
 };
 const copy = (from, to) => {
-  try { copyFileSync(from, resolve(bin, to)); return true; } catch { return false; }
+  const dest = resolve(bin, to);
+  try {
+    copyFileSync(from, dest);
+    return true;
+  } catch (e) {
+    // ETXTBSY: the destination is a *running* binary (a live `mochi-agent
+    // plan` child owned by an open TUI session) — copyFileSync opens it for
+    // write and the kernel refuses. rename(2) swaps the path to the fresh
+    // inode without touching the executing one: the running process keeps
+    // its old code, every future exec gets the new build. Without this a
+    // single open session silently degraded the whole native build.
+    try {
+      const tmp = `${dest}.new-${process.pid}`;
+      copyFileSync(from, tmp);
+      renameSync(tmp, dest);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 };
 
 // 1. Rust core: mochi_core cdylib (loaded as mochi_core.node) + mochi-agent CLI.
@@ -41,9 +60,12 @@ best('cargo (mochi_core)', () => {
   // copyFileSync fail with ETXTBSY, and an && chain would then skip the
   // .node copy too — one busy file used to disable the whole native core.
   const agent = copy(resolve(out, exe('mochi-agent')), exe('mochi-agent'));
+  // The default `mochi` entry: Rust launcher that owns --version/runtime and
+  // dispatches to the freshest engine (see src/bin/mochi.rs).
+  const launcher = copy(resolve(out, exe('mochi')), exe('mochi'));
   const nodeLib = copy(resolve(out, libName), 'mochi_core.node');
   const lib = copy(resolve(out, libName), libName);
-  return agent && nodeLib && lib;
+  return agent && launcher && nodeLib && lib;
 });
 
 // 2. Single-file rust accelerators.
@@ -54,7 +76,7 @@ best('rustc search', () => sh('rustc', ['-O', '-o', resolve(bin, exe('search_rus
 best('g++ fuzzy_cpp', () => sh('g++', ['-O2', '-std=c++17', '-o', resolve(bin, exe('fuzzy_cpp')), resolve(root, 'native', 'cpp', 'fuzzy.cpp')]));
 
 // 4. Strip release symbols (unstripped: 26.6MB, stripped: 800KB). Optional.
-const stripTargets = ['fuzzy_rust', 'search_rust', 'mochi-agent', 'mochi_core.node', 'libmochi_core.so', 'libmochi_core.dylib']
+const stripTargets = ['fuzzy_rust', 'search_rust', 'mochi-agent', 'mochi', 'mochi_core.node', 'libmochi_core.so', 'libmochi_core.dylib']
   .flatMap((n) => [resolve(bin, n), resolve(bin, `${n}.exe`)])
   .filter((p) => existsSync(p));
 if (stripTargets.length) sh('strip', stripTargets);

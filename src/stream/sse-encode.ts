@@ -167,11 +167,13 @@ export function buildChatCompletion(params: {
   };
 
   const out: string[] = [];
-  if (toolCalls.length) {
-    toolCalls.forEach((call, i) => out.push(buildToolCallChunk(id, call, i)));
-  } else if (content || reasoningContent) {
-    // Reasoning precedes content on the wire (real provider order); each is
-    // split across two chunks the way real providers stream.
+  // Reasoning precedes content on the wire (real provider order); each is
+  // split across two chunks the way real providers stream. Content and tool
+  // calls COEXIST on real wires — a model narrates while calling a tool — so
+  // they are emitted together, not exclusively. The old `if (toolCalls) …
+  // else if (content)` silently dropped scripted narration whenever the same
+  // reply carried tool calls (the chat-cap test's final answer vanished).
+  if (reasoningContent || content) {
     if (reasoningContent) {
       const rHalves = [reasoningContent.slice(0, Math.ceil(reasoningContent.length / 2)), reasoningContent.slice(Math.ceil(reasoningContent.length / 2))];
       for (const part of rHalves) {
@@ -184,6 +186,9 @@ export function buildChatCompletion(params: {
       if (!part) continue;
       out.push(buildContentChunk(id, part));
     }
+  }
+  if (toolCalls.length) {
+    toolCalls.forEach((call, i) => out.push(buildToolCallChunk(id, call, i)));
   }
   out.push(buildFinishChunk(id, usage, finishReason));
   return out.join('');

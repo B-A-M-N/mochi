@@ -6,6 +6,38 @@ import { clipToolOutput, DEFAULT_TOOL_RESULT_MAX_CHARS } from './output-budget.j
 import { nativeSkeletonizeSource } from '../native/core.js';
 import { extractCodeOutline } from './outline.js';
 
+// MCH-109 images are inlined as base64 data URIs — uncapped that turns a big
+// file (or a huge file misdetected as an image) into a context/token bomb
+// (~1.33 chars of base64 per raw byte, re-sent on every request until
+// compaction). 4MB raw (~5.3MB base64) is the inline ceiling; above it the
+// read returns a short note instead of the blob.
+const MAX_INLINE_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/** Header-only image dimensions where the format gives them in a few bytes
+ *  (PNG/GIF/BMP fixed offsets, JPEG SOF scan). Best-effort: '' when cheap
+ *  detection fails — dimensions are a nicety in the too-large note, never a
+ *  reason to fail the read. */
+function imageDimensions(buf: Buffer, ext: string): string {
+  try {
+    if (ext === '.png' && buf.length >= 24) return `${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}`;
+    if (ext === '.gif' && buf.length >= 10) return `${buf.readUInt16LE(6)}x${buf.readUInt16LE(8)}`;
+    if (ext === '.bmp' && buf.length >= 26) return `${buf.readInt32LE(18)}x${Math.abs(buf.readInt32LE(22))}`;
+    if ((ext === '.jpg' || ext === '.jpeg') && buf.length >= 4) {
+      let i = 2;
+      while (i + 9 < buf.length) {
+        if (buf[i] !== 0xff) { i++; continue; }
+        const marker = buf[i + 1];
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return `${buf.readUInt16BE(i + 7)}x${buf.readUInt16BE(i + 5)}`;
+        }
+        if (marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd9)) { i += 2; continue; }
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+    }
+  } catch { /* malformed header — skip dimensions */ }
+  return '';
+}
+
 export const readTool: Tool = {
   def: {
     name: 'read',
@@ -26,11 +58,21 @@ export const readTool: Tool = {
     // MCH-109: image files are unreadable as text — return a data URI the
     // model can attach to its next user message (multimodal vision input).
     const IMG_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']);
-    if (IMG_EXTS.has(extname(fullPath).toLowerCase())) {
+    const ext = extname(fullPath).toLowerCase();
+    if (IMG_EXTS.has(ext)) {
       const buf = readFileSync(fullPath);
-      const mime = extname(fullPath).toLowerCase() === '.jpg' || extname(fullPath).toLowerCase() === '.jpeg'
+      // Cap the inline payload: past ~4MB raw the base64 blob is a context
+      // bomb, so report the facts instead of attaching it.
+      if (buf.length > MAX_INLINE_IMAGE_BYTES) {
+        const dims = imageDimensions(buf, ext);
+        return [
+          `Image too large to inline: ${rawPath} (${buf.length} bytes${dims ? `, ${dims}` : ''}, cap ${MAX_INLINE_IMAGE_BYTES} bytes).`,
+          'No data URI was attached — a base64 payload this size would blow up the prompt. Resize or crop the image (or read a thumbnail of it) and re-read if you need to inspect it.',
+        ].join('\n');
+      }
+      const mime = ext === '.jpg' || ext === '.jpeg'
         ? 'image/jpeg'
-        : `image/${extname(fullPath).toLowerCase().replace(/^\./, '')}`;
+        : `image/${ext.replace(/^\./, '')}`;
       const uri = `data:${mime};base64,${buf.toString('base64')}`;
       return [
         `Image file: ${rawPath} (${buf.length} bytes, ${mime}).`,
