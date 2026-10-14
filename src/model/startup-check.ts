@@ -10,6 +10,7 @@
 
 import type { ModelConfig } from '../types.js';
 import { PROVIDERS } from './providers.js';
+import { normalizeModelName } from './router.js';
 
 /** Placeholder-shaped keys are the same as no key (mirrors config.ts). */
 export function isKeyUsable(key: string | undefined): boolean {
@@ -23,8 +24,8 @@ export function isKeyUsable(key: string | undefined): boolean {
 
 /** Strip `provider/`-style prefixes the way the request router does, so
  *  `opencode/deepseek-v4-flash-free` matches the bare listed id. */
-export function bareModelId(model: string): string {
-  return model.replace(/^(?:opencode-go|opencode|zen|go)\//, '') || model;
+export function bareModelId(model: string, baseUrl?: string): string {
+  return normalizeModelName(model, baseUrl);
 }
 
 export interface StartupModelHealth {
@@ -53,8 +54,8 @@ export function checkStartupModel(
       line: `◇ model check: no API key for ${prov.name} (${prov.id}). Requests will 401 — run /login or set $${prov.envKey}, then send your message again.`,
     };
   }
-  const bare = bareModelId(model.model ?? '');
-  const listed = prov.models.some((m) => m === bare || m === model.model);
+  const bare = bareModelId(model.model ?? '', prov.baseUrl);
+  const listed = prov.models.some((m) => m === bare || m === model.model || bareModelId(m, prov.baseUrl) === bare);
   if (!listed && prov.models.length > 0) {
     return {
       ok: false,

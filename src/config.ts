@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MochiConfig, ModelProfile } from './types.js';
 import { PROVIDERS } from './model/providers.js';
+import { normalizeModelName } from './model/router.js';
 
 const defaultConfig = (): MochiConfig => ({
   model: {
@@ -288,6 +289,28 @@ if (!cfg.model.failover || cfg.model.failover.length === 0) {
   }
 
   merge(cfg as unknown as Record<string, unknown>, overrides as Record<string, unknown>);
+
+  // Normalize model names across primary model, profiles, and failover targets
+  if (cfg.model) {
+    if (cfg.model.model) {
+      cfg.model.model = normalizeModelName(cfg.model.model, cfg.model.baseUrl);
+    }
+    if (cfg.model.profiles) {
+      for (const k of Object.keys(cfg.model.profiles) as ModelProfile[]) {
+        if (cfg.model.profiles[k]) {
+          cfg.model.profiles[k] = normalizeModelName(cfg.model.profiles[k], cfg.model.baseUrl);
+        }
+      }
+    }
+    if (Array.isArray(cfg.model.failover)) {
+      for (const fo of cfg.model.failover) {
+        if (fo.model) {
+          fo.model = normalizeModelName(fo.model, fo.baseUrl);
+        }
+      }
+    }
+  }
+
   return cfg;
 }
 

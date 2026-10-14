@@ -1906,8 +1906,10 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const specific = line.startsWith('/model ') ? line.slice(7).trim() : '';
       if (specific) {
         await run(async () => {
+          const { normalizeModelName } = await import('../model/router.js');
           const p = providerById(runtime.config.model.provider);
-          return p ? (await runtime.useProvider(p.id, specific)) : 'Current provider unknown';
+          const normModel = normalizeModelName(specific, p?.baseUrl ?? runtime.config.model.baseUrl);
+          return p ? (await runtime.useProvider(p.id, normModel)) : 'Current provider unknown';
         });
       } else {
         await modelMenu();
@@ -2834,11 +2836,13 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     const midx = await openMenu(`${prov.name} · Select Model`, modelItems);
     if (midx < 0 || midx >= prov.models.length) return;
     const model = prov.models[midx];
+    const { normalizeModelName } = await import('../model/router.js');
+    const normModel = normalizeModelName(model, prov.baseUrl);
 
     // Apply the selection
     await run(async () => {
-      const desc = await runtime.useProvider(prov.id, model);
-      modelShort = model.split('/').pop() ?? model;
+      const desc = await runtime.useProvider(prov.id, normModel);
+      modelShort = normModel.split('/').pop() ?? normModel;
       return desc;
     });
   }

@@ -8,33 +8,100 @@ import { CapabilityRegistry, providerKey } from './capability.js';
 // retry/backoff logic it complements; router reuses that single canonical
 // implementation rather than redefining it.
 import { isAbort } from './rate-limit.js';
+import { ProviderError } from '../utils/http-error.js';
 export type { ProviderConfig } from './openai.js';
 
 const ALIASES: Record<string, { baseUrl: string; defaultModel: string }> = {
   'opencode-zen': { baseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
   'opencode': { baseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
   'zen': { baseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
-  'opencode-go': { baseUrl: 'https://opencode.ai/go/v1', defaultModel: 'deepseek-v4-flash' },
-  'go': { baseUrl: 'https://opencode.ai/go/v1', defaultModel: 'deepseek-v4-flash' },
+  'opencode-go': { baseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
+  'go': { baseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash' },
   'freeinference': { baseUrl: 'https://freeinference.org/v1', defaultModel: 'glm-5.3-flash' },
   'freeinference-org': { baseUrl: 'https://freeinference.org/v1', defaultModel: 'glm-5.3-flash' },
 };
 
-// OpenCode.ai's OpenAI-compatible endpoints list and accept BARE model ids
-// (e.g. `deepseek-v4-flash-free`), not the `opencode/…`-prefixed ids their docs
-// historically used. The ALIASES above keep the prefix as a human-friendly
-// default, but we strip it here at the request boundary for opencode.ai bases
-// so the request actually succeeds. Other OpenAI-compatible providers are
-// untouched because they often DO expect the prefixed id.
-function opencodeBase(baseUrl: string): boolean {
-  return /opencode\.ai\/(zen|go)/.test(baseUrl);
-}
+/**
+ * Robust model name normalizer:
+ * 1. Strips provider prefixes ('freeinference/', 'opencode/', 'opencode-go/', etc.)
+ *    on direct OpenAI-compatible providers (non-OpenRouter).
+ * 2. Normalizes spacing/punctuation (e.g. 'deep seek v4 flash' -> 'deepseek-v4-flash').
+ * 3. Fixes common typos (e.g. 'flah' -> 'flash').
+ * 4. Gracefully aliases non-existent or misnamed models (e.g. 'glm-5.4-flash' -> 'glm-5.3-flash').
+ */
+export function normalizeModelName(rawModel: string, baseUrl?: string): string {
+  if (!rawModel) return rawModel;
+  let m = rawModel.trim();
 
-function resolveModelForBase(baseUrl: string, model: string): string {
-  if (!opencodeBase(baseUrl)) return model;
-  // Strip any `provider/`-style prefix; the endpoint wants just `deepseek-v4-…`.
-  const stripped = model.replace(/^(?:opencode-go|opencode|zen|go)\//, '');
-  return stripped || model;
+  // If baseUrl is OpenRouter, OpenRouter requires 'vendor/model' format (e.g. anthropic/claude-3.5-sonnet).
+  // For all direct providers (FreeInference, OpenCode, DeepSeek, OpenAI, Groq, Mistral, Zhipu, etc.),
+  // endpoints accept bare model IDs without vendor prefixes.
+  const isOpenRouter = Boolean(baseUrl && baseUrl.includes('openrouter.ai'));
+  if (!isOpenRouter) {
+    m = m.replace(/^(?:freeinference|freeinforge|opencode-go|opencode|zen|go|openai|deepseek|zhipu|zai|anthropic|google|gemini)\//i, '');
+  }
+
+  // Normalize whitespace, multiple dashes, and casing
+  const clean = m.toLowerCase().replace(/[\s_]+/g, '-');
+
+  // Typo correction: 'flah' -> 'flash'
+  const deflashed = clean.replace(/flah$/i, 'flash').replace(/flah(?=-)/i, 'flash');
+
+  // GLM models: FreeInference and OpenCode provide glm-5.3-flash and glm-5.3.
+  // Users frequently ask for 'glm 5.4 flash' / 'glm-5.4-flash' / 'glm 5.4' / 'glm-5.4'.
+  // Map these gracefully to the real available flash tier: glm-5.3-flash.
+  if (
+    deflashed === 'glm-5.4-flash' ||
+    deflashed === 'glm-5.4' ||
+    deflashed === 'glm5.4-flash' ||
+    deflashed === 'glm5.4' ||
+    deflashed === 'glm-flash' ||
+    deflashed === 'glm-5-flash'
+  ) {
+    return 'glm-5.3-flash';
+  }
+  if (deflashed === 'glm-5.3-flash' || deflashed === 'glm-5.3' || deflashed === 'glm-5') {
+    return deflashed;
+  }
+
+  // DeepSeek models: deep seek v4 flash -> deepseek-v4-flash
+  // Note: On OpenCode, deepseek-v4-flash-free is a distinct model ID; on FreeInference it must be deepseek-v4-flash.
+  if (deflashed === 'deepseek-v4-flash-free' || deflashed === 'deep-seek-v4-flash-free') {
+    if (baseUrl && baseUrl.includes('freeinference')) {
+      return 'deepseek-v4-flash';
+    }
+    return 'deepseek-v4-flash-free';
+  }
+  if (
+    deflashed === 'deepseek-v4-flash' ||
+    deflashed === 'deep-seek-v4-flash' ||
+    deflashed === 'deepseek-flash' ||
+    deflashed === 'deep-seek-flash' ||
+    deflashed === 'deepseek-v4' ||
+    deflashed === 'deep-seek-v4'
+  ) {
+    return 'deepseek-v4-flash';
+  }
+
+  // GPT models
+  if (deflashed === 'gpt-5.4-nano' || deflashed === 'gpt5.4-nano' || deflashed === 'gpt-5.4nano') {
+    return 'gpt-5.4-nano';
+  }
+  if (deflashed === 'gpt-5.4' || deflashed === 'gpt5.4') {
+    return 'gpt-5.4';
+  }
+
+  // Qwen models
+  if (deflashed === 'qwen3.6-35b' || deflashed === 'qwen-3.6-35b' || deflashed === 'qwen-3.6' || deflashed === 'qwen3.6') {
+    return 'qwen3.6-35b';
+  }
+
+  // MiniMax
+  if (deflashed === 'minimax-m3' || deflashed === 'minimaxm3') {
+    return 'MiniMax-M3';
+  }
+
+  return m;
 }
 
 const ALIAS_KIND: Record<string, 'anthropic' | 'gemini'> = {
@@ -49,12 +116,14 @@ export function resolveProvider(config: ModelConfig): ProviderConfig {
   const name = config.provider.toLowerCase();
   const alias = ALIASES[name];
   const baseUrl = config.baseUrl || alias?.baseUrl || 'https://api.openai.com/v1';
-  const model = resolveModelForBase(baseUrl, config.model || alias?.defaultModel || 'gpt-4o-mini');
+  const rawModel = config.model || alias?.defaultModel || 'gpt-4o-mini';
+  const model = normalizeModelName(rawModel, baseUrl);
   return { baseUrl, apiKey: config.apiKey, model, providerName: config.provider };
 }
 
 export function selectModel(config: ModelConfig, profile: ModelProfile): string {
-  return resolveModelForBase(config.baseUrl || '', config.profiles?.[profile] ?? config.model);
+  const rawModel = config.profiles?.[profile] ?? config.model;
+  return normalizeModelName(rawModel, config.baseUrl || '');
 }
 
 export function createProvider(config: ModelConfig, profile?: ModelProfile) {
@@ -138,7 +207,7 @@ function createRawProvider(config: ModelConfig, profile?: ModelProfile) {
   const kind = kindOf(config.provider);
   const resolved = resolveProvider(config);
   if (profile && config.profiles?.[profile]) {
-    resolved.model = resolveModelForBase(resolved.baseUrl, config.profiles[profile]);
+    resolved.model = normalizeModelName(config.profiles[profile], resolved.baseUrl);
   }
   if (kind === 'anthropic' || name === 'anthropic') return createAnthropicProvider(resolved);
   if (kind === 'gemini' || name === 'gemini' || name === 'google') return createGeminiProvider(resolved);
@@ -213,8 +282,11 @@ function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved
       // growing-cooldown freezes. Skip the registry penalty for aborts; still
       // rethrow so the caller/withRetries can treat it as transient.
       if (!isAbort(err)) {
-        reg.record(key, { ok: false, error: err instanceof Error ? err.message : String(err), check: 'chat' });
-        if (isPermanent(err)) reg.markDead(key, err instanceof Error ? err.message : String(err));
+        if (isPermanent(err)) {
+          reg.markDead(key, err instanceof Error ? err.message : String(err));
+        } else {
+          reg.record(key, { ok: false, error: err instanceof Error ? err.message : String(err), check: 'chat' });
+        }
       }
       throw err;
     }
@@ -228,8 +300,11 @@ function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved
       return result;
     } catch (err) {
       if (!isAbort(err)) {
-        reg.record(key, { ok: false, error: err instanceof Error ? err.message : String(err), check: 'chat' });
-        if (isPermanent(err)) reg.markDead(key, err instanceof Error ? err.message : String(err));
+        if (isPermanent(err)) {
+          reg.markDead(key, err instanceof Error ? err.message : String(err));
+        } else {
+          reg.record(key, { ok: false, error: err instanceof Error ? err.message : String(err), check: 'chat' });
+        }
       }
       throw err;
     }
@@ -239,6 +314,15 @@ function withCapabilityGate(provider: RawProvider, config: ModelConfig, resolved
 }
 
 function isPermanent(err: unknown): boolean {
+  if (err instanceof ProviderError) {
+    if (err.status === 400 || err.status === 401 || err.status === 402 || err.status === 403 || err.status === 404) {
+      return true;
+    }
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/not found|404|insufficient.*funds|402|unauthorized|401|forbidden|403/i.test(msg)) {
+    return true;
+  }
   if (err && typeof err === 'object' && 'cause' in err) {
     const cause = (err as { cause?: unknown }).cause;
     if (cause && typeof cause === 'object' && 'code' in (cause as object)) {

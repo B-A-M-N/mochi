@@ -96,7 +96,7 @@ const BOOLEAN_FLAGS = new Set([
   'w', 'worktree',
   'y', 'yolo', 'dangerously-skip-permissions', 'force', 'user',
   'u', 'uncensored', 'admin',
-  'strict', 'json', 'diff-only', 'auto-commit', 'repair',
+  'strict', 'json', 'diff-only', 'auto-commit', 'repair', 'post',
 ]);
 
 function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; positional: string[] } {
@@ -898,6 +898,34 @@ async function main() {
       return;
     } catch (e) {
       console.error(`Issue pipeline failed: ${(e as Error).message}`);
+      return;
+    }
+  }
+  if (first === 'pr') {
+    const sub = positional[1];
+    if (sub === 'review') {
+      const { parsePrReviewArgs, runPrReview } = await import('./pr-cli.js');
+      const parsed = parsePrReviewArgs(positional.slice(2), flags);
+      if (typeof parsed === 'string') {
+        console.error(parsed);
+        process.exit(1);
+      }
+      const code = await runPrReview(parsed, cwd);
+      process.exit(code);
+    }
+    const n = Number(positional[1]);
+    if (!Number.isInteger(n) || n < 1) {
+      console.log('Usage: mochi pr review <number> [--post] [--json] [--repo owner/name] [--focus correctness|security|performance]');
+      return;
+    }
+    const { runIssueToPr } = await import('./pr.js');
+    try {
+      const res = await runIssueToPr({ cwd, issueNumber: n, stage: 'full' });
+      if (res.prUrl) console.log(`PR created: ${res.prUrl}`);
+      else console.log(`Branch ${res.branch} ready. No changes committed or PR creation skipped.`);
+      return;
+    } catch (e) {
+      console.error(`PR pipeline failed: ${(e as Error).message}`);
       return;
     }
   }

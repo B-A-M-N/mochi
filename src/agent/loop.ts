@@ -9,7 +9,7 @@ import { ContextEngine, approxTokens } from '../context.js';
 import { MemoryStore } from '../memory/memory.js';
 import { projectMemoryPrefix, recordProjectMemory } from '../memory/project-memory.js';
 import { loadReadCache, saveReadCache } from '../state/read-cache-store.js';
-import { createProvider } from '../model/router.js';
+import { createProvider, normalizeModelName } from '../model/router.js';
 import { PROVIDERS } from '../model/providers.js';
 import { isMode, modeInstruction } from '../modes.js';
 
@@ -1678,6 +1678,24 @@ Continue from 'Next:', do not redo completed progress.`,
             return this.finish(task, false, 'Run aborted by caller. Resume anytime with "mochi resume".', 'aborted');
           }
 
+          // Permanent error detection (404 Not Found, 402 Insufficient Funds, 401/403):
+          // Immediately fail over to the next provider/model without wasting 30s in cooldown pauses.
+          const isPermanent = /404|not found|402|insufficient.*funds|401|unauthorized/i.test(rMsg || message);
+          if (isPermanent) {
+            if (this.switchToNextProvider()) {
+              i = Math.max(0, i - 1);
+              continue;
+            }
+            const alt = this.pickAlternateModel();
+            if (alt) {
+              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[failover] Model unavailable (${(rMsg || message).slice(0, 80)}). Failing over to ${alt}` });
+              this.setActiveModel(alt);
+              i = Math.max(0, i - 1);
+              continue;
+            }
+            return this.finish(task, false, `Model request failed: ${rMsg || message}. Try switching models with /model.`, 'model_error');
+          }
+
           // Provider cooldown resilience: pause, wait cooldown, fail over or retry.
           // Transport retries are NOT task iterations (same rule as stalls
           // above): undo the loop increment so a flaky provider doesn't burn
@@ -2713,11 +2731,22 @@ Continue from 'Next:', do not redo completed progress.`,
   }
 
   /** Swap the active model in-place: same provider/key/baseUrl, new model id.
-   *  Rebuilds the provider so the next iteration uses the fallback. */
+   *  Rebuilds the provider and updates profiles so the next iteration uses the fallback. */
   private setActiveModel(modelId: string): void {
+    const norm = normalizeModelName(modelId, this.config.model.baseUrl);
+    this.triedFallbackModels.add(norm);
     this.triedFallbackModels.add(modelId);
     this.triedFallbackModels.add(this.config.model.model ?? '');
-    this.config.model = { ...this.config.model, model: modelId };
+    this.config.model = {
+      ...this.config.model,
+      model: norm,
+      profiles: {
+        fast: norm,
+        coding: norm,
+        reasoning: norm,
+        review: norm,
+      },
+    };
     this.provider = createProvider(this.config.model, this.profile.defaultModel ?? 'coding');
     this.providers.clear();
     this.cooldownRetries = 0;
@@ -2734,18 +2763,24 @@ Continue from 'Next:', do not redo completed progress.`,
       if (!pId || this.triedFallbackProviders.has(pId)) continue;
       this.triedFallbackProviders.add(pId);
       this.triedFallbackProviders.add((this.config.model.provider || '').toLowerCase());
+      const normModel = normalizeModelName(fb.model, fb.baseUrl);
       this.events.emit({
         type: 'agent:log',
         agentId: this.id,
-        message: `[failover] Switching provider from ${this.config.model.provider} to ${fb.provider} (${fb.model})`,
+        message: `[failover] Switching provider from ${this.config.model.provider} to ${fb.provider} (${normModel})`,
       });
       this.config.model = {
         ...this.config.model,
         provider: fb.provider,
         baseUrl: fb.baseUrl,
         apiKey: fb.apiKey,
-        model: fb.model,
-        profiles: fb.profiles,
+        model: normModel,
+        profiles: fb.profiles ?? {
+          fast: normModel,
+          coding: normModel,
+          reasoning: normModel,
+          review: normModel,
+        },
       };
       this.provider = createProvider(this.config.model, this.profile.defaultModel ?? 'coding');
       this.providers.clear();

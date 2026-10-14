@@ -1,5 +1,6 @@
 import type { MochiConfig, ModelProfile } from '../types.js';
 import {PROVIDERS, providerById, loadConfigFile, saveConfigFile} from './providers.js';
+import { normalizeModelName } from './router.js';
 
 export interface ProviderSelection {
   provider: string;
@@ -17,6 +18,7 @@ export function modelContextBudget(model: string, provider?: string): number {
   const p = (provider || '').toLowerCase();
   if (m.includes('gemini') || p.includes('gemini')) return 400_000;
   if (m.includes('claude') || p.includes('anthropic') || m.includes('kimi') || m.includes('moonshot')) return 160_000;
+  if (p.includes('freeinference') || m.includes('glm-5') || m.includes('deepseek-v4')) return 500_000;
   if (
     m.includes('gpt-4') || m.includes('gpt-5') || m.includes('o3') || m.includes('o4') ||
     m.includes('deepseek') || m.includes('glm') || m.includes('qwen') ||
@@ -45,27 +47,28 @@ export function setProvider(config: MochiConfig, selection: ProviderSelection): 
   // never send Provider A's key to Provider B!
   const sameProvider = base.provider === selection.provider;
   const apiKey = selection.apiKey || (sameProvider ? base.apiKey : (envKey || undefined));
+  const normModel = normalizeModelName(selection.model, selection.baseUrl);
 
   cfg.model = {
     ...base,
     provider: selection.provider,
     baseUrl: selection.baseUrl,
-    model: selection.model,
+    model: normModel,
     apiKey,
   };
   if (!cfg.reasoning) {
-    cfg.reasoning = 'max';
+    cfg.reasoning = 'medium';
   }
   cfg.safety = {
     ...(cfg.safety ?? {}),
-    contextBudgetTokens: modelContextBudget(selection.model, selection.provider),
+    contextBudgetTokens: modelContextBudget(normModel, selection.provider),
   };
   if (p && (p.kind === 'openai' || p.kind === 'anthropic' || p.kind === 'gemini')) {
     cfg.model.profiles = cfg.model.profiles ?? ({} as Record<ModelProfile, string>);
-    cfg.model.profiles.fast = selection.model;
-    cfg.model.profiles.coding = selection.model;
-    cfg.model.profiles.reasoning = selection.model;
-    cfg.model.profiles.review = selection.model;
+    cfg.model.profiles.fast = normModel;
+    cfg.model.profiles.coding = normModel;
+    cfg.model.profiles.reasoning = normModel;
+    cfg.model.profiles.review = normModel;
   }
   saveConfigFile(cfg);
   return cfg;
