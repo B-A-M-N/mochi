@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -422,6 +422,65 @@ describe('Runtime approvePlan', () => {
     } finally {
       await fake.close();
       try { rt.close(); } catch { /* best-effort: release SQLite handles (win32 EBUSY) */ }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+describe('Runtime selfTrain (bounded learning loop)', () => {
+  function stubbedRuntime(dir: string): Runtime {
+    const rt = new Runtime({ cwd: dir, config: baseConfig() } as any);
+    vi.spyOn(rt as any, 'autoImprove').mockResolvedValue({
+      summaries: ['did the thing'], finalSummary: 'cycle done', tokensUsed: 0, costUsd: 0, durationMs: 1,
+    });
+    return rt;
+  }
+
+  it('clamps cycles to 1..20 (0 runs once, 99 caps at twenty)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rt-train-'));
+    try {
+      const rt0 = stubbedRuntime(dir);
+      await rt0.selfTrain({ cycles: 0 });
+      expect((rt0.autoImprove as any).mock.calls.length).toBe(1);
+      try { rt0.close(); } catch {}
+      const rt99 = stubbedRuntime(dir);
+      const seen: number[] = [];
+      await rt99.selfTrain({ cycles: 99, onProgress: (i) => { seen.push(i); } });
+      expect((rt99.autoImprove as any).mock.calls.length).toBe(20);
+      expect(seen).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+      try { rt99.close(); } catch {}
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('honors an aborted signal with zero cycles and still reports', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rt-train-abort-'));
+    try {
+      const rt = stubbedRuntime(dir);
+      const ctl = new AbortController();
+      ctl.abort();
+      const r = await rt.selfTrain({ cycles: 5, signal: ctl.signal });
+      expect((rt.autoImprove as any).mock.calls.length).toBe(0);
+      expect(r.report).toContain('Skill curator');
+      expect(r.tokensUsed).toBeGreaterThanOrEqual(0);
+      expect(r.durationMs).toBeGreaterThanOrEqual(0);
+      try { rt.close(); } catch {}
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('report accounts usage deltas and per-cycle summaries', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rt-train-rep-'));
+    try {
+      const rt = stubbedRuntime(dir);
+      const r = await rt.selfTrain({ cycles: 2, focus: 'auth' });
+      expect(r.report).toContain('## Cycle 1/2');
+      expect(r.report).toContain('## Cycle 2/2');
+      expect(r.report).toContain('## Skill curator');
+      expect(typeof r.costUsd).toBe('number');
+      try { rt.close(); } catch {}
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);

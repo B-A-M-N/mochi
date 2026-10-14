@@ -34,27 +34,29 @@ function tmpFile(name: string, body: string): string {
   return p;
 }
 
-/** Executable fixture that spawnSync can actually launch on every OS: a
- *  shebang script on posix, a .cmd batch file on Windows (CreateProcess
- *  cannot execute extensionless scripts — the bare-sh fixture ENOENTs and
- *  the test reads 127 instead of the scripted exit code). */
-function tmpExec(exitCode: number, marker?: string): string {
+/** Executable fixture that spawnSync can actually launch on every OS. Posix
+ *  uses a shebang script; Windows cannot spawn scripts directly
+ *  (extensionless files ENOENT, .cmd/.bat EINVAL without a shell), so it
+ *  drives a real executable — powershell.exe, present on every Windows —
+ *  with a generated .ps1 (leadArgs carry the -File invocation; the test's
+ *  own args follow verbatim). */
+function tmpExec(exitCode: number, marker?: string): { bin: string; leadArgs: string[] } {
   const dir = mkdtempSync(join(tmpdir(), 'mochi-dispatch-'));
   tmpDirs.push(dir);
   if (process.platform === 'win32') {
-    const p = join(dir, 'mochi-standalone.cmd');
-    const lines = ['@echo off'];
-    if (marker) lines.push(`:loop`, `if "%~1"=="" goto done`, `echo %~1>> "${marker}"`, `shift`, `goto loop`, `:done`);
-    lines.push(`exit ${exitCode}`);
-    writeFileSync(p, lines.join('\r\n') + '\r\n');
-    return p;
+    const script = join(dir, 'mochi-standalone.ps1');
+    const lines = marker
+      ? [`$args | ForEach-Object { $_ } | Out-File -Encoding ascii -FilePath '${marker}'`, `exit ${exitCode}`]
+      : [`exit ${exitCode}`];
+    writeFileSync(script, lines.join('\r\n') + '\r\n');
+    return { bin: 'powershell.exe', leadArgs: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script] };
   }
   const p = join(dir, 'mochi-standalone');
   writeFileSync(p, marker
     ? `#!/bin/sh\nprintf '%s\\n' "$@" > "${marker}"\nexit ${exitCode}\n`
     : `#!/bin/sh\nexit ${exitCode}\n`);
   chmodSync(p, 0o755);
-  return p;
+  return { bin: p, leadArgs: [] };
 }
 
 afterEach(() => {
@@ -110,9 +112,9 @@ describe('handleEngineArg', () => {
   });
 
   it('runs the pinned standalone binary and returns its exit code', () => {
-    const bin = tmpExec(7);
+    const { bin, leadArgs } = tmpExec(7);
     pin('MOCHI_STANDALONE', bin);
-    const r = handleEngineArg('standalone', ['--version']);
+    const r = handleEngineArg('standalone', [...leadArgs, '--version']);
     expect(r.continue).toBe(false);
     expect(r.exitCode).toBe(7);
   });
@@ -126,12 +128,14 @@ describe('handleEngineArg', () => {
 
   it('propagates arguments verbatim to the spawned engine', () => {
     const marker = join(tmpdir(), `mochi-dispatch-marker-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    const bin = tmpExec(0, marker);
+    const { bin, leadArgs } = tmpExec(0, marker);
     pin('MOCHI_STANDALONE', bin);
-    const r = handleEngineArg('standalone', ['--quiet', 'a prompt with spaces']);
+    const r = handleEngineArg('standalone', [...leadArgs, '--quiet', 'a prompt with spaces']);
     expect(r.exitCode).toBe(0);
     const logged = readFileSync(marker, 'utf8').replace(/\r\n/g, '\n');
-    expect(logged).toBe('--quiet\na prompt with spaces\n');
+    // Lead args belong to the launcher shim on Windows; the test's own args
+    // must arrive verbatim at the tail, one per line.
+    expect(logged.endsWith('--quiet\na prompt with spaces\n')).toBe(true);
     try { rmSync(marker, { force: true }); } catch { /* best-effort */ }
   });
 });

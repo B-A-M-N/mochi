@@ -68,6 +68,8 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'status', description: 'Show key sources (env/file/missing), --probe live-verifies' },
       { name: 'logout', description: 'Clear the stored key for a provider' },
       { name: 'reset', description: 'Clear the stored key for a provider (explicit reset)' },
+      { name: 'export', description: 'Print the keyring as JSON (secrets to stdout — redirect to a file)' },
+      { name: 'import', description: 'Restore keys from an export file (or stdin)' },
     ],
   },
   { name: 'models', description: 'List models (--refresh live-diffs the endpoint against the table)' },

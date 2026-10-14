@@ -77,6 +77,70 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     log(`${out.message} Re-login with: mochi login ${target}. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
     return;
   }
-  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider] | reset [provider]] (authenticate with: mochi login <provider>; change a key by logging in again)`);
+  if (sub === 'export') {
+    // Print the owned keyring as JSON (opencode `auth export` parity) for
+    // backup/migration. Secrets go to STDOUT deliberately — redirect to a
+    // file, never paste into chats/logs. Nothing is printed for empty rings.
+    const { loadKeyring } = await import('./model/keyring.js');
+    const ring = loadKeyring();
+    const ids = Object.keys(ring);
+    if (!ids.length) {
+      log('Keyring empty — nothing stored (env-only and keyless setups export nothing).');
+      return;
+    }
+    error('WARNING: writing secrets to stdout — redirect to a file, never paste this output.');
+    log(JSON.stringify(Object.fromEntries(ids.map((id) => [id, { type: ring[id].type, key: ring[id].key }])), null, 2));
+    return;
+  }
+  if (sub === 'import') {
+    // Restore a keyring from `auth export` JSON (file path or '-' for stdin).
+    // Shape-validated only (unknown ids skipped with a message); keys are
+    // NOT live-probed here — run `auth status --probe` after to verify.
+    const src = positional[2] ?? '-';
+    let raw: string;
+    try {
+      if (src === '-') {
+        const { readStdin } = await import('./pipeline.js');
+        raw = await readStdin();
+      } else {
+        const { readFileSync } = await import('node:fs');
+        const { resolve } = await import('node:path');
+        raw = readFileSync(resolve(src), 'utf8');
+      }
+    } catch {
+      error(`Cannot read import source "${src}".`);
+      exit(1);
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw!);
+    } catch {
+      error(`Import source "${src}" is not valid JSON.`);
+      exit(1);
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      error(`Import source "${src}" must be an object shaped {provider: {type, key}}.`);
+      exit(1);
+    }
+    const { setKeyringKey } = await import('./model/keyring.js');
+    const stored: string[] = [];
+    const skipped: string[] = [];
+    for (const [id, entry] of Object.entries(parsed as Record<string, unknown>)) {
+      const p = providerById(id);
+      const e = entry as Record<string, unknown> | null;
+      const key = typeof e?.key === 'string' ? e.key : '';
+      const type = e?.type === 'oauth' ? 'oauth' as const : 'api-key' as const;
+      if (!p || !key) { skipped.push(id); continue; }
+      try {
+        setKeyringKey(p.id, key, type);
+        stored.push(p.id);
+      } catch {
+        skipped.push(id);
+      }
+    }
+    log(`Imported ${stored.length} key(s)${stored.length ? `: ${stored.join(', ')}` : ''}${skipped.length ? ` (skipped unknown/empty: ${skipped.join(', ')})` : ''}. Keys are stored unverified — run \`mochi auth status --probe\` to verify.`);
+    return;
+  }
+  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider] | reset [provider] | export | import [file|-]] (authenticate with: mochi login <provider>; change a key by logging in again)`);
   exit(1);
 }

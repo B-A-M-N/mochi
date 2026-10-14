@@ -105,6 +105,51 @@ describe('runAuthCommand logout', () => {
     expect(empty.logs.join('\n')).toContain('No stored key');
   });
 
+  it('export prints the keyring as JSON with a stderr warning', async () => {
+    const { setKeyringKey } = await import('./model/keyring.js');
+    setKeyringKey('groq', 'gsk-export-me');
+    const d = deps({ positional: ['auth', 'export'] });
+    await runAuthCommand(d);
+    expect(d.errors.join('\n')).toContain('never paste');
+    const parsed = JSON.parse(d.logs.join('\n')) as Record<string, { type: string; key: string }>;
+    expect(parsed['groq']).toMatchObject({ type: 'api-key', key: 'gsk-export-me' });
+  });
+
+  it('export on an empty ring reports honestly without printing', async () => {
+    const d = deps({ positional: ['auth', 'export'] });
+    await runAuthCommand(d);
+    expect(d.logs.join('\n')).toContain('Keyring empty');
+  });
+
+  it('import round-trips an export file and skips unknown ids', async () => {
+    const { setKeyringKey, loadKeyring, getKeyringKey, deleteKeyringKey } = await import('./model/keyring.js');
+    const { writeFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const { mkdtempSync } = await import('node:fs');
+    setKeyringKey('groq', 'gsk-round-trip');
+    const file = resolve(mkdtempSync(resolve(tmpdir(), 'mochi-authexp-')), 'auth.json');
+    writeFileSync(file, JSON.stringify({ groq: { type: 'api-key', key: 'gsk-round-trip' }, nope: { type: 'api-key', key: 'x' }, bad: { type: 'api-key' } }));
+    deleteKeyringKey('groq');
+    const d = deps({ positional: ['auth', 'import', file] });
+    await runAuthCommand(d);
+    expect(getKeyringKey(loadKeyring(), 'groq')).toBe('gsk-round-trip');
+    expect(d.logs.join('\n')).toContain('Imported 1 key(s)');
+    expect(d.logs.join('\n')).toContain('skipped unknown/empty: nope, bad');
+  });
+
+  it('import rejects malformed JSON with exit 1', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const { mkdtempSync } = await import('node:fs');
+    const file = resolve(mkdtempSync(resolve(tmpdir(), 'mochi-authbad-')), 'auth.json');
+    writeFileSync(file, '{not json');
+    const d = deps({ positional: ['auth', 'import', file] });
+    await expect(runAuthCommand(d)).rejects.toThrow('exit:1');
+    expect(d.errors.join('\n')).toContain('not valid JSON');
+  });
+
   it('unknown subcommand errors and exits 1', async () => {
     const d = deps({ positional: ['auth', 'frobnicate'] });
     await expect(runAuthCommand(d)).rejects.toThrow('exit:1');
