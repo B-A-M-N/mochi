@@ -40,7 +40,7 @@ beforeAll(() => {
       '  exit 0',
       'fi',
       'if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then',
-      '  printf \'diff --git a/src/a.ts b/src/a.ts\\n+console.log("debug here");\\n+// TODO: remove\\n\'',
+      '  printf \'diff --git a/src/a.ts b/src/a.ts\\n--- a/src/a.ts\\n+++ b/src/a.ts\\n@@ -1,2 +1,4 @@\\n const a = 1;\\n+console.log("debug here");\\n+// TODO: remove\\n const b = 2;\\n\'',
       '  exit 0',
       'fi',
       'if [ "$1" = "pr" ] && [ "$2" = "comment" ]; then',
@@ -81,7 +81,10 @@ describe('review_pr tool', () => {
     expect(res).toContain('octo');
     expect(res).toContain('src/a.ts');
     expect(res).toContain('Static findings');
-    expect(res).toContain('TODO');
+    // Proves the scanner parsed the hunk and rendered structured findings
+    // (not just that the raw diff echoed the word "TODO").
+    expect(res).toMatch(/-\s*\[debug-log\]\s+src\/a\.ts:2/);
+    expect(res).toMatch(/-\s*\[todo-marker\]\s+src\/a\.ts:3/);
     expect(res).toContain('Read-only review');
     expect(readFileSync(callLog, 'utf8')).not.toContain('comment');
   });

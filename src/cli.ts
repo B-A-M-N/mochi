@@ -230,6 +230,7 @@ Usage:
   mochi plugin add <dir>|remove <name>|list        # spec 12-E plugin registry
   mochi security | mochi audit       # static security and credential audit
   mochi review [--strict] [--json] [--diff-only]   # git diff | mochi review
+  mochi pr review <number> [--focus security] [--post] [--json]  # review a GitHub PR (needs gh)
   mochi fix [--auto-commit]                        # cat crash.log | mochi fix
   mochi acp                          # editor-native stdio server (Agent Client Protocol)
   mochi daemon start [--port <n>] [--token <t>]

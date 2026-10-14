@@ -122,12 +122,13 @@ export async function runPrReview(args: PrReviewArgs, cwd: string): Promise<PrRe
     return 1;
   }
 
-  // Hygiene findings rendered by the tool use `- [kind] file:line — text`;
-  // count them by kind for the JSON shape (the pipeline's [HIGH] format is a
-  // different renderer — parsing it here would always yield zero).
+  // Hygiene findings rendered by the tool use `- [kind] file:line — text`
+  // (kinds are hyphenated, e.g. `debug-log`); count them for the JSON shape
+  // (the pipeline's [HIGH] format is a different renderer — parsing it here
+  // would always yield zero).
   const hygiene: Record<string, number> = {};
   for (const raw of out.split('\n')) {
-    const m = /^\s*-\s*\[([a-z_]+)\]\s+\S+:\d+/i.exec(raw);
+    const m = /^\s*-\s*\[([a-z-]+)\]\s+\S+:\d+/i.exec(raw);
     if (m) hygiene[m[1].toLowerCase()] = (hygiene[m[1].toLowerCase()] ?? 0) + 1;
   }
   const findings = hygiene;

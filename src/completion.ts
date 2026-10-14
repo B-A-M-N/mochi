@@ -71,6 +71,12 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   },
   { name: 'models', description: 'List models' },
   { name: 'providers', description: 'List providers' },
+  {
+    name: 'pr', description: 'GitHub pull-request workflows (headless, CI-friendly)',
+    subcommands: [
+      { name: 'review', description: 'Review a PR via gh; --focus lens, --json, --post; exit 0/1/2' },
+    ],
+  },
   { name: 'model', description: 'Select model' },
   { name: 'reasoning', description: 'Set reasoning depth', aliases: ['depth'] },
   { name: 'mode', description: 'Set execution mode' },
