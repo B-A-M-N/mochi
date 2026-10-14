@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { definitionsInSource, findTsDefinitions } from './symbol-defs.js';
+import { definitionsInSource, findTsDefinitions, referencesInSource, findTsReferences } from './symbol-defs.js';
 
 const SRC = `
 export function alpha(a: number): string { return String(a); }
@@ -103,5 +103,73 @@ describe('findTsDefinitions (walker)', () => {
 
   it('returns [] for a missing scope, not a throw', () => {
     expect(findTsDefinitions('/nonexistent-xyz', '/nonexistent-xyz', 'x')).toEqual([]);
+  });
+});
+
+describe('referencesInSource (AST-accurate references)', () => {
+  const SRC = [
+    'import { alpha } from "./a.js";',        // 1: import
+    'export function alpha() { return 1; }',  // 2: declaration
+    'const call = alpha();',                  // 3: call
+    '// alpha in a comment',                  // 4: comment — must NOT count
+    "const s = 'alpha in a string';",         // 5: string — must NOT count
+    'const obj = { alpha: 2 };',              // 6: property key
+    'type T = alpha;',                        // 7: type reference (if alpha were a type)
+    'const n = new alpha();',                 // 8: constructor
+  ].join('\n');
+
+  it('finds real identifier references and tags their usage', () => {
+    const refs = referencesInSource('a.ts', SRC, 'alpha');
+    const lines = refs.map((r) => r.line).sort((a, b) => a - b);
+    // Lines 1,2,3,6,7,8 are real identifier occurrences; 4 (comment) and
+    // 5 (string) are trivia and must be excluded.
+    expect(lines).toEqual([1, 2, 3, 6, 7, 8]);
+    const byLine = new Map(refs.map((r) => [r.line, r.usage]));
+    expect(byLine.get(1)).toBe('import');
+    expect(byLine.get(2)).toBe('declaration');
+    expect(byLine.get(3)).toBe('call');
+    expect(byLine.get(8)).toBe('constructor');
+  });
+
+  it('excludes the symbol when it only appears in comments and strings', () => {
+    const src = '// alpha\nconst s = "alpha";\n/* alpha */\n';
+    expect(referencesInSource('a.ts', src, 'alpha')).toEqual([]);
+  });
+
+  it('captures trimmed source-line context', () => {
+    const refs = referencesInSource('a.ts', 'const   call = alpha();  \n', 'alpha');
+    expect(refs).toHaveLength(1);
+    expect(refs[0].text).toBe('const   call = alpha();');
+    expect(refs[0].usage).toBe('call');
+  });
+
+  it('returns [] for empty/unknown without throwing', () => {
+    expect(referencesInSource('a.ts', '', 'x')).toEqual([]);
+    expect(referencesInSource('a.ts', 'const y = 1;', 'x')).toEqual([]);
+  });
+});
+
+describe('findTsReferences (walker)', () => {
+  it('walks files and reports POSIX-relative paths, respecting ignores', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-symrefs-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      mkdirSync(join(dir, 'node_modules', 'junk'), { recursive: true });
+      writeFileSync(join(dir, 'src', 'a.ts'), 'export function target() {}\n');
+      writeFileSync(join(dir, 'src', 'b.ts'), 'import { target } from "./a.js";\ntarget();\n');
+      writeFileSync(join(dir, 'node_modules', 'junk', 'c.ts'), 'target();\n'); // ignored
+      const res = findTsReferences(dir, dir, 'target');
+      expect(res).not.toBeNull();
+      const files = new Set((res ?? []).map((r) => r.file));
+      expect(files.has('src/a.ts')).toBe(true);
+      expect(files.has('src/b.ts')).toBe(true);
+      expect([...files].some((f) => f.startsWith('node_modules'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns [] for a missing scope', () => {
+    expect(findTsReferences('/nonexistent-abc', '/nonexistent-abc', 'x')).toEqual([]);
   });
 });

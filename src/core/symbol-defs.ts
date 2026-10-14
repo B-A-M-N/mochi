@@ -204,3 +204,105 @@ export function findTsDefinitions(root: string, scopeAbs: string, symbol: string
   }
   return out;
 }
+
+// ─── References (AST-accurate) ──────────────────────────────────────────────
+// A reference is a real Identifier node whose text matches the symbol. String
+// literals and comments are NOT Identifier nodes — they're trivia — so the
+// AST walker excludes them for free (the whole point: the old regex matched
+// the word inside `// computeTotal` and `"computeTotal"`). Each hit is tagged
+// with its usage kind so the caller can tell a call from an import or a
+// property access without needing the (expensive) type checker.
+
+export interface SymbolReference {
+  file: string;
+  line: number;
+  column: number;
+  /** How the symbol is used here: declaration, call, import, property, type, or identifier. */
+  usage: string;
+  /** The source line, trimmed, capped for display context. */
+  text: string;
+}
+
+/** Classify an Identifier's usage from its parent, without the type checker. */
+function usageOf(ident: import('typescript').Node, ts: typeof import('typescript')): string {
+  const p = ident.parent;
+  if (!p) return 'identifier';
+  if (ts.isCallExpression(p) && p.expression === ident) return 'call';
+  if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p)) return 'import';
+  if (ts.isExportSpecifier(p)) return 'export';
+  if (ts.isPropertyAccessExpression(p) && p.name === ident) return 'property';
+  if (ts.isPropertyAssignment(p) && p.name === ident) return 'property';
+  if (ts.isNewExpression(p) && p.expression === ident) return 'constructor';
+  if (ts.isTypeReferenceNode(p)) return 'type';
+  // A declaration node that owns this identifier as its name.
+  const k = p.kind;
+  if (k === ts.SyntaxKind.FunctionDeclaration || k === ts.SyntaxKind.ClassDeclaration ||
+      k === ts.SyntaxKind.InterfaceDeclaration || k === ts.SyntaxKind.TypeAliasDeclaration ||
+      k === ts.SyntaxKind.EnumDeclaration || k === ts.SyntaxKind.MethodDeclaration ||
+      k === ts.SyntaxKind.PropertyDeclaration || k === ts.SyntaxKind.VariableDeclaration) {
+    return 'declaration';
+  }
+  return 'identifier';
+}
+
+/** Find every real Identifier reference to `symbol` in one parsed source.
+ *  Pure — used by the walker and directly by tests. [] when compiler absent. */
+export function referencesInSource(relPath: string, content: string, symbol: string): SymbolReference[] {
+  const ts = getTsCompiler();
+  if (!ts) return [];
+  const ext = extname(relPath).toLowerCase();
+  const scriptKind = ext === '.tsx' || ext === '.jsx'
+    ? ts.ScriptKind.TSX
+    : ext === '.js' || ext === '.mjs' || ext === '.cjs'
+      ? ts.ScriptKind.JS
+      : ts.ScriptKind.TS;
+  let source: import('typescript').SourceFile;
+  try {
+    source = ts.createSourceFile(relPath, content, ts.ScriptTarget.Latest, true, scriptKind);
+  } catch {
+    return [];
+  }
+
+  const lines = content.split('\n');
+  const out: SymbolReference[] = [];
+  const visit = (node: import('typescript').Node): void => {
+    if (ts.isIdentifier(node) && node.text === symbol) {
+      let line = 0, column = 0;
+      try {
+        const pos = source.getLineAndCharacterOfPosition(node.getStart(source));
+        line = pos.line + 1;
+        column = pos.character + 1;
+      } catch { /* report 0,0 rather than throw */ }
+      const rawLine = (lines[line - 1] ?? '').trim();
+      out.push({ file: relPath, line, column, usage: usageOf(node, ts), text: rawLine.slice(0, 200) });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
+  return out;
+}
+
+/** Walk the scope for TS/JS files and collect every reference to `symbol`.
+ *  Returns null when the compiler is unavailable (caller falls back to rg). */
+export function findTsReferences(root: string, scopeAbs: string, symbol: string): SymbolReference[] | null {
+  const ts = getTsCompiler();
+  if (!ts) return null;
+  if (!existsSync(scopeAbs)) return [];
+
+  const files: string[] = [];
+  if (statSync(scopeAbs).isFile()) {
+    if (TS_EXTS.has(extname(scopeAbs).toLowerCase())) files.push(scopeAbs);
+  } else {
+    collectTsFiles(scopeAbs, root, files, { seen: 0 });
+  }
+
+  const out: SymbolReference[] = [];
+  for (const f of files) {
+    let content: string;
+    try { content = readFileSync(f, 'utf8'); } catch { continue; }
+    const rel = relative(root, f).split(sep).join('/');
+    out.push(...referencesInSource(rel, content, symbol));
+    if (out.length >= 500) break; // hard cap: plenty for any real symbol
+  }
+  return out;
+}

@@ -59,4 +59,23 @@ describe('find-references and find-definitions tools', () => {
     expect(res).toContain('a.ts');
     expect(res).toContain('b.ts');
   });
+
+  it('AST references path excludes comment/string decoys and tags usage', async () => {
+    writeFileSync(join(dir, 'c.ts'), '// computeTotal mentioned in a comment\nconst msg = "computeTotal";\n');
+    const res = await findReferencesTool.execute({ symbol: 'computeTotal' }, ctx);
+    expect(String(res)).toContain('AST-verified');
+    // Real identifier occurrences: declaration in a.ts, import + call in b.ts.
+    // c.ts holds only a comment and a string — no identifier — so no c.ts ref.
+    const refLines = String(res).split('\n').filter((l) => /^\s+\S+:\d+:\d+\s+\[/.test(l));
+    expect(refLines.some((l) => l.includes('a.ts') && l.includes('[declaration]'))).toBe(true);
+    expect(refLines.some((l) => l.includes('b.ts') && l.includes('[call]'))).toBe(true);
+    expect(refLines.some((l) => l.includes('c.ts'))).toBe(false);
+  });
+
+  it('references fall back to ripgrep for non-TS scopes (python)', async () => {
+    writeFileSync(join(dir, 'script.py'), 'def computeTotal(x):\n    return computeTotal(x - 1)\n');
+    const res = await findReferencesTool.execute({ symbol: 'computeTotal', path: 'script.py' }, ctx);
+    expect(String(res)).toContain('computeTotal');
+    expect(String(res)).toContain('regex fallback');
+  });
 });

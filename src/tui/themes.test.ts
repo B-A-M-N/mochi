@@ -269,15 +269,19 @@ describe('theme distinctness (entire-look contract)', () => {
   it('tabActiveBg derives a dimmed act pill per theme (empty when unparseable)', async () => {
     // applyTheme (not setTheme) moves the getCurrentTheme cache that
     // tabActiveBg reads — and it writes real files, so sandbox HOME+cwd
-    // exactly like the persistence tests above.
+    // exactly like the persistence tests above. COLORTERM is pinned so the
+    // truecolor branch is deterministic on CI (no COLORTERM there); the
+    // 256-color fallback is covered by the canvasBg capability tests.
     const { mkdtempSync, rmSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { resolve } = await import('node:path');
     const prevHome = process.env.HOME;
     const prevCwd = process.cwd();
     const prevTheme = getCurrentTheme().id;
+    const prevColorTerm = process.env.COLORTERM;
     const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
     try {
+      process.env.COLORTERM = 'truecolor';
       process.env.HOME = fakeHome;
       process.chdir(fakeHome);
       applyTheme('mochi-purple');
@@ -289,6 +293,8 @@ describe('theme distinctness (entire-look contract)', () => {
       process.chdir(prevCwd);
       if (prevHome === undefined) delete process.env.HOME;
       else process.env.HOME = prevHome;
+      if (prevColorTerm === undefined) delete process.env.COLORTERM;
+      else process.env.COLORTERM = prevColorTerm;
       rmSync(fakeHome, { recursive: true, force: true });
     }
   });

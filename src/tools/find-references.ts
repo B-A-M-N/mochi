@@ -100,6 +100,23 @@ export const findReferencesTool: Tool = {
     if (!symbol) return 'Error: symbol parameter is required.';
 
     const searchScope = args.path ? String(args.path).trim() : '.';
+
+    // AST path first: real identifier references only (no comment/string
+    // matches), each tagged with its usage (call/import/property/type/…).
+    // Non-TS scopes and a missing compiler fall through to ripgrep below.
+    const { findTsReferences } = await import('../core/symbol-defs.js');
+    const { existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const scopeAbs = resolve(ctx.cwd, searchScope === '.' ? '.' : searchScope);
+    if (existsSync(scopeAbs)) {
+      const astRefs = findTsReferences(ctx.cwd, scopeAbs, symbol);
+      if (astRefs && astRefs.length > 0) {
+        const lines = astRefs.slice(0, 60).map((r) => `  ${r.file}:${r.line}:${r.column}  [${r.usage}]  ${r.text}`);
+        const tail = astRefs.length > 60 ? `\n\n[... ${astRefs.length - 60} more references omitted ...]` : '';
+        return `# References for "${symbol}" (${astRefs.length} found, AST-verified)\n\n${lines.join('\n')}${tail}`;
+      }
+    }
+
     const COMMON_IGNORE_GLOBS = ['-g', '!{dist,build,out,target,.next,.turbo,coverage,node_modules,.cache}/**'];
     const rgArgs = ['-n', '--word-regexp', ...COMMON_IGNORE_GLOBS, symbol, searchScope];
     const regex = new RegExp(`\\b${escapeRegExp(symbol)}\\b`);
@@ -110,7 +127,7 @@ export const findReferencesTool: Tool = {
 
     const formatted = lines.slice(0, 40).map((l) => `  ${l}`).join('\n');
     const tail = lines.length > 40 ? `\n\n[... ${lines.length - 40} more references omitted ...]` : '';
-    return `# References for "${symbol}" (${lines.length} found)\n\n${formatted}${tail}`;
+    return `# References for "${symbol}" (${lines.length} found, regex fallback — may include comments/strings)\n\n${formatted}${tail}`;
   },
 };
 
