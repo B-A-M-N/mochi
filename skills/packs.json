@@ -419,164 +419,204 @@
     "path": "zero-downtime-deploys",
     "description": "Zero-downtime deployments: rolling updates, health gates, migrations, instant rollback. Use when asked for safe deploys, rollout strategy, or release automation."
   },
-{
-  "name": "creative-writing",
-  "path": "creative-writing",
-  "description": "Write stories, essays, marketing copy, and scripts with structure-first drafting, voice control, and revision passes. Use when asked to write or improve any non-code prose."
-},
-{
-  "name": "email-communication",
-  "path": "email-communication",
-  "description": "Triage an inbox and draft professional email — sorting by action needed, BLUF-structured replies, tone matching, and follow-up tracking. Use when handling email or writing messages for work."
-},
-{
-  "name": "data-analysis",
-  "path": "data-analysis",
-  "description": "Explore and summarize tabular data (CSV/Excel/SQLite) with Python — profiling, cleaning, aggregation, and findings writeups. Use when asked what a dataset shows or to analyze numbers."
-},
-{
-  "name": "productivity-planning",
-  "path": "productivity-planning",
-  "description": "Turn goals into executable plans with mochi's todo, goal, and checkpoint machinery — scoping, sequencing, timeboxing, and daily review. Use when planning work, breaking down projects, or organizing tasks."
-},
-{
-  "name": "error-handling",
-  "path": "error-handling",
-  "description": "Design deliberate error handling — typed errors, boundary translation, retry vs fail-fast, and never swallowing failures. Use when adding try/catch, designing APIs, or debugging silent failures."
-},
-{
-  "name": "async-concurrency",
-  "path": "async-concurrency",
-  "description": "Design correct async and concurrent code — bounded parallelism, backpressure, cancellation, and deadlock avoidance. Use when writing worker pools, streaming pipelines, or anything with await/Promise.all/spawn."
-},
-{
-  "name": "api-versioning",
-  "path": "api-versioning",
-  "description": "Evolve APIs without breaking clients — additive change first, deprecation windows, compatibility shims, and migration paths. Use when changing a public API, REST contract, or library interface."
-},
-{
-  "name": "state-machines",
-  "path": "state-machines",
-  "description": "Model complex state as explicit machines instead of boolean flags — illegal states unrepresentable, transitions validated, and bugs caught at the type level. Use for workflows, connection handling, or multi-step UI."
-},
-{
-  "name": "typescript-strictness",
-  "path": "typescript-strictness",
-  "description": "Use the type system to prevent bugs at compile time — discriminated unions, satisfies, exhaustive switches, and avoiding any/unknown leaks. Use when writing TypeScript that must be correct by construction."
-},
-{
-  "name": "root-cause-analysis",
-  "path": "root-cause-analysis",
-  "description": "Find the actual cause instead of the first plausible one — evidence-first diagnosis, bisection, hypothesis elimination, and distinguishing symptom from cause. Use when debugging anything non-trivial."
-},
-{
-  "name": "tradeoff-analysis",
-  "path": "tradeoff-analysis",
-  "description": "Make engineering decisions explicitly — enumerate options, evaluate against constraints, and document the tradeoff chosen. Use when choosing between architectures, libraries, or designs."
-},
-{
-  "name": "requirements-elicitation",
-  "path": "requirements-elicitation",
-  "description": "Turn vague requests into testable requirements — clarify the ask, expose hidden assumptions, and define acceptance criteria before coding. Use when a task is ambiguous or acceptance is unclear."
-},
-{
-  "name": "risk-assessment",
-  "path": "risk-assessment",
-  "description": "Assess and mitigate risk before shipping — failure mode enumeration, premortems, blast radius, and rollback planning. Use when shipping changes with real consequences."
-},
-{
-  "name": "decision-records",
-  "path": "decision-records",
-  "description": "Record significant technical decisions as ADRs — context, options, consequences, and review dates — so choices survive memory loss. Use for architecture, library, or process decisions."
-},
-{
-  "name": "project-scoping",
-  "path": "project-scoping",
-  "description": "Scope software projects into deliverable slices — vertical slicing, MVP definition, cut lines, and honest sizing. Use when planning a build, splitting work, or facing a vague 'build X' request."
-},
-{
-  "name": "spec-writing",
-  "path": "spec-writing",
-  "description": "Write technical specs that engineers can build from — problem statement, interfaces, edge cases, and open questions. Use before implementing anything larger than a few files."
-},
-{
-  "name": "postmortems",
-  "path": "postmortems",
-  "description": "Run blameless postmortems — build the timeline, find contributing factors, and convert lessons into tracked actions. Use after incidents, failed releases, or notable bugs."
-},
-{
-  "name": "flaky-test-debugging",
-  "path": "flaky-test-debugging",
-  "description": "Diagnose and eliminate flaky tests — find shared state, timing dependence, and order coupling, then make them deterministic. Use when a test passes locally and fails in CI, or fails randomly."
-},
-{
-  "name": "git-advanced",
-  "path": "git-advanced",
-  "description": "Advanced git for investigation and repair — bisect, reflog recovery, history surgery, and conflict strategies. Use when finding a regression, recovering lost work, or cleaning history."
-},
-{
-  "name": "config-management",
-  "path": "config-management",
-  "description": "Manage configuration correctly across environments — env var precedence, secrets handling, validation at startup, and config layering. Use when adding config, secrets, or environment handling."
-},
-{
-  "name": "cli-design",
-  "path": "cli-design",
-  "description": "Design command-line interfaces people can actually use — verb-first commands, discoverable help, honest exit codes, and pipe-friendly output. Use when building or revising a CLI."
-},
-{
-  "name": "data-modeling",
-  "path": "data-modeling",
-  "description": "Model data for change — normalization tradeoffs, keys and invariants, evolution strategies, and choosing schemas that survive growth. Use when designing databases, file formats, or data contracts."
-},
-{
-  "name": "resilience-patterns",
-  "path": "resilience-patterns",
-  "description": "Make systems survive dependency failures — timeouts, retries with backoff, circuit breakers, bulkheads, and graceful degradation. Use when integrating flaky or external services."
-},
-{
-  "name": "code-readability",
-  "path": "code-readability",
-  "description": "Write code humans and models can read — naming, function size, comment policy, and reducing cognitive load. Use when reviewing code for clarity or refactoring for maintainability."
-},
-{
-  "name": "inversion-reasoning",
-  "path": "inversion-reasoning",
-  "description": "Solve problems by flipping the goal - work backward from failure modes to unguarded edges, instead of forward from happy paths. Use for design hardening and stuck problems."
-},
-{
-  "name": "walking-skeleton",
-  "path": "walking-skeleton",
-  "description": "Prove a multi-component system end-to-end with the thinnest possible slice (real wiring, fake behavior) before building features. Use to start new services or pipelines."
-},
-{
-  "name": "pull-request-hygiene",
-  "path": "pull-request-hygiene",
-  "description": "Make PRs reviewers can act on - single intent, small scope, intent-first titles, reviewer briefing, CI doing boring checks. Use when opening or reviewing changes."
-},
-{
-  "name": "property-based-testing",
-  "path": "property-based-testing",
-  "description": "Test invariants with generated inputs instead of hand-picked examples to find cases you never wrote. Use for parsers, serializers, math and round-trip guarantees."
-},
-{
-  "name": "mutation-testing",
-  "path": "mutation-testing",
-  "description": "Measure test suite strength by introducing small code mutations and checking the suite kills them. Use when high coverage still hides weak assertions."
-},
-{
-  "name": "idempotency-design",
-  "path": "idempotency-design",
-  "description": "Design operations that can run more than once without changing the outcome - keys, fences, and convergence. Use for payments, queues, retries and migrations."
-},
-{
-  "name": "contract-testing",
-  "path": "contract-testing",
-  "description": "Lock down the boundary between two teams or systems with shared, machine-checked contracts so neither breaks the other. Use for service boundaries and published APIs."
-},
-{
-  "name": "assumptions-documentation",
-  "path": "assumptions-documentation",
-  "description": "Surface, label and verify the assumptions a change rests on so hidden bets become explicit and removable. Use in specs, PRs and incident reviews."
-}
+  {
+    "name": "creative-writing",
+    "path": "creative-writing",
+    "description": "Write stories, essays, marketing copy, and scripts with structure-first drafting, voice control, and revision passes. Use when asked to write or improve any non-code prose."
+  },
+  {
+    "name": "email-communication",
+    "path": "email-communication",
+    "description": "Triage an inbox and draft professional email — sorting by action needed, BLUF-structured replies, tone matching, and follow-up tracking. Use when handling email or writing messages for work."
+  },
+  {
+    "name": "data-analysis",
+    "path": "data-analysis",
+    "description": "Explore and summarize tabular data (CSV/Excel/SQLite) with Python — profiling, cleaning, aggregation, and findings writeups. Use when asked what a dataset shows or to analyze numbers."
+  },
+  {
+    "name": "productivity-planning",
+    "path": "productivity-planning",
+    "description": "Turn goals into executable plans with mochi's todo, goal, and checkpoint machinery — scoping, sequencing, timeboxing, and daily review. Use when planning work, breaking down projects, or organizing tasks."
+  },
+  {
+    "name": "error-handling",
+    "path": "error-handling",
+    "description": "Design deliberate error handling — typed errors, boundary translation, retry vs fail-fast, and never swallowing failures. Use when adding try/catch, designing APIs, or debugging silent failures."
+  },
+  {
+    "name": "async-concurrency",
+    "path": "async-concurrency",
+    "description": "Design correct async and concurrent code — bounded parallelism, backpressure, cancellation, and deadlock avoidance. Use when writing worker pools, streaming pipelines, or anything with await/Promise.all/spawn."
+  },
+  {
+    "name": "api-versioning",
+    "path": "api-versioning",
+    "description": "Evolve APIs without breaking clients — additive change first, deprecation windows, compatibility shims, and migration paths. Use when changing a public API, REST contract, or library interface."
+  },
+  {
+    "name": "state-machines",
+    "path": "state-machines",
+    "description": "Model complex state as explicit machines instead of boolean flags — illegal states unrepresentable, transitions validated, and bugs caught at the type level. Use for workflows, connection handling, or multi-step UI."
+  },
+  {
+    "name": "typescript-strictness",
+    "path": "typescript-strictness",
+    "description": "Use the type system to prevent bugs at compile time — discriminated unions, satisfies, exhaustive switches, and avoiding any/unknown leaks. Use when writing TypeScript that must be correct by construction."
+  },
+  {
+    "name": "root-cause-analysis",
+    "path": "root-cause-analysis",
+    "description": "Find the actual cause instead of the first plausible one — evidence-first diagnosis, bisection, hypothesis elimination, and distinguishing symptom from cause. Use when debugging anything non-trivial."
+  },
+  {
+    "name": "tradeoff-analysis",
+    "path": "tradeoff-analysis",
+    "description": "Make engineering decisions explicitly — enumerate options, evaluate against constraints, and document the tradeoff chosen. Use when choosing between architectures, libraries, or designs."
+  },
+  {
+    "name": "requirements-elicitation",
+    "path": "requirements-elicitation",
+    "description": "Turn vague requests into testable requirements — clarify the ask, expose hidden assumptions, and define acceptance criteria before coding. Use when a task is ambiguous or acceptance is unclear."
+  },
+  {
+    "name": "risk-assessment",
+    "path": "risk-assessment",
+    "description": "Assess and mitigate risk before shipping — failure mode enumeration, premortems, blast radius, and rollback planning. Use when shipping changes with real consequences."
+  },
+  {
+    "name": "decision-records",
+    "path": "decision-records",
+    "description": "Record significant technical decisions as ADRs — context, options, consequences, and review dates — so choices survive memory loss. Use for architecture, library, or process decisions."
+  },
+  {
+    "name": "project-scoping",
+    "path": "project-scoping",
+    "description": "Scope software projects into deliverable slices — vertical slicing, MVP definition, cut lines, and honest sizing. Use when planning a build, splitting work, or facing a vague 'build X' request."
+  },
+  {
+    "name": "spec-writing",
+    "path": "spec-writing",
+    "description": "Write technical specs that engineers can build from — problem statement, interfaces, edge cases, and open questions. Use before implementing anything larger than a few files."
+  },
+  {
+    "name": "postmortems",
+    "path": "postmortems",
+    "description": "Run blameless postmortems — build the timeline, find contributing factors, and convert lessons into tracked actions. Use after incidents, failed releases, or notable bugs."
+  },
+  {
+    "name": "flaky-test-debugging",
+    "path": "flaky-test-debugging",
+    "description": "Diagnose and eliminate flaky tests — find shared state, timing dependence, and order coupling, then make them deterministic. Use when a test passes locally and fails in CI, or fails randomly."
+  },
+  {
+    "name": "git-advanced",
+    "path": "git-advanced",
+    "description": "Advanced git for investigation and repair — bisect, reflog recovery, history surgery, and conflict strategies. Use when finding a regression, recovering lost work, or cleaning history."
+  },
+  {
+    "name": "config-management",
+    "path": "config-management",
+    "description": "Manage configuration correctly across environments — env var precedence, secrets handling, validation at startup, and config layering. Use when adding config, secrets, or environment handling."
+  },
+  {
+    "name": "cli-design",
+    "path": "cli-design",
+    "description": "Design command-line interfaces people can actually use — verb-first commands, discoverable help, honest exit codes, and pipe-friendly output. Use when building or revising a CLI."
+  },
+  {
+    "name": "data-modeling",
+    "path": "data-modeling",
+    "description": "Model data for change — normalization tradeoffs, keys and invariants, evolution strategies, and choosing schemas that survive growth. Use when designing databases, file formats, or data contracts."
+  },
+  {
+    "name": "resilience-patterns",
+    "path": "resilience-patterns",
+    "description": "Make systems survive dependency failures — timeouts, retries with backoff, circuit breakers, bulkheads, and graceful degradation. Use when integrating flaky or external services."
+  },
+  {
+    "name": "code-readability",
+    "path": "code-readability",
+    "description": "Write code humans and models can read — naming, function size, comment policy, and reducing cognitive load. Use when reviewing code for clarity or refactoring for maintainability."
+  },
+  {
+    "name": "inversion-reasoning",
+    "path": "inversion-reasoning",
+    "description": "Solve problems by flipping the goal - work backward from failure modes to unguarded edges, instead of forward from happy paths. Use for design hardening and stuck problems."
+  },
+  {
+    "name": "walking-skeleton",
+    "path": "walking-skeleton",
+    "description": "Prove a multi-component system end-to-end with the thinnest possible slice (real wiring, fake behavior) before building features. Use to start new services or pipelines."
+  },
+  {
+    "name": "pull-request-hygiene",
+    "path": "pull-request-hygiene",
+    "description": "Make PRs reviewers can act on - single intent, small scope, intent-first titles, reviewer briefing, CI doing boring checks. Use when opening or reviewing changes."
+  },
+  {
+    "name": "property-based-testing",
+    "path": "property-based-testing",
+    "description": "Test invariants with generated inputs instead of hand-picked examples to find cases you never wrote. Use for parsers, serializers, math and round-trip guarantees."
+  },
+  {
+    "name": "mutation-testing",
+    "path": "mutation-testing",
+    "description": "Measure test suite strength by introducing small code mutations and checking the suite kills them. Use when high coverage still hides weak assertions."
+  },
+  {
+    "name": "idempotency-design",
+    "path": "idempotency-design",
+    "description": "Design operations that can run more than once without changing the outcome - keys, fences, and convergence. Use for payments, queues, retries and migrations."
+  },
+  {
+    "name": "contract-testing",
+    "path": "contract-testing",
+    "description": "Lock down the boundary between two teams or systems with shared, machine-checked contracts so neither breaks the other. Use for service boundaries and published APIs."
+  },
+  {
+    "name": "assumptions-documentation",
+    "path": "assumptions-documentation",
+    "description": "Surface, label and verify the assumptions a change rests on so hidden bets become explicit and removable. Use in specs, PRs and incident reviews."
+  },
+  {
+    "name": "meeting-facilitation",
+    "path": "meeting-facilitation",
+    "description": "Run meetings that end with decisions and owners — agenda design, timeboxing, and facilitation moves. Use when organizing or leading any recurring or ad-hoc meeting."
+  },
+  {
+    "name": "presentation-design",
+    "path": "presentation-design",
+    "description": "Design talks and slide decks that land — narrative arc, one-idea-per-slide, and speaker support. Use when preparing a presentation, talk, demo, or pitch."
+  },
+  {
+    "name": "technical-writing",
+    "path": "technical-writing",
+    "description": "Write documentation engineers actually read — READMEs, API docs, ADRs, and runbooks with the right level of detail. Use when writing or reviewing any technical document."
+  },
+  {
+    "name": "resume-tailoring",
+    "path": "resume-tailoring",
+    "description": "Tailor a resume to a specific job description — keyword alignment, impact bullets, and honest framing. Use when applying to a job and the resume must pass both ATS and human screens."
+  },
+  {
+    "name": "salary-negotiation",
+    "path": "salary-negotiation",
+    "description": "Negotiate compensation with data and leverage — market ranges, total-comp framing, and the conversation itself. Use when preparing for a raise, promotion, or new-offer negotiation."
+  },
+  {
+    "name": "email-outreach-cold",
+    "path": "email-outreach-cold",
+    "description": "Write cold emails that get replies — pattern-interrupt subject lines, short bodies, and a single clear ask. Use when doing outreach for sales, partnerships, hiring, or community."
+  },
+  {
+    "name": "personal-finance-review",
+    "path": "personal-finance-review",
+    "description": "Review personal finances and build a realistic budget — spending audit, emergency fund, debt payoff, and savings rate. Use when taking control of personal money or planning a big financial change."
+  },
+  {
+    "name": "learning-new-topic-fast",
+    "path": "learning-new-topic-fast",
+    "description": "Learn a new subject or skill to working competence fast — deliberate practice, Feynman technique, and project-based immersion. Use when you need to get good at something new on a deadline."
+  }
 ]
