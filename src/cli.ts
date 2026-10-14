@@ -230,6 +230,7 @@ Usage:
   mochi rules [list|add]             # manage modular project rules
   mochi bg [list|logs|kill]          # manage async background tasks
   mochi discord [run|status]         # run Discord bot gateway
+  mochi telegram [run|status]        # run Telegram bot gateway (HTTP long-poll)
   mochi dashboard | mochi web        # open web dashboard in browser
   mochi plugin add <dir>|remove <name>|list        # spec 12-E plugin registry
   mochi security | mochi audit       # static security and credential audit
@@ -1393,6 +1394,33 @@ async function main() {
     }
     console.log(`🍡 Mochi Discord Gateway configured with prefix "${cfg.prefix || '!mochi'}".`);
     console.log(`Bot Token: ${cfg.token.slice(0, 10)}... (whitelisting: ${cfg.allowAllUsers ? 'all users' : (cfg.allowedUserIds?.length ?? 0) + ' users'})`);
+    return;
+  }
+  if (first === 'telegram') {
+    // mochi telegram [run|status] — third-party messaging gateway (HTTP
+    // long-poll; no websocket handshake, no privileged intents). Same
+    // ask-prefix + allowlist policy as the Discord gateway.
+    const { loadTelegramConfig, runTelegramGateway } = await import('./telegram.js');
+    const tcfg = loadTelegramConfig(cwd);
+    if (!tcfg) {
+      console.error('No Telegram bot configuration found. Set TELEGRAM_BOT_TOKEN in .env, ~/.mochi/.env, or ~/.hermes/.env.');
+      process.exit(1);
+    }
+    const sub = positional[1] ?? 'status';
+    if (sub === 'run') {
+      console.log(`🍡 Mochi Telegram gateway long-polling with prefix "${tcfg.prefix}" (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      process.once('SIGINT', () => ctl.abort());
+      const summary = await runTelegramGateway(tcfg, runtime, {
+        fetchJson: fetch as never,
+        onLog: (line: string) => console.log(line),
+        signal: ctl.signal,
+      });
+      console.log(`Telegram gateway stopped (${summary.updates} updates, ${summary.messages} answered).`);
+      return;
+    }
+    console.log(`🍡 Mochi Telegram gateway configured with prefix "${tcfg.prefix}".`);
+    console.log(`Bot Token: ${tcfg.token.slice(0, 10)}... (whitelisting: ${tcfg.allowAllUsers ? 'all users' : (tcfg.allowedUserIds?.length ?? 0) + ' users'})`);
     return;
   }
   if (first === 'security' || first === 'audit') {
