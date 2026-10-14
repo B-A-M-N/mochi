@@ -92,4 +92,12 @@ describe('MCH-91 task-adaptive tool advertising', () => {
     expect(trimToReadTier(tools, 'Research browser automation with screenshots')).toBe(0);
     expect(tools.has('browser')).toBe(true);
   });
+
+  it('read tier keeps review_pr (reviews are read-shaped analysis)', () => {
+    const tools = buildTools(cfg);
+    trimToReadTier(tools, 'Review my PR for correctness');
+    expect(tools.has('review_pr')).toBe(true);
+    expect(tools.has('read')).toBe(true);
+    expect(tools.has('write')).toBe(false);
+  });
 });

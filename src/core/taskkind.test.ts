@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyTaskKind, kindHint, resolveAutoReasoning } from './taskkind.js';
+import { classifyTaskKind, kindHint, resolveAutoReasoning, isReviewTask } from './taskkind.js';
 
 describe('classifyTaskKind', () => {
   it('classifies a bug-fix task as fix', () => {
@@ -59,6 +59,26 @@ describe('classifyTaskKind', () => {
     expect(classifyTaskKind({ title: 'Whatever', description: 'whatever', role: 'debugger' })).toBe('fix');
     expect(classifyTaskKind({ title: 'Whatever', description: 'whatever', role: 'tester' })).toBe('test');
     expect(classifyTaskKind({ title: 'Whatever', description: 'whatever', role: 'architect' })).toBe('plan');
+  });
+  it('routes review intent to research (never chat-starved)', () => {
+    // Reviews were chat-tier: 7 tools, low effort, 3-round cutoff.
+    expect(classifyTaskKind({ title: 'Review my PR', description: 'check PR #123 for correctness' })).toBe('research');
+    expect(classifyTaskKind({ title: 'Can you review my PR?', description: 'correctness pass' })).toBe('research');
+    expect(classifyTaskKind({ title: 'Audit the auth module', description: 'security review' })).toBe('research');
+    expect(classifyTaskKind({ title: 'Look over this diff', description: 'anything wrong here?' })).toBe('research');
+    // Execution verbs still win: fixing review feedback is a fix, not a review.
+    expect(classifyTaskKind({ title: 'Fix the review comments', description: 'address PR feedback' })).toBe('fix');
+    expect(classifyTaskKind({ title: 'Review and fix the bug', description: 'audit then patch it' })).toBe('fix');
+  });
+});
+
+describe('isReviewTask', () => {
+  it('detects review-shaped work and nothing else', () => {
+    expect(isReviewTask({ title: 'Review PR #9', description: '' })).toBe(true);
+    expect(isReviewTask({ title: 'LGTM this diff', description: '' })).toBe(true);
+    expect(isReviewTask({ title: 'Fix the bug', description: '' })).toBe(false);
+    expect(isReviewTask({ title: 'hi', description: '' })).toBe(false);
+    expect(isReviewTask({ title: 'Write docs', description: '' })).toBe(false);
   });
 });
 

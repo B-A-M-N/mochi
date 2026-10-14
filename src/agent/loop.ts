@@ -17,7 +17,7 @@ import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTool
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo/repo.js';
-import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask } from '../core/taskkind.js';
+import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask } from '../core/taskkind.js';
 import { trimToLeanTier, trimToReadTier } from '../tools/index.js';
 import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
@@ -699,6 +699,10 @@ export class Agent {
       // MCH-95: create-and-run script tasks (f1 arena: 21s thinking + 40s of
       // self-doubt diff re-checks and identical rewrites). 'medium' is ample.
       if (isSimpleScriptTask(task)) return 'medium';
+      // Reviews are read-shaped analysis, not Q&A: 'low' produced shallow
+      // rubber-stamps under the chat-tier tool cap. 'medium' funds careful
+      // analysis without max-tier burn on every "lgtm this".
+      if (isReviewTask(task)) return 'medium';
       return resolveAutoReasoning(kind);
     }
     // Guard against any stray invalid value (config re-validates, but stay safe).

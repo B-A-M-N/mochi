@@ -15,6 +15,7 @@ const TEST_RE = /\b(test|spec|coverage|assert|jest|vitest|pytest|unittest)\b/i;
 const RESEARCH_RE = /\b(research|investigate|explore|find\s*out|discover|learn|how\s*does|why\s*does)\b/i;
 const PLAN_RE = /\b(plan|design|architect|sketch|outline|proposal)\b/i;
 const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*doc|architecture\s*doc)\b/i;
+const REVIEW_RE = /\b(review|audit|inspect|assess|critique|lgtm|look\s*over|go\s*over|check\s*over|give\s*(me\s*)?feedback(\s*on)?)\b/i;
 // Execution beats planning vocabulary: "design and implement" is an
 // implementation task, while "create only a plan" remains planning. The
 // strong verb list intentionally omits create/write/make/generate, which can
@@ -40,7 +41,7 @@ export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'rol
   // fix/test burned a full verify loop + max/medium reasoning on a Q&A.
   const titleTrimmed = task.title.trim();
   if (/^(how|what|why|who|which|where|when|can|could|would|should|is|are|do|does|did|has|have|explain|tell|describe|compare)\b/i.test(titleTrimmed) && /\?\s*$/.test(titleTrimmed)) {
-    const isImperativeRequest = /^(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+)?(?:fix|add|implement|write|create|update|refactor|test|remove|delete|build|code|patch|edit|modify)\b/i.test(titleTrimmed);
+    const isImperativeRequest = /^(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+)?(?:fix|add|implement|write|create|update|refactor|test|remove|delete|build|code|patch|edit|modify|review|audit)\b/i.test(titleTrimmed);
     if (!isImperativeRequest) {
       if (/^(?:how do (?:i|we)|explain how|what is|what are|why does|why do|tell me)/i.test(titleTrimmed) || !ACTION_RE.test(text)) {
         return 'chat';
@@ -72,6 +73,12 @@ export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'rol
     return 'implement';
   }
   if (RESEARCH_RE.test(text) || task.role === 'researcher') return 'research';
+  // Review intent (PR/diff/code review, audit) is read-shaped analysis work —
+  // routing it to chat starved it to 7 tools, low effort, and a 3-round cutoff
+  // (rubber-stamp reviews). Research lane: READ tier (with review_pr) + full
+  // MCP, protocols, and preflight. Execution kinds above keep priority, so a
+  // "fix the review comments" still routes to fix.
+  if (REVIEW_RE.test(text)) return 'research';
 
   // General non-action questions fall back to chat even if assigned coder role
   const QUESTION_RE = /^((what|why|how|who|which|where|when)\b|(is|are|can|could|would|should|do|does|did|has|have)\s+(you|u|we|i|it|there|mochi|this|that)\b)|\?$/i;
@@ -124,6 +131,13 @@ export function isSimpleScriptTask(task: Task): boolean {
   // or suite orchestration.
   return /\b(create|write|make|rename|update|fix)\b/.test(text) && /\brun\b|\bnode\b|\bpython\b/.test(text)
     && !/\bnpm (test|run)|vitest|jest|pytest|cargo test/.test(text);
+}
+
+/** True for review-shaped tasks (PR/diff/code review, audit): read-heavy
+ *  analysis that deserves more than chat-tier effort. Pure, tested. */
+export function isReviewTask(task: Pick<Task, 'title' | 'description'>): boolean {
+  const text = `${task.title} ${task.description ?? ''}`;
+  return REVIEW_RE.test(text);
 }
 
 /** Tailored hint added to the system prompt per task kind. */

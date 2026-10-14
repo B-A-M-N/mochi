@@ -167,7 +167,7 @@ export function trimToLeanTier(map: Map<string, Tool>, taskText: string): number
 export const READ_TOOL_NAMES = new Set([
   'read', 'search', 'glob', 'outline', 'inspect', 'tree', 'diff', 'fetch',
   'web_search', 'skill', 'think', 'ask_question', 'load_tools', 'todo',
-  'memory', 'blast_radius',
+  'memory', 'blast_radius', 'review_pr',
 ]);
 
 /** Defer all non-READ tools to `load_tools` for read-only task shapes.
