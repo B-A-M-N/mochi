@@ -64,6 +64,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'init', description: 'Create MOCHI.md' },
   { name: 'config', description: 'Show effective configuration' },
   { name: 'login', description: 'Authenticate a provider' },
+  { name: 'bundle', description: 'Write a diagnostic bundle (transcript + diff + doctor)', aliases: ['export-bundle'] },
   { name: 'update', description: 'Check GitHub releases for updates and upgrade Mochi', aliases: ['upgrade', 'self-update'] },
   {
     name: 'auth', description: 'Credential status across providers',

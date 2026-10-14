@@ -233,6 +233,7 @@ Usage:
   mochi telegram [run|status]        # run Telegram bot gateway (HTTP long-poll)
   mochi slack [run|webhook|status]   # run Slack gateway (polling or Events API webhook)
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
+  mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers
@@ -2032,6 +2033,57 @@ async function main() {
       return;
     }
     console.log(formatDoctor(report));
+    return;
+  }
+  if (first === 'bundle' || first === 'export-bundle') {
+    const { SessionStore } = await import('./state/session-store.js');
+    const { safe } = await (async () => ({ safe: (s: string) => s })) as never;
+    void safe;
+    const out = positional[1] ?? 'mochi-bundle.md';
+    const wsDir = resolve(runtime.workspace.dir);
+    const store = new SessionStore(wsDir);
+    const rows = store.list(1);
+    let transcript = '';
+    if (rows.length) {
+      const msgs = store.messages(rows[0].id);
+      transcript = msgs.map((m) => `### ${m.role} @ ${new Date(m.t).toISOString()}\\n${m.content}`).join('\\n\\n');
+    }
+    store.close();
+    let gitDiff = '';
+    try {
+      const { execFileSync } = await import('node:child_process');
+      gitDiff = execFileSync('git', ['diff', 'HEAD'], { cwd: runtime.cwd, encoding: 'utf8' });
+    } catch { gitDiff = '(git diff unavailable)'; }
+    const lines = [
+      `# Mochi Diagnostic Bundle`,
+      ``,
+      `- Version: ${VERSION}`,
+      `- Exports: ${new Date().toISOString()}`,
+      `- Provider: ${runtime.config.model.provider} / ${runtime.config.model.model}`,
+      `- Usage: ${runtime.usage.summary()}`,
+      ``,
+      `## Latest session`,
+      transcript || '(none)',
+      ``,
+      `## Git diff`,
+      '```diff',
+      gitDiff.slice(0, 20000),
+      '```',
+      ``,
+      `## Doctor`,
+      JSON.stringify(await (await import('./doctor.js')).doctorReport({
+        version: VERSION,
+        probeProvider: false,
+        provider: runtime.config.model.provider,
+        baseUrl: runtime.config.model.baseUrl ?? '',
+        model: runtime.config.model.model,
+        apiKey: (runtime.config.model as { apiKey?: string }).apiKey ?? null,
+        workspaceDir: runtime.cwd,
+      }), null, 2),
+    ];
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(resolve(runtime.cwd, out), lines.join('\n'));
+    console.log(`Wrote bundle to ${resolve(runtime.cwd, out)}`);
     return;
   }
   if (first === 'init') {
