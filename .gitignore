@@ -37,3 +37,5 @@ editors/vscode/*.vsix
 editors/jetbrains/build/
 editors/jetbrains/.gradle/
 # NOTE: gradle-wrapper.jar IS committed (required for reproducible builds).
+aimbot-venv/
+*.env

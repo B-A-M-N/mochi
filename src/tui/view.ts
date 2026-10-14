@@ -428,7 +428,7 @@ export function statusBarRow1(m: StatusBarModel, width: number): string {
     : '';
 
   const velocityBadge = (m.tokenVelocity && m.tokenVelocity > 0 && width >= 54)
-    ? ` ${T.warning}${Math.round(m.tokenVelocity)} t/s ⚡${T.reset}`
+    ? ` ${T.warning}${Math.round(m.tokenVelocity)} t/s ▲${T.reset}`
     : '';
 
   const modeBadge = m.agentMode && m.agentMode !== 'normal'

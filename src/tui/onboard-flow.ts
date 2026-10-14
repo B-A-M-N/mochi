@@ -32,7 +32,7 @@ export async function runUniversalInjection(
   push: PushFn,
   scheduleRender: () => void,
 ): Promise<void> {
-  push('system', '⚡ Scanning machine for all coding agents (Claude, Hermes, Antigravity, Codex, OpenCode, Cursor, Cline, J-Code, Terminus)...');
+  push('system', '◆ Scanning machine for all coding agents (Claude, Hermes, Antigravity, Codex, OpenCode, Cursor, Cline, J-Code, Terminus)...');
   scheduleRender();
 
   const scan = scanForOnboarding(runtime.cwd);
@@ -91,7 +91,7 @@ export async function runInteractiveOnboarding(
   // 2. Interactive Welcome & Setup Menu
   const detectedKeysCount = scan.providers.filter((p) => p.hasKey).length;
   const welcomeChoices = [
-    `⚡ 1. Express Setup (Auto-inject ${agentNames.length} agents, ${detectedKeysCount} keys, ${scan.totalSkills} skills & ${scan.totalMcpServers} MCPs)`,
+    `1. Express Setup (Auto-inject ${agentNames.length} agents, ${detectedKeysCount} keys, ${scan.totalSkills} skills & ${scan.totalMcpServers} MCPs)`,
     `🛠️ 2. Step-by-Step Setup (Configure keys, model, skills & editor interactively)`,
     `⏩ 3. Skip Setup (I'll configure manually later)`,
   ];
@@ -110,7 +110,7 @@ export async function runInteractiveOnboarding(
 
   // Path A: Express Setup
   if (mainPick === 0) {
-    push('system', '⚡ Running Express Setup...');
+    push('system', '◆ Running Express Setup...');
     scheduleRender();
 
     const rep = await injectAllAgentEcosystem(scan, { force: false });

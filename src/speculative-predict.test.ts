@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { predictNextFiles } from './agent/speculative.js';
@@ -44,5 +44,27 @@ describe('predictNextFiles (MCH-43 co-change prefetch)', () => {
   it('returns empty for unknown files and bad dirs without throwing', () => {
     expect(predictNextFiles(dir, ['src/nope.ts'], 5)).toEqual([]);
     expect(predictNextFiles(join(dir, 'missing'), ['src/a.ts'], 5)).toEqual([]);
+  });
+
+  it('predicts co-change partners in non-TypeScript repos (polyglot)', () => {
+    const d = mkdtempSync(join(tmpdir(), 'mochi-predict-py-'));
+    try {
+      execSync('git init && git config user.email t@t && git config user.name t', { cwd: d });
+      writeFileSync(join(d, 'app.py'), 'A = 1\n');
+      writeFileSync(join(d, 'util.py'), 'U = 1\n');
+      writeFileSync(join(d, 'notes.md'), '# notes\n');
+      execSync('git add -A && git commit -m init', { cwd: d });
+      // app.py + util.py co-change (code); app.py + notes.md co-change (prose).
+      writeFileSync(join(d, 'app.py'), 'A = 2\n');
+      writeFileSync(join(d, 'util.py'), 'U = 2\n');
+      writeFileSync(join(d, 'notes.md'), '# notes v2\n');
+      execSync('git add -A && git commit -m "touch all"', { cwd: d });
+      const predicted = predictNextFiles(d, ['app.py'], 5);
+      expect(predicted).toContain('util.py');
+      expect(predicted).not.toContain('notes.md'); // prose is never warmed
+      expect(predicted).not.toContain('app.py');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 });

@@ -131,7 +131,7 @@ describe('statusBar rows', () => {
   it('row1 displays token velocity speedometer when available', () => {
     const row = statusBarRow1(baseStatus({ tokenVelocity: 68 }), 90);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
-    expect(plain).toContain('68 t/s ⚡');
+    expect(plain).toContain('68 t/s ▲');
   });
 
   it('row1 keeps clean model name on the left without jumping bottom spinner', () => {

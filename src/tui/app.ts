@@ -1320,7 +1320,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const activeSubs = state.activeSubagents ? [...state.activeSubagents.values()] : [];
     if (activeSubs.length > 0) {
       const roles = activeSubs.map((s) => `#${s.role}`).join(', ');
-      extra.push(`⚡ ${activeSubs.length} subagents (${roles})`);
+      extra.push(`◆ ${activeSubs.length} subagents (${roles})`);
     }
     const statusModel = {
       modelId: modelShort,

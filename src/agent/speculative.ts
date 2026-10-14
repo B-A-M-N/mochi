@@ -95,10 +95,25 @@ export interface SpeculativeResult {
 
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 // MCH-43: predictive file pre-fetch. Given recently-touched files, predict
 // which files are likely to be needed NEXT (co-change graph from git history),
 // so the agent can warm its read cache before the model even asks.
+
+/** Source + config extensions worth warming (not prose/media/locks). The old
+ *  `.ts`-only filter starved every non-TypeScript repo of predictions. */
+const WARMABLE_EXTS = new Set([
+  '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
+  '.py', '.pyi', '.go', '.rs', '.java', '.kt', '.kts', '.rb', '.php',
+  '.swift', '.c', '.h', '.hpp', '.hh', '.cc', '.cpp', '.cxx', '.cs',
+  '.scala', '.lua', '.sh', '.bash', '.zsh', '.pl', '.r', '.jl', '.dart',
+  '.vue', '.svelte', '.astro', '.sql', '.graphql', '.gql', '.proto', '.tf',
+  '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.xml',
+]);
+
+function warmable(path: string): boolean {
+  return WARMABLE_EXTS.has(extname(path).toLowerCase());
+}
 export function predictNextFiles(workspaceDir: string, recentlyTouched: string[], limit = 5): string[] {
   try {
     if (!existsSync(join(workspaceDir, '.git'))) return [];
@@ -118,7 +133,7 @@ export function predictNextFiles(workspaceDir: string, recentlyTouched: string[]
       for (const f of files) {
         if (!touchedSet.has(f)) continue;
         for (const g of files) {
-          if (g === f || touchedSet.has(g) || !g.endsWith('.ts')) continue;
+          if (g === f || touchedSet.has(g) || !warmable(g)) continue;
           counts.set(g, (counts.get(g) ?? 0) + 1);
         }
       }
