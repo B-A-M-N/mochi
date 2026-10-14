@@ -134,19 +134,11 @@ describe('statusBar rows', () => {
     expect(plain).toContain('68 t/s ⚡');
   });
 
-  it('row1 displays animated bottom spinner and verb when busy', () => {
-    const row = statusBarRow1(baseStatus({ busy: true, spinner: 2, verb: 'Working', currentTool: 'bash', elapsed: '3.2s' }), 90);
+  it('row1 keeps clean model name on the left without jumping bottom spinner', () => {
+    const row = statusBarRow1(baseStatus(), 90);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
-    expect(plain).toContain('Working');
-    expect(plain).toContain('bash');
-    expect(plain).toContain('3.2s');
-  });
-
-  it('row1 displays Done indicator when recently completed', () => {
-    const row = statusBarRow1(baseStatus({ done: true, doneElapsed: '1.8s' }), 90);
-    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
-    expect(plain).toContain('✓ Done');
-    expect(plain).toContain('1.8s');
+    expect(plain.startsWith('deepseek-v4-flash')).toBe(true);
+    expect(plain).not.toContain('⠋');
   });
 
   it('row2 shows workspace, branch, and diff stats', () => {
@@ -286,21 +278,11 @@ describe('composer', () => {
     expect(plain).toContain('fix the bug');
   });
 
-  it('composer row shows animated spinner prompt glyph when busy', () => {
-    const row = composerRow('running command', 60, true, true, 0);
+  it('composer placeholder row shows clean ❯ prompt and placeholder text', () => {
+    const row = composerPlaceholderRow('Message mochi…', 60);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
-    expect(plain).not.toContain('❯');
-    expect(plain).toContain('⠋');
-    expect(plain).toContain('running command');
-    expect(visibleLen(row.replace(/\x1b\[[0-9;]*m/g, ''))).toBe(60);
-  });
-
-  it('composer placeholder row shows spinner glyph when busy', () => {
-    const row = composerPlaceholderRow('Working…', 60, true, 0);
-    const plain = row.replace(/\x1b\[[0-9;]*m/g, '');
-    expect(plain).not.toContain('❯');
-    expect(plain).toContain('⠋');
-    expect(plain).toContain('Working…');
+    expect(plain).toContain('❯');
+    expect(plain).toContain('Message mochi…');
     expect(visibleLen(row.replace(/\x1b\[[0-9;]*m/g, ''))).toBe(60);
   });
 

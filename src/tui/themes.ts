@@ -1,6 +1,7 @@
-// 20 unique, handcrafted color themes for Mochi TUI.
-// Each theme provides distinct foregrounds, accents, rule borders,
-// background highlights, and splash gradient stops.
+// 23 unique, handcrafted color themes for Mochi TUI.
+// Each theme owns its full look: foreground, signature accent, canvas
+// background, rule borders, and splash gradient stops — no two themes share
+// a signature accent, so switching themes visibly re-skins the entire IO.
 //
 // Color strategy (two layers):
 //   1. PALETTE TOKENS — the raw hex slots (act, plan, error, pink, cyan, ...).
@@ -29,6 +30,10 @@ export interface ThemeColors {
   grayDark: string;
   fg: string;
   bgUser: string;
+  /** Canvas background (the terminal rows behind everything). Dark themes use
+   *  near-black values (mochi-purple mandates true black); light themes set a
+   *  paper tone (canvas stays transparent for them — see canvasBg). */
+  bg: string;
   rule: string;
   pink: string;
   magenta: string;
@@ -137,12 +142,12 @@ function relativeLuminance([r, g, b]: [number, number, number]): number {
 }
 
 /** True for dark-background themes (light text on dark surface),
- *  decided by comparing fg vs bg luminance — no per-theme flag to drift.
- *  The TUI forces a pure-black canvas behind dark themes (opencode parity);
- *  light themes stay transparent so the terminal background shows. */
+ *  decided by comparing fg vs canvas-bg luminance — no per-theme flag to drift.
+ *  The TUI paints the theme's own canvas bg behind dark themes (opencode
+ *  parity); light themes stay transparent so the terminal background shows. */
 export function themeIsDark(t: MochiTheme): boolean {
   const fg = parseThemeRgb(t.colors.fg, 38);
-  const bg = parseThemeRgb(t.colors.bgUser, 48) ?? parseThemeRgb(t.colors.bgUser, 38);
+  const bg = parseThemeRgb(t.colors.bg, 48) ?? parseThemeRgb(t.colors.bg, 38);
   if (!fg || !bg) return true;
   return relativeLuminance(fg) > relativeLuminance(bg);
 }
@@ -157,23 +162,45 @@ export function themeContrastRatio(t: MochiTheme): number | null {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-/** Rewrite a color string's 24-bit codes as 256-color codes. */
+/** Rewrite a color string's 24-bit codes as 256-color codes (both fg 38;2
+ *  and bg 48;2 — backgrounds go through the same path since the bg token). */
 function downgradeColorCodes(s: string): string {
-  return s.replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g, (_m, r: string, g: string, b: string) =>
-    `\x1b[38;5;${rgbTo256(Number(r), Number(g), Number(b))}m`);
+  return s
+    .replace(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g, (_m, r: string, g: string, b: string) =>
+      `\x1b[38;5;${rgbTo256(Number(r), Number(g), Number(b))}m`)
+    .replace(/\x1b\[48;2;(\d+);(\d+);(\d+)m/g, (_m, r: string, g: string, b: string) =>
+      `\x1b[48;5;${rgbTo256(Number(r), Number(g), Number(b))}m`);
 }
 
 /** Canvas background escape for the TUI frame writer (opencode parity):
- *  dark themes paint every row over explicit black so the terminal profile
- *  color can never show through. Truecolor terminals get 24-bit black;
- *  256-color terminals get palette black (16) — 24-bit codes degrade
- *  unpredictably there (gray tint / garbage cells). Dumb terminals,
- *  NO_COLOR, and light themes stay fully transparent. */
+ *  dark themes paint every row over the theme's own canvas color so the
+ *  terminal profile color can never show through (mochi-purple mandates true
+ *  black). Truecolor terminals get the 24-bit value; 256-color terminals get
+ *  the nearest palette index. Dumb terminals, NO_COLOR, and light themes
+ *  stay fully transparent. */
 export function canvasBg(): string {
   if (honorsNoColor()) return '';
   if ((process.env.TERM ?? '').toLowerCase() === 'dumb') return '';
-  if (!themeIsDark(getCurrentTheme())) return '';
-  return supportsTruecolor() ? '\x1b[48;2;26;26;26m' : '\x1b[48;5;234m';
+  const t = getCurrentTheme();
+  if (!themeIsDark(t)) return '';
+  const bg = parseThemeRgb(t.colors.bg, 48) ?? parseThemeRgb(t.colors.bg, 38);
+  if (!bg) return supportsTruecolor() ? '\x1b[48;2;0;0;0m' : '\x1b[48;5;16m';
+  return supportsTruecolor()
+    ? `\x1b[48;2;${bg[0]};${bg[1]};${bg[2]}m`
+    : `\x1b[48;5;${rgbTo256(bg[0], bg[1], bg[2])}m`;
+}
+
+/** Dimmed signature-accent background for the active tab pill: the tab bar
+ *  follows the theme instead of wearing one fixed purple on all 23 themes.
+ *  Reads the current theme object directly (no view.js import cycle).
+ *  Returns '' when the accent is unparseable (NO_COLOR/odd terminals). */
+export function tabActiveBg(): string {
+  if (honorsNoColor()) return '';
+  const m = /38;2;(\d+);(\d+);(\d+)m/.exec(getCurrentTheme().colors.act);
+  if (!m) return '';
+  const f = 0.16;
+  const r = Math.round(Number(m[1]) * f), g = Math.round(Number(m[2]) * f), b = Math.round(Number(m[3]) * f);
+  return supportsTruecolor() ? `\x1b[48;2;${r};${g};${b}m` : `\x1b[48;5;${rgbTo256(r, g, b)}m`;
 }
 
 /** True when the terminal advertises 24-bit color support. */
@@ -235,7 +262,7 @@ export function adaptThemeColors(t: MochiTheme): MochiTheme {
 export const THEMES: MochiTheme[] = [
   {
     id: 'cyber-void',
-    name: 'Cyber Void',
+    name: 'Abyss',
     description: 'Deep neon void — electric cyan, hot pink, lime; the default mochi look',
     colors: {
       act: '\x1b[38;2;0;255;255m',
@@ -246,6 +273,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;150;150;165m',
       grayDark: '\x1b[38;2;110;110;125m',
       fg: '\x1b[38;2;230;230;250m',
+      bg: '\x1b[48;2;2;6;23m',
       bgUser: '\x1b[48;2;15;5;30m',
       rule: '\x1b[38;2;255;0;255m',
       pink: '\x1b[38;2;255;20;147m',
@@ -269,7 +297,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'vaporwave',
-    name: 'Vaporwave',
+    name: 'Mirage',
     description: '80s sunset — teal, magenta, peach, lavender, soft cream',
     colors: {
       act: '\x1b[38;2;0;255;204m',
@@ -280,13 +308,14 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;180;170;200m',
       grayDark: '\x1b[38;2;120;110;140m',
       fg: '\x1b[38;2;252;240;248m',
+      bg: '\x1b[48;2;23;15;43m',
       bgUser: '\x1b[48;2;50;30;70m',
       rule: '\x1b[38;2;255;0;255m',
       pink: '\x1b[38;2;255;192;203m',
       magenta: '\x1b[38;2;255;0;255m',
       violet: '\x1b[38;2;216;191;216m',
       cyan: '\x1b[38;2;0;255;204m',
-      lime: '\x1b[38;2;144;238;144m',
+      lime: '\x1b[38;2;167;243;208m',
       orange: '\x1b[38;2;255;160;122m',
       teal: '\x1b[38;2;32;178;170m',
     },
@@ -304,7 +333,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'solar-flare',
-    name: 'Solar Flare',
+    name: 'Ember',
     description: 'Burning sun on black — intense orange, sunburst yellow, crimson',
     colors: {
       act: '\x1b[38;2;255;215;0m',
@@ -315,11 +344,12 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;180;130;80m',
       grayDark: '\x1b[38;2;120;80;40m',
       fg: '\x1b[38;2;255;245;225m',
+      bg: '\x1b[48;2;20;8;0m',
       bgUser: '\x1b[48;2;40;15;0m',
       rule: '\x1b[38;2;255;140;0m',
-      pink: '\x1b[38;2;255;105;180m',
+      pink: '\x1b[38;2;255;122;89m',
       magenta: '\x1b[38;2;220;20;60m',
-      violet: '\x1b[38;2;186;85;211m',
+      violet: '\x1b[38;2;192;38;211m',
       cyan: '\x1b[38;2;0;206;209m',
       lime: '\x1b[38;2;255;215;0m',
       orange: '\x1b[38;2;255;140;0m',
@@ -340,25 +370,26 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'deep-sea',
-    name: 'Deep Sea',
+    name: 'Lagoon',
     description: 'Bioluminescent coral — aqua, sea green, salmon glow on midnight blue',
     colors: {
-      act: '\x1b[38;2;0;255;255m',
+      act: '\x1b[38;2;45;212;191m',
       plan: '\x1b[38;2;64;224;208m',
       success: '\x1b[38;2;46;139;87m',
       error: '\x1b[38;2;255;127;80m',
       warning: '\x1b[38;2;255;160;122m',
       gray: '\x1b[38;2;140;170;200m',
       grayDark: '\x1b[38;2;80;110;140m',
-      fg: '\x1b[38;2;240;255;255m',
+      fg: '\x1b[38;2;232;255;248m',
+      bg: '\x1b[48;2;1;26;26m',
       bgUser: '\x1b[48;2;0;15;40m',
       rule: '\x1b[38;2;0;206;209m',
       pink: '\x1b[38;2;255;182;193m',
       magenta: '\x1b[38;2;186;85;211m',
-      violet: '\x1b[38;2;138;43;226m',
-      cyan: '\x1b[38;2;0;255;255m',
+      violet: '\x1b[38;2;129;140;248m',
+      cyan: '\x1b[38;2;94;234;212m',
       lime: '\x1b[38;2;127;255;212m',
-      orange: '\x1b[38;2;255;160;122m',
+      orange: '\x1b[38;2;252;165;165m',
       teal: '\x1b[38;2;32;178;170m',
     },
     roleColors: {
@@ -376,7 +407,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'autumn-leaves',
-    name: 'Autumn Leaves',
+    name: 'Harvest',
     description: 'Falling maple — burnt sienna, goldenrod, olive, plum, warm cream',
     colors: {
       act: '\x1b[38;2;218;165;32m',
@@ -387,6 +418,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;160;140;110m',
       grayDark: '\x1b[38;2;100;85;65m',
       fg: '\x1b[38;2;255;245;220m',
+      bg: '\x1b[48;2;20;14;2m',
       bgUser: '\x1b[48;2;45;25;15m',
       rule: '\x1b[38;2;160;82;45m',
       pink: '\x1b[38;2;219;112;147m',
@@ -412,7 +444,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'retro-arcade',
-    name: 'Retro Arcade',
+    name: 'CRT',
     description: 'Pacman fever — true black with primary yellow, red, cyan, lime',
     colors: {
       act: '\x1b[38;2;255;255;0m',
@@ -423,6 +455,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;160;160;160m',
       grayDark: '\x1b[38;2;90;90;90m',
       fg: '\x1b[38;2;255;255;255m',
+      bg: '\x1b[48;2;0;0;0m',
       bgUser: '\x1b[48;2;0;0;0m',
       rule: '\x1b[38;2;0;0;255m',
       pink: '\x1b[38;2;255;105;180m',
@@ -448,7 +481,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'cotton-candy',
-    name: 'Cotton Candy',
+    name: 'Sorbet',
     description: 'Pastel dreams — sky blue, blush pink, mint, lavender on warm cream',
     colors: {
       act: '\x1b[38;2;135;206;235m',
@@ -459,6 +492,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;190;180;200m',
       grayDark: '\x1b[38;2;150;140;160m',
       fg: '\x1b[38;2;60;50;70m',
+      bg: '\x1b[48;2;243;234;242m',
       bgUser: '\x1b[48;2;240;220;240m',
       rule: '\x1b[38;2;216;191;216m',
       pink: '\x1b[38;2;255;192;203m',
@@ -488,7 +522,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'hacker-terminal',
-    name: 'Hacker Terminal',
+    name: 'Phosphor',
     description: 'Phosphor screen — varied shades of green on black, amber warnings',
     colors: {
       act: '\x1b[38;2;0;255;0m',
@@ -499,11 +533,12 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;0;180;0m',
       grayDark: '\x1b[38;2;0;100;0m',
       fg: '\x1b[38;2;144;238;144m',
+      bg: '\x1b[48;2;0;0;0m',
       bgUser: '\x1b[48;2;0;20;0m',
       rule: '\x1b[38;2;0;180;0m',
-      pink: '\x1b[38;2;255;105;180m',
+      pink: '\x1b[38;2;255;176;0m',
       magenta: '\x1b[38;2;255;20;147m',
-      violet: '\x1b[38;2;148;0;211m',
+      violet: '\x1b[38;2;50;205;50m',
       cyan: '\x1b[38;2;127;255;212m',
       lime: '\x1b[38;2;127;255;0m',
       orange: '\x1b[38;2;255;140;0m',
@@ -526,17 +561,18 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'midnight-jazz',
-    name: 'Midnight Jazz',
+    name: 'Noir',
     description: 'Smooth indigo lounge — gold, silver, plum on midnight blue, warm cream',
     colors: {
-      act: '\x1b[38;2;218;165;32m',
+      act: '\x1b[38;2;108;142;191m',
       plan: '\x1b[38;2;192;192;192m',
       success: '\x1b[38;2;102;205;170m',
       error: '\x1b[38;2;220;20;60m',
       warning: '\x1b[38;2;255;165;0m',
       gray: '\x1b[38;2;160;150;190m',
-      grayDark: '\x1b[38;2;100;90;120m',
+      grayDark: '\x1b[38;2;74;68;88m',
       fg: '\x1b[38;2;245;240;225m',
+      bg: '\x1b[48;2;10;14;26m',
       bgUser: '\x1b[48;2;25;25;75m',
       rule: '\x1b[38;2;72;61;139m',
       pink: '\x1b[38;2;219;112;147m',
@@ -544,7 +580,7 @@ export const THEMES: MochiTheme[] = [
       violet: '\x1b[38;2;147;112;219m',
       cyan: '\x1b[38;2;72;209;204m',
       lime: '\x1b[38;2;152;251;152m',
-      orange: '\x1b[38;2;255;140;0m',
+      orange: '\x1b[38;2;217;119;6m',
       teal: '\x1b[38;2;0;139;139m',
     },
     roleColors: {
@@ -562,7 +598,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'desert-sand',
-    name: 'Desert Sand',
+    name: 'Dune',
     description: 'Sun-bleached earth — terracotta, sage, twilight blue, sandy beige',
     colors: {
       act: '\x1b[38;2;70;130;180m',
@@ -572,7 +608,8 @@ export const THEMES: MochiTheme[] = [
       warning: '\x1b[38;2;210;105;30m',
       gray: '\x1b[38;2;180;165;140m',
       grayDark: '\x1b[38;2;120;105;85m',
-      fg: '\x1b[38;2;255;245;220m',
+      fg: '\x1b[38;2;247;236;212m',
+      bg: '\x1b[48;2;20;16;10m',
       bgUser: '\x1b[48;2;80;55;40m',
       rule: '\x1b[38;2;188;143;143m',
       pink: '\x1b[38;2;255;182;193m',
@@ -598,25 +635,26 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'arctic-aurora',
-    name: 'Arctic Aurora',
+    name: 'Glacier',
     description: 'Ice-blue dawn — vivid aurora greens, royal purples, cyan, gold',
     colors: {
-      act: '\x1b[38;2;0;255;255m',
+      act: '\x1b[38;2;125;211;252m',
       plan: '\x1b[38;2;138;43;226m',
       success: '\x1b[38;2;0;250;154m',
       error: '\x1b[38;2;220;20;60m',
       warning: '\x1b[38;2;255;215;0m',
       gray: '\x1b[38;2;176;196;222m',
       grayDark: '\x1b[38;2;112;128;144m',
-      fg: '\x1b[38;2;240;255;255m',
+      fg: '\x1b[38;2;234;246;255m',
+      bg: '\x1b[48;2;6;13;20m',
       bgUser: '\x1b[48;2;10;20;40m',
       rule: '\x1b[38;2;70;130;180m',
       pink: '\x1b[38;2;255;192;203m',
       magenta: '\x1b[38;2;186;85;211m',
-      violet: '\x1b[38;2;148;0;211m',
-      cyan: '\x1b[38;2;0;255;255m',
+      violet: '\x1b[38;2;147;51;234m',
+      cyan: '\x1b[38;2;186;230;253m',
       lime: '\x1b[38;2;127;255;0m',
-      orange: '\x1b[38;2;255;140;0m',
+      orange: '\x1b[38;2;253;186;116m',
       teal: '\x1b[38;2;32;178;170m',
     },
     roleColors: {
@@ -634,7 +672,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'ruby-rose',
-    name: 'Ruby Rose',
+    name: 'Claret',
     description: 'Velvet burgundy — crimson, blush pink, gold, ivory on wine',
     colors: {
       act: '\x1b[38;2;255;182;193m',
@@ -645,13 +683,14 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;200;160;170m',
       grayDark: '\x1b[38;2;128;0;0m',
       fg: '\x1b[38;2;255;240;245m',
+      bg: '\x1b[48;2;22;4;9m',
       bgUser: '\x1b[48;2;50;10;20m',
       rule: '\x1b[38;2;139;0;0m',
       pink: '\x1b[38;2;255;105;180m',
       magenta: '\x1b[38;2;220;20;60m',
       violet: '\x1b[38;2;199;21;133m',
       cyan: '\x1b[38;2;175;238;238m',
-      lime: '\x1b[38;2;144;238;144m',
+      lime: '\x1b[38;2;217;249;157m',
       orange: '\x1b[38;2;255;165;0m',
       teal: '\x1b[38;2;0;128;128m',
     },
@@ -671,7 +710,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'neon-city',
-    name: 'Neon City',
+    name: 'Afterhours',
     description: 'Cyberpunk rain-slick street — electric blue, toxic lime, blood red, hot pink',
     colors: {
       act: '\x1b[38;2;0;191;255m',
@@ -681,12 +720,13 @@ export const THEMES: MochiTheme[] = [
       warning: '\x1b[38;2;255;140;0m',
       gray: '\x1b[38;2;160;160;175m',
       grayDark: '\x1b[38;2;90;90;100m',
-      fg: '\x1b[38;2;255;255;255m',
+      fg: '\x1b[38;2;242;245;255m',
+      bg: '\x1b[48;2;5;5;16m',
       bgUser: '\x1b[48;2;30;30;30m',
       rule: '\x1b[38;2;128;128;128m',
       pink: '\x1b[38;2;255;20;147m',
       magenta: '\x1b[38;2;255;0;255m',
-      violet: '\x1b[38;2;138;43;226m',
+      violet: '\x1b[38;2;168;85;247m',
       cyan: '\x1b[38;2;0;255;255m',
       lime: '\x1b[38;2;50;205;50m',
       orange: '\x1b[38;2;255;69;0m',
@@ -707,7 +747,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'pastel-goth',
-    name: 'Pastel Goth',
+    name: 'Moth',
     description: 'Charcoal with pastel pink, mint, lavender, sky — sweet meets dark',
     colors: {
       act: '\x1b[38;2;221;160;221m',
@@ -718,14 +758,15 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;180;175;190m',
       grayDark: '\x1b[38;2;120;115;135m',
       fg: '\x1b[38;2;240;248;255m',
+      bg: '\x1b[48;2;16;16;20m',
       bgUser: '\x1b[48;2;40;40;45m',
       rule: '\x1b[38;2;119;136;153m',
       pink: '\x1b[38;2;255;182;193m',
       magenta: '\x1b[38;2;238;130;238m',
       violet: '\x1b[38;2;216;191;216m',
       cyan: '\x1b[38;2;224;255;255m',
-      lime: '\x1b[38;2;144;238;144m',
-      orange: '\x1b[38;2;255;160;122m',
+      lime: '\x1b[38;2;134;239;172m',
+      orange: '\x1b[38;2;252;211;77m',
       teal: '\x1b[38;2;32;178;170m',
     },
     roleColors: {
@@ -743,10 +784,10 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'obsidian-gold',
-    name: 'Obsidian Gold',
+    name: 'Gilt',
     description: 'Black mirror with gold accents — precious metals on volcanic glass',
     colors: {
-      act: '\x1b[38;2;218;165;32m',
+      act: '\x1b[38;2;212;175;55m',
       plan: '\x1b[38;2;192;192;192m',
       success: '\x1b[38;2;184;134;11m',
       error: '\x1b[38;2;178;34;34m',
@@ -754,11 +795,12 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;160;150;130m',
       grayDark: '\x1b[38;2;80;75;65m',
       fg: '\x1b[38;2;245;235;210m',
+      bg: '\x1b[48;2;12;10;6m',
       bgUser: '\x1b[48;2;25;20;15m',
       rule: '\x1b[38;2;139;119;85m',
-      pink: '\x1b[38;2;255;105;180m',
+      pink: '\x1b[38;2;244;194;194m',
       magenta: '\x1b[38;2;218;112;214m',
-      violet: '\x1b[38;2;186;85;211m',
+      violet: '\x1b[38;2;175;143;224m',
       cyan: '\x1b[38;2;72;209;204m',
       lime: '\x1b[38;2;154;205;50m',
       orange: '\x1b[38;2;255;140;0m',
@@ -791,6 +833,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;98;114;164m',
       grayDark: '\x1b[38;2;68;71;90m',
       fg: '\x1b[38;2;248;248;242m',
+      bg: '\x1b[48;2;40;42;54m',
       bgUser: '\x1b[48;2;40;42;54m',
       rule: '\x1b[38;2;98;114;164m',
       pink: '\x1b[38;2;255;121;198m',
@@ -838,6 +881,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;86;95;137m',
       grayDark: '\x1b[38;2;59;66;97m',
       fg: '\x1b[38;2;192;202;245m',
+      bg: '\x1b[48;2;26;27;38m',
       bgUser: '\x1b[48;2;26;27;38m',
       rule: '\x1b[38;2;86;95;137m',
       pink: '\x1b[38;2;173;142;230m',
@@ -887,6 +931,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;108;112;134m',
       grayDark: '\x1b[38;2;69;71;90m',
       fg: '\x1b[38;2;205;214;244m',
+      bg: '\x1b[48;2;30;30;46m',
       bgUser: '\x1b[48;2;30;30;46m',
       rule: '\x1b[38;2;108;112;134m',
       pink: '\x1b[38;2;245;194;231m',
@@ -934,6 +979,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;146;131;116m',
       grayDark: '\x1b[38;2;80;73;69m',
       fg: '\x1b[38;2;235;219;178m',
+      bg: '\x1b[48;2;40;40;40m',
       bgUser: '\x1b[48;2;40;40;40m',
       rule: '\x1b[38;2;146;131;116m',
       pink: '\x1b[38;2;251;73;52m',
@@ -981,6 +1027,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;92;99;112m',
       grayDark: '\x1b[38;2;60;63;72m',
       fg: '\x1b[38;2;171;178;191m',
+      bg: '\x1b[48;2;40;44;52m',
       bgUser: '\x1b[48;2;40;44;52m',
       rule: '\x1b[38;2;92;99;112m',
       pink: '\x1b[38;2;198;120;221m',
@@ -1018,10 +1065,10 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'royal-orchid',
-    name: 'Royal Orchid',
+    name: 'Orchid',
     description: 'Signature mochi look — rich royal purple with crisp white text and lavender chrome',
     colors: {
-      act: '\x1b[38;2;167;139;250m',
+      act: '\x1b[38;2;192;132;252m',
       plan: '\x1b[38;2;216;180;254m',
       success: '\x1b[38;2;134;239;172m',
       error: '\x1b[38;2;252;165;165m',
@@ -1029,6 +1076,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;148;140;172m',
       grayDark: '\x1b[38;2;104;96;136m',
       fg: '\x1b[38;2;245;243;255m',
+      bg: '\x1b[48;2;18;8;38m',
       bgUser: '\x1b[48;2;38;24;66m',
       rule: '\x1b[38;2;139;92;246m',
       pink: '\x1b[38;2;232;121;249m',
@@ -1079,6 +1127,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;161;153;185m',
       grayDark: '\x1b[38;2;112;104;144m',
       fg: '\x1b[38;2;248;248;255m',
+      bg: '\x1b[48;2;0;0;0m',
       bgUser: '\x1b[48;2;14;7;26m',
       rule: '\x1b[38;2;139;92;246m',
       pink: '\x1b[38;2;232;121;249m',
@@ -1119,7 +1168,7 @@ export const THEMES: MochiTheme[] = [
   },
   {
     id: 'paper-light',
-    name: 'Paper Light',
+    name: 'Paper',
     description: 'Ink on paper — dark indigo text on warm paper for light terminals and bright rooms',
     colors: {
       act: '\x1b[38;2;0;120;150m',
@@ -1130,6 +1179,7 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;110;105;120m',
       grayDark: '\x1b[38;2;150;145;160m',
       fg: '\x1b[38;2;43;38;58m',
+      bg: '\x1b[48;2;238;233;222m',
       bgUser: '\x1b[48;2;238;233;222m',
       rule: '\x1b[38;2;190;180;195m',
       pink: '\x1b[38;2;210;80;140m',

@@ -1,12 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch, honorsNoColor, prefersReducedMotion, stripThemeColors, adaptThemeColors, themeContrastRatio, parseThemeRgb, loadSavedTheme, themeIsDark, canvasBg } from './themes.js';
+import { THEMES, getTheme, getAllThemes, applyTheme, getCurrentTheme, themeSwatch, honorsNoColor, prefersReducedMotion, stripThemeColors, adaptThemeColors, themeContrastRatio, parseThemeRgb, loadSavedTheme, themeIsDark, canvasBg, tabActiveBg } from './themes.js';
 import { setTheme, T } from './view.js';
 
 describe('mochi themes', () => {
-  it('defines 22 unique themes', () => {
+  it('defines 23 unique themes', () => {
     expect(THEMES.length).toBe(23);
     const ids = new Set(THEMES.map((t) => t.id));
     expect(ids.size).toBe(23);
+  });
+
+  it('keeps stable ids (persistence keys) while names stay tasteful', () => {
+    // ids are load-bearing (theme.json, MOCHI_THEME); display names are free.
+    expect(new Set(THEMES.map((t) => t.id)).size).toBe(23);
+    const names = THEMES.map((t) => t.name);
+    expect(new Set(names).size).toBe(23);
+    for (const n of names) expect(n.trim().length).toBeGreaterThan(0);
   });
 
   it('every theme has all required color tokens and description', () => {
@@ -34,6 +42,7 @@ describe('mochi themes', () => {
       expect(c.lime).toContain('\x1b[');
       expect(c.orange).toContain('\x1b[');
       expect(c.teal).toContain('\x1b[');
+      expect(c.bg).toContain('\x1b[');
     }
   });
 
@@ -45,13 +54,15 @@ describe('mochi themes', () => {
   });
 
   it('can look up themes by id or name', () => {
-    expect(getTheme('cyber-void')?.name).toBe('Cyber Void');
-    expect(getTheme('Vaporwave')?.id).toBe('vaporwave');
-    expect(getTheme('solar-flare')?.name).toBe('Solar Flare');
-    expect(getTheme('deep-sea')?.name).toBe('Deep Sea');
-    expect(getTheme('retro-arcade')?.name).toBe('Retro Arcade');
-    expect(getTheme('hacker-terminal')?.name).toBe('Hacker Terminal');
-    expect(getTheme('midnight-jazz')?.name).toBe('Midnight Jazz');
+    expect(getTheme('cyber-void')?.name).toBe('Abyss');
+    expect(getTheme('Mirage')?.id).toBe('vaporwave');
+    expect(getTheme('solar-flare')?.name).toBe('Ember');
+    expect(getTheme('deep-sea')?.name).toBe('Lagoon');
+    expect(getTheme('retro-arcade')?.name).toBe('CRT');
+    expect(getTheme('hacker-terminal')?.name).toBe('Phosphor');
+    expect(getTheme('midnight-jazz')?.name).toBe('Noir');
+    expect(getTheme('mochi-purple')?.name).toBe('Mochi Purple');
+    expect(getTheme('paper-light')?.name).toBe('Paper');
   });
 
   it('dynamically switches theme and updates T palette in place', () => {
@@ -228,8 +239,62 @@ describe('theme persistence', () => {
   });
 });
 
-describe('mochi-purple default', () => {
-  it('exists, is dark, and passes AA on near-black', () => {
+describe('theme distinctness (entire-look contract)', () => {
+  it('every signature accent is unique — no two themes share an act color', () => {
+    const seen = new Map<string, string>();
+    for (const t of THEMES) {
+      expect(seen.has(t.colors.act), `act ${t.colors.act} shared by ${seen.get(t.colors.act)} and ${t.id}`).toBe(false);
+      seen.set(t.colors.act, t.id);
+    }
+    expect(seen.size).toBe(23);
+  });
+
+  it('every body-text color is unique', () => {
+    const seen = new Map<string, string>();
+    for (const t of THEMES) {
+      expect(seen.has(t.colors.fg), `fg shared by ${seen.get(t.colors.fg)} and ${t.id}`).toBe(false);
+      seen.set(t.colors.fg, t.id);
+    }
+    expect(seen.size).toBe(23);
+  });
+
+  it('every theme owns a canvas bg; dark set is everything but the two lights', () => {
+    const lights = new Set(['paper-light', 'cotton-candy']);
+    for (const t of THEMES) {
+      expect(t.colors.bg, `${t.id} missing canvas bg`).toContain('\x1b[');
+      expect(themeIsDark(t), `${t.id} dark classification`).toBe(!lights.has(t.id));
+    }
+  });
+
+  it('tabActiveBg derives a dimmed act pill per theme (empty when unparseable)', async () => {
+    // applyTheme (not setTheme) moves the getCurrentTheme cache that
+    // tabActiveBg reads — and it writes real files, so sandbox HOME+cwd
+    // exactly like the persistence tests above.
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const prevHome = process.env.HOME;
+    const prevCwd = process.cwd();
+    const prevTheme = getCurrentTheme().id;
+    const fakeHome = mkdtempSync(resolve(tmpdir(), 'mochi-home-'));
+    try {
+      process.env.HOME = fakeHome;
+      process.chdir(fakeHome);
+      applyTheme('mochi-purple');
+      expect(tabActiveBg()).toBe('\x1b[48;2;27;22;40m'); // 16% of act 167,139,250
+      applyTheme('dracula');
+      expect(tabActiveBg()).toBe('\x1b[48;2;13;40;20m'); // 16% of act 80,250,123
+    } finally {
+      applyTheme(prevTheme);
+      process.chdir(prevCwd);
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('mochi-purple default', () => {  it('exists, is dark, and passes AA on near-black', () => {
     const t = getTheme('mochi-purple');
     expect(t).toBeTruthy();
     expect(themeIsDark(t!)).toBe(true);
@@ -248,15 +313,16 @@ describe('canvasBg (capability-aware black canvas)', () => {
     delete process.env.MOCHI_THEME;
     process.env.TERM = 'xterm-256color';
     process.env.COLORTERM = 'truecolor';
+    applyTheme('mochi-purple');
   };
-  it('emits 24-bit dark gray (26,26,26) on truecolor dark themes', () => {
+  it('emits the theme canvas on truecolor dark themes (true black by mandate)', () => {
     reset();
-    expect(canvasBg()).toBe('\x1b[48;2;26;26;26m');
+    expect(canvasBg()).toBe('\x1b[48;2;0;0;0m');
   });
-  it('emits palette dark gray (234) on 256-color terms — never 24-bit codes', () => {
+  it('emits nearest palette index on 256-color terms — never 24-bit codes', () => {
     reset();
     delete process.env.COLORTERM;
-    expect(canvasBg()).toBe('\x1b[48;5;234m');
+    expect(canvasBg()).toBe('\x1b[48;5;16m');
   });
   it('stays transparent for NO_COLOR and dumb terms', () => {
     reset();
