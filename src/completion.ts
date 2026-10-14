@@ -67,6 +67,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
     subcommands: [
       { name: 'status', description: 'Show key sources (env/file/missing), --probe live-verifies' },
       { name: 'logout', description: 'Clear the stored key for a provider' },
+      { name: 'reset', description: 'Clear the stored key for a provider (explicit reset)' },
     ],
   },
   { name: 'models', description: 'List models (--refresh live-diffs the endpoint against the table)' },

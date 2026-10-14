@@ -96,7 +96,7 @@ const COMMANDS = [
   { name: '/copy', hint: 'Copy last assistant message to clipboard (works without mouse)' },
   { name: '/model', hint: 'Select AI model provider & model' },
   { name: '/reasoning', hint: 'Adjust reasoning effort & compute (low, medium, high, max)' },
-  { name: '/theme', hint: 'Select color theme (22 styles)' },
+  { name: '/theme', hint: 'Select color theme (23 styles)' },
   { name: '/skills', hint: 'Browse, search & activate specialized engineering skills' },
   { name: '/mcp', hint: 'Search, add & manage MCP servers (1-command install)' },
   { name: '/mode', hint: 'Set execution mode (normal, spec, security, chaos)' },
@@ -3670,7 +3670,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         if (state.dropActive) {
           const items = currentDropItems();
           const pick = items[Math.min(state.dropSelected, items.length - 1)];
-          const takesArg = pick && ['/goal', '/plan', '/team', '/model', '/reasoning', '/theme', '/inspect', '/run', '/shell', '/login', '/import', '/rename', '/compact', '/review', '/security-review', '/self-train', '/image'].includes(pick.name);
+          const takesArg = pick && ['/goal', '/plan', '/team', '/model', '/reasoning', '/theme', '/providers', '/inspect', '/run', '/shell', '/login', '/import', '/rename', '/compact', '/review', '/security-review', '/self-train', '/image'].includes(pick.name);
           // Only hijack Enter when the composer holds the BARE command name
           // (no arguments typed yet) — then expand to "/cmd " for the user to
           // type args. Once arguments exist, Enter must SEND the command

@@ -1608,7 +1608,7 @@ async function main() {
     }
     const p = providerById(provider);
     if (!p) { console.error('Unknown provider: ' + provider); return; }
-    const key = process.env[p.envKey] || positional.find((x) => x.startsWith('env:'))?.slice(4);
+    const key = process.env[p.envKey] || positional.find((x) => x.startsWith('env:'))?.slice(4) || (typeof flags.key === 'string' && flags.key ? flags.key : undefined);
     if (!key && p.envKey) {
       console.log(`Set ${p.envKey} or run 'mochi tui' and use /login to input an API key interactively.`);
       return;
