@@ -34,6 +34,29 @@ function tmpFile(name: string, body: string): string {
   return p;
 }
 
+/** Executable fixture that spawnSync can actually launch on every OS: a
+ *  shebang script on posix, a .cmd batch file on Windows (CreateProcess
+ *  cannot execute extensionless scripts — the bare-sh fixture ENOENTs and
+ *  the test reads 127 instead of the scripted exit code). */
+function tmpExec(exitCode: number, marker?: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'mochi-dispatch-'));
+  tmpDirs.push(dir);
+  if (process.platform === 'win32') {
+    const p = join(dir, 'mochi-standalone.cmd');
+    const lines = ['@echo off'];
+    if (marker) lines.push(`:loop`, `if "%~1"=="" goto done`, `echo %~1>> "${marker}"`, `shift`, `goto loop`, `:done`);
+    lines.push(`exit ${exitCode}`);
+    writeFileSync(p, lines.join('\r\n') + '\r\n');
+    return p;
+  }
+  const p = join(dir, 'mochi-standalone');
+  writeFileSync(p, marker
+    ? `#!/bin/sh\nprintf '%s\\n' "$@" > "${marker}"\nexit ${exitCode}\n`
+    : `#!/bin/sh\nexit ${exitCode}\n`);
+  chmodSync(p, 0o755);
+  return p;
+}
+
 afterEach(() => {
   for (const k of PINNED) {
     const v = saved.get(k);
@@ -87,8 +110,7 @@ describe('handleEngineArg', () => {
   });
 
   it('runs the pinned standalone binary and returns its exit code', () => {
-    const bin = tmpFile('mochi-standalone', '#!/bin/sh\nexit 7\n');
-    chmodSync(bin, 0o755);
+    const bin = tmpExec(7);
     pin('MOCHI_STANDALONE', bin);
     const r = handleEngineArg('standalone', ['--version']);
     expect(r.continue).toBe(false);
@@ -104,12 +126,12 @@ describe('handleEngineArg', () => {
 
   it('propagates arguments verbatim to the spawned engine', () => {
     const marker = join(tmpdir(), `mochi-dispatch-marker-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    const bin = tmpFile('mochi-standalone', `#!/bin/sh\nprintf '%s\\n' "$@" > "${marker}"\nexit 0\n`);
-    chmodSync(bin, 0o755);
+    const bin = tmpExec(0, marker);
     pin('MOCHI_STANDALONE', bin);
     const r = handleEngineArg('standalone', ['--quiet', 'a prompt with spaces']);
     expect(r.exitCode).toBe(0);
-    expect(readFileSync(marker, 'utf8')).toBe('--quiet\na prompt with spaces\n');
+    const logged = readFileSync(marker, 'utf8').replace(/\r\n/g, '\n');
+    expect(logged).toBe('--quiet\na prompt with spaces\n');
     try { rmSync(marker, { force: true }); } catch { /* best-effort */ }
   });
 });
