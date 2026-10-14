@@ -323,12 +323,12 @@ describe('canvasBg (capability-aware black canvas)', () => {
   };
   it('emits the theme canvas on truecolor dark themes (soft obsidian black for mochi-purple)', () => {
     reset();
-    expect(canvasBg()).toBe('\x1b[48;2;10;10;10m');
+    expect(canvasBg()).toBe('\x1b[48;2;26;26;26m');
   });
   it('emits nearest palette index on 256-color terms — never 24-bit codes', () => {
     reset();
     delete process.env.COLORTERM;
-    expect(canvasBg()).toBe('\x1b[48;5;232m');
+    expect(canvasBg()).toBe('\x1b[48;5;234m');
   });
   it('stays transparent for NO_COLOR and dumb terms', () => {
     reset();

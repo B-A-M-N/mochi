@@ -184,7 +184,7 @@ export function canvasBg(): string {
   const t = getCurrentTheme();
   if (!themeIsDark(t)) return '';
   const bg = parseThemeRgb(t.colors.bg, 48) ?? parseThemeRgb(t.colors.bg, 38);
-  if (!bg) return supportsTruecolor() ? '\x1b[48;2;10;10;10m' : '\x1b[48;5;232m';
+  if (!bg) return supportsTruecolor() ? '\x1b[48;2;26;26;26m' : '\x1b[48;5;235m';
   return supportsTruecolor()
     ? `\x1b[48;2;${bg[0]};${bg[1]};${bg[2]}m`
     : `\x1b[48;5;${rgbTo256(bg[0], bg[1], bg[2])}m`;
@@ -273,8 +273,8 @@ export const THEMES: MochiTheme[] = [
       gray: '\x1b[38;2;161;153;185m',
       grayDark: '\x1b[38;2;112;104;144m',
       fg: '\x1b[38;2;248;248;255m',
-      bg: '\x1b[48;2;10;10;10m',
-      bgUser: '\x1b[48;2;14;7;26m',
+      bg: '\x1b[48;2;26;26;26m',
+      bgUser: '\x1b[48;2;22;14;38m',
       rule: '\x1b[38;2;139;92;246m',
       pink: '\x1b[38;2;232;121;249m',
       magenta: '\x1b[38;2;217;70;239m',
