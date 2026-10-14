@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { definitionsInSource, findTsDefinitions, referencesInSource, findTsReferences } from './symbol-defs.js';
+import { definitionsInSource, findTsDefinitions, referencesInSource, findTsReferences, identifierSpansInSource, renameSymbolInSource } from './symbol-defs.js';
 
 const SRC = `
 export function alpha(a: number): string { return String(a); }
@@ -171,5 +171,49 @@ describe('findTsReferences (walker)', () => {
 
   it('returns [] for a missing scope', () => {
     expect(findTsReferences('/nonexistent-abc', '/nonexistent-abc', 'x')).toEqual([]);
+  });
+});
+
+describe('identifierSpansInSource + renameSymbolInSource (safe rename)', () => {
+  const SRC = [
+    'import { alpha } from "./a.js";',   // 1
+    'export function alpha() {',          // 2
+    '  return "alpha in a string";',      // 3 — string, must NOT be renamed
+    '}',                                  // 4
+    '// alpha in a comment',              // 5 — comment, must NOT be renamed
+    'const call = alpha();',              // 6 — call, real identifier
+  ].join('\n');
+
+  it('spans only real identifiers, sorted right-to-left for safe splicing', () => {
+    const spans = identifierSpansInSource('a.ts', SRC, 'alpha');
+    // lines 1,2,6 have real identifiers; 3 (string) and 5 (comment) don't.
+    expect(spans).toHaveLength(3);
+    // right-to-left: descending start offsets
+    const starts = spans.map((s) => s.start);
+    expect([...starts].sort((a, b) => b - a)).toEqual(starts);
+  });
+
+  it('renames identifiers without touching comments or strings', () => {
+    const res = renameSymbolInSource('a.ts', SRC, 'alpha', 'beta');
+    expect(res).not.toBeNull();
+    expect(res!.count).toBe(3);
+    expect(res!.content).toContain('import { beta }');
+    expect(res!.content).toContain('export function beta()');
+    expect(res!.content).toContain('const call = beta();');
+    // the string literal and the comment keep the old word verbatim
+    expect(res!.content).toContain('"alpha in a string"');
+    expect(res!.content).toContain('// alpha in a comment');
+  });
+
+  it('reports count 0 and unchanged content when the symbol is absent', () => {
+    const res = renameSymbolInSource('a.ts', SRC, 'zzz', 'yyy');
+    expect(res).toEqual({ content: SRC, count: 0 });
+  });
+
+  it('handles multi-byte and overlapping-safe offsets (unicode symbol)', () => {
+    const src = 'const café = 1;\nconst x = café + café;\n';
+    const res = renameSymbolInSource('a.ts', src, 'café', 'coffee');
+    expect(res!.count).toBe(3);
+    expect(res!.content).toBe('const coffee = 1;\nconst x = coffee + coffee;\n');
   });
 });

@@ -306,3 +306,71 @@ export function findTsReferences(root: string, scopeAbs: string, symbol: string)
   }
   return out;
 }
+
+// ─── Exact identifier spans (for safe rename) ───────────────────────────────
+// Rename needs byte offsets, not line:col. These are the start/end offsets of
+// every REAL Identifier node named `symbol` — comments and string literals are
+// trivia, so they never appear. A rename built from these spans can rewrite a
+// symbol without ever touching `// oldName` or `"oldName"`.
+
+export interface IdentifierSpan {
+  start: number;
+  end: number;
+}
+
+/** Exact spans of real Identifier nodes named `symbol` in one parsed source.
+ *  Returns [] when the compiler is absent or the file can't be parsed. */
+export function identifierSpansInSource(relPath: string, content: string, symbol: string): IdentifierSpan[] {
+  const ts = getTsCompiler();
+  if (!ts) return [];
+  const ext = extname(relPath).toLowerCase();
+  const scriptKind = ext === '.tsx' || ext === '.jsx'
+    ? ts.ScriptKind.TSX
+    : ext === '.js' || ext === '.mjs' || ext === '.cjs'
+      ? ts.ScriptKind.JS
+      : ext === '.ts' || ext === '.mts' || ext === '.cts'
+        ? ts.ScriptKind.TS
+        : ts.ScriptKind.TS;
+  let source: import('typescript').SourceFile;
+  try {
+    source = ts.createSourceFile(relPath, content, ts.ScriptTarget.Latest, true, scriptKind);
+  } catch {
+    return [];
+  }
+
+  const spans: IdentifierSpan[] = [];
+  const visit = (node: import('typescript').Node): void => {
+    if (ts.isIdentifier(node) && node.text === symbol) {
+      try {
+        spans.push({ start: node.getStart(source), end: node.getEnd() });
+      } catch { /* skip unpositionable node */ }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
+  // Apply edits right-to-left so earlier offsets stay valid.
+  spans.sort((a, b) => b.start - a.start);
+  return spans;
+}
+
+/** Rename every real Identifier named `oldName` to `newName` in one source,
+ *  by exact span (never touching comments/strings). Returns the new content
+ *  and how many identifiers were renamed. Returns null when the compiler is
+ *  unavailable (caller falls back to word-boundary regex) or the file can't
+ *  be parsed — never a silent partial write. */
+export function renameSymbolInSource(
+  relPath: string,
+  content: string,
+  oldName: string,
+  newName: string,
+): { content: string; count: number } | null {
+  const ts = getTsCompiler();
+  if (!ts) return null;
+  const spans = identifierSpansInSource(relPath, content, oldName);
+  if (spans.length === 0) return { content, count: 0 };
+  let out = content;
+  for (const s of spans) { // already sorted right-to-left
+    out = out.slice(0, s.start) + newName + out.slice(s.end);
+  }
+  return { content: out, count: spans.length };
+}
