@@ -1,5 +1,6 @@
 // Ambient OAuth ingestion: codex/gemini/claude/gcloud token caches.
 import { describe, it, expect } from 'vitest';
+import { resolve } from 'node:path';
 import {
   codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken,
   type AmbientDeps,
@@ -7,10 +8,10 @@ import {
 
 const FAKE_HOME = '/home/test';
 
-function memFs(files: Record<string, string>): { deps: AmbientDeps; reads: string[] } {
+function memFs(files: Record<string, string>): { deps: AmbientDeps; reads: string[]; abs: Record<string, string> } {
   const reads: string[] = [];
   const abs: Record<string, string> = {};
-  for (const [k, v] of Object.entries(files)) abs[`${FAKE_HOME}/${k}`] = v;
+  for (const [k, v] of Object.entries(files)) abs[resolve(FAKE_HOME, k)] = v;
   const deps: AmbientDeps = {
     existsSync: (p) => p in abs,
     readFileSync: (p) => { reads.push(p); return abs[p] ?? ''; },
@@ -47,7 +48,7 @@ describe('ambient-auth', () => {
     const t = await codexAmbientToken(merged);
     expect(t?.token).toBe('fresh');
     expect(writes.length).toBe(1);
-    expect(JSON.parse(abs['/home/test/.codex/auth.json']).tokens.access_token).toBe('fresh');
+    expect(JSON.parse(abs[resolve(FAKE_HOME, '.codex/auth.json')]).tokens.access_token).toBe('fresh');
   });
 
   it('codex: no token when refresh fails', async () => {
