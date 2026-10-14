@@ -2035,11 +2035,48 @@ async function main() {
     return;
   }
   if (first === 'init') {
-    const { existsSync, writeFileSync } = await import('node:fs');
-    const p = resolve(cwd, 'MOCHI.md');
-    if (existsSync(p)) { console.log('MOCHI.md already exists.'); return; }
-    writeFileSync(p, '# MOCHI.md\n\nProject instructions for the Mochi coding agent.\n');
-    console.log('Created MOCHI.md');
+    const { existsSync, writeFileSync, mkdirSync } = await import('node:fs');
+    const templateRaw = positional[1] ?? 'basic';
+    const template = templateRaw.toLowerCase();
+    const initMd = resolve(cwd, 'MOCHI.md');
+    if (!existsSync(initMd)) {
+      writeFileSync(initMd, '# MOCHI.md\n\nProject instructions for the Mochi coding agent.\n');
+    }
+    if (template === 'basic' || template === 'bare') {
+      console.log('Initialized MOCHI.md. Pass a template: `mochi init node|python|ts<|constrain|>rust` for a working scaffold.');
+      return;
+    }
+    const scaffolds: Record<string, { files: Record<string, string>; next: string }> = {
+      node: { files: {
+        'package.json': JSON.stringify({ name: 'mochi-project', version: '0.1.0', type: 'module', scripts: { test: 'node --test', start: 'node index.js' } }, null, 2) + '\n',
+        'index.js': '// Mochi-generated starter\nexport function main() { console.log(\"hello, mochi\"); }\nif (import.meta.url === `file://${process.argv[1]}`) main();\n',
+        'index.test.js': "import test from 'node:test';\nimport { main } from './index.js';\ntest('main', () => { /* sanity */ });\n",
+        '.gitignore': 'node_modules\n dist\n.env\n',
+      }, next: 'npm install && npm test' },
+      ts: { files: {
+        'package.json': JSON.stringify({ name: 'mochi-project', version: '0.1.0', scripts: { test: 'tsc --noEmit', dev: 'tsx index.ts', start: 'node index.js' }, devDependencies: { typescript: '^5.7.0', '@types/node': '^22.0.0' } }, null, 2) + '\n',
+        'tsconfig.json': JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, noEmit: true, types: ['node'], allowImportingTsExtensions: true }, include: ['*.ts'] }, null, 2) + '\n',
+        'index.ts': 'export function greet(name: string): string { return `hello, ${name}`; }\n',
+        'index.test.ts': "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { greet } from './index.ts';\ntest('greet', () => assert.equal(greet('mochi'), 'hello, mochi'));\n",
+        '.gitignore': 'node_modules\n dist\n.env\n',
+      }, next: 'npm install && npm test' },
+      python: { files: {
+        'pyproject.toml': '[project]\nname = "mochi-project"\nversion = "0.1.0"\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+        'main.py': 'def greet(name: str) -> str:\n    return f"hello, {name}"\n\nif __name__ == "__main__":\n    print(greet("mochi"))\n',
+        'test_main.py': 'import unittest\nfrom main import greet\n\nclass TestMain(unittest.TestCase):\n    def test_greet(self):\n        self.assertEqual(greet("mochi"), "hello, mochi")\n\nif __name__ == "__main__":\n    unittest.main()\n',
+        '.gitignore': '__pycache__\n.venv\n.env\n',
+      }, next: 'python -m unittest (no extra deps)' },
+    };
+    const s = scaffolds[template];
+    if (!s) { console.error(`Unknown template "${template}". Supported: node, ts, python, (basic).`); process.exit(1); }
+    for (const [rel, content] of Object.entries(s.files)) {
+      const full = resolve(cwd, rel);
+      if (existsSync(full)) { console.log(`skip (exists): ${rel}`); continue; }
+      if (rel.includes('/')) mkdirSync(resolve(full, '..'), { recursive: true });
+      writeFileSync(full, content);
+      console.log(`created ${rel}`);
+    }
+    console.log(`Next: ${s.next}`);
     return;
   }
   if (first === 'commit') {
