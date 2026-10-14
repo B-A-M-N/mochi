@@ -57,7 +57,9 @@ export interface LogoutOutcome {
   cleared: boolean;
 }
 
-/** Decide a logout without touching disk (caller persists on cleared). */
+/** Decide a logout without touching disk (caller persists on cleared). Any
+ *  provider with stored material (keyring entry or legacy active slot, as
+ *  resolved by the caller) can be cleared — not just the active one. */
 export function decideLogout(
   targetId: string,
   knownProvider: boolean,
@@ -65,8 +67,9 @@ export function decideLogout(
   storedKey: string | undefined,
 ): LogoutOutcome {
   if (!knownProvider) return { ok: false, message: `Unknown provider: ${targetId}`, cleared: false };
-  if (activeId !== targetId || !storedKey) {
-    return { ok: false, message: `No stored key for ${targetId} (only the active provider holds a stored key).`, cleared: false };
+  void activeId;
+  if (!storedKey) {
+    return { ok: false, message: `No stored key for ${targetId}.`, cleared: false };
   }
   return { ok: true, message: `Cleared stored key for ${targetId}.`, cleared: true };
 }

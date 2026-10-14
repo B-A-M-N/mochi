@@ -5,6 +5,7 @@ import { findProjectRoot } from '../repo/repo.js';
 import { Runtime } from '../runtime.js';
 import type { MochiEvent } from '../types.js';
 import { PROVIDERS, providerById } from '../model/providers.js';
+import { loadKeyring, storedKeyForProvider, deleteKeyringKey } from '../model/keyring.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
 import { wrap, visibleLen } from './wrap.js';
@@ -2810,9 +2811,15 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       setMenuSelected: (i: number) => { state.menuSelected = i; },
       readState: () => ({
         activeProvider: runtime.config.model.provider,
-        storedKey: runtime.config.model.apiKey,
         activeModel: runtime.config.model.model,
       }),
+      storedKeyFor: (pid: string) => {
+        try {
+          return storedKeyForProvider(loadKeyring(), pid, runtime.config.model.provider, runtime.config.model.apiKey);
+        } catch {
+          return pid === runtime.config.model.provider ? runtime.config.model.apiKey : undefined;
+        }
+      },
       envLookup: (k: string) => process.env[k],
       openUrl: async (url: string) => {
         // Best-effort browser open; the URL itself is always returned so a
@@ -2832,7 +2839,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         const v = await verifyApiKey({ provider: providerId, baseUrl, apiKey: key, kind });
         return v.ok ? { ok: true, message: 'verified' } : { ok: false, reason: v.reason, message: v.message };
       },
-      persistLogin: (id: string, key: string, model: string) => run(() => runtime.loginProvider(id, key, model)),
+      persistLogin: (id: string, key: string, model: string, source: 'api-key' | 'oauth') => run(() => runtime.loginProvider(id, key, model, source)),
       switchProvider: (id: string, model: string) => run(() => runtime.useProvider(id, model)),
       persistCleared,
     };
@@ -2864,13 +2871,19 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     return undefined;
   }
 
-  function persistCleared(): Promise<void> {
+  function persistCleared(id: string): Promise<void> {
+    // Keyring entry first (the owned per-provider store), then the legacy
+    // active slot when it belongs to the cleared provider.
+    try {
+      deleteKeyringKey(id);
+    } catch { /* file write is best-effort; runtime state below still lands */ }
+    if (id === runtime.config.model.provider) runtime.config.model.apiKey = undefined;
     // Dynamic import keeps the TUI graph lean (same modules cli-auth uses).
     return import('../model/providers.js').then(({ loadConfigFile, saveConfigFile }) => {
+      if (id !== runtime.config.model.provider) return;
       const cfg = loadConfigFile() as { model?: { apiKey?: string } };
       if (cfg.model) delete cfg.model.apiKey;
       saveConfigFile(cfg as never);
-      runtime.config.model.apiKey = undefined;
     });
   }
 

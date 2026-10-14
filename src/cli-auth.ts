@@ -2,7 +2,7 @@
 // adapter). All disk/network effects arrive injected; tests use fakes.
 import { PROVIDERS, providerById, loadConfigFile, saveConfigFile } from './model/providers.js';
 import { isKeyUsable } from './model/startup-check.js';
-import { authStatusLines, probeKeyState, decideLogout } from './model/auth-cli.js';
+import { probeKeyState, decideLogout, keySource } from './model/auth-cli.js';
 import { verifyApiKey } from './model/auth-verify.js';
 import type { MochiConfig } from './types.js';
 
@@ -25,12 +25,23 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
   const lookup = (k: string): string | undefined => process.env[k];
   if (sub === 'status') {
     const probing = !!flags.probe;
-    const rows = authStatusLines(PROVIDERS, activeId, lookup, runtime.config.model.apiKey, isKeyUsable);
+    // Per-provider stored keys (keyring first, legacy active slot second) so
+    // every provider reports its real source — not just the active one.
+    const { loadKeyring, storedKeyForProvider } = await import('./model/keyring.js');
+    const ring = loadKeyring();
+    const legacyKey = runtime.config.model.apiKey;
+    const storedFor = (pid: string) => storedKeyForProvider(ring, pid, activeId, legacyKey);
+    const rows = PROVIDERS.map((p) => {
+      const src = keySource(p, activeId, p.envKey ? lookup(p.envKey) : undefined, storedFor(p.id), isKeyUsable);
+      const mark = p.id === activeId ? '*' : ' ';
+      const state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
+      return `${mark}${p.id.padEnd(16)} ${state}`;
+    });
     if (probing) {
       const probed = await Promise.all(PROVIDERS.map(async (p, i) => {
         const src = rows[i].includes('set (env)') ? 'env' : rows[i].includes('set (file)') ? 'file' : null;
         if (!src) return rows[i];
-        const key = src === 'env' ? String(process.env[p.envKey]) : String(runtime.config.model.apiKey);
+        const key = src === 'env' ? String(process.env[p.envKey]) : String(storedFor(p.id) ?? '');
         return `${rows[i]} · ${await probeKeyState(verify, { provider: p.id, baseUrl: p.baseUrl, apiKey: key, kind: p.kind })}`;
       }));
       log(probed.join('\n'));
@@ -43,18 +54,25 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
   if (sub === 'logout' || sub === 'reset') {
     // `reset` is an explicit alias for `logout`: changing a key is just
     // `mochi login <provider>` again (it overwrites the stored key after a
-    // live probe); resetting is clearing it here. Same logic, clearer name.
+    // live probe); resetting clears it here — for ANY provider with a stored
+    // key, not just the active one (the keyring owns per-provider keys).
     const target = positional[2] ?? activeId;
-    const out = decideLogout(target, !!providerById(target), activeId, runtime.config.model.apiKey);
+    const { loadKeyring, storedKeyForProvider, deleteKeyringKey } = await import('./model/keyring.js');
+    const ring = loadKeyring();
+    const resolved = storedKeyForProvider(ring, target, activeId, runtime.config.model.apiKey);
+    const out = decideLogout(target, !!providerById(target), activeId, resolved);
     if (!out.cleared) {
       log(out.message);
       if (target && !providerById(target)) exit(1);
       return;
     }
-    const cfg = loadConfigFile() as { model?: { apiKey?: string } };
-    if (cfg.model) delete cfg.model.apiKey;
-    saveConfigFile(cfg as never);
-    runtime.config.model.apiKey = undefined;
+    deleteKeyringKey(target);
+    if (target === activeId) {
+      const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+      if (cfg.model) delete cfg.model.apiKey;
+      saveConfigFile(cfg as never);
+      runtime.config.model.apiKey = undefined;
+    }
     const p = providerById(target)!;
     log(`${out.message} Re-login with: mochi login ${target}. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
     return;

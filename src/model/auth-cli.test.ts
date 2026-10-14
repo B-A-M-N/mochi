@@ -49,13 +49,14 @@ describe('probeKeyState', () => {
 });
 
 describe('decideLogout', () => {
-  it('clears only a stored key on the active provider', () => {
+  it('clears any provider with stored material (keyring era: not just active)', () => {
     expect(decideLogout('nope', false, 'openai', 'k')).toMatchObject({ ok: false, cleared: false });
-    expect(decideLogout('openai', true, 'other', 'k').cleared).toBe(false);
-    expect(decideLogout('openai', true, 'openai', undefined).cleared).toBe(false);
+    expect(decideLogout('groq', true, 'openai', 'k')).toMatchObject({ ok: true, cleared: true });
+    expect(decideLogout('openai', true, 'openai', undefined)).toMatchObject({ ok: false, cleared: false });
     const out = decideLogout('openai', true, 'openai', 'k');
     expect(out).toMatchObject({ ok: true, cleared: true });
     expect(out.message).toContain('openai');
+    expect(decideLogout('openai', true, 'openai', undefined).message).toContain('No stored key');
   });
 
   it('isKeyUsable gate is consulted by callers (placeholder never counts)', () => {

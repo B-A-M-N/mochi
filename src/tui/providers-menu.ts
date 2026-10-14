@@ -35,7 +35,9 @@ export interface AuthDeps {
   /** Open a URL in the system browser (injected; falls back to printing it). */
   openUrl: (url: string) => Promise<string>;
   /** Live auth state (active provider, stored file key, active model). */
-  readState: () => { activeProvider: string; storedKey: string | undefined; activeModel: string };
+  readState: () => { activeProvider: string; activeModel: string };
+  /** Stored file key for ANY provider id (keyring + legacy slot). */
+  storedKeyFor: (providerId: string) => string | undefined;
   /** Read an env var without touching process.env directly in tests. */
   envLookup: (key: string) => string | undefined;
   /** OAuth/CLI-sourced token (gh auth token, huggingface-cli cache…).
@@ -44,11 +46,11 @@ export interface AuthDeps {
   /** Live-probe a key (injected; app.ts uses verifyApiKey). */
   verifyKey: (providerId: string, baseUrl: string, kind: ProviderKind, key: string) => Promise<VerifyOutcome>;
   /** Persist a verified login (injected; app.ts runs runtime.loginProvider). */
-  persistLogin: (providerId: string, key: string, model: string) => Promise<string>;
+  persistLogin: (providerId: string, key: string, model: string, source: 'api-key' | 'oauth') => Promise<string>;
   /** Switch to a keyless local provider (injected; app.ts runs runtime.useProvider). */
   switchProvider: (providerId: string, model: string) => Promise<string>;
-  /** Persist a cleared key (injected; app.ts deletes it from the config file). */
-  persistCleared: () => Promise<void>;
+  /** Persist a cleared key for one provider (keyring entry + legacy slot). */
+  persistCleared: (providerId: string) => Promise<void>;
 }
 
 /** Names sorted for the browser, optionally filtered by a query. Pure. */
@@ -101,7 +103,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
     // state, so a clear/re-auth VISIBLY changes the card. Done or Esc leaves.
     for (;;) {
       const s = deps.readState();
-      push('system', detailsText(p, s.activeProvider, deps.envLookup, s.storedKey));
+      push('system', detailsText(p, s.activeProvider, deps.envLookup, deps.storedKeyFor(p.id)));
       scheduleRender();
       // Key actions live here so a provider can be re-authed, OAuth-logged-in,
       // or cleared without leaving the browser. The OAuth item only appears
@@ -136,7 +138,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
       return;
     }
     const s0 = deps.readState();
-    const items = names.map((id) => rowText(PROVIDERS.find((p) => p.id === id)!, s0.activeProvider, deps.envLookup, s0.storedKey));
+    const items = names.map((id) => { const q = PROVIDERS.find((p) => p.id === id)!; return rowText(q, s0.activeProvider, deps.envLookup, deps.storedKeyFor(q.id)); });
     setMenuSelected(0);
     const idx = await openMenu(`Providers matching "${arg}"`, items);
     if (idx < 0 || idx >= names.length) return;
@@ -145,7 +147,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
   }
 
   const sAll = deps.readState();
-  const items = PROVIDERS.map((p) => rowText(p, sAll.activeProvider, deps.envLookup, sAll.storedKey));
+  const items = PROVIDERS.map((p) => rowText(p, sAll.activeProvider, deps.envLookup, deps.storedKeyFor(p.id)));
   const curIdx = PROVIDERS.findIndex((p) => p.id === sAll.activeProvider);
   setMenuSelected(Math.max(0, curIdx));
   const idx = await openMenu('Connected Model Providers', items);
@@ -214,7 +216,7 @@ async function verifyAndStore(deps: AuthDeps, p: Provider, model: string, apiKey
   if (!v.ok) push('system', `Warning: could not verify the key (${v.message}) — storing anyway.`);
   else push('system', `Verified key with ${p.name}${source === 'oauth' ? ' (OAuth token from local CLI auth)' : ''}.`);
   scheduleRender();
-  const desc = await deps.persistLogin(p.id, apiKey, model);
+  const desc = await deps.persistLogin(p.id, apiKey, model, source === 'oauth' ? 'oauth' : 'api-key');
   push('system', desc);
   scheduleRender();
 }
@@ -236,8 +238,7 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
     return;
   }
   const envKey = deps.envLookup(p.envKey);
-  const s = deps.readState();
-  const stored = s.activeProvider === p.id ? s.storedKey : undefined;
+  const stored = deps.storedKeyFor(p.id);
   const current = envKey ? 'env' : stored ? 'stored file' : null;
   // Secrets go through the masked dialog — never the chat composer.
   const typed = (await deps.askSecret(
@@ -276,13 +277,13 @@ async function openKeyPage(deps: ProvidersMenuDeps, p: Provider): Promise<void> 
 async function clearStoredKey(deps: ProvidersMenuDeps, p: Provider): Promise<void> {
   const { push, scheduleRender } = deps;
   const s = deps.readState();
-  const out = decideLogout(p.id, true, s.activeProvider, s.storedKey);
+  const out = decideLogout(p.id, true, s.activeProvider, deps.storedKeyFor(p.id));
   if (!out.cleared) {
     push('system', `${out.message} Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
     scheduleRender();
     return;
   }
-  await deps.persistCleared();
+  await deps.persistCleared(p.id);
   push('system', `${out.message} Re-authenticate any time from this menu. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
   scheduleRender();
 }

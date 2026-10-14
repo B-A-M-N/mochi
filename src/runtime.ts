@@ -806,7 +806,27 @@ export class Runtime {
       resetCapabilityRegistry();
     } catch { /* best effort */ }
     const saved = currentConfig();
+    // Re-attach a stored keyring key when switching, unless the environment
+    // provides one (env keeps its override; display agrees). Keys thus
+    // survive provider switches instead of being lost with the old slot.
+    let key: string | undefined;
+    try {
+      const { loadKeyring, getKeyringKey } = await import('./model/keyring.js');
+      const { providerById } = await import('./model/providers.js');
+      const target = providerById(providerId);
+      const envKey = target?.envKey ? process.env[target.envKey]?.trim() : '';
+      if (target && !envKey) key = getKeyringKey(loadKeyring(), target.id);
+    } catch { /* fall through keyless */ }
     this.config = selectProviderById(saved, providerId, model);
+    if (key) {
+      // Durable too (legacy slot mirrors the keyring), so the key survives
+      // restarts exactly like a login-stored one.
+      this.config.model.apiKey = key;
+      try {
+        const { saveConfigFile } = await import('./model/providers.js');
+        saveConfigFile(this.config as never);
+      } catch { /* in-memory key still serves this session */ }
+    }
     if (!this.config.reasoning) {
       this.config.reasoning = 'max';
     }
@@ -814,13 +834,13 @@ export class Runtime {
     return describeConfig(this.config);
   }
 
-  async loginProvider(provider: string, apiKey: string, model?: string) {
+  async loginProvider(provider: string, apiKey: string, model?: string, source: 'api-key' | 'oauth' = 'api-key') {
     try {
       const { resetCapabilityRegistry } = await import('./model/router.js');
       resetCapabilityRegistry();
     } catch { /* best effort */ }
     const saved = currentConfig();
-    this.config = doLogin(saved, provider, apiKey, model);
+    this.config = doLogin(saved, provider, apiKey, model, source);
     if (!this.config.reasoning) {
       this.config.reasoning = 'max';
     }

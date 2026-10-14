@@ -72,6 +72,15 @@ describe('login / selectProviderById', () => {
     expect(cfg.model.apiKey).toContain('sk-ant');
   });
 
+  it('login records the keyring (per-provider owned store)', async () => {
+    login(base(), 'groq', 'gsk-ring-key', 'llama-3.3-70b-versatile', 'oauth');
+    const { loadKeyring, getKeyringKey } = await import('./keyring.js');
+    const ring = loadKeyring();
+    expect(getKeyringKey(ring, 'groq')).toBe('gsk-ring-key');
+    expect(ring['groq'].type).toBe('oauth');
+    expect(getKeyringKey(ring, 'openai')).toBeUndefined();
+  });
+
   it('throws on an unknown provider', () => {
     expect(() => login(base(), 'no-such-provider', 'k')).toThrow(/Unknown provider/);
     expect(() => selectProviderById(base(), 'nope')).toThrow(/Unknown provider/);

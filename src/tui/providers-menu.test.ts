@@ -6,12 +6,14 @@ import type { LineKind } from './state.js';
 
 type Deps = Parameters<typeof providersMenu>[0];
 
-function deps(over: Partial<Deps> & { activeProvider?: string; storedKey?: string; activeModel?: string } = {}): { d: Deps; lines: Array<{ kind: LineKind; text: string }>; persisted: Array<{ id: string; key: string; model: string }>; cleared: { n: number }; state: { activeProvider: string; storedKey: string | undefined; activeModel: string } } {
+function deps(over: Partial<Deps> & { activeProvider?: string; storedKey?: string; activeModel?: string } = {}): { d: Deps; lines: Array<{ kind: LineKind; text: string }>; persisted: Array<{ id: string; key: string; model: string }>; sources: string[]; cleared: { n: number }; state: { activeProvider: string; activeModel: string } } {
   const lines: Array<{ kind: LineKind; text: string }> = [];
   const persisted: Array<{ id: string; key: string; model: string }> = [];
+  const sources: string[] = [];
   const cleared = { n: 0 };
   const { activeProvider = 'openai', storedKey = undefined, activeModel = '', ...rest } = over;
-  const state = { activeProvider, storedKey: storedKey as string | undefined, activeModel };
+  const keys: Record<string, string> = storedKey ? { [activeProvider]: storedKey as string } : {};
+  const state = { activeProvider, activeModel };
   return {
     d: {
       openMenu: async () => -1,
@@ -21,15 +23,17 @@ function deps(over: Partial<Deps> & { activeProvider?: string; storedKey?: strin
       ask: async () => '',
       askSecret: async () => '',
       openUrl: async (url: string) => `Opened ${url}`,
-      readState: () => ({ ...state }),
+      readState: () => ({ activeProvider: state.activeProvider, activeModel: state.activeModel }),
+      storedKeyFor: (pid: string) => keys[pid],
       envLookup: () => undefined,
       getAmbientKey: async () => undefined,
       verifyKey: async () => ({ ok: true, message: 'verified' }),
-      persistLogin: async (id: string, key: string, model: string) => {
+      persistLogin: async (id: string, key: string, model: string, source: 'api-key' | 'oauth' = 'api-key') => {
         persisted.push({ id, key, model });
+        sources.push(source);
         // Mirror app.ts: a login makes the provider active with the new key.
         state.activeProvider = id;
-        state.storedKey = key;
+        keys[id] = key;
         state.activeModel = model;
         return `ok ${id}`;
       },
@@ -39,11 +43,12 @@ function deps(over: Partial<Deps> & { activeProvider?: string; storedKey?: strin
         state.activeModel = model;
         return `switched ${id}`;
       },
-      persistCleared: async () => { cleared.n++; state.storedKey = undefined; },
+      persistCleared: async (pid: string) => { cleared.n++; delete keys[pid]; },
       ...rest,
     },
     lines,
     persisted,
+    sources,
     cleared,
     state,
   };
@@ -114,13 +119,14 @@ describe('providersMenu', () => {
 
   it('OAuth action persists the CLI token after probing it', async () => {
     let n = 0;
-    const { d, lines, persisted } = deps({
+    const { d, lines, persisted, sources } = deps({
       openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 4) : 0),
       getAmbientKey: async () => 'ghp-oauth-token',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
     });
     await providersMenu(d, '/providers github-models');
     expect(persisted).toEqual([{ id: 'github-models', key: 'ghp-oauth-token', model: 'openai/gpt-4.1' }]);
+    expect(sources).toEqual(['oauth']);
     expect(lines.some((l) => l.text.includes('OAuth token from local CLI auth'))).toBe(true);
     expect(lines.join('\n')).not.toContain('ghp-oauth-token');
   });

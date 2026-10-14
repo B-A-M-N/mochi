@@ -1,8 +1,22 @@
 // runAuthCommand with scripted deps: status matrix, probe mapping, logout,
 // unknown-command handling. Disk/network arrive injected — no real config or
 // fetch is touched.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runAuthCommand, type AuthCommandDeps } from './cli-auth.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+
+let prevConfigPath: string | undefined;
+beforeEach(() => {
+  // runAuthCommand touches the config dir (keyring); keep the real home clean.
+  prevConfigPath = process.env.MOCHI_CONFIG_PATH;
+  process.env.MOCHI_CONFIG_PATH = resolve(mkdtempSync(resolve(tmpdir(), 'mochi-cliauth-')), 'config.json');
+});
+afterEach(() => {
+  if (prevConfigPath === undefined) delete process.env.MOCHI_CONFIG_PATH;
+  else process.env.MOCHI_CONFIG_PATH = prevConfigPath;
+});
 
 class Exit extends Error {
   code: number;
@@ -72,6 +86,15 @@ describe('runAuthCommand logout', () => {
     const d = deps({ positional: ['auth', 'logout'] });
     await runAuthCommand(d);
     expect(d.logs.join('\n')).toContain('No stored key');
+  });
+
+  it('logout clears a non-active provider key from the keyring', async () => {
+    const { setKeyringKey, loadKeyring, getKeyringKey } = await import('./model/keyring.js');
+    setKeyringKey('groq', 'gsk-logout-me');
+    const d = deps({ positional: ['auth', 'logout', 'groq'] });
+    await runAuthCommand(d);
+    expect(d.logs.join('\n')).toContain('Cleared stored key for groq');
+    expect(getKeyringKey(loadKeyring(), 'groq')).toBeUndefined();
   });
 
   it('reset is an explicit alias for logout (same honest paths)', async () => {
