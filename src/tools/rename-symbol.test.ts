@@ -41,4 +41,32 @@ describe('rename_symbol tool', () => {
     const calcContent = readFileSync(resolve(dir, 'src', 'calc.ts'), 'utf8');
     expect(calcContent).toContain('calculateTotal');
   });
+
+  it('AST path renames TS identifiers but leaves comments and strings intact', async () => {
+    // decoy.ts has the symbol ONLY in a comment and a string — AST must not touch it.
+    writeFileSync(resolve(dir, 'src', 'decoy.ts'), '// calculateTotal is a great function\nconst label = "calculateTotal";\n');
+    const res = await renameSymbolTool.execute({ old_name: 'calculateTotal', new_name: 'computeSum' }, ctx);
+    expect(String(res)).toContain('via AST');
+
+    const decoy = readFileSync(resolve(dir, 'src', 'decoy.ts'), 'utf8');
+    // real identifier renamed, comment + string untouched
+    expect(decoy).toContain('// calculateTotal is a great function');
+    expect(decoy).toContain('"calculateTotal"');
+    expect(decoy).not.toContain('computeSum');
+  });
+
+  it('still renames real occurrences and reports via-AST mode in the summary', async () => {
+    const res = await renameSymbolTool.execute({ old_name: 'calculateTotal', new_name: 'computeSum' }, ctx);
+    expect(String(res)).toContain('Renamed "calculateTotal" -> "computeSum"');
+    expect(String(res)).toContain('via AST');
+    expect(String(res)).toContain('comments/strings left untouched');
+  });
+
+  it('renames non-TS files via the labeled word-boundary fallback', async () => {
+    writeFileSync(resolve(dir, 'script.py'), 'def calculateTotal(a, b):\n    return calculateTotal(a, b)\n');
+    const res = await renameSymbolTool.execute({ old_name: 'calculateTotal', new_name: 'computeSum' }, ctx);
+    expect(String(res)).toContain('via word-boundary regex');
+    const py = readFileSync(resolve(dir, 'script.py'), 'utf8');
+    expect(py).toContain('def computeSum(a, b):');
+  });
 });
