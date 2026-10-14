@@ -7,7 +7,7 @@
 
 import { PROVIDERS, type Provider, type ProviderKind } from '../model/providers.js';
 import { keySource, decideLogout } from '../model/auth-cli.js';
-import { isKeyUsable } from '../model/startup-check.js';
+import { isKeyUsable, bareModelId } from '../model/startup-check.js';
 import { T } from './view.js';
 import type { LineKind } from './state.js';
 
@@ -22,18 +22,18 @@ export interface ProvidersMenuDeps extends AuthDeps {
   setMenuSelected: (i: number) => void;
 }
 
-/** The shared key-entry effects both /providers re-auth and /login use. */
+/** The shared key-entry effects both /providers re-auth and /login use. State
+ *  arrives via readState (never a stale snapshot): after an action persists,
+ *  the panel re-renders from live runtime config. */
 export interface AuthDeps {
   push: (kind: LineKind, text: string) => void;
   scheduleRender: () => void;
   /** Prompt for free text (used for the key entry). */
   ask: (question: string) => Promise<string>;
-  /** Currently active provider id. */
-  activeProvider: string;
+  /** Live auth state (active provider, stored file key, active model). */
+  readState: () => { activeProvider: string; storedKey: string | undefined; activeModel: string };
   /** Read an env var without touching process.env directly in tests. */
   envLookup: (key: string) => string | undefined;
-  /** Stored file key for the active provider (never printed). */
-  storedKey: string | undefined;
   /** OAuth/CLI-sourced token (gh auth token, huggingface-cli cache…).
    *  Undefined when the provider has no ambient source or it failed. */
   getAmbientKey: (providerId: string) => Promise<string | undefined>;
@@ -81,10 +81,10 @@ export function oauthLoginHint(p: Provider): { label: string; command: string } 
   return null;
 }
 
-function rowText(p: Provider, activeId: string): string {
+function rowText(p: Provider, activeId: string, envLookup: (k: string) => string | undefined, storedKey: string | undefined): string {
   const active = p.id === activeId;
   const badge = active ? `${T.lime}[ACTIVE]${T.reset} ` : '        ';
-  return `${p.name.padEnd(20)}  ${badge}${T.grayDark}${p.models.length} models · ${p.baseUrl}${T.reset}`;
+  return `${p.name.padEnd(20)}  ${badge}${T.grayDark}${p.models.length} models · ${keyStateText(p, activeId, envLookup, storedKey)} · ${p.baseUrl}${T.reset}`;
 }
 
 export async function providersMenu(deps: ProvidersMenuDeps, line: string): Promise<void> {
@@ -92,22 +92,28 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
   const arg = (line.length > 10 ? line.slice(10) : '').trim();
 
   const showProvider = async (p: Provider): Promise<void> => {
-    push('system', detailsText(p, deps.activeProvider, deps.envLookup, deps.storedKey));
-    scheduleRender();
-    // Key actions live here so a provider can be re-authed, OAuth-logged-in,
-    // or cleared without leaving the browser. The OAuth item only appears
-    // for providers with a real local flow (gh, huggingface-cli) — nothing
-    // fake is ever offered.
-    const oauth = oauthLoginHint(p);
-    const actions: Array<{ label: string; run: () => Promise<void> }> = [
-      { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
-      ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthWizard(deps, p, oauth) }] : []),
-      { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
-      { label: 'Done', run: async () => {} },
-    ];
-    setMenuSelected(0);
-    const action = await openMenu(`${p.name} · key actions`, actions.map((a) => a.label));
-    if (action >= 0 && action < actions.length) await actions[action].run();
+    // Persistent panel: after every action the details re-render from live
+    // state, so a clear/re-auth VISIBLY changes the card. Done or Esc leaves.
+    for (;;) {
+      const s = deps.readState();
+      push('system', detailsText(p, s.activeProvider, deps.envLookup, s.storedKey));
+      scheduleRender();
+      // Key actions live here so a provider can be re-authed, OAuth-logged-in,
+      // or cleared without leaving the browser. The OAuth item only appears
+      // for providers with a real local flow (gh, huggingface-cli) — nothing
+      // fake is ever offered.
+      const oauth = oauthLoginHint(p);
+      const actions: Array<{ label: string; run: () => Promise<void> }> = [
+        { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
+        ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthWizard(deps, p, oauth) }] : []),
+        { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
+        { label: 'Done', run: async () => {} },
+      ];
+      setMenuSelected(0);
+      const action = await openMenu(`${p.name} · key actions`, actions.map((a) => a.label));
+      if (action < 0 || action >= actions.length || actions[action].label === 'Done') return;
+      await actions[action].run();
+    }
   };
 
   if (arg) {
@@ -123,7 +129,8 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
       scheduleRender();
       return;
     }
-    const items = names.map((id) => rowText(PROVIDERS.find((p) => p.id === id)!, deps.activeProvider));
+    const s0 = deps.readState();
+    const items = names.map((id) => rowText(PROVIDERS.find((p) => p.id === id)!, s0.activeProvider, deps.envLookup, s0.storedKey));
     setMenuSelected(0);
     const idx = await openMenu(`Providers matching "${arg}"`, items);
     if (idx < 0 || idx >= names.length) return;
@@ -131,8 +138,9 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
     return;
   }
 
-  const items = PROVIDERS.map((p) => rowText(p, deps.activeProvider));
-  const curIdx = PROVIDERS.findIndex((p) => p.id === deps.activeProvider);
+  const sAll = deps.readState();
+  const items = PROVIDERS.map((p) => rowText(p, sAll.activeProvider, deps.envLookup, sAll.storedKey));
+  const curIdx = PROVIDERS.findIndex((p) => p.id === sAll.activeProvider);
   setMenuSelected(Math.max(0, curIdx));
   const idx = await openMenu('Connected Model Providers', items);
   if (idx < 0 || idx >= PROVIDERS.length) return;
@@ -141,7 +149,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
 
 /** Re-authenticate one provider: model select → key entry → persist. */
 async function reauthenticate(deps: ProvidersMenuDeps, p: Provider): Promise<void> {
-  await authenticateKey(deps, p, await selectModel(deps, p));
+  await authenticateKey(deps, p, resolveModel(deps, p));
 }
 
 /** OAuth login wizard for providers with a real local flow (gh,
@@ -166,23 +174,31 @@ async function oauthWizard(deps: ProvidersMenuDeps, p: Provider, oauth: { label:
     scheduleRender();
     return;
   }
-  await verifyAndStore(deps, p, await selectModel(deps, p), token, 'oauth');
+  await verifyAndStore(deps, p, resolveModel(deps, p), token, 'oauth');
 }
 
-/** Model picker shared by re-auth and OAuth login (default preselected). */
-async function selectModel(deps: ProvidersMenuDeps, p: Provider): Promise<string> {
-  const { openMenu, setMenuSelected } = deps;
-  const modelItems = p.models.map((m) => `${m.padEnd(36)}`);
-  const defIdx = p.models.indexOf(p.defaultModel);
-  setMenuSelected(Math.max(0, defIdx >= 0 ? defIdx : 0));
-  const modelIdx = await openMenu(`${p.name} · Select Model`, modelItems);
-  return modelIdx >= 0 && modelIdx < p.models.length ? p.models[modelIdx] : p.defaultModel;
+/** Model for (re)auth without a picker: the re-auth used to force a model
+ *  menu every time (pure friction — /model owns model switching, and users
+ *  stalled on the extra step). Keep the current model when it belongs to
+ *  this provider (bare-id aware: configured ids are often prefixed like
+ *  opencode/…), else the provider default. */
+function resolveModel(deps: AuthDeps, p: Provider): string {
+  const s = deps.readState();
+  if (s.activeProvider === p.id && s.activeModel) {
+    if (p.models.includes(s.activeModel)) return s.activeModel;
+    const bare = bareModelId(s.activeModel, p.baseUrl);
+    if (p.models.includes(bare)) return bare;
+  }
+  return p.defaultModel;
 }
 
 /** Probe-then-persist shared by API-key and OAuth logins. Rejected keys are
- *  never stored; unreachable endpoints store with a warning. */
+ *  never stored; unreachable endpoints store with a warning. A probing line
+ *  goes out FIRST so the 10s live check never looks dead. */
 async function verifyAndStore(deps: AuthDeps, p: Provider, model: string, apiKey: string, source: string): Promise<void> {
   const { push, scheduleRender } = deps;
+  push('system', `Probing key with ${p.name}…`);
+  scheduleRender();
   const v = await deps.verifyKey(p.id, p.baseUrl, p.kind, apiKey);
   if (!v.ok && v.reason === 'auth') {
     push('error', `Key rejected by ${p.name}: ${v.message} Not stored — check the key and try again.`);
@@ -214,7 +230,8 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
     return;
   }
   const envKey = deps.envLookup(p.envKey);
-  const stored = deps.activeProvider === p.id ? deps.storedKey : undefined;
+  const s = deps.readState();
+  const stored = s.activeProvider === p.id ? s.storedKey : undefined;
   const current = envKey ? 'env' : stored ? 'stored file' : null;
   const typed = (await deps.ask(
     current
@@ -242,7 +259,8 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
 /** Clear one provider's stored file key (env keys are reported, not touched). */
 async function clearStoredKey(deps: ProvidersMenuDeps, p: Provider): Promise<void> {
   const { push, scheduleRender } = deps;
-  const out = decideLogout(p.id, true, deps.activeProvider, deps.storedKey);
+  const s = deps.readState();
+  const out = decideLogout(p.id, true, s.activeProvider, s.storedKey);
   if (!out.cleared) {
     push('system', `${out.message} Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
     scheduleRender();

@@ -2778,9 +2778,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     return {
       push, scheduleRender, ask,
       setMenuSelected: (i: number) => { state.menuSelected = i; },
-      activeProvider: runtime.config.model.provider,
+      readState: () => ({
+        activeProvider: runtime.config.model.provider,
+        storedKey: runtime.config.model.apiKey,
+        activeModel: runtime.config.model.model,
+      }),
       envLookup: (k: string) => process.env[k],
-      storedKey: runtime.config.model.apiKey,
       getAmbientKey,
       verifyKey: async (providerId: string, baseUrl: string, kind: import('../model/providers.js').ProviderKind, key: string) => {
         const { verifyApiKey } = await import('../model/auth-verify.js');
@@ -2838,12 +2841,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   async function modelMenu() {
-    // Step 1: select a provider
+    // Step 1: select a provider (rows carry live key state so cleared/expired
+    // keys are visible here too — a cleared provider reads "key: missing").
+    const { keyStateText } = await import('./providers-menu.js');
     const curProvider = runtime.config.model.provider;
+    const storedKey = runtime.config.model.apiKey;
     const providerItems = PROVIDERS.map((p) => {
       const active = p.id === curProvider;
       const badge = active ? `${T.lime}[ACTIVE]${T.reset} ` : '        ';
-      return `${p.name.padEnd(20)}  ${badge}${T.grayDark}${p.models.length} models · ${p.baseUrl}${T.reset}`;
+      const key = keyStateText(p, curProvider, (k) => process.env[k], storedKey);
+      return `${p.name.padEnd(20)}  ${badge}${T.grayDark}${p.models.length} models · ${key} · ${p.baseUrl}${T.reset}`;
     });
     const curIdx = PROVIDERS.findIndex((p) => p.id === curProvider);
     state.menuSelected = Math.max(0, curIdx);
