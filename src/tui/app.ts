@@ -45,6 +45,7 @@ import {
   resolveVerb,
   getThemeSpinnerColors,
   ellipsize,
+  maskSecretInput,
 } from './view.js';
 
 const HIDE = '\x1b[?25l';
@@ -188,6 +189,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     scroll: 0,
     startedAt: Date.now(),
     promptActive: false,
+    /** A secret prompt (API key) is armed: composer input renders masked. */
+    promptSecret: false,
     menuActive: false,
     menuTitle: '',
     menuItems: [] as string[],
@@ -470,6 +473,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       spinner: 0,
       scroll: 0,
       promptActive: false,
+    /** A secret prompt (API key) is armed: composer input renders masked. */
+    promptSecret: false,
       menuActive: false,
       menuItems: [],
       menuSelected: 0,
@@ -1359,8 +1364,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     // cursor is already on the last visible row. (This is the multiline-editor
     // scroll the old `slice(-visibleTextRows)` never did.)
     const composerInnerW = Math.max(1, w - 6);
-    const composerRawRows = state.input ? wrap(state.input, composerInnerW) : [''];
-    const caretRow = Math.max(0, wrap(state.input.slice(0, state.cursor), composerInnerW).length - 1);
+    const composerText = state.promptSecret ? maskSecretInput(state.input) : state.input;
+    const composerRawRows = composerText ? wrap(composerText, composerInnerW) : [''];
+    const caretRow = Math.max(0, wrap(composerText.slice(0, state.cursor), composerInnerW).length - 1);
     let sliceStart = caretRow - Math.floor((visibleTextRows - 1) / 2);
     sliceStart = Math.max(0, Math.min(Math.max(0, composerRawRows.length - visibleTextRows), sliceStart));
     const shownRows = composerRawRows.slice(sliceStart, sliceStart + visibleTextRows);
@@ -1369,9 +1375,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const r = cTop + 1 + i;
       if (r < h) {
         if (i === 0 && !state.input) {
-          const placeholder = w >= 65
-            ? (state.busy ? 'Working… (type to queue · Esc to cancel)' : 'Message mochi… (Tab: plan/act · /: commands · ⏎: send)')
-            : (state.busy ? 'Working… (Esc to cancel)' : 'Message mochi… (/ for commands)');
+          const placeholder = state.promptSecret
+            ? 'Type or paste your key… (Enter submits · Esc cancels)'
+            : w >= 65
+              ? (state.busy ? 'Working… (type to queue · Esc to cancel)' : 'Message mochi… (Tab: plan/act · /: commands · ⏎: send)')
+              : (state.busy ? 'Working… (Esc to cancel)' : 'Message mochi… (/ for commands)');
           rows[r] = composerPlaceholderRow(placeholder, w);
         } else if (i < shownRows.length) {
           // Only the FIRST visible row carries the prompt glyph; wrapped
@@ -2616,6 +2624,28 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         old('');
       }
       state.promptActive = true;
+      state.promptSecret = false;
+      pendingResolver = res;
+      state.input = '';
+      state.cursor = 0;
+      sendSystemNotification('Input Required', question.slice(0, 100), 'normal');
+      push('system', `? ${question}`);
+      scheduleRender();
+    });
+  }
+
+  /** Secret input dialog (API keys): identical plumbing to ask(), but the
+   *  composer renders masked so the secret never shows on screen or scrollback.
+   *  The value still resolves only to the caller — never to the transcript. */
+  function askSecret(question: string): Promise<string> {
+    return new Promise((res) => {
+      if (pendingResolver) {
+        const old = pendingResolver;
+        pendingResolver = undefined;
+        old('');
+      }
+      state.promptActive = true;
+      state.promptSecret = true;
       pendingResolver = res;
       state.input = '';
       state.cursor = 0;
@@ -2776,7 +2806,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   /** Shared key-entry effects for loginFlow and providerMenu (one wiring). */
   function authDeps() {
     return {
-      push, scheduleRender, ask,
+      push, scheduleRender, ask, askSecret,
       setMenuSelected: (i: number) => { state.menuSelected = i; },
       readState: () => ({
         activeProvider: runtime.config.model.provider,
@@ -2784,6 +2814,18 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         activeModel: runtime.config.model.model,
       }),
       envLookup: (k: string) => process.env[k],
+      openUrl: async (url: string) => {
+        // Best-effort browser open; the URL itself is always returned so a
+        // headless/mobile session can still copy it.
+        try {
+          const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+          await new Promise<void>((res, rej) =>
+            execFile(opener, [url], { timeout: 5000 }, (e) => (e ? rej(e) : res())));
+          return `Opened ${url} in your browser.`;
+        } catch {
+          return `Open this URL in a browser: ${url}`;
+        }
+      },
       getAmbientKey,
       verifyKey: async (providerId: string, baseUrl: string, kind: import('../model/providers.js').ProviderKind, key: string) => {
         const { verifyApiKey } = await import('../model/auth-verify.js');
@@ -3769,6 +3811,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
             pendingResolver(text.trim());
             pendingResolver = undefined;
             state.promptActive = false;
+            state.promptSecret = false;
             state.input = '';
             state.cursor = 0;
           } else if (state.busy) {
@@ -3823,6 +3866,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
             const old = pendingResolver;
             pendingResolver = undefined;
             state.promptActive = false;
+            state.promptSecret = false;
             old('');
             push('system', 'Cancelled prompt.');
             scheduleRender();

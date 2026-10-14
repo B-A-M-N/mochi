@@ -1233,6 +1233,12 @@ export function composerTopRule(width: number): string {
  *  input look like a row of stacked `❯❯❯` symbols and corrupted the box. The
  *  `❯` column still matches the caret math (`4 = ❯ + 2 spaces`).
  */
+/** Mask a secret input for display (char-for-char `*`, newlines kept): lengths
+ *  are preserved exactly so caret math and wrapping behave identically. */
+export function maskSecretInput(text: string): string {
+  return text.replace(/[^\n]/g, '*');
+}
+
 export function composerRow(text: string, width: number, isFirst = true): string {
   const inner = Math.max(1, width - 6);
   const shown = visibleLen(text) > inner ? ellipsize(text, inner) : text;

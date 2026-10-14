@@ -32,6 +32,7 @@ import {
   formatDuration,
   ellipsize,
   visibleLen,
+  maskSecretInput,
   highlightShellCommand,
   renderMetricGauge,
   renderMarkdown,
@@ -271,6 +272,13 @@ describe('renderEntry', () => {
 });
 
 describe('composer', () => {
+  it('maskSecretInput hides secrets char-for-char (lengths preserved for caret math)', () => {
+    expect(maskSecretInput('sk-abc123')).toBe('*********');
+    expect(maskSecretInput('').length).toBe(0);
+    expect(maskSecretInput('a\nb').length).toBe(3);
+    expect(maskSecretInput('sk-abc123')).not.toContain('sk-abc123');
+  });
+
   it('composer row shows the ❯ prompt and text', () => {
     const row = composerRow('fix the bug', 60);
     const plain = row.replace(/\x1b\[[0-9;]*m/g, '');

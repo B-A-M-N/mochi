@@ -19,6 +19,8 @@ function deps(over: Partial<Deps> & { activeProvider?: string; storedKey?: strin
       scheduleRender: () => {},
       setMenuSelected: () => {},
       ask: async () => '',
+      askSecret: async () => '',
+      openUrl: async (url: string) => `Opened ${url}`,
       readState: () => ({ ...state }),
       envLookup: () => undefined,
       getAmbientKey: async () => undefined,
@@ -80,7 +82,7 @@ describe('providersMenu', () => {
   it('exact id shows details then Done leaves without side effects', async () => {
     const calls: string[] = [];
     const { d, lines, persisted, cleared } = deps({
-      openMenu: async (t: string) => { calls.push(t); return t.includes('key actions') ? 2 : -1; },
+      openMenu: async (t: string) => { calls.push(t); return t.includes('key actions') ? 3 : -1; },
     });
     await providersMenu(d, '/providers upstage');
     expect(lines.some((l) => l.text.includes('Upstage (Solar)'))).toBe(true);
@@ -92,27 +94,28 @@ describe('providersMenu', () => {
   });
 
   it('shows the gh OAuth path for github-models', async () => {
-    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 3 : -1) });
+    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 4 : -1) });
     await providersMenu(d, '/providers github-models');
     expect(lines.some((l) => l.text.includes('gh auth login'))).toBe(true);
   });
 
   it('OAuth action lists the visible login item only where a real flow exists', async () => {
     const seen: string[][] = [];
-    const gh = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 3; } });
+    const gh = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 4; } });
     await providersMenu(gh.d, '/providers github-models');
-    expect(seen[0]).toHaveLength(4);
+    expect(seen[0]).toHaveLength(5);
     expect(seen[0][1]).toContain('Login with GitHub OAuth');
-    const plain = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 2; } });
+    expect(seen[0][2]).toContain('Open key page');
+    const plain = deps({ openMenu: async (_t: string, items: string[]) => { seen.push(items); return 3; } });
     await providersMenu(plain.d, '/providers upstage');
-    expect(seen[1]).toHaveLength(3);
+    expect(seen[1]).toHaveLength(4);
     expect(seen[1].some((i) => i.includes('OAuth'))).toBe(false);
   });
 
   it('OAuth action persists the CLI token after probing it', async () => {
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 3) : 0),
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 4) : 0),
       getAmbientKey: async () => 'ghp-oauth-token',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
     });
@@ -125,7 +128,7 @@ describe('providersMenu', () => {
   it('OAuth action without CLI auth names the exact command, stores nothing', async () => {
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 3) : 0),
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 4) : 0),
       getAmbientKey: async () => undefined,
     });
     await providersMenu(d, '/providers github-models');
@@ -138,7 +141,7 @@ describe('providersMenu', () => {
     const menus: string[] = [];
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => { menus.push(t); return t.includes('key actions') ? (n++ === 0 ? 1 : 3) : 1; },
+      openMenu: async (t: string) => { menus.push(t); return t.includes('key actions') ? (n++ === 0 ? 1 : 4) : 1; },
       getAmbientKey: async () => 'ghp-oauth-token',
     });
     await providersMenu(d, '/providers github-models');
@@ -176,8 +179,8 @@ describe('providersMenu', () => {
     const menus: string[] = [];
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => { menus.push(t); return t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0; },
-      ask: async () => 'sk-typed-key',
+      openMenu: async (t: string) => { menus.push(t); return t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0; },
+      askSecret: async () => 'sk-typed-key',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
     });
     await providersMenu(d, '/providers upstage');
@@ -189,8 +192,8 @@ describe('providersMenu', () => {
   it('re-authenticate with a rejected key stores nothing', async () => {
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => 'sk-bad-key',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      askSecret: async () => 'sk-bad-key',
       verifyKey: async () => ({ ok: false, reason: 'auth', message: 'endpoint rejected the key (HTTP 401)' }),
     });
     await providersMenu(d, '/providers upstage');
@@ -202,7 +205,7 @@ describe('providersMenu', () => {
   it('clear stored key persists the clear and guides back to re-auth', async () => {
     let n = 0;
     const { d, lines, cleared } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 2) : 0),
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 2 : 3) : 0),
       activeProvider: 'openai',
       storedKey: 'sk-stored',
     });
@@ -217,7 +220,7 @@ describe('providersMenu', () => {
   it('clear with no stored key reports honestly and touches nothing', async () => {
     let n = 0;
     const { d, lines, cleared } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 2) : 0),
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 2 : 3) : 0),
     });
     await providersMenu(d, '/providers openai');
     expect(cleared.n).toBe(0);
@@ -227,8 +230,8 @@ describe('providersMenu', () => {
   it('typing a new key replaces the stored one (the reported bug)', async () => {
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => 'sk-brand-new-key',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      askSecret: async () => 'sk-brand-new-key',
       activeProvider: 'openai',
       storedKey: 'sk-stale-key',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
@@ -242,8 +245,8 @@ describe('providersMenu', () => {
   it('Enter with a stored key keeps it (no retype needed)', async () => {
     let n = 0;
     const { d, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => '',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      askSecret: async () => '',
       activeProvider: 'openai',
       storedKey: 'sk-kept-key',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
@@ -255,8 +258,8 @@ describe('providersMenu', () => {
   it('re-auth keeps the current model instead of forcing a picker', async () => {
     let n = 0;
     const { d, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => 'sk-new-key',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      askSecret: async () => 'sk-new-key',
       activeProvider: 'openai',
       activeModel: 'gpt-4o',
       storedKey: 'sk-old-key',
@@ -269,8 +272,8 @@ describe('providersMenu', () => {
   it('shows a probing line so the live check never looks dead', async () => {
     let n = 0;
     const { d, lines } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => 'sk-typed-key',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      askSecret: async () => 'sk-typed-key',
       verifyKey: async () => ({ ok: true, message: 'verified' }),
     });
     await providersMenu(d, '/providers upstage');
@@ -280,8 +283,8 @@ describe('providersMenu', () => {
   it('OAuth token fills in when nothing is configured (github-models via gh)', async () => {
     let n = 0;
     const { d, lines, persisted } = deps({
-      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
-      ask: async () => '',
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 4) : 0),
+      askSecret: async () => '',
       getAmbientKey: async (id: string) => (id === 'github-models' ? 'ghp-oauth-token' : undefined),
       verifyKey: async () => ({ ok: true, message: 'verified' }),
     });
@@ -291,12 +294,46 @@ describe('providersMenu', () => {
     expect(lines.join('\n')).not.toContain('ghp-oauth-token');
   });
 
+  it('key entry uses the masked dialog, never the chat composer', async () => {
+    let secret = 0;
+    let plain = 0;
+    let n = 0;
+    const { d } = deps({
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 3) : 0),
+      ask: async () => { plain++; return 'x'; },
+      askSecret: async () => { secret++; return 'sk-typed-key'; },
+      verifyKey: async () => ({ ok: true, message: 'verified' }),
+    });
+    await providersMenu(d, '/providers upstage');
+    expect(secret).toBe(1);
+    expect(plain).toBe(0);
+  });
+
+  it('open-key-page action offers the verified console link', async () => {
+    let opened: string[] = [];
+    let n = 0;
+    const { d, lines } = deps({
+      // upstage actions: re-auth(0), open page(1), clear(2), Done(3)
+      openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 1 : 3) : 0),
+      openUrl: async (url: string) => { opened.push(url); return `Opened ${url}`; },
+    });
+    await providersMenu(d, '/providers upstage');
+    expect(opened).toEqual(['https://console.upstage.ai/']);
+    expect(lines.some((l) => l.text.includes('https://console.upstage.ai/'))).toBe(true);
+  });
+
+  it('details card prints the console link for link-backed providers', async () => {
+    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 3 : -1) });
+    await providersMenu(d, '/providers openai');
+    expect(lines.some((l) => l.text.includes('https://platform.openai.com/api-keys'))).toBe(true);
+  });
+
   it('keyless local providers switch with no key prompt', async () => {
     let asked = 0;
     let n = 0;
     const { d, lines, persisted } = deps({
       openMenu: async (t: string) => (t.includes('key actions') ? (n++ === 0 ? 0 : 2) : 0),
-      ask: async () => { asked++; return ''; },
+      askSecret: async () => { asked++; return ''; },
     });
     await providersMenu(d, '/providers ollama');
     expect(asked).toBe(0);

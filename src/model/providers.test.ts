@@ -91,6 +91,12 @@ describe('providers', () => {
       expect(p.models.length, `${p.id} lists no models`).toBeGreaterThan(0);
       expect(p.models, `${p.id} default ${p.defaultModel} not listed`).toContain(p.defaultModel);
       expect(typeof p.envKey).toBe('string');
+      if (typeof p.consoleUrl !== 'undefined') {
+        expect(p.consoleUrl, `${p.id} consoleUrl must be an https URL`).toMatch(/^https:\/\//);
+      }
+      if (typeof p.keyHelp !== 'undefined') {
+        expect(p.keyHelp.length, `${p.id} keyHelp empty`).toBeGreaterThan(0);
+      }
       // Azure has no fixed endpoint (per-deployment URL by construction) —
       // the template is honest, not a fake; everything else must be a real URL.
       if (p.id === 'azure') continue;

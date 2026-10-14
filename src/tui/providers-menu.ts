@@ -28,8 +28,12 @@ export interface ProvidersMenuDeps extends AuthDeps {
 export interface AuthDeps {
   push: (kind: LineKind, text: string) => void;
   scheduleRender: () => void;
-  /** Prompt for free text (used for the key entry). */
+  /** Prompt for free text (used for non-secret questions). */
   ask: (question: string) => Promise<string>;
+  /** Masked secret dialog (API keys): renders •••, never echoes. */
+  askSecret: (question: string) => Promise<string>;
+  /** Open a URL in the system browser (injected; falls back to printing it). */
+  openUrl: (url: string) => Promise<string>;
   /** Live auth state (active provider, stored file key, active model). */
   readState: () => { activeProvider: string; storedKey: string | undefined; activeModel: string };
   /** Read an env var without touching process.env directly in tests. */
@@ -66,6 +70,7 @@ function detailsText(p: Provider, activeId: string, envLookup: (k: string) => st
     `Base URL: ${p.baseUrl}`,
     `Key: ${keyStateText(p, activeId, envLookup, storedKey)}${p.envKey ? ` ($${p.envKey})` : ''}`,
     ...(p.keyHelp ? [`Get a key: ${p.keyHelp}`] : []),
+    ...(p.consoleUrl ? [`Console: ${p.consoleUrl}`] : []),
     `Models (${p.models.length}):`,
     ...p.models.map((m) => `  ${m}${m === p.defaultModel ? '  (default)' : ''}`),
   ];
@@ -106,6 +111,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
       const actions: Array<{ label: string; run: () => Promise<void> }> = [
         { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
         ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthWizard(deps, p, oauth) }] : []),
+        ...(p.consoleUrl ? [{ label: 'Open key page in browser', run: () => openKeyPage(deps, p) }] : []),
         { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
         { label: 'Done', run: async () => {} },
       ];
@@ -233,7 +239,8 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
   const s = deps.readState();
   const stored = s.activeProvider === p.id ? s.storedKey : undefined;
   const current = envKey ? 'env' : stored ? 'stored file' : null;
-  const typed = (await deps.ask(
+  // Secrets go through the masked dialog — never the chat composer.
+  const typed = (await deps.askSecret(
     current
       ? `${p.name} API Key: (Enter keeps the current ${current} key, or type a new one)`
       : `${p.name} API Key:`,
@@ -254,6 +261,15 @@ export async function authenticateKey(deps: AuthDeps, p: Provider, model: string
   }
   if (!apiKey) { push('error', 'No API key provided.'); scheduleRender(); return; }
   await verifyAndStore(deps, p, model, apiKey, source);
+}
+
+/** Open the provider's key console (URL always printed; browser best-effort). */
+async function openKeyPage(deps: ProvidersMenuDeps, p: Provider): Promise<void> {
+  const { push, scheduleRender } = deps;
+  if (!p.consoleUrl) return;
+  const note = await deps.openUrl(p.consoleUrl);
+  push('system', note);
+  scheduleRender();
 }
 
 /** Clear one provider's stored file key (env keys are reported, not touched). */
