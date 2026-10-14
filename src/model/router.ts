@@ -36,8 +36,12 @@ export function normalizeModelName(rawModel: string, baseUrl?: string): string {
   // If baseUrl is OpenRouter, OpenRouter requires 'vendor/model' format (e.g. anthropic/claude-3.5-sonnet).
   // For all direct providers (FreeInference, OpenCode, DeepSeek, OpenAI, Groq, Mistral, Zhipu, etc.),
   // endpoints accept bare model IDs without vendor prefixes.
+  // Aggregators that REQUIRE vendor prefixes (Novita's deepseek/…, Nebius'
+  // Qwen/…, Together's meta-llama/…) are exempt from stripping: stripping
+  // deepseek/deepseek-v4.1-flash to deepseek-v4.1-flash 404s on Novita.
   const isOpenRouter = Boolean(baseUrl && baseUrl.includes('openrouter.ai'));
-  if (!isOpenRouter) {
+  const needsVendorPrefix = Boolean(baseUrl && /openrouter\.ai|novita\.ai|nebius|together\.xyz|fireworks\.ai|deepinfra\.com/i.test(baseUrl));
+  if (!isOpenRouter && !needsVendorPrefix) {
     m = m.replace(/^(?:freeinference|freeinforge|opencode-go|opencode|zen|go|openai|deepseek|zhipu|zai|anthropic|google|gemini)\//i, '');
   }
 

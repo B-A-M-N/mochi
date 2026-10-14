@@ -69,7 +69,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'logout', description: 'Clear the stored key for a provider' },
     ],
   },
-  { name: 'models', description: 'List models' },
+  { name: 'models', description: 'List models (--refresh live-diffs the endpoint against the table)' },
   { name: 'providers', description: 'List providers' },
   {
     name: 'pr', description: 'GitHub pull-request workflows (headless, CI-friendly)',

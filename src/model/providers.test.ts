@@ -107,6 +107,10 @@ describe('providers', () => {
       ['zai', 'glm-5.3'],
       ['cohere', 'command-a-plus-05-2026'],
       ['qwen', 'qwen-max'],
+      ['upstage', 'solar-pro4'],
+      ['nebius', 'meta-llama/Meta-Llama-3.3-70B-Instruct'],
+      ['novita', 'deepseek/deepseek-v4.1-flash'],
+      ['ai21', 'jamba-large'],
     ] as Array<[string, string]>) {
       const cfg = providerById(provider);
       expect(cfg, provider).toBeDefined();
@@ -114,5 +118,21 @@ describe('providers', () => {
       expect(resolved.model).toBe(model);
       expect(typeof createProvider({ provider, baseUrl: cfg!.baseUrl, model } as never).chat).toBe('function');
     }
+  });
+
+  it('provider ids are unique (no shadowed entries)', () => {
+    const ids = PROVIDERS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('aggregator vendor prefixes survive; direct-provider prefixes still strip', async () => {
+    const { normalizeModelName } = await import('./router.js');
+    // Aggregators require vendor/model form — stripping 404s (novita case).
+    expect(normalizeModelName('deepseek/deepseek-v4.1-flash', 'https://api.novita.ai/openai/v1')).toBe('deepseek/deepseek-v4.1-flash');
+    expect(normalizeModelName('Qwen/Qwen3-235B-A22B', 'https://api.studio.nebius.ai/v1')).toBe('Qwen/Qwen3-235B-A22B');
+    expect(normalizeModelName('meta-llama/Llama-3.3-70B-Instruct-Turbo', 'https://api.together.xyz/v1')).toBe('meta-llama/Llama-3.3-70B-Instruct-Turbo');
+    // Direct endpoints still want bare ids.
+    expect(normalizeModelName('deepseek/deepseek-chat', 'https://api.deepseek.com/v1')).toBe('deepseek-chat');
+    expect(normalizeModelName('openai/gpt-4o', 'https://api.openai.com/v1')).toBe('gpt-4o');
   });
 });

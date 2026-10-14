@@ -1632,8 +1632,8 @@ async function main() {
     return;
   }
   if (first === 'auth') {
-    // mochi auth [status [--probe] | logout [provider]] — credential visibility
-    // across all providers (authenticate with: mochi login <provider>).
+    // mochi auth [status [--probe] | logout [provider] | reset [provider]] — credential visibility
+    // across all providers (authenticate with: mochi login <provider>; change a key by logging in again).
     // Never prints key material: sources only (env/file/local/missing).
     // Unit in ./cli-auth.js (scripted deps); this stays a thin adapter.
     const { runAuthCommand } = await import('./cli-auth.js');
@@ -1646,6 +1646,31 @@ async function main() {
     return;
   }
   if (first === 'models') {
+    // mochi models [--refresh] [--provider <id>] — static table by default;
+    // --refresh live-diffs the active provider's /models endpoint against the
+    // table (detection only, never mutates providers.ts). Unit in
+    // ./model/model-refresh.js (stubbed fetch); this stays a thin adapter.
+    if (flags.refresh) {
+      const { providerById, PROVIDERS } = await import('./model/providers.js');
+      const { listRemoteModels, diffModels, renderRefresh } = await import('./model/model-refresh.js');
+      const { isKeyUsable } = await import('./model/startup-check.js');
+      const wanted = typeof flags.provider === 'string' ? flags.provider : runtime.config.model.provider;
+      const p = providerById(wanted) ?? PROVIDERS.find((x) => x.id === wanted.toLowerCase());
+      if (!p) { console.error(`Unknown provider: ${wanted}`); process.exit(1); }
+      const key = (p.envKey && process.env[p.envKey]) || (runtime.config.model.provider === p.id ? runtime.config.model.apiKey : undefined) || '';
+      if (!isKeyUsable(key)) {
+        console.error(`No usable key for ${p.id} — set $${p.envKey || '(no env key; log in via the TUI /login)'} or run: mochi login ${p.id}`);
+        process.exit(1);
+      }
+      const remote = await listRemoteModels(p, key);
+      if (!Array.isArray(remote)) {
+        console.log(renderRefresh(p, { provider: p.id, added: [], known: [], error: remote.error }));
+        process.exit(1);
+      }
+      const { added, known } = diffModels(p.models, remote);
+      console.log(renderRefresh(p, { provider: p.id, added, known }));
+      return;
+    }
     console.log(runtime.modelList().join('\n') || 'No models listed for ' + runtime.config.model.provider);
     return;
   }

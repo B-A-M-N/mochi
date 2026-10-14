@@ -14,6 +14,10 @@ export interface Provider {
   models: string[];
   defaultModel: string;
   chatPath?: string;
+  /** How to obtain a key (console URL, or CLI command for token-via-OAuth
+   *  flows like `gh auth login`). Optional — only filled where verified;
+   *  never a placeholder. Shown by `mochi auth status` and /login hints. */
+  keyHelp?: string;
 }
 
 export const PROVIDERS: Provider[] = [
@@ -34,7 +38,7 @@ export const PROVIDERS: Provider[] = [
   { id: 'azure', name: 'Azure OpenAI', kind: 'openai', baseUrl: 'YOUR_AZURE_ENDPOINT/openai/deployments/YOUR_DEPLOYMENT', envKey: 'AZURE_OPENAI_API_KEY', models: ['gpt-4o'], defaultModel: 'gpt-4o' },
   { id: 'huggingface', name: 'Hugging Face', kind: 'openai', baseUrl: 'https://router.huggingface.co/v1', envKey: 'HF_TOKEN', models: ['meta-llama/Llama-3.3-70B-Instruct'], defaultModel: 'meta-llama/Llama-3.3-70B-Instruct' },
   { id: 'bedrock', name: 'AWS Bedrock', kind: 'openai', baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1', envKey: 'AWS_BEARER_TOKEN_BEDROCK', models: ['anthropic.claude-sonnet-4-5', 'amazon.nova-pro-v1', 'meta.llama3-3-70b-instruct'], defaultModel: 'anthropic.claude-sonnet-4-5' },
-  { id: 'github-models', name: 'GitHub Models', kind: 'openai', baseUrl: 'https://models.github.ai/inference', envKey: 'GITHUB_TOKEN', models: ['openai/gpt-4.1', 'anthropic/claude-sonnet-4-5', 'mistral-ai/mistral-large'], defaultModel: 'openai/gpt-4.1' },
+  { id: 'github-models', name: 'GitHub Models', kind: 'openai', baseUrl: 'https://models.github.ai/inference', envKey: 'GITHUB_TOKEN', models: ['openai/gpt-4.1', 'anthropic/claude-sonnet-4-5', 'mistral-ai/mistral-large'], defaultModel: 'openai/gpt-4.1', keyHelp: 'No manual key needed if you use the gh CLI: run `gh auth login` (device-flow OAuth handled by gh), then export GITHUB_TOKEN=$(gh auth token)' },
   { id: 'deepinfra', name: 'DeepInfra', kind: 'openai', baseUrl: 'https://api.deepinfra.com/v1/openai', envKey: 'DEEPINFRA_API_KEY', models: ['meta-llama/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-Coder-32B-Instruct'], defaultModel: 'meta-llama/Llama-3.3-70B-Instruct' },
   { id: 'lmstudio', name: 'LM Studio (local)', kind: 'openai', baseUrl: 'http://localhost:1234/v1', envKey: '', models: ['local-model'], defaultModel: 'local-model' },
   { id: 'cloudflare', name: 'Cloudflare Workers AI', kind: 'openai', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1', envKey: 'CLOUDFLARE_API_TOKEN', models: ['@cf/meta/llama-3.3-70b-instruct-fp8-fast'], defaultModel: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
@@ -49,6 +53,10 @@ export const PROVIDERS: Provider[] = [
   { id: 'zai', name: 'Z.AI (GLM, overseas)', kind: 'openai', baseUrl: 'https://api.z.ai/api/paas/v4', envKey: 'ZAI_API_KEY', models: ['glm-5.3', 'glm-4.5', 'glm-4.5-air'], defaultModel: 'glm-5.3' },
   { id: 'cohere', name: 'Cohere', kind: 'openai', baseUrl: 'https://api.cohere.ai/compatibility/v1', envKey: 'COHERE_API_KEY', models: ['command-a-plus-05-2026', 'command-a-03-2025', 'command-a-reasoning-08-2025'], defaultModel: 'command-a-plus-05-2026' },
   { id: 'qwen', name: 'Alibaba Qwen (DashScope)', kind: 'openai', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', envKey: 'DASHSCOPE_API_KEY', models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen2.5-coder-32b-instruct'], defaultModel: 'qwen-max' },
+  { id: 'upstage', name: 'Upstage (Solar)', kind: 'openai', baseUrl: 'https://api.upstage.ai/v1', envKey: 'UPSTAGE_API_KEY', models: ['solar-pro4', 'solar-mini'], defaultModel: 'solar-pro4', keyHelp: 'Get a key at https://console.upstage.ai (API Keys)' },
+  { id: 'nebius', name: 'Nebius AI Studio', kind: 'openai', baseUrl: 'https://api.studio.nebius.ai/v1', envKey: 'NEBIUS_API_KEY', models: ['meta-llama/Meta-Llama-3.3-70B-Instruct', 'Qwen/Qwen3-235B-A22B'], defaultModel: 'meta-llama/Meta-Llama-3.3-70B-Instruct', keyHelp: 'Get a key at https://studio.nebius.com (API keys)' },
+  { id: 'novita', name: 'Novita AI', kind: 'openai', baseUrl: 'https://api.novita.ai/openai/v1', envKey: 'NOVITA_API_KEY', models: ['deepseek/deepseek-v4.1-flash', 'meta-llama/llama-3.1-8b-instruct'], defaultModel: 'deepseek/deepseek-v4.1-flash', keyHelp: 'Get a key at https://novita.ai (API Keys)' },
+  { id: 'ai21', name: 'AI21 Labs (Jamba)', kind: 'openai', baseUrl: 'https://api.ai21.com/studio/v1', envKey: 'AI21_API_KEY', models: ['jamba-large', 'jamba-mini'], defaultModel: 'jamba-large', keyHelp: 'Get a key at https://studio.ai21.com (API keys)' },
 ];
 
 export const providerById = (id: string): Provider | undefined => PROVIDERS.find((p) => p.id === id);

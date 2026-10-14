@@ -40,12 +40,15 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     log(`\n* = active. Authenticate with: mochi login <provider> (keys are live-probed before storing).${probing ? '' : ' Add --probe to live-verify configured keys.'}`);
     return;
   }
-  if (sub === 'logout') {
+  if (sub === 'logout' || sub === 'reset') {
+    // `reset` is an explicit alias for `logout`: changing a key is just
+    // `mochi login <provider>` again (it overwrites the stored key after a
+    // live probe); resetting is clearing it here. Same logic, clearer name.
     const target = positional[2] ?? activeId;
     const out = decideLogout(target, !!providerById(target), activeId, runtime.config.model.apiKey);
     if (!out.cleared) {
-      if (target && !providerById(target)) exit(1);
       log(out.message);
+      if (target && !providerById(target)) exit(1);
       return;
     }
     const cfg = loadConfigFile() as { model?: { apiKey?: string } };
@@ -53,9 +56,9 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     saveConfigFile(cfg as never);
     runtime.config.model.apiKey = undefined;
     const p = providerById(target)!;
-    log(`${out.message} Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
+    log(`${out.message} Re-login with: mochi login ${target}. Env-provided keys are unaffected (unset $${p.envKey} to remove those).`);
     return;
   }
-  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider]] (authenticate with: mochi login <provider>)`);
+  error(`Unknown auth command "${sub}". Use: mochi auth [status [--probe] | logout [provider] | reset [provider]] (authenticate with: mochi login <provider>; change a key by logging in again)`);
   exit(1);
 }

@@ -438,7 +438,7 @@ Global: `~/.config/mochi/config.json` · Project: `.mochi/config.json`
 | `MOCHI_LIGHT=1` | Disable embedded SQLite index + WASM parser |
 | `FREEINFERENCE_API_KEY=...` | Provider key (or any OpenAI-compatible env) |
 
-**32 built-in providers** — OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Azure, AWS Bedrock, GitHub Models, DeepInfra, Cloudflare Workers AI, HuggingFace, Perplexity, SambaNova, SiliconFlow, Moonshot/Kimi, MiniMax, Zhipu, Z.AI, Cohere, Alibaba Qwen, Ollama, LM Studio, llama.cpp, OpenCode Zen/Go, FreeInference — all with failover, key-pool rotation, and capability-tier routing. Adding one is a single registry entry plus tests (see the `provider-registration` skill).
+**36 built-in providers** — OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Azure, AWS Bedrock, GitHub Models, DeepInfra, Cloudflare Workers AI, HuggingFace, Perplexity, SambaNova, SiliconFlow, Moonshot/Kimi, MiniMax, Zhipu, Z.AI, Cohere, Alibaba Qwen, Upstage/Solar, Nebius, Novita, AI21/Jamba, Ollama, LM Studio, llama.cpp, OpenCode Zen/Go, FreeInference — all with failover, key-pool rotation, and capability-tier routing. Adding one is a single registry entry plus tests (see the `provider-registration` skill).
 
 Unknown values for `MOCHI_SAFETY` / `MOCHI_SANDBOX` / `MOCHI_REASONING` warn at startup rather than being silently ignored.
 

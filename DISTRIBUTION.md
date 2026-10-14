@@ -11,7 +11,7 @@ What makes it different from Claude Code / OpenCode / Aider:
 - **84 bundled deep-procedure skills** (vs ~10 for most agents). Each is a full workflow — real commands, numbers, pitfalls, verification loops — not a one-line description. `mochi skills search <query>` finds and loads them on demand; community skills publish to a marketplace repo.
 - **Adaptive token budgeting.** Tool schemas are advertised per task kind: coding tasks get a ~20-tool lean tier, chat tasks get 7, research a 16-tool read tier. A trivial question costs ~3.9k tokens end-to-end, not 13k. The model can pull any deferred tool back mid-run via `load_tools`.
 - **`mochi apply`** — atomic multi-file patch application. Parses a unified diff, validates every hunk against the working tree, applies all-or-nothing with rollback. Never trusts partial application.
-- **32 model providers** out of the box (OpenAI, Anthropic, Moonshot/Kimi, Cohere, Alibaba Qwen, Bedrock, free endpoints, local llama.cpp...), with failover and per-provider cooldowns.
+- **36 model providers** out of the box (OpenAI, Anthropic, Moonshot/Kimi, Cohere, Alibaba Qwen, Upstage/Solar, Nebius, Novita, AI21/Jamba, Bedrock, free endpoints, local llama.cpp...), with failover and per-provider cooldowns.
 - **Persistent goals** — `mochi` runs multi-step tasks as resumable goals with checkpoints, `mochi rollback` restores any snapshot, `mochi trace` replays the run.
 
 Cold start: 0.11s. One-shot task end-to-end: ~3s including the model round trip.

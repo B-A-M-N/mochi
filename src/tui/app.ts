@@ -2790,19 +2790,16 @@ if (line === '/branch' || line.startsWith('/branch ')) {
   }
 
   async function providerMenu() {
-    const activeProvider = runtime.config.model.provider;
-    const providerItems = PROVIDERS.map((p) => {
-      const active = p.id === activeProvider;
-      const badge = active ? `${T.lime}[ACTIVE]${T.reset} ` : '        ';
-      return `${p.name.padEnd(20)}  ${badge}${T.grayDark}${p.models.length} models · ${p.baseUrl}${T.reset}`;
-    });
-    const curIdx = PROVIDERS.findIndex((p) => p.id === activeProvider);
-    state.menuSelected = Math.max(0, curIdx);
-    const idx = await openMenu('Connected Model Providers', providerItems);
-    if (idx < 0) return;
-    const p = PROVIDERS[idx];
-    push('system', `${p.name} (${p.id})\nBase URL: ${p.baseUrl}\nAvailable Models:\n  ${p.models.join('\n  ') || '(none listed)'}`);
-    scheduleRender();
+    // Dedicated /providers browser (extracted unit — app.ts stays a thin
+    // dispatcher). Read-only: details show key source + keyHelp, never keys.
+    const { providersMenu } = await import('./providers-menu.js');
+    await providersMenu({
+      openMenu, push, scheduleRender,
+      setMenuSelected: (i: number) => { state.menuSelected = i; },
+      activeProvider: runtime.config.model.provider,
+      envLookup: (k: string) => process.env[k],
+      storedKey: runtime.config.model.apiKey,
+    }, '/providers');
   }
 
   async function modelMenu() {

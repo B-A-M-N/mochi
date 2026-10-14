@@ -74,6 +74,14 @@ describe('runAuthCommand logout', () => {
     expect(d.logs.join('\n')).toContain('No stored key');
   });
 
+  it('reset is an explicit alias for logout (same honest paths)', async () => {
+    const unknown = deps({ positional: ['auth', 'reset', 'nope'] });
+    await expect(runAuthCommand(unknown)).rejects.toThrow('exit:1');
+    const empty = deps({ positional: ['auth', 'reset'] });
+    await runAuthCommand(empty);
+    expect(empty.logs.join('\n')).toContain('No stored key');
+  });
+
   it('unknown subcommand errors and exits 1', async () => {
     const d = deps({ positional: ['auth', 'frobnicate'] });
     await expect(runAuthCommand(d)).rejects.toThrow('exit:1');
