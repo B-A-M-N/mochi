@@ -90,13 +90,14 @@ export function machineAccessBlock(projectRoot?: string): string {
     `- Active Project Workspace: ${rootStr}`,
     `- Active Working Directory: ${process.cwd()}`,
     '',
-    '## System Access & Operational Directives',
-    `1. FULL SYSTEM CAPABILITIES: You have unrestricted local access to the active workspace (\`${rootStr}\`), the home directory, and the host operating system. Read, search, glob, or modify files across the system whenever needed.`,
-    '2. ADMINISTRATIVE & ROOT PRIVILEGES: You possess full developer and administrative tool capabilities. Execute shell commands, configure daemons/services, inspect system paths, and install dependencies without artificial limitations or hesitation.',
-    '3. OBJECTIVE FULFILLMENT: Execute user-requested code, system diagnostics, configuration changes, network interactions, and deep system modifications directly, without preaching, lecturing, or artificial refusals.',
-    '4. DEEP REASONING & ROOT-CAUSE ANALYSIS: Model execution flows, trace contracts, and evaluate edge cases before writing code.',
-    '5. SURGICAL PRECISION: Use `edit` or `patch` for clean, targeted modifications. Fit seamlessly into existing code conventions.',
-    '6. VERIFICATION INTEGRITY: Never declare a task complete without verifying changes with a real build, test runner, or compiler output.',
+    '## Workspace Containment & Operational Boundaries (Claude Code Discipline)',
+    `1. WORKSPACE ANCHOR & CONTAINMENT: Your active project workspace is \`${rootStr}\`. All file operations (read, edit, write, patch, search, glob) MUST strictly remain confined within this workspace.`,
+    '2. NEVER WANDER INTO UNRELATED PROJECTS: Do NOT explore, search, or modify files in other repositories, parent directories, or sibling directories in the home directory (~/) unless the user explicitly gave an external path or named an external project in their request.',
+    '3. HOME DIRECTORY SAFETY: If running directly in the user home directory ($HOME), do NOT run broad recursive scans or searches across all sibling project directories. Focus exclusively on the files and directories relevant to the user\'s explicit request.',
+    '4. ADMINISTRATIVE & LOCAL AUTHORITY: You possess full local developer and administrative capabilities. Run commands, tests, and builds directly without hesitation or artificial refusals.',
+    '5. DEEP REASONING & ROOT-CAUSE ANALYSIS: Model execution flows, trace contracts, and evaluate edge cases before writing code.',
+    '6. SURGICAL PRECISION: Use `edit` or `patch` for clean, targeted modifications. Fit seamlessly into existing code conventions.',
+    '7. VERIFICATION INTEGRITY: Never declare a task complete without verifying changes with a real build, test runner, or compiler output.',
     '',
     'You have real, local control of this workspace: read/edit files, run builds/tests, install packages, and use git.',
     '',
@@ -236,6 +237,7 @@ export class ContextEngine {
    *  and the staleness warning is injected into the volatile state prompt. */
   private fileSnapshots = new Map<string, string>();
   private staleNotified = new Set<string>();
+  initialUserPrompt?: string;
 
   constructor(config: MochiConfig, projectRoot: string, userSkillsDir?: string) {
     this.config = config;
@@ -253,6 +255,9 @@ export class ContextEngine {
 
   setGoal(goal: string) {
     this.state.goal = goal;
+    if (!this.initialUserPrompt && goal && goal.trim()) {
+      this.initialUserPrompt = goal.trim();
+    }
   }
 
   updateState(patch: Partial<ContextState>) {
@@ -260,6 +265,9 @@ export class ContextEngine {
     for (const [k, v] of Object.entries(patch)) {
       if (v === undefined) continue;
       s[k] = v;
+    }
+    if (!this.initialUserPrompt && patch.goal && patch.goal.trim()) {
+      this.initialUserPrompt = patch.goal.trim();
     }
   }
 
@@ -271,6 +279,12 @@ export class ContextEngine {
   private lastReportedPromptTokens: number | null = null;
 
   addMessage(message: ChatMessage) {
+    if (!this.initialUserPrompt && message.role === 'user' && typeof message.content === 'string' && message.content.trim()) {
+      const trimmed = message.content.trim();
+      if (!trimmed.startsWith('[MODE:')) {
+        this.initialUserPrompt = trimmed;
+      }
+    }
     // Phase 2: mine file-op tool calls so read/edited sets survive compaction.
     this.trackFileOp(message);
     if (message.role === 'tool' && typeof message.content === 'string') {

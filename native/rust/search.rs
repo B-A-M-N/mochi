@@ -16,6 +16,18 @@ const MAX_TOTAL_OUTPUT: usize = 256_000;
 const MAX_TOTAL_MATCHES: usize = 200;
 const MAX_FILE_SIZE: u64 = 5_000_000;
 
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        s
+    } else {
+        let mut end = max_bytes;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+}
+
 fn should_ignore_dir(name: &str) -> bool {
     matches!(
         name,
@@ -88,11 +100,7 @@ fn extract_outline(path: &Path) -> String {
             || trimmed.starts_with("const ") && trimmed.contains(" = ") && (trimmed.contains("=>") || trimmed.contains("function"));
 
         if is_decl {
-            let snippet = if trimmed.len() > 65 {
-                &trimmed[..65]
-            } else {
-                trimmed
-            };
+            let snippet = safe_truncate(trimmed, 65);
             decls.push(format!("{line_num}:{snippet}"));
             if decls.len() >= 8 {
                 break;
@@ -166,7 +174,7 @@ fn walk_and_search(
             if line_buf.contains(query) {
                 let trimmed = line_buf.trim_end_matches(&['\r', '\n'][..]);
                 let display = if trimmed.len() > 200 {
-                    format!("{}...", &trimmed[..200])
+                    format!("{}...", safe_truncate(trimmed, 200))
                 } else {
                     trimmed.to_string()
                 };

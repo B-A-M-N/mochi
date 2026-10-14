@@ -4,6 +4,18 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        s
+    } else {
+        let mut end = max_bytes;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+}
+
 pub fn extract_file_outline(path: &Path) -> String {
     let Ok(file) = File::open(path) else {
         return String::new();
@@ -44,11 +56,7 @@ pub fn extract_file_outline(path: &Path) -> String {
             || (trimmed.starts_with("const ") && trimmed.contains(" = ") && (trimmed.contains("=>") || trimmed.contains("function")));
 
         if is_decl {
-            let snippet = if trimmed.len() > 65 {
-                &trimmed[..65]
-            } else {
-                trimmed
-            };
+            let snippet = safe_truncate(trimmed, 65);
             decls.push(format!("{line_num}:{snippet}"));
             if decls.len() >= 8 {
                 break;
@@ -145,7 +153,7 @@ pub fn search_directory(root: &Path, query: &str, glob: &str, limit: usize) -> S
                 if line_buf.contains(query) {
                     let trimmed = line_buf.trim_end_matches(&['\r', '\n'][..]);
                     let display = if trimmed.len() > 200 {
-                        format!("{}...", &trimmed[..200])
+                        format!("{}...", safe_truncate(trimmed, 200))
                     } else {
                         trimmed.to_string()
                     };
