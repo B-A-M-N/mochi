@@ -31,6 +31,26 @@ describe('find-references and find-definitions tools', () => {
     expect(res).toContain('Definitions for "computeTotal"');
     expect(res).toContain('a.ts');
     expect(res).toContain('function computeTotal');
+    expect(res).toContain('AST-verified');
+  });
+
+  it('AST path ignores calls, comments, and strings — only the real declaration', async () => {
+    // computeTotal is called in b.ts and (hypothetically) could appear in a
+    // comment; only a.ts declares it. Exactly one definition, AST-tagged.
+    writeFileSync(join(dir, 'c.ts'), '// computeTotal is mentioned here in a comment\nconst msg = "computeTotal";\n');
+    const res = await findDefinitionsTool.execute({ symbol: 'computeTotal' }, ctx);
+    const defLines = String(res).split('\n').filter((l) => /^\s+\S+:\d+:\d+\s+\[/.test(l));
+    expect(defLines).toHaveLength(1);
+    expect(defLines[0]).toContain('a.ts');
+    expect(defLines[0]).toContain('[function]');
+  });
+
+  it('falls back to regex for non-TS scopes (python)', async () => {
+    writeFileSync(join(dir, 'script.py'), 'def computeTotal(x):\n    return x * 2\n');
+    const res = await findDefinitionsTool.execute({ symbol: 'computeTotal', path: 'script.py' }, ctx);
+    expect(res).toContain('computeTotal');
+    // python has no AST path here, so the regex fallback labels itself
+    expect(String(res)).toContain('regex fallback');
   });
 
   it('finds references and usages of a symbol across files', async () => {

@@ -127,6 +127,26 @@ export const findDefinitionsTool: Tool = {
     const symbol = String(args.symbol ?? '').trim();
     if (!symbol) return 'Error: symbol parameter is required.';
 
+    // AST path first: for TS/JS, parse real syntax so we report true
+    // declarations (kind + exact line + signature) instead of regex matches
+    // that also hit comments, strings, and call sites. Non-TS/JS files and a
+    // missing compiler fall through to the regex below.
+    const { findTsDefinitions } = await import('../core/symbol-defs.js');
+    const searchScope = args.path ? String(args.path).trim() : '.';
+    const { existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const scopeAbs = resolve(ctx.cwd, searchScope === '.' ? '.' : searchScope);
+    if (existsSync(scopeAbs)) {
+      const astDefs = findTsDefinitions(ctx.cwd, scopeAbs, symbol);
+      if (astDefs && astDefs.length > 0) {
+        const lines = astDefs.slice(0, 40).map((d) => `  ${d.file}:${d.line}:${d.column}  [${d.kind}]  ${d.signature}`);
+        const tail = astDefs.length > 40 ? `\n\n[... ${astDefs.length - 40} more definitions omitted ...]` : '';
+        return `# Definitions for "${symbol}" (${astDefs.length} found, AST-verified)\n\n${lines.join('\n')}${tail}`;
+      }
+      // AST found nothing in TS/JS — still try regex for other languages below,
+      // but if the scope is pure TS/JS we can report the honest empty result.
+    }
+
     // `export function symbol`, `class symbol`, `interface symbol`, `def symbol`, `fn symbol`, `func symbol`
     const pattern = `\\b(function|class|interface|type|enum|const|let|var|def|fn|func|struct|trait|impl)\\s+${escapeRegExp(symbol)}\\b`;
     const COMMON_IGNORE_GLOBS = ['-g', '!{dist,build,out,target,.next,.turbo,coverage,node_modules,.cache}/**'];
@@ -136,7 +156,7 @@ export const findDefinitionsTool: Tool = {
     if (lines.length === 0) {
       return `No definitions found matching pattern for "${symbol}".`;
     }
-    return `# Definitions for "${symbol}"\n\n` + lines.map((l) => `  ${l}`).join('\n');
+    return `# Definitions for "${symbol}" (regex fallback — verify each is a real declaration)\n\n` + lines.map((l) => `  ${l}`).join('\n');
   },
 };
 
