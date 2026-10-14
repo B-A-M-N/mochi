@@ -618,5 +618,45 @@
     "name": "learning-new-topic-fast",
     "path": "learning-new-topic-fast",
     "description": "Learn a new subject or skill to working competence fast — deliberate practice, Feynman technique, and project-based immersion. Use when you need to get good at something new on a deadline."
+  },
+  {
+    "name": "legacy-refactoring",
+    "path": "legacy-refactoring",
+    "description": "Safely refactor legacy code that has no tests — characterization tests, golden masters, and small reversible steps. Use when improving or cleaning up old, untested code."
+  },
+  {
+    "name": "debugging-with-bisect",
+    "path": "debugging-with-bisect",
+    "description": "Find the exact commit that introduced a regression using git bisect and a scripted check. Use when a bug appeared \"sometime recently\" and you need the commit, not a guess."
+  },
+  {
+    "name": "test-generation-from-scratch",
+    "path": "test-generation-from-scratch",
+    "description": "Write tests for code that has none — boundary analysis, table-driven cases, and property checks. Use when adding tests to untested code or increasing coverage meaningfully."
+  },
+  {
+    "name": "performance-optimization",
+    "path": "performance-optimization",
+    "description": "Make code faster the right way — measure first, fix the hotspot, verify the win. Use when code is too slow and you need real improvement, not a guess."
+  },
+  {
+    "name": "concurrency-correctness",
+    "path": "concurrency-correctness",
+    "description": "Write concurrent code that is actually correct — happens-before, lock discipline, and avoiding data races. Use when writing parallel, async, or threaded code."
+  },
+  {
+    "name": "api-backwards-compatibility",
+    "path": "api-backwards-compatibility",
+    "description": "Change APIs without breaking existing clients — deprecation windows, additive changes, and safe removal. Use when evolving a library, CLI, or HTTP API others depend on."
+  },
+  {
+    "name": "writing-stable-tests",
+    "path": "writing-stable-tests",
+    "description": "Write tests that never flaky — deterministic, isolated, and order-independent. Use when writing any test that will run in CI forever."
+  },
+  {
+    "name": "reading-unfamiliar-code",
+    "path": "reading-unfamiliar-code",
+    "description": "Get productive in an unfamiliar codebase fast — entry points, call graphs, and the five-question map. Use when onboarding to a new repo or subsystem."
   }
 ]
