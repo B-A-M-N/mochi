@@ -7,8 +7,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { skillSimilarity, consolidateSkills, defaultCuratorConfig, scanSkills, runCurator } from './skills/skill-curator.js';
-import { saveUsage } from './skills/skill-manager.js';
+import { skillSimilarity, consolidateSkills, defaultCuratorConfig, scanSkills, runCurator, promoteLessons } from './skills/skill-curator.js';
+import { saveLessons } from './lessons.js';
+import { loadUsage, saveUsage } from './skills/skill-manager.js';
 
 let dir: string;
 
@@ -87,5 +88,46 @@ describe('skill dedup / consolidation', () => {
     expect(out.consolidated.length).toBe(1);
     expect(out.consolidated[0].merged).toBe('worker-deploy-guide');
     expect(out.consolidated[0].kept).toBe('deploy-worker');
+  });
+});
+
+describe('lesson promotion (experience → gated skills)', () => {
+  beforeEach(() => { dir = mkdtempSync(resolve(tmpdir(), 'mochi-curator-promote-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  function seedLessons(): void {
+    saveLessons(dir, [
+      { id: 'l1', signature: 'ECONNREFUSED db', lesson: 'Retry the database connection with exponential backoff (100ms base, 5 attempts) before failing the task.', useCount: 5, successCount: 2, recordedAtMs: 1 },
+      { id: 'l2', signature: 'flaky thing', lesson: 'Re-run the flaky step once before investigating further here.', useCount: 1, successCount: 1, recordedAtMs: 1 },
+      { id: 'l3', signature: 'never fixed', lesson: 'Some approach that never actually fixed anything at all here.', useCount: 9, successCount: 0, recordedAtMs: 1 },
+      { id: 'l4', signature: '', lesson: 'A lesson with no trigger signature attached to it here.', useCount: 9, successCount: 9, recordedAtMs: 1 },
+    ]);
+  }
+
+  it('promotes only proven lessons (3+ uses, 1+ fixes) into gated skills', () => {
+    seedLessons();
+    const { promoted, skipped } = promoteLessons(dir);
+    expect(promoted).toEqual(['learned-econnrefused-db']);
+    expect(skipped.map((s) => s.signature)).toEqual(expect.arrayContaining(['flaky thing', 'never fixed', '(empty)']));
+    const body = readFileSync(resolve(dir, '.mochi', 'skills', 'learned', 'learned-econnrefused-db', 'SKILL.md'), 'utf8');
+    expect(body).toContain('ECONNREFUSED db');
+    expect(body).toContain('exponential backoff');
+    expect(body).not.toContain('sk-');
+    // Flagged agent-created so later curator passes lifecycle-manage it.
+    expect(loadUsage(dir).byName['learned-econnrefused-db']?.agentCreated).toBe(true);
+  });
+
+  it('is idempotent (second pass collides instead of duplicating)', () => {
+    seedLessons();
+    expect(promoteLessons(dir).promoted).toHaveLength(1);
+    const second = promoteLessons(dir);
+    expect(second.promoted).toEqual([]);
+    expect(second.skipped.some((s) => s.reason.includes('already exists'))).toBe(true);
+  });
+
+  it('runCurator surfaces promotions in its output and report', () => {
+    seedLessons();
+    const out = runCurator(dir, defaultCuratorConfig());
+    expect(out.promoted).toEqual(['learned-econnrefused-db']);
   });
 });

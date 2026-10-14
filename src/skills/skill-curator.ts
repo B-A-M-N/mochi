@@ -16,6 +16,8 @@ import { readdirSync, existsSync, readFileSync, statSync, mkdirSync, writeFileSy
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {skillsRoot, archiveRoot, loadUsage, safeSlug, parseFrontmatter, renderSkill} from './skill-manager.js';
+import { writeSkill, markUsed } from './skill-manager.js';
+import { loadLessons } from '../lessons.js';
 import { lintSkillDoc, formatSkillLint } from './skill-lint.js';
 import { maybeRedact } from '../security/security.js';
 
@@ -154,6 +156,8 @@ export interface CuratorOutput {
    *  archived). Previously the `consolidate` config flag existed but was
    *  never consumed — vaporware. */
   consolidated: Array<{ kept: string; merged: string }>;
+  /** Lessons promoted to agent-created skills this pass. */
+  promoted: string[];
   reportPath: string;
 }
 
@@ -217,6 +221,86 @@ function projectDirFor(skillPath: string): string {
   return idx > 0 ? s.slice(0, idx).join('/') : dirname(dirname(skillPath));
 }
 
+export interface PromotionResult {
+  promoted: string[];
+  skipped: Array<{ signature: string; reason: string }>;
+}
+
+/** Promotion bar: retrieved repeatedly AND fixed something at least once.
+ *  Anything lower is noise that would fill the tree with junk. */
+export const PROMOTE_MIN_USES = 3;
+export const PROMOTE_MIN_SUCCESSES = 1;
+
+/** Turn proven lessons into agent-created skills (the self-training loop's
+ *  write path: experience → lesson → reusable procedure). Conservative:
+ *  only lessons retrieved 3+ times with ≥1 recorded fix qualify; bodies are
+ *  templated from the lesson's own trigger+strategy (match/apply/verify —
+ *  the actual retrieval protocol, no invented specifics); writeSkill's
+ *  lint+quality gates still apply, so junk can never land; collisions with
+ *  existing skill names skip. Promoted skills are flagged agentCreated so
+ *  later curator passes lifecycle-manage them (stale/archive/consolidate). */
+export function promoteLessons(projectDir: string): PromotionResult {
+  const promoted: string[] = [];
+  const skipped: Array<{ signature: string; reason: string }> = [];
+  let lessons;
+  try {
+    lessons = loadLessons(projectDir);
+  } catch {
+    return { promoted, skipped };
+  }
+  for (const l of lessons) {
+    const sig = (l.signature ?? '').trim();
+    const strategy = (l.lesson ?? '').trim();
+    if (!sig || strategy.length < 20) { skipped.push({ signature: sig || '(empty)', reason: 'no usable trigger/strategy' }); continue; }
+    if ((l.useCount ?? 0) < PROMOTE_MIN_USES || (l.successCount ?? 0) < PROMOTE_MIN_SUCCESSES) {
+      skipped.push({ signature: sig, reason: `below bar (uses ${l.useCount ?? 0}, fixes ${l.successCount ?? 0})` });
+      continue;
+    }
+    const name = `learned-${safeSlug(sig).slice(0, 40)}`;
+    // Collision with any existing skill (root or category dir): keep the human
+    // version, skip. A missing tree means no collision (writeSkill creates it).
+    try {
+      const root = skillsRoot(projectDir);
+      let collision = existsSync(join(root, name, 'SKILL.md'));
+      if (!collision && existsSync(root)) {
+        for (const e of readdirSync(root, { withFileTypes: true })) {
+          if (e.isDirectory() && !e.name.startsWith('.') && existsSync(join(root, e.name, name, 'SKILL.md'))) { collision = true; break; }
+        }
+      }
+      if (collision) { skipped.push({ signature: sig, reason: `skill ${name} already exists` }); continue; }
+    } catch {
+      skipped.push({ signature: sig, reason: 'tree unreadable' });
+      continue;
+    }
+    const body = [
+      `# Learned fix for "${sig.slice(0, 80)}"`,
+      ``,
+      `## Trigger / when to use`,
+      `When command output contains \`${sig.slice(0, 120)}\`${l.kind ? ` during ${l.kind} failures` : ''}. Auto-promoted after ${l.useCount} retrievals with ${l.successCount} recorded fix${l.successCount === 1 ? '' : 'es'}.`,
+      ``,
+      `## Procedure`,
+      `1. Confirm the failure output matches the signature above — a similar message with a different root cause needs a different fix.`,
+      `2. Apply the learned fix: ${strategy}`,
+      `3. Re-run the failing command and confirm the error clears.`,
+      ``,
+      `## Pitfalls`,
+      `- Re-applying blindly when the signature matches a different root cause — step 1 exists for this; signatures are substrings, not diagnoses.`,
+      ``,
+      `## Verification`,
+      `The originating command exits clean. If the fix stops working, patch this skill (do not duplicate it) so the curator keeps one canonical copy.`,
+      ``,
+    ].join('\n');
+    const description = `Auto-learned fix: ${strategy.slice(0, 140)}. Use when output matches the recorded failure signature.`;
+    const r = writeSkill(projectDir, { name, description, body, category: 'learned' });
+    if (!r.ok) { skipped.push({ signature: sig, reason: `gate rejected (${String(r.error).slice(0, 120)})` }); continue; }
+    try {
+      markUsed(projectDir, name, { agentCreated: true, category: 'learned' });
+    } catch { /* usage record is best-effort; the skill file itself landed */ }
+    promoted.push(name);
+  }
+  return { promoted, skipped };
+}
+
 export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutput {
   const { snapshots, stale, archive } = scanSkills(projectDir, cfg);
   const agentCreated = snapshots.filter((s) => s.agentCreated);
@@ -241,12 +325,19 @@ export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutpu
     (s.agentCreated || usage.byName[s.name]?.agentCreated) && !archived.includes(s.name) && !pinned.has(s.name));
   const consolidated = consolidateSkills(consolidateable, cfg);
   for (const c of consolidated) archived.push(c.merged);
+  // Promotion runs on the survivors so fresh lessons become gated,
+  // agent-created skills in the same pass (self-training write path).
+  let promoted: string[] = [];
+  try {
+    promoted = promoteLessons(projectDir).promoted;
+  } catch { /* promotion is best-effort; curation results still land */ }
   const report = [
     `# Skill curator report (${new Date(now).toISOString()})`,
     `Scanned: ${snapshots.length} skills (${agentCreated.length} agent-created).`,
     `Stale: ${stale.map((s) => s.name).join(', ') || '(none)'}.`,
     `Archived: ${archived.join(', ') || '(none)'}.`,
     consolidated.length ? `Consolidated: ${consolidated.map((c) => `${c.merged} → ${c.kept}`).join(', ')}.` : '',
+    promoted.length ? `Promoted: ${promoted.join(', ')}.` : '',
     ``,
     'Agent-created skills (maintainable):',
     ...agentCreated.map((s) => `- ${s.name}${s.category ? ` [${s.category}]` : ''} — ${s.patches} patches, active`),
@@ -255,7 +346,7 @@ export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutpu
   mkdirSync(reportDir, { recursive: true });
   const reportPath = join(reportDir, `skill-curator-${now}.md`);
   writeFileSync(reportPath, report, 'utf8');
-  return { scanned: snapshots.length, agentCreated: agentCreated.length, stale: stale.map((s) => s.name), archived, consolidated, reportPath };
+  return { scanned: snapshots.length, agentCreated: agentCreated.length, stale: stale.map((s) => s.name), archived, consolidated, promoted, reportPath };
 }
 
 // ─── State (last-run time, pause, pin) — Hermes curator_state ────────────

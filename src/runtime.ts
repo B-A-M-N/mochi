@@ -498,7 +498,7 @@ export class Runtime {
     try {
       const { runCurator, defaultCuratorConfig } = await import('./skills/skill-curator.js');
       const co = runCurator(this.cwd, defaultCuratorConfig());
-      const curatorSummary = `scanned ${co.scanned}, agent-authored ${co.agentCreated}, stale ${co.stale.length}, archived ${co.archived.length}, consolidated ${co.consolidated.length}${co.reportPath ? `\nreport: ${co.reportPath}` : ''}`;
+      const curatorSummary = `scanned ${co.scanned}, agent-authored ${co.agentCreated}, promoted ${co.promoted.length}, stale ${co.stale.length}, archived ${co.archived.length}, consolidated ${co.consolidated.length}${co.reportPath ? `\nreport: ${co.reportPath}` : ''}`;
       reports.push(`## Skill curator\n${curatorSummary}\n`);
     } catch { /* curator failure must not fail the training run */ }
 
