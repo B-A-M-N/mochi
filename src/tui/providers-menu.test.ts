@@ -118,6 +118,18 @@ describe('providersMenu', () => {
     expect(err?.text).toContain('gh auth login');
   });
 
+  it('OAuth wizard shows setup steps first and Back stores nothing', async () => {
+    const menus: string[] = [];
+    const { d, lines, persisted } = deps({
+      openMenu: async (t: string) => { menus.push(t); return 1; },
+      getAmbientKey: async () => 'ghp-oauth-token',
+    });
+    await providersMenu(d, '/providers github-models');
+    expect(menus).toContain('Login with GitHub OAuth');
+    expect(lines.some((l) => l.text.includes('gh auth login'))).toBe(true);
+    expect(persisted).toEqual([]);
+  });
+
   it('nomatch errors honestly', async () => {
     const { d, lines } = deps();
     await providersMenu(d, '/providers zzz-nope');

@@ -101,7 +101,7 @@ export async function providersMenu(deps: ProvidersMenuDeps, line: string): Prom
     const oauth = oauthLoginHint(p);
     const actions: Array<{ label: string; run: () => Promise<void> }> = [
       { label: 'Re-authenticate with API key', run: () => reauthenticate(deps, p) },
-      ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthLogin(deps, p, oauth) }] : []),
+      ...(oauth ? [{ label: `${oauth.label} (via \`${oauth.command}\`)`, run: () => oauthWizard(deps, p, oauth) }] : []),
       { label: 'Clear stored key', run: () => clearStoredKey(deps, p) },
       { label: 'Done', run: async () => {} },
     ];
@@ -144,14 +144,25 @@ async function reauthenticate(deps: ProvidersMenuDeps, p: Provider): Promise<voi
   await authenticateKey(deps, p, await selectModel(deps, p));
 }
 
-/** OAuth login for providers with a real local flow (gh, huggingface-cli):
- *  model select → pull the CLI token → probe → persist. When the CLI isn't
- *  authed, it says the exact command to run instead of failing cryptically. */
-async function oauthLogin(deps: ProvidersMenuDeps, p: Provider, oauth: { label: string; command: string }): Promise<void> {
-  const { push, scheduleRender } = deps;
+/** OAuth login wizard for providers with a real local flow (gh,
+ *  huggingface-cli): everything happens in menus — instructions first, then
+ *  Grab pulls the CLI token, probes it, and stores it. When the CLI isn't
+ *  authed yet it names the exact setup command instead of dying quietly. */
+async function oauthWizard(deps: ProvidersMenuDeps, p: Provider, oauth: { label: string; command: string }): Promise<void> {
+  const { openMenu, push, scheduleRender, setMenuSelected } = deps;
+  push('system', [
+    `${oauth.label} for ${p.name}:`,
+    `1. Open a shell and run: ${oauth.command}`,
+    '2. Finish the approval there.',
+    '3. Come back here and grab the token — it is probed before storing, exactly like an API key.',
+  ].join('\n'));
+  scheduleRender();
+  setMenuSelected(0);
+  const step = await openMenu(oauth.label, ['Grab the token now', 'Back']);
+  if (step !== 0) return;
   const token = await deps.getAmbientKey(p.id);
   if (!token) {
-    push('error', `${oauth.label} needs \`${oauth.command}\` first: run it in a shell, then choose this action again.`);
+    push('error', `No token found yet — finish \`${oauth.command}\` first, then retry. Nothing stored.`);
     scheduleRender();
     return;
   }
