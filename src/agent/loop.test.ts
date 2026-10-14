@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -2235,6 +2235,157 @@ describe('scope fence (drift guard — out-of-scope writes vetoed)', () => {
     } finally {
       await fake.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('/tmp-evil is not /tmp: prefix-only tmp matches are vetoed, real /tmp stays allowed', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-tmp-fence-'));
+    const okFile = resolve(tmpdir(), `mochi-tmp-ok-${process.pid}.txt`);
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Trying a lookalike tmp dir.',
+        toolCalls: [{ id: 's-evil', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo pwn > /tmp-evil/mochi-pwn.txt' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Real tmp is fine.',
+        toolCalls: [{ id: 's-ok', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: `echo ok > ${okFile}` }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Check tmp handling');
+      const task = createTask('Check tmp handling', 'Check tmp handling.');
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      await agent.run(task);
+      expect(existsSync('/tmp-evil/mochi-pwn.txt')).toBe(false);
+      expect(existsSync(okFile)).toBe(true);
+      expect(fake.requests.some((r) => JSON.stringify(r).includes('Vetoed:'))).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(okFile, { force: true });
+    }
+  });
+
+  it('absolute redirect outside the workspace is vetoed (not just ../ forms)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-redir-fence-'));
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Dumping outside.',
+        toolCalls: [{ id: 's-dump', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo data > /var/tmp/mochi-outside-dump.txt' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Writing inside instead.',
+        toolCalls: [{ id: 'w-local', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'app.js', content: 'console.log(1);' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done. Created app.js.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create app.js');
+      const task = createTask('Create app.js', 'Create app.js.');
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(existsSync('/var/tmp/mochi-outside-dump.txt')).toBe(false);
+      expect(result.success).toBe(true);
+      expect(fake.requests.some((r) => JSON.stringify(r).includes('redirects output'))).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a successful write resets the veto streak (third veto does not re-inject the protocol)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-veto-reset-'));
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Drifting.',
+        toolCalls: [{ id: 'w-1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../other/a.txt', content: 'x' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Still drifting.',
+        toolCalls: [{ id: 'w-2', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../other/b.txt', content: 'y' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'On task.',
+        toolCalls: [{ id: 'w-3', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'app.js', content: 'console.log(1);' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'Drifting again.',
+        toolCalls: [{ id: 'w-4', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '../other/c.txt', content: 'z' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done. Created app.js.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create app.js');
+      const task = createTask('Create app.js', 'Create app.js.');
+      task.fileScope = ['app.js'];
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      await agent.run(task);
+      expect(existsSync(resolve(dir, 'other/c.txt'))).toBe(false);
+      // Turn-0 injection (1) + second veto (1) = 2 protocol copies in the
+      // final transcript. Without the reset, the fourth-turn veto would add
+      // a third. Count occurrences in the last request body.
+      const last = JSON.stringify(fake.requests[fake.requests.length - 1]);
+      const copies = last.split('TASK EXECUTION & OPERATIONAL AUTONOMY PROTOCOL').length - 1;
+      expect(copies).toBe(2);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('prompt authorization uses word boundaries (test inside latest authorizes nothing)', async () => {
+    const { homedir } = await import('node:os');
+    const home = homedir();
+    const tag = `mochi-fence-${process.pid}-${Date.now()}`;
+    const wsRoot = resolve(home, `${tag}-ws`);
+    const sibDir = resolve(home, `${tag}-sib`, 'test');
+    mkdirSync(sibDir, { recursive: true });
+    writeFileSync(resolve(sibDir, 'deep.txt'), 'sibling secret');
+    const fake = await startFakeOpenAI([
+      {
+        content: 'Reading sibling file.',
+        toolCalls: [{ id: 'r-sib', type: 'function', function: { name: 'read', arguments: JSON.stringify({ path: resolve(sibDir, 'deep.txt') }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Understood, staying in my workspace.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(wsRoot, fake.url);
+      const workspace = new Workspace(wsRoot, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, wsRoot);
+      // 'latest' contains the substring 'test' — a bare substring check would
+      // treat this prompt as authorizing the sibling's test/ directory.
+      context.setGoal('Fix the latest bug');
+      const task = createTask('Fix the latest bug', 'Fix the latest bug in my project.');
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: wsRoot, context });
+      await agent.run(task);
+      expect(fake.requests.some((r) => JSON.stringify(r).includes('Vetoed:') && JSON.stringify(r).includes('sibling'))).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(wsRoot, { recursive: true, force: true });
+      rmSync(resolve(home, `${tag}-sib`), { recursive: true, force: true });
     }
   });
 });

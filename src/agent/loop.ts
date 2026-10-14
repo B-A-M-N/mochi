@@ -506,13 +506,26 @@ export class Agent {
     return resolve(this.cwd, raw);
   }
 
+  private isTmpPath(abs: string): boolean {
+    if (!abs) return false;
+    const sysTmp = resolve(tmpdir());
+    return abs === '/tmp' || abs.startsWith('/tmp' + sep) || abs === sysTmp || abs.startsWith(sysTmp + sep);
+  }
+
   private isPromptAuthorized(targetPath: string): boolean {
     const prompt = (this.context.initialUserPrompt || this.activeTask?.description || this.activeTask?.title || '').toLowerCase();
     if (!prompt) return false;
     const abs = this.resolveTargetPath(targetPath).toLowerCase();
     const base = basename(abs).toLowerCase();
     const dir = basename(dirname(abs)).toLowerCase();
-    return prompt.includes(abs) || prompt.includes(targetPath.toLowerCase()) || prompt.includes(base) || prompt.includes(dir);
+    // base/dir match on word boundaries: a bare substring would authorize a
+    // sibling's src/ for any prompt containing 'src' (even inside
+    // 'description'), and an empty dir (root-level target) matches everything.
+    const wordHit = (w: string): boolean => {
+      if (!w) return false;
+      return new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(prompt);
+    };
+    return prompt.includes(abs) || prompt.includes(targetPath.toLowerCase()) || wordHit(base) || wordHit(dir);
   }
 
   private isInsideWorkspace(targetPath: string): boolean {
@@ -3576,9 +3589,9 @@ Continue from 'Next:', do not redo completed progress.`,
           return;
         }
 
-        // (b) Workspace root fence: if workspace is not homedir, never mutate outside workspace (except /tmp)
+        // (b) Workspace root fence: if workspace is not homedir, never mutate outside workspace (except tmp)
         const abs = this.resolveTargetPath(target);
-        const inTmp = abs.startsWith('/tmp') || abs.startsWith(resolve(tmpdir()));
+        const inTmp = this.isTmpPath(abs);
         if (resolve(this.workspace.root) !== resolve(homedir()) && !this.isInsideWorkspace(target) && !inTmp && !this.isPromptAuthorized(target)) {
           this.scopeVetoCount++;
           const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
@@ -3708,7 +3721,7 @@ Continue from 'Next:', do not redo completed progress.`,
           return;
         }
         const absCwd = this.resolveTargetPath(targetCwd);
-        const inTmp = absCwd.startsWith('/tmp') || absCwd.startsWith(resolve(tmpdir()));
+        const inTmp = this.isTmpPath(absCwd);
         if (resolve(this.workspace.root) !== resolve(homedir()) && !this.isInsideWorkspace(targetCwd) && !inTmp && !this.isPromptAuthorized(targetCwd)) {
           this.context.addMessage({
             role: 'tool',
@@ -3757,15 +3770,30 @@ Continue from 'Next:', do not redo completed progress.`,
       const hasFileScope = Boolean(this.activeTask?.fileScope?.length);
       if (isWsRoot || hasFileScope) {
         const WRITES_OUTSIDE = /\b(mkdir|touch|mv|cp|tee|install|rsync|ln)\b[^;&|]*\.\.|>>?\s*(?!\/)[\w./-]*\.\.\//;
-        if (cmd && WRITES_OUTSIDE.test(cmd)) {
+        // Absolute redirect targets bypass the regex above (`> /etc/x` has no
+        // `..` and absolute paths are lookahead-excluded): resolve every `>`
+        // target through the workspace fence instead. /tmp, /dev/*, and fd
+        // redirections (2>, >&2, &>) stay allowed.
+        let absRedirect: string | null = null;
+        if (cmd) {
+          for (const m of cmd.matchAll(/(?:^|[^\d&>])>>?\s*([^\s;&|]+)/g)) {
+            const tgt = m[1];
+            if (!tgt || tgt.startsWith('&') || tgt === '/dev/null' || tgt.startsWith('/dev/') || /^\d+$/.test(tgt)) continue;
+            const resolved = this.resolveTargetPath(tgt);
+            if (this.isTmpPath(resolved)) continue;
+            if (!this.isInsideWorkspace(tgt) && !this.isPromptAuthorized(tgt)) { absRedirect = tgt; break; }
+          }
+        }
+        if (absRedirect || (cmd && WRITES_OUTSIDE.test(cmd))) {
           this.scopeVetoCount++;
           const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+          const what = absRedirect ? `redirects output to "${absRedirect}", which is OUTSIDE` : 'writes OUTSIDE';
           this.context.addMessage({
             role: 'tool',
             tool_call_id: tc.id,
             name: tc.function.name,
             content:
-              `Vetoed: this command writes OUTSIDE the active workspace root (${this.workspace.root}). ` +
+              `Vetoed: this command ${what} the active workspace root (${this.workspace.root}). ` +
               `Your objective is: ${this.activeTask?.title || this.context.initialUserPrompt}. Do not create or modify files unrelated to it.` +
               focus,
           });
@@ -3835,6 +3863,11 @@ Continue from 'Next:', do not redo completed progress.`,
     // gate) operates on the exit-code-aware outcome, not the raw tool result.
     const err = effectiveError;
     const out = effectiveOutput;
+    // The scope fence promises "SECOND *consecutive*" veto re-injects the
+    // focus protocol — a successful mutation breaks the streak, so the counter
+    // resets here. Without this, vetoes from an old task kept the protocol
+    // stapled to every later veto for the rest of the session.
+    if (!err && MUTATING_TOOLS.has(toolName)) this.scopeVetoCount = 0;
     // Instant diagnostics (the Crush LSP insight): after every edit, surface
     // type/syntax errors for the touched file in the SAME turn so the model
     // fixes them now instead of burning whole iterations discovering them at
