@@ -56,7 +56,11 @@ if (process.argv.includes('--skip-tests')) {
   const suiteLog = resolve(tmpdir(), `mochi-release-suite-${process.pid}.log`);
   let suiteFailed = false;
   try {
-    execSync(`npx vitest run --reporter=basic > "${suiteLog}" 2>&1`, { cwd: root, timeout: 600_000 });
+    // `default` reporter — vitest 5 removed `basic`, and `text` isn't a
+    // built-in name either (it'd be loaded as a custom module and fail).
+    // `default` emits the `Test Files`/`Tests`/`FAIL <file>` lines the summary
+    // grep and failing-file detection below both depend on.
+    execSync(`npx vitest run --reporter=default > "${suiteLog}" 2>&1`, { cwd: root, timeout: 600_000 });
   } catch {
     suiteFailed = true;
   }
