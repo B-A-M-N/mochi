@@ -283,8 +283,9 @@ export class ContextEngine {
     const msg = message.tool_calls ? { ...message, tool_calls: [...message.tool_calls] } : message;
     if (!this.initialUserPrompt && msg.role === 'user' && typeof msg.content === 'string' && msg.content.trim()) {
       const trimmed = msg.content.trim();
-      if (!trimmed.startsWith('[MODE:')) {
-        this.initialUserPrompt = trimmed;
+      const realPrompt = trimmed.replace(/^\[MODE:[^\]]*\]\s*/, '').trim();
+      if (realPrompt) {
+        this.initialUserPrompt = realPrompt;
       }
     }
     // Phase 2: mine file-op tool calls so read/edited sets survive compaction.
@@ -659,7 +660,10 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     if (staleness) lines.push(staleness);
     if (this.stuckSignal) lines.push(`WARNING (loop detected): ${this.stuckSignal}`);
     lines.push('## Current State');
-    if (this.state.goal) lines.push(`Goal: ${this.state.goal}`);
+    lines.push(`Workspace: ${this.projectRoot}`);
+    const rootGoal = this.initialUserPrompt || this.state.goal;
+    if (rootGoal) lines.push(`Primary Objective (North Star): ${rootGoal}`);
+    if (this.state.goal && this.state.goal !== rootGoal) lines.push(`Goal: ${this.state.goal}`);
     if (task) {
       lines.push(`Task: ${task.title}`);
       if (task.description && task.description !== task.title) lines.push(`Description: ${task.description}`);

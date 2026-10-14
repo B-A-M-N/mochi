@@ -339,8 +339,55 @@ export function detectRepo(root: string): RepoInfo {
   };
 }
 
-export function findProjectRoot(cwd: string): string {
+/**
+ * When running in a multi-project directory (such as $HOME), detect if the user's
+ * prompt specifically references an existing project subdirectory.
+ * Anchors the agent directly to that project instead of wandering across sibling repositories.
+ */
+export function detectProjectFromPrompt(baseDir: string, prompt?: string): string | null {
+  if (!prompt || typeof prompt !== 'string') return null;
   const home = homedir();
+  if (baseDir !== home && existsSync(resolve(baseDir, '.git'))) {
+    return null;
+  }
+  try {
+    const entries = readdirSync(baseDir, { withFileTypes: true });
+    const candidates: string[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        const sub = resolve(baseDir, entry.name);
+        if (
+          existsSync(resolve(sub, '.git')) ||
+          existsSync(resolve(sub, 'package.json')) ||
+          existsSync(resolve(sub, 'Cargo.toml')) ||
+          existsSync(resolve(sub, 'go.mod')) ||
+          existsSync(resolve(sub, 'pyproject.toml'))
+        ) {
+          candidates.push(entry.name);
+        }
+      }
+    }
+    // Sort longer names first so specific sub-repos match before short prefixes
+    candidates.sort((a, b) => b.length - a.length);
+    for (const name of candidates) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`(^|[^a-zA-Z0-9_-])${escaped}([^a-zA-Z0-9_-]|$)`, 'i');
+      if (re.test(prompt)) {
+        return resolve(baseDir, name);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function findProjectRoot(cwd: string, prompt?: string): string {
+  const home = homedir();
+  if (cwd === home && prompt) {
+    const detected = detectProjectFromPrompt(home, prompt);
+    if (detected) return detected;
+  }
   let dir = cwd;
   while (dir !== '/' && dir !== home) {
     if (existsSync(resolve(dir, '.git'))) return dir;

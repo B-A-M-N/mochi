@@ -177,6 +177,7 @@ export function generateCodebaseMap(
       const relPath = relative(rootDir, fullPath);
 
       if (entry.isDirectory()) {
+        if (dir === homedir() && existsSync(join(fullPath, '.git'))) continue;
         scanDir(fullPath, depth + 1);
       } else if (entry.isFile()) {
         const ext = extname(entry.name).toLowerCase();

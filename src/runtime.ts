@@ -42,7 +42,7 @@ export class Runtime {
   cwd: string;
   goals: GoalEngine;
   private hooks: HookManager;
-  readonly usage: UsageStore;
+  usage: UsageStore;
   /** MCH-79: run-level budget ledger — exposed so /usage can show a per-model cost breakdown. */
   budget?: BudgetEngine;
   private abortController: AbortController;
@@ -668,6 +668,24 @@ export class Runtime {
       this.activeSessionId = this.goals['store'].begin({ objective: prompt.slice(0, 80) });
     }
     const sessionId = this.activeSessionId;
+    // Auto-anchor: if running at home directory and prompt targets an existing project subfolder, anchor to it
+    try {
+      const { homedir } = await import('node:os');
+      if (this.cwd === homedir()) {
+        const { detectProjectFromPrompt } = await import('./repo/repo.js');
+        const detected = detectProjectFromPrompt(this.cwd, prompt);
+        if (detected) {
+          this.cwd = detected;
+          const projectRoot = detected;
+          this.workspace = new Workspace(projectRoot, this.config.projectDir);
+          this.workspace.ensure();
+          this.goals = new GoalEngine(this.config, this.workspace, this.events, projectRoot);
+          this.hooks = new HookManager(this.workspace.dir);
+          this.usage = new UsageStore(this.workspace.dir);
+          this.events.emit({ type: 'agent:log', agentId: 'runtime', message: `[workspace] Anchored project workspace to ${detected}` });
+        }
+      }
+    } catch { /* best-effort project anchoring */ }
     // Single-agent one-shot task: create task directly without waiting for decompose LLM call.
     const { createTask } = await import('./goals/task.js');
     const goal = await this.goals.createGoal(prompt);

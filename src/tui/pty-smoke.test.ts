@@ -37,12 +37,11 @@ describe.skipIf(!scriptBin || !existsSync(bin) || binIsStale())('TUI PTY visual 
     const logPath = resolve(root, '.mochi-audit', 'tui-smoke', 'vitest-typescript.log');
     mkdirSync(dirname(logPath), { recursive: true });
     try {
-      const inner = `MOCHI_SKIP_AUTOBUILD=1 TERM=xterm-256color timeout 10 '${bin}'`;
-      execFileSync(scriptBin as string, ['-qec', inner, logPath], {
-        input: `sleep 2; printf '/'; sleep 1.5; printf '\\x1b'; sleep 1\n`,
+      const cmd = `{ sleep 2; printf '/'; sleep 1.5; printf '\\x1b'; sleep 1; } | MOCHI_SKIP_AUTOBUILD=1 TERM=xterm-256color timeout 10 '${scriptBin}' -qec '${bin}' '${logPath}'`;
+      execFileSync('bash', ['-c', cmd], {
         timeout: 20_000,
         cwd: root,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['ignore', 'ignore', 'ignore'],
       });
       const raw = readFileSync(logPath, 'utf8');
       const text = raw

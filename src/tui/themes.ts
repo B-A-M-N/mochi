@@ -31,7 +31,7 @@ export interface ThemeColors {
   fg: string;
   bgUser: string;
   /** Canvas background (the terminal rows behind everything). Dark themes use
-   *  near-black values (mochi-purple mandates true black); light themes set a
+   *  near-black values (mochi-purple uses opencode soft obsidian black); light themes set a
    *  paper tone (canvas stays transparent for them — see canvasBg). */
   bg: string;
   rule: string;
@@ -174,8 +174,8 @@ function downgradeColorCodes(s: string): string {
 
 /** Canvas background escape for the TUI frame writer (opencode parity):
  *  dark themes paint every row over the theme's own canvas color so the
- *  terminal profile color can never show through (mochi-purple mandates true
- *  black). Truecolor terminals get the 24-bit value; 256-color terminals get
+ *  terminal profile color can never show through (mochi-purple uses opencode
+ *  soft obsidian black rgb(10,10,10)). Truecolor terminals get the 24-bit value; 256-color terminals get
  *  the nearest palette index. Dumb terminals, NO_COLOR, and light themes
  *  stay fully transparent. */
 export function canvasBg(): string {
@@ -184,7 +184,7 @@ export function canvasBg(): string {
   const t = getCurrentTheme();
   if (!themeIsDark(t)) return '';
   const bg = parseThemeRgb(t.colors.bg, 48) ?? parseThemeRgb(t.colors.bg, 38);
-  if (!bg) return supportsTruecolor() ? '\x1b[48;2;0;0;0m' : '\x1b[48;5;16m';
+  if (!bg) return supportsTruecolor() ? '\x1b[48;2;10;10;10m' : '\x1b[48;5;232m';
   return supportsTruecolor()
     ? `\x1b[48;2;${bg[0]};${bg[1]};${bg[2]}m`
     : `\x1b[48;5;${rgbTo256(bg[0], bg[1], bg[2])}m`;
@@ -261,9 +261,61 @@ export function adaptThemeColors(t: MochiTheme): MochiTheme {
 
 export const THEMES: MochiTheme[] = [
   {
+    id: 'mochi-purple',
+    name: 'Mochi Purple',
+    description: 'Signature mochi look — crisp white + violet on soft obsidian black; the default mochi look',
+    colors: {
+      act: '\x1b[38;2;167;139;250m',
+      plan: '\x1b[38;2;216;180;254m',
+      success: '\x1b[38;2;134;239;172m',
+      error: '\x1b[38;2;252;165;165m',
+      warning: '\x1b[38;2;253;224;71m',
+      gray: '\x1b[38;2;161;153;185m',
+      grayDark: '\x1b[38;2;112;104;144m',
+      fg: '\x1b[38;2;248;248;255m',
+      bg: '\x1b[48;2;10;10;10m',
+      bgUser: '\x1b[48;2;14;7;26m',
+      rule: '\x1b[38;2;139;92;246m',
+      pink: '\x1b[38;2;232;121;249m',
+      magenta: '\x1b[38;2;217;70;239m',
+      violet: '\x1b[38;2;139;92;246m',
+      cyan: '\x1b[38;2;165;180;252m',
+      lime: '\x1b[38;2;190;242;100m',
+      orange: '\x1b[38;2;251;146;60m',
+      teal: '\x1b[38;2;94;234;212m',
+    },
+    roleColors: {
+      assistantGutter: '\x1b[38;2;139;92;246m',
+      assistantText: '\x1b[38;2;248;248;255m',
+      toolMarker: '\x1b[38;2;167;139;250m',
+      userGutter: '\x1b[38;2;217;70;239m',
+      userFg: '\x1b[38;2;255;255;255m',
+      userBg: '\x1b[48;2;14;7;26m',
+      thoughtGutter: '\x1b[38;2;112;104;144m',
+      taskMark: '\x1b[38;2;165;180;252m',
+      goalMark: '\x1b[38;2;232;121;249m',
+      codeKeyword: '\x1b[38;2;167;139;250m',
+      codeString: '\x1b[38;2;134;239;172m',
+      codeNumber: '\x1b[38;2;253;224;71m',
+      codeComment: '\x1b[38;2;112;104;144m',
+      codePunct: '\x1b[38;2;94;234;212m',
+      codeType: '\x1b[38;2;216;180;254m',
+      codeFn: '\x1b[38;2;165;180;252m',
+      mdHeading: '\x1b[38;2;216;180;254m',
+      mdLink: '\x1b[38;2;165;180;252m',
+      mdBold: '\x1b[38;2;255;255;255m',
+      thinkingLabel: '\x1b[38;2;139;92;246m',
+      reasoningBadge: '\x1b[38;2;216;180;254m',
+      reasonBadge: { low: '\x1b[38;2;165;180;252m', medium: '\x1b[38;2;134;239;172m', high: '\x1b[38;2;216;180;254m', max: '\x1b[38;2;252;165;165m' },
+    },
+    splashStops: [
+      [10, 5, 20], [76, 29, 149], [139, 92, 246], [196, 181, 253], [248, 248, 255],
+    ],
+  },
+  {
     id: 'cyber-void',
     name: 'Abyss',
-    description: 'Deep neon void — electric cyan, hot pink, lime; the default mochi look',
+    description: 'Deep neon void — electric cyan, hot pink, lime',
     colors: {
       act: '\x1b[38;2;0;255;255m',
       plan: '\x1b[38;2;255;255;0m',
@@ -1112,58 +1164,6 @@ export const THEMES: MochiTheme[] = [
     },
     splashStops: [
       [49, 10, 94], [139, 92, 246], [167, 139, 250], [216, 180, 254], [245, 243, 255],
-    ],
-  },
-  {
-    id: 'mochi-purple',
-    name: 'Mochi Purple',
-    description: 'Signature mochi look — crisp white + violet on pure black',
-    colors: {
-      act: '\x1b[38;2;167;139;250m',
-      plan: '\x1b[38;2;216;180;254m',
-      success: '\x1b[38;2;134;239;172m',
-      error: '\x1b[38;2;252;165;165m',
-      warning: '\x1b[38;2;253;224;71m',
-      gray: '\x1b[38;2;161;153;185m',
-      grayDark: '\x1b[38;2;112;104;144m',
-      fg: '\x1b[38;2;248;248;255m',
-      bg: '\x1b[48;2;0;0;0m',
-      bgUser: '\x1b[48;2;14;7;26m',
-      rule: '\x1b[38;2;139;92;246m',
-      pink: '\x1b[38;2;232;121;249m',
-      magenta: '\x1b[38;2;217;70;239m',
-      violet: '\x1b[38;2;139;92;246m',
-      cyan: '\x1b[38;2;165;180;252m',
-      lime: '\x1b[38;2;190;242;100m',
-      orange: '\x1b[38;2;251;146;60m',
-      teal: '\x1b[38;2;94;234;212m',
-    },
-    roleColors: {
-      assistantGutter: '\x1b[38;2;139;92;246m',
-      assistantText: '\x1b[38;2;248;248;255m',
-      toolMarker: '\x1b[38;2;167;139;250m',
-      userGutter: '\x1b[38;2;217;70;239m',
-      userFg: '\x1b[38;2;255;255;255m',
-      userBg: '\x1b[48;2;14;7;26m',
-      thoughtGutter: '\x1b[38;2;112;104;144m',
-      taskMark: '\x1b[38;2;165;180;252m',
-      goalMark: '\x1b[38;2;232;121;249m',
-      codeKeyword: '\x1b[38;2;167;139;250m',
-      codeString: '\x1b[38;2;134;239;172m',
-      codeNumber: '\x1b[38;2;253;224;71m',
-      codeComment: '\x1b[38;2;112;104;144m',
-      codePunct: '\x1b[38;2;94;234;212m',
-      codeType: '\x1b[38;2;216;180;254m',
-      codeFn: '\x1b[38;2;165;180;252m',
-      mdHeading: '\x1b[38;2;216;180;254m',
-      mdLink: '\x1b[38;2;165;180;252m',
-      mdBold: '\x1b[38;2;255;255;255m',
-      thinkingLabel: '\x1b[38;2;139;92;246m',
-      reasoningBadge: '\x1b[38;2;216;180;254m',
-      reasonBadge: { low: '\x1b[38;2;165;180;252m', medium: '\x1b[38;2;134;239;172m', high: '\x1b[38;2;216;180;254m', max: '\x1b[38;2;252;165;165m' },
-    },
-    splashStops: [
-      [10, 5, 20], [76, 29, 149], [139, 92, 246], [196, 181, 253], [248, 248, 255],
     ],
   },
   {

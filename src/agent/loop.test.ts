@@ -2202,4 +2202,40 @@ describe('scope fence (drift guard — out-of-scope writes vetoed)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('vetoes out-of-workspace writes and sibling project commands when fileScope is not declared', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-ws-fence-'));
+    const fake = await startFakeOpenAI([
+      {
+        content: 'I will write to sibling project.',
+        toolCalls: [{ id: 'w-outside', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: '/var/log/unrelated-outside.txt', content: 'bad' }) } }],
+        finishReason: 'tool_calls',
+      },
+      {
+        content: 'I will write to app.js.',
+        toolCalls: [{ id: 'w-local', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'app.js', content: 'console.log(42);' }) } }],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done. Created app.js.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('Create app.js');
+      const task = createTask('Create app.js', 'Create app.js.');
+      // NOTE: fileScope is explicitly undefined
+      const agent = new Agent({ role: 'coder', config, workspace, events: new EventBus(), cwd: dir, context });
+      const result = await agent.run(task);
+      expect(result.success).toBe(true);
+      expect(existsSync(resolve(dir, 'app.js'))).toBe(true);
+      const vetoedReq = fake.requests.find((r) => JSON.stringify(r).includes('Vetoed:'));
+      expect(vetoedReq).toBeDefined();
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+

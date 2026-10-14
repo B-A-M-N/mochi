@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { join, relative, sep } from 'node:path';
+import { homedir } from 'node:os';
 
 import type { Dirent } from 'node:fs';
 
@@ -36,7 +37,10 @@ function walk(dir: string, out: string[], budget?: { seen: number; max: number }
     if (budget && budget.seen >= budget.max) return;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      if (!IGNORED_DIRS.has(e.name)) walk(full, out, budget);
+      if (!IGNORED_DIRS.has(e.name)) {
+        if (dir === homedir() && existsSync(join(full, '.git'))) continue;
+        walk(full, out, budget);
+      }
     } else if (SEARCH_EXT.has((e.name.slice(e.name.lastIndexOf('.')) || '').toLowerCase())) {
       try { if (statSync(full).size <= 2 * 1024 * 1024) { if (budget) budget.seen++; out.push(full); } } catch { /* skip */ }
     }
@@ -118,6 +122,17 @@ export const findReferencesTool: Tool = {
     }
 
     const COMMON_IGNORE_GLOBS = ['-g', '!{dist,build,out,target,.next,.turbo,coverage,node_modules,.cache}/**'];
+    if (ctx.cwd === homedir()) {
+      try {
+        const topEntries = readdirSync(ctx.cwd);
+        for (const entry of topEntries) {
+          if (entry.startsWith('.')) continue;
+          if (existsSync(join(ctx.cwd, entry, '.git'))) {
+            COMMON_IGNORE_GLOBS.push('-g', `!${entry}/**`);
+          }
+        }
+      } catch {}
+    }
     const rgArgs = ['-n', '--word-regexp', ...COMMON_IGNORE_GLOBS, symbol, searchScope];
     const regex = new RegExp(`\\b${escapeRegExp(symbol)}\\b`);
     const lines = await search(ctx.cwd, searchScope, rgArgs, regex);

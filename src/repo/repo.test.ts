@@ -135,3 +135,31 @@ describe('languageHint', () => {
     expect(h).toMatch(/cargo test/);
   });
 });
+
+describe('detectProjectFromPrompt', () => {
+  it('detects matching project subdirectory from user prompt when in multi-project directory', async () => {
+    const { detectProjectFromPrompt, findProjectRoot } = await import('./repo.js');
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+
+    const baseDir = mkdtempSync(resolve(tmpdir(), 'mochi-projects-'));
+    const p1 = resolve(baseDir, 'my-cool-app');
+    const p2 = resolve(baseDir, 'terminus-service');
+    mkdirSync(resolve(p1, '.git'), { recursive: true });
+    mkdirSync(resolve(p2, '.git'), { recursive: true });
+
+    try {
+      const match1 = detectProjectFromPrompt(baseDir, 'Please fix the bug in my-cool-app right away');
+      expect(match1).toBe(p1);
+
+      const match2 = detectProjectFromPrompt(baseDir, 'Check health of terminus-service');
+      expect(match2).toBe(p2);
+
+      const noMatch = detectProjectFromPrompt(baseDir, 'What is the weather today?');
+      expect(noMatch).toBeNull();
+    } finally {
+      rmSync(baseDir, { recursive: true, force: true });
+    }
+  });
+});

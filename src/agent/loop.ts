@@ -59,7 +59,8 @@ import {
   type Lesson,
 } from '../lessons.js';
 import { HookManager } from '../hooks.js';
-import { resolve, extname, sep } from 'node:path';
+import { resolve, extname, sep, relative, basename, dirname, isAbsolute } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 import { statSync, existsSync, readFileSync } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { condenseOutput } from '../core/output-condenser.js';
@@ -496,6 +497,46 @@ export class Agent {
     } catch { /* unresolvable -> out of scope */ }
     return false;
   }
+
+  private resolveTargetPath(pathStr: string): string {
+    const raw = String(pathStr || '').trim();
+    if (!raw) return '';
+    if (raw === '~') return homedir();
+    if (raw.startsWith('~/')) return resolve(homedir(), raw.slice(2));
+    return resolve(this.cwd, raw);
+  }
+
+  private isPromptAuthorized(targetPath: string): boolean {
+    const prompt = (this.context.initialUserPrompt || this.activeTask?.description || this.activeTask?.title || '').toLowerCase();
+    if (!prompt) return false;
+    const abs = this.resolveTargetPath(targetPath).toLowerCase();
+    const base = basename(abs).toLowerCase();
+    const dir = basename(dirname(abs)).toLowerCase();
+    return prompt.includes(abs) || prompt.includes(targetPath.toLowerCase()) || prompt.includes(base) || prompt.includes(dir);
+  }
+
+  private isInsideWorkspace(targetPath: string): boolean {
+    const abs = this.resolveTargetPath(targetPath);
+    if (!abs) return true;
+    const wsRoot = resolve(this.workspace.root);
+    const rel = relative(wsRoot, abs);
+    return !rel.startsWith('..') && !isAbsolute(rel);
+  }
+
+  private isSiblingProject(targetPath: string): boolean {
+    const abs = this.resolveTargetPath(targetPath);
+    if (!abs) return false;
+    const home = resolve(homedir());
+    const wsRoot = resolve(this.workspace.root);
+    if (wsRoot === home || !wsRoot.startsWith(home + sep)) return false;
+    const rel = relative(home, abs);
+    if (rel.startsWith('..') || isAbsolute(rel)) return false;
+    const topSegment = rel.split(sep)[0];
+    if (!topSegment || topSegment.startsWith('.')) return false;
+    const topAbs = resolve(home, topSegment);
+    return topAbs !== wsRoot;
+  }
+
   private task?: import('../types.js').Task;
   private contextCutoffNudged = false;
   private lastCompletionAnswer = '';
@@ -903,6 +944,25 @@ Continue from 'Next:', do not redo completed progress.`,
         role: 'system',
         content: `Preflight: repo=${repo.language ?? 'unknown'}${gitStatus ? ', git status:\n' + gitStatus : ''}${langHint ? '\n\n' + langHint : ''}${scopeOutline}`,
       });
+    }
+
+    // Claude Code operational autonomy and focus protocol (injected before turn 0)
+    if (taskKind !== 'chat') {
+      if (!this.rewriteProtocolInjected) {
+        this.rewriteProtocolInjected = true;
+        const complex = isComplexRewritingTask(task.title, task.description);
+        if (complex) {
+          this.context.addMessage({ role: 'system', content: LARGE_REWRITE_PROTOCOL });
+        }
+      }
+      if (!this.resumeProtocolInjected) {
+        this.resumeProtocolInjected = true;
+        if (repo) {
+          const memPrefix = projectMemoryPrefix(this.workspace.dir);
+          if (memPrefix) this.context.addMessage({ role: 'system', content: memPrefix });
+        }
+        this.context.addMessage({ role: 'system', content: TASK_FOCUS_PROTOCOL });
+      }
     }
 
     const maxIterations = this.config.safety.maxIterations;
@@ -2311,7 +2371,7 @@ Continue from 'Next:', do not redo completed progress.`,
           // acceptance criteria exists, run it once and downgrade to partial
           // on failure instead of trusting the prose claim. Read-only/chat
           // tasks and plan mode are exempt.
-          if (this.toolCallsTotal === 0 && !this.fileChanged && !this.planMode) {
+          if (this.toolCallsTotal === 0 && !this.fileChanged && !this.planMode && taskKind !== 'chat' && taskKind !== 'research' && taskKind !== 'document') {
             // A creation-led task that produced prose only with zero tool calls
             // is incomplete even when no verification gate exists (runPrompt
             // one-shots carry no acceptance criteria). Never record prose as
@@ -3471,31 +3531,116 @@ Continue from 'Next:', do not redo completed progress.`,
     }
     const args = normalizeToolArgs(toolName, this.parseArgs(tc.function.arguments));
 
-    // SCOPE FENCE (drift guard): a mutating write to a path outside the task's
-    // scope is the "started working on gonext" failure class — the model wanders
-    // into sibling projects / unrelated files mid-task. First out-of-scope write
-    // gets vetoed with a return-to-objective directive; a SECOND consecutive one
-    // re-injects the TASK_FOCUS_PROTOCOL so the goal stays in the near context.
-    // Fence only engages when the task declares a fileScope (greenfield and
-    // scoped tasks); repo-wide refactors without fileScope stay unfenced.
-    if (['write', 'edit', 'delete', 'patch'].includes(toolName) && this.activeTask?.fileScope?.length) {
+    // WORKSPACE & SCOPE FENCE (drift guard):
+    // 1. Mutating tool boundary check: prevent wandering into sibling projects or mutating external files
+    const MUTATING_TOOLS = new Set([
+      'write', 'edit', 'delete', 'patch',
+      'create_directory', 'mkdir',
+      'move_file', 'copy_file',
+      'replace_symbol', 'rename_symbol',
+      'regex_replace', 'search_replace_multi',
+      'notebook',
+    ]);
+    if (MUTATING_TOOLS.has(toolName)) {
+      const targets: string[] = [];
+      if (args.path) targets.push(String(args.path));
+      if (args.destination) targets.push(String(args.destination));
+      if (args.target) targets.push(String(args.target));
+      if (args.file) targets.push(String(args.file));
+      if (toolName === 'delete' || toolName === 'move_file') {
+        if (args.source) targets.push(String(args.source));
+      }
+
+      for (const target of targets) {
+        if (!target) continue;
+        // (a) Sibling project fence: never mutate files in sibling projects unless explicitly requested
+        if (this.isSiblingProject(target) && !this.isPromptAuthorized(target)) {
+          this.scopeVetoCount++;
+          const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content:
+              `Vetoed: "${target}" is located inside a separate sibling project. ` +
+              `Your active workspace is: ${this.workspace.root}. Your objective is: ${this.activeTask?.title || this.context.initialUserPrompt}. ` +
+              `Do not create, edit, or delete files in sibling projects. Focus exclusively on your active workspace.` +
+              focus,
+          });
+          this.events.emit({
+            type: 'tool:completed',
+            tool: tc.function.name,
+            result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: sibling-project mutation (drift guard).', durationMs: 0 },
+            agentId: this.id,
+          });
+          return;
+        }
+
+        // (b) Workspace root fence: if workspace is not homedir, never mutate outside workspace (except /tmp)
+        const abs = this.resolveTargetPath(target);
+        const inTmp = abs.startsWith('/tmp') || abs.startsWith(resolve(tmpdir()));
+        if (resolve(this.workspace.root) !== resolve(homedir()) && !this.isInsideWorkspace(target) && !inTmp && !this.isPromptAuthorized(target)) {
+          this.scopeVetoCount++;
+          const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content:
+              `Vetoed: "${target}" is OUTSIDE the active workspace root (${this.workspace.root}). ` +
+              `Your active workspace is: ${this.workspace.root}. Your objective is: ${this.activeTask?.title || this.context.initialUserPrompt}. ` +
+              `Keep all file changes strictly inside ${this.workspace.root}.` +
+              focus,
+          });
+          this.events.emit({
+            type: 'tool:completed',
+            tool: tc.function.name,
+            result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-workspace mutation (drift guard).', durationMs: 0 },
+            agentId: this.id,
+          });
+          return;
+        }
+
+        // (c) Task-declared fileScope fence
+        if (this.activeTask?.fileScope?.length && !this.pathInScope(target, this.activeTask.fileScope)) {
+          this.scopeVetoCount++;
+          const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content:
+              `Vetoed: "${target}" is OUTSIDE this task's scope (${this.activeTask.fileScope.join(', ')}). ` +
+              `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
+              focus,
+          });
+          this.events.emit({
+            type: 'tool:completed',
+            tool: tc.function.name,
+            result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope write (drift guard).', durationMs: 0 },
+            agentId: this.id,
+          });
+          return;
+        }
+      }
+    }
+
+    // 2. Read tool boundary check: prevent wandering into sibling projects
+    if (toolName === 'read') {
       const target = String(args.path ?? '');
-      if (target && !this.pathInScope(target, this.activeTask.fileScope)) {
-        this.scopeVetoCount++;
-        const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+      if (target && this.isSiblingProject(target) && !this.isPromptAuthorized(target)) {
         this.context.addMessage({
           role: 'tool',
           tool_call_id: tc.id,
           name: tc.function.name,
           content:
-            `Vetoed: "${target}" is OUTSIDE this task's scope (${this.activeTask.fileScope.join(', ')}). ` +
-            `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
-            focus,
+            `Vetoed: "${target}" is located inside a separate sibling project. ` +
+            `Your active workspace is: ${this.workspace.root}. Do not read files from sibling projects unless explicitly requested in your task.`,
         });
         this.events.emit({
           type: 'tool:completed',
           tool: tc.function.name,
-          result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope write (drift guard).', durationMs: 0 },
+          result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: sibling-project read.', durationMs: 0 },
           agentId: this.id,
         });
         return;
@@ -3548,27 +3693,85 @@ Continue from 'Next:', do not redo completed progress.`,
     // config, data) gains nothing from repo-wide suites or builds — they
     // exercise code, not content, and pre-existing failures then burn tokens
     // and fail correct work. Veto the suite; suggest a direct check instead.
-    if (toolName === 'shell' && this.activeTask?.fileScope?.length) {
-      // Scope-fence for shell: a command that WRITES (mkdir/touch/mv/cp/tee/>,
-      // redirects) referencing paths outside the task scope is the same drift
-      // class as a vetoed write tool. Cheap regex on the command text; the
-      // directive mirrors the write-tool fence so the model self-corrects.
+    if (toolName === 'shell') {
+      // (a) cwd fence: ensure args.cwd does not wander into a sibling project or outside workspace
+      if (args.cwd) {
+        const targetCwd = String(args.cwd);
+        if (this.isSiblingProject(targetCwd) && !this.isPromptAuthorized(targetCwd)) {
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: `Vetoed: cwd "${targetCwd}" targets a separate sibling project. Your active workspace is ${this.workspace.root}. Keep commands within the active project.`,
+          });
+          this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: sibling-project shell cwd.', durationMs: 0 }, agentId: this.id });
+          return;
+        }
+        const absCwd = this.resolveTargetPath(targetCwd);
+        const inTmp = absCwd.startsWith('/tmp') || absCwd.startsWith(resolve(tmpdir()));
+        if (resolve(this.workspace.root) !== resolve(homedir()) && !this.isInsideWorkspace(targetCwd) && !inTmp && !this.isPromptAuthorized(targetCwd)) {
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: `Vetoed: cwd "${targetCwd}" is OUTSIDE the active workspace root (${this.workspace.root}). Stay within the workspace.`,
+          });
+          this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-workspace shell cwd.', durationMs: 0 }, agentId: this.id });
+          return;
+        }
+      }
+
+      // (b) Command text drift guard: check for cd or git -C into sibling projects
       const cmd = String(args.command ?? '');
-      const WRITES_OUTSIDE = /\b(mkdir|touch|mv|cp|tee|install|rsync|ln)\b[^;&|]*\.\.|>>?\s*(?!\/)[\w./-]*\.\.\//;
-      if (cmd && WRITES_OUTSIDE.test(cmd)) {
-        this.scopeVetoCount++;
-        const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
-        this.context.addMessage({
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: tc.function.name,
-          content:
-            `Vetoed: this command writes OUTSIDE the task's scope (${this.activeTask.fileScope.join(', ')}). ` +
-            `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
-            focus,
-        });
-        this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope shell write (drift guard).', durationMs: 0 }, agentId: this.id });
-        return;
+      const cdMatches = cmd.matchAll(/(?:^|[;&|]\s*)(?:cd|pushd)\s+([^\s;&|]+)/g);
+      for (const match of cdMatches) {
+        const cdTarget = match[1];
+        if (this.isSiblingProject(cdTarget) && !this.isPromptAuthorized(cdTarget)) {
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: `Vetoed: command attempts to cd to "${cdTarget}" in a separate sibling project. Your active workspace is ${this.workspace.root}. Stay within the active workspace.`,
+          });
+          this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: sibling-project cd.', durationMs: 0 }, agentId: this.id });
+          return;
+        }
+      }
+      const gitCMatches = cmd.matchAll(/(?:^|\s)git\s+-C\s+([^\s;&|]+)/g);
+      for (const match of gitCMatches) {
+        const gitTarget = match[1];
+        if (this.isSiblingProject(gitTarget) && !this.isPromptAuthorized(gitTarget)) {
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: `Vetoed: git -C targets sibling project "${gitTarget}". Your active workspace is ${this.workspace.root}.`,
+          });
+          this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: sibling-project git -C.', durationMs: 0 }, agentId: this.id });
+          return;
+        }
+      }
+
+      // (c) Write-outside scope fence
+      const isWsRoot = resolve(this.cwd) === resolve(this.workspace.root) && resolve(this.workspace.root) !== resolve(homedir());
+      const hasFileScope = Boolean(this.activeTask?.fileScope?.length);
+      if (isWsRoot || hasFileScope) {
+        const WRITES_OUTSIDE = /\b(mkdir|touch|mv|cp|tee|install|rsync|ln)\b[^;&|]*\.\.|>>?\s*(?!\/)[\w./-]*\.\.\//;
+        if (cmd && WRITES_OUTSIDE.test(cmd)) {
+          this.scopeVetoCount++;
+          const focus = this.scopeVetoCount >= 2 ? '\n' + TASK_FOCUS_PROTOCOL : '';
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content:
+              `Vetoed: this command writes OUTSIDE the active workspace root (${this.workspace.root}). ` +
+              `Your objective is: ${this.activeTask?.title || this.context.initialUserPrompt}. Do not create or modify files unrelated to it.` +
+              focus,
+          });
+          this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope shell write (drift guard).', durationMs: 0 }, agentId: this.id });
+          return;
+        }
       }
     }
     if (toolName === 'shell' && this.contentOnly) {

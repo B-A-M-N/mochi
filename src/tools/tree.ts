@@ -45,6 +45,9 @@ function buildTree(
     }
     lines.push(`${prefix}${connector}${entry}${isDir ? '/' : ''}`);
     if (isDir) {
+      if (dir === homedir() && existsSync(join(fullPath, '.git'))) {
+        continue;
+      }
       buildTree(fullPath, depth + 1, maxDepth, excludePatterns, childPrefix, lines);
     }
   }

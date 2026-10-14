@@ -154,7 +154,7 @@ const COMMANDS = [
 
 
 export async function launchTui(runtime: Runtime, initialPrompt?: string): Promise<void> {
-  const projectRoot = findProjectRoot(runtime.cwd);
+  const projectRoot = findProjectRoot(runtime.cwd, initialPrompt);
   const projectName = basename(projectRoot);
   let branch = '';
   void gitBranch(projectRoot).then((b) => {
@@ -1890,7 +1890,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     }
     if (line === '/known-good') { await run(async () => runtime.recordGood()); return; }
     if (line === '/check') { await run(async () => runtime.knownGood()); return; }
-    if (line === '/providers') { await providerMenu(); return; }
+    if (line === '/providers' || line.startsWith('/providers ')) { await providerMenu(line); return; }
     if (line === '/login' || line === '/provider') { await loginFlow(); return; }
     if (line === '/onboard' || line === '/setup' || line === '/welcome') {
       const { runInteractiveOnboarding } = await import('./onboard-flow.js');
@@ -2789,7 +2789,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     await run(async () => runtime.loginProvider(prov.id, apiKey, model || prov.defaultModel));
   }
 
-  async function providerMenu() {
+  async function providerMenu(line = '/providers') {
     // Dedicated /providers browser (extracted unit — app.ts stays a thin
     // dispatcher). Read-only: details show key source + keyHelp, never keys.
     const { providersMenu } = await import('./providers-menu.js');
@@ -2799,7 +2799,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       activeProvider: runtime.config.model.provider,
       envLookup: (k: string) => process.env[k],
       storedKey: runtime.config.model.apiKey,
-    }, '/providers');
+    }, line);
   }
 
   async function modelMenu() {

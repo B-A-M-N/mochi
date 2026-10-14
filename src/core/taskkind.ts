@@ -40,7 +40,12 @@ export function classifyTaskKind(task: Pick<Task, 'title' | 'description' | 'rol
   // fix/test burned a full verify loop + max/medium reasoning on a Q&A.
   const titleTrimmed = task.title.trim();
   if (/^(how|what|why|who|which|where|when|can|could|would|should|is|are|do|does|did|has|have|explain|tell|describe|compare)\b/i.test(titleTrimmed) && /\?\s*$/.test(titleTrimmed)) {
-    return 'chat';
+    const isImperativeRequest = /^(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+)?(?:fix|add|implement|write|create|update|refactor|test|remove|delete|build|code|patch|edit|modify)\b/i.test(titleTrimmed);
+    if (!isImperativeRequest) {
+      if (/^(?:how do (?:i|we)|explain how|what is|what are|why does|why do|tell me)/i.test(titleTrimmed) || !ACTION_RE.test(text)) {
+        return 'chat';
+      }
+    }
   }
   if (ACTION_RE.test(text)) {
     if (FIX_RE.test(text) || task.role === 'debugger') return 'fix';
