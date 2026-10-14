@@ -70,6 +70,17 @@ describe('classifyTaskKind', () => {
     expect(classifyTaskKind({ title: 'Fix the review comments', description: 'address PR feedback' })).toBe('fix');
     expect(classifyTaskKind({ title: 'Review and fix the bug', description: 'audit then patch it' })).toBe('fix');
   });
+  it('routes long-form prose to document (never max-burn implement)', () => {
+    expect(classifyTaskKind({ title: 'Write an essay', description: 'on remote work' })).toBe('document');
+    expect(classifyTaskKind({ title: 'Write a blog post', description: 'launch announcement' })).toBe('document');
+    expect(classifyTaskKind({ title: 'Write a story', description: 'sci-fi short' })).toBe('document');
+    expect(classifyTaskKind({ title: 'Draft the newsletter', description: 'weekly update' })).toBe('document');
+    // Code-adjacent prose keeps its engineering lane.
+    expect(classifyTaskKind({ title: 'Write a test story', description: 'gherkin scenarios' })).toBe('test');
+    // Bare 'post' matches no doc pattern (only 'blog post' does): a short
+    // ambiguous message falls back to chat, never document.
+    expect(classifyTaskKind({ title: 'POST the form data', description: 'submit handler' })).toBe('chat');
+  });
 });
 
 describe('isReviewTask', () => {

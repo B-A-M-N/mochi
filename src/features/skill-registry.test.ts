@@ -31,6 +31,19 @@ function mkdtempUnder(): string {
 }
 
 describe('skill-registry', () => {
+  it('repo seed catalog still resolves the non-coding packs', async () => {
+    // The 84→88 seed additions must stay discoverable by name; a dropped or
+    // renamed catalog entry silently uninstalls the skill for every clone.
+    const { discoverPacks } = await import('./skill-registry.js');
+    const { resolve: resolvePath, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const repoSkills = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills');
+    const packs = discoverPacks(repoSkills);
+    const names = new Set(packs.map((p) => p.name));
+    for (const n of ['creative-writing', 'email-communication', 'data-analysis', 'productivity-planning']) {
+      expect(names.has(n), `${n} missing from the seed catalog`).toBe(true);
+    }
+  });
   let tmp: string;
   let sourceDir: string;
 

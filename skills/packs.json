@@ -418,5 +418,25 @@
     "name": "zero-downtime-deploys",
     "path": "zero-downtime-deploys",
     "description": "Zero-downtime deployments: rolling updates, health gates, migrations, instant rollback. Use when asked for safe deploys, rollout strategy, or release automation."
-  }
+  },
+{
+  "name": "creative-writing",
+  "path": "creative-writing",
+  "description": "Write stories, essays, marketing copy, and scripts with structure-first drafting, voice control, and revision passes. Use when asked to write or improve any non-code prose."
+},
+{
+  "name": "email-communication",
+  "path": "email-communication",
+  "description": "Triage an inbox and draft professional email — sorting by action needed, BLUF-structured replies, tone matching, and follow-up tracking. Use when handling email or writing messages for work."
+},
+{
+  "name": "data-analysis",
+  "path": "data-analysis",
+  "description": "Explore and summarize tabular data (CSV/Excel/SQLite) with Python — profiling, cleaning, aggregation, and findings writeups. Use when asked what a dataset shows or to analyze numbers."
+},
+{
+  "name": "productivity-planning",
+  "path": "productivity-planning",
+  "description": "Turn goals into executable plans with mochi's todo, goal, and checkpoint machinery — scoping, sequencing, timeboxing, and daily review. Use when planning work, breaking down projects, or organizing tasks."
+}
 ]

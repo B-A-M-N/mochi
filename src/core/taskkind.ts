@@ -14,7 +14,7 @@ const REFACTOR_RE = /\b(refactor|rename|move|extract|split|consolidate|simplify|
 const TEST_RE = /\b(test|spec|coverage|assert|jest|vitest|pytest|unittest)\b/i;
 const RESEARCH_RE = /\b(research|investigate|explore|find\s*out|discover|learn|how\s*does|why\s*does)\b/i;
 const PLAN_RE = /\b(plan|design|architect|sketch|outline|proposal)\b/i;
-const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*doc|architecture\s*doc)\b/i;
+const DOC_RE = /\b(document|readme|doc|comment|jsdoc|docstring|annotate|spec\s*doc|architecture\s*doc|essay|article|newsletter|blog\s*post|story|poem|haiku|novel|screenplay)\b/i;
 const REVIEW_RE = /\b(review|audit|inspect|assess|critique|lgtm|look\s*over|go\s*over|check\s*over|give\s*(me\s*)?feedback(\s*on)?)\b/i;
 // Execution beats planning vocabulary: "design and implement" is an
 // implementation task, while "create only a plan" remains planning. The
