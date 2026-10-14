@@ -28,13 +28,27 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     // Per-provider stored keys (keyring first, legacy active slot second) so
     // every provider reports its real source — not just the active one.
     const { loadKeyring, storedKeyForProvider, accountsFor, activeAccountName } = await import('./model/keyring.js');
+    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken } = await import('./model/ambient-auth.js');
     const ring = loadKeyring();
     const legacyKey = runtime.config.model.apiKey;
     const storedFor = (pid: string) => storedKeyForProvider(ring, pid, activeId, legacyKey);
+    // Ambient OAuth: real tokens cached by other CLIs the user already logged
+    // into (Codex, Gemini CLI, Claude Code, gcloud ADC). Resolved once, lazily.
+    const ambientMap = new Map<string, string>();
+    await Promise.all(PROVIDERS.map(async (p) => {
+      try {
+        let tok: string | undefined;
+        if (p.id === 'openai') tok = (await codexAmbientToken())?.token;
+        else if (p.id === 'gemini' || p.id === 'google') tok = geminiAmbientToken()?.token ?? (await gcloudAmbientToken())?.token;
+        else if (p.id === 'anthropic') tok = claudeAmbientToken()?.token;
+        if (tok) ambientMap.set(p.id, tok);
+      } catch { /* ambient is best-effort */ }
+    }));
+    const ambientFor = (pid: string) => ambientMap.get(pid);
     const rows = PROVIDERS.map((p) => {
-      const src = keySource(p, activeId, p.envKey ? lookup(p.envKey) : undefined, storedFor(p.id), isKeyUsable);
+      const src = keySource(p, activeId, p.envKey ? lookup(p.envKey) : undefined, storedFor(p.id), isKeyUsable, ambientFor(p.id));
       const mark = p.id === activeId ? '*' : ' ';
-      const state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'local' ? 'keyless local' : 'missing';
+      const state = src === 'env' ? 'set (env)' : src === 'file' ? 'set (file)' : src === 'ambient' ? 'set (ambient)' : src === 'local' ? 'keyless local' : 'missing';
       const n = accountsFor(p.id).length;
       const extra = n > 1 ? `  (${n} accounts, active: ${activeAccountName(p.id)})` : '';
       return `${mark}${p.id.padEnd(16)} ${state}${extra}`;

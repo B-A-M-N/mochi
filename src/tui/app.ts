@@ -2878,6 +2878,13 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         return out || undefined;
       } catch { return undefined; }
     }
+    // Ambient OAuth from other real CLIs the user already logged into.
+    try {
+      const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken } = await import('../model/ambient-auth.js');
+      if (id === 'openai') return (await codexAmbientToken())?.token;
+      if (id === 'gemini' || id === 'google') return geminiAmbientToken()?.token ?? (await gcloudAmbientToken())?.token;
+      if (id === 'anthropic') return claudeAmbientToken()?.token;
+    } catch { /* best-effort */ }
     if (id === 'huggingface') {
       try {
         const { readFileSync, existsSync } = await import('node:fs');

@@ -43,6 +43,7 @@ export interface DoctorReport {
   acp?: { ok: boolean; detail: string };
   editors?: { vscodeInstalled: boolean; jetbrainsPluginPresent: boolean; vscodeCli: boolean };
   onboarding?: { done: boolean };
+  ambientAuth: Array<{ provider: string; source: string; expiresAtMs?: number }>;
   problems: string[];
 }
 
@@ -235,6 +236,7 @@ export async function doctorReport(opts: {
     acp: await acpHealth(),
     editors: editorHealth(),
     onboarding: onboardingHealth(),
+    ambientAuth: await ambientAuthHealth(),
     problems,
   };
 
@@ -297,6 +299,21 @@ function editorHealth(): { vscodeInstalled: boolean; jetbrainsPluginPresent: boo
 }
 
 /** Onboarding marker health. */
+/** Ambient OAuth from other real CLIs (Codex/Gemini/Claude/gcloud). */
+async function ambientAuthHealth(): Promise<Array<{ provider: string; source: string; expiresAtMs?: number }>> {
+  const out: Array<{ provider: string; source: string; expiresAtMs?: number }> = [];
+  try {
+    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken } = await import('./model/ambient-auth.js');
+    const codex = await codexAmbientToken();
+    if (codex) out.push({ provider: 'openai', source: codex.source, expiresAtMs: codex.expiresAtMs });
+    const gemini = geminiAmbientToken() ?? (await gcloudAmbientToken());
+    if (gemini) out.push({ provider: 'gemini/google', source: gemini.source, expiresAtMs: gemini.expiresAtMs });
+    const claude = claudeAmbientToken();
+    if (claude) out.push({ provider: 'anthropic', source: claude.source, expiresAtMs: claude.expiresAtMs });
+  } catch { /* best-effort */ }
+  return out;
+}
+
 function onboardingHealth(): { done: boolean } {
   try {
     return { done: existsSync(join(homedir(), '.config', 'mochi', 'onboarded.json')) };
