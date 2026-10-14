@@ -1207,6 +1207,49 @@ async function main() {
       console.log(`\n${rep.imported.length} installed, ${rep.skipped.length} skipped, ${rep.warnings.length} warnings, ${rep.errors.length} errors (source: ${src.name}).`);
       return;
     }
+    if (sub === 'lint') {
+      const { lintSkillDoc, formatSkillLint } = await import('./skills/skill-lint.js');
+      const { assessSkillQuality } = await import('./skills/skill-manager.js');
+      const { readFileSync } = await import('node:fs');
+      const target = positional[2];
+      const { discoverSkills } = await import('./skills/skills.js');
+      const { bundledSkillsDir } = await import('./skills/skills.js');
+      const { resolve } = await import('node:path');
+      const { homedir } = await import('node:os');
+      const dirs = target
+        ? [resolve(target)]
+        : [
+            resolve(cwd, '.mochi', 'skills'),
+            resolve(homedir(), '.mochi', 'skills'),
+            bundledSkillsDir(),
+          ].filter(Boolean) as string[];
+      let failing = 0, scanned = 0;
+      for (const d of dirs) {
+        let collection: any[] = [];
+        try { const { skills: s } = discoverSkills(d); collection = s; } catch { collection = []; }
+        for (const sk of collection) {
+          scanned++;
+          let pass = true;
+          try {
+            const raw = readFileSync(sk.path, 'utf8');
+            const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+            if (!m) { console.error(`FAIL  ${sk.name}: bad frontmatter (no --- block)`); failing++; continue; }
+            const name = (/name:\s*(.+)/.exec(m[1]) ?? [])[1]?.trim() ?? sk.name;
+            const desc = (/description:\s*([\s\S]*?)(?=\n\w+:|$)/.exec(m[1]) ?? [])[1]?.replace(/\n/g, ' ').trim() ?? '';
+            const r = lintSkillDoc(name, desc, m[2]);
+            if (!r.ok) { console.error(`FAIL  ${sk.name}: ${formatSkillLint(r)}`); pass = false; failing++; }
+            const dq: any = assessSkillQuality(desc, m[2]);
+            if (!dq.passed) { console.log(`WARN  ${sk.name}: quality bar missing — ${dq.missing.join('; ')}`); }
+          } catch (e) {
+            console.error(`FAIL  ${sk.name}: ${(e as Error).message}`);
+            failing++; pass = false;
+          }
+          if (pass) console.log(`ok    ${sk.name}`);
+        }
+      }
+      console.log(`\\nLinted ${scanned} skills${failing ? ` — ${failing} failed` : ' (all clean)'}.`);
+      return;
+    }
     const { skills } = loadAllSkills(cwd);
     if (sub === 'list' || !sub) {
       if (!skills.length) { console.log('No skills available.'); return; }
