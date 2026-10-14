@@ -2791,14 +2791,28 @@ if (line === '/branch' || line.startsWith('/branch ')) {
 
   async function providerMenu(line = '/providers') {
     // Dedicated /providers browser (extracted unit — app.ts stays a thin
-    // dispatcher). Read-only: details show key source + keyHelp, never keys.
+    // dispatcher). Browse details plus key actions: re-authenticate
+    // (live-probed, like /login) and clear the stored key.
     const { providersMenu } = await import('./providers-menu.js');
+    const { verifyApiKey } = await import('../model/auth-verify.js');
+    const { loadConfigFile, saveConfigFile } = await import('../model/providers.js');
     await providersMenu({
-      openMenu, push, scheduleRender,
+      openMenu, push, scheduleRender, ask,
       setMenuSelected: (i: number) => { state.menuSelected = i; },
       activeProvider: runtime.config.model.provider,
       envLookup: (k: string) => process.env[k],
       storedKey: runtime.config.model.apiKey,
+      verifyKey: async (providerId, baseUrl, kind, key) => {
+        const v = await verifyApiKey({ provider: providerId, baseUrl, apiKey: key, kind });
+        return v.ok ? { ok: true, message: 'verified' } : { ok: false, reason: v.reason, message: v.message };
+      },
+      persistLogin: (id, key, model) => run(() => runtime.loginProvider(id, key, model)),
+      persistCleared: () => {
+        const cfg = loadConfigFile() as { model?: { apiKey?: string } };
+        if (cfg.model) delete cfg.model.apiKey;
+        saveConfigFile(cfg as never);
+        runtime.config.model.apiKey = undefined;
+      },
     }, line);
   }
 

@@ -6,20 +6,28 @@ import type { LineKind } from './state.js';
 
 type Deps = Parameters<typeof providersMenu>[0];
 
-function deps(over: Partial<Deps> = {}): { d: Deps; lines: Array<{ kind: LineKind; text: string }> } {
+function deps(over: Partial<Deps> = {}): { d: Deps; lines: Array<{ kind: LineKind; text: string }>; persisted: Array<{ id: string; model: string }>; cleared: { n: number } } {
   const lines: Array<{ kind: LineKind; text: string }> = [];
+  const persisted: Array<{ id: string; model: string }> = [];
+  const cleared = { n: 0 };
   return {
     d: {
       openMenu: async () => -1,
       push: (kind: LineKind, text: string) => { lines.push({ kind, text }); },
       scheduleRender: () => {},
       setMenuSelected: () => {},
+      ask: async () => '',
       activeProvider: 'openai',
       envLookup: () => undefined,
       storedKey: undefined,
+      verifyKey: async () => ({ ok: true, message: 'verified' }),
+      persistLogin: async (id: string, _key: string, model: string) => { persisted.push({ id, model }); return `ok ${id}`; },
+      persistCleared: () => { cleared.n++; },
       ...over,
     },
     lines,
+    persisted,
+    cleared,
   };
 }
 
@@ -44,20 +52,24 @@ describe('keyStateText (never prints key material)', () => {
 });
 
 describe('providersMenu', () => {
-  it('exact id shows details without opening a menu', async () => {
-    const { d, lines } = deps({ openMenu: async () => { throw new Error('menu must not open'); } });
+  it('exact id shows details then Done leaves without side effects', async () => {
+    const calls: string[] = [];
+    const { d, lines, persisted, cleared } = deps({
+      openMenu: async (t: string) => { calls.push(t); return t.includes('key actions') ? 2 : -1; },
+    });
     await providersMenu(d, '/providers upstage');
-    expect(lines).toHaveLength(1);
-    expect(lines[0].text).toContain('Upstage (Solar)');
-    expect(lines[0].text).toContain('solar-pro4');
-    expect(lines[0].text).toContain('(default)');
-    expect(lines[0].text).toContain('console.upstage.ai');
+    expect(lines.some((l) => l.text.includes('Upstage (Solar)'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('solar-pro4'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('(default)'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('console.upstage.ai'))).toBe(true);
+    expect(persisted).toEqual([]);
+    expect(cleared.n).toBe(0);
   });
 
   it('shows the gh OAuth path for github-models', async () => {
-    const { d, lines } = deps({ openMenu: async () => { throw new Error('menu must not open'); } });
+    const { d, lines } = deps({ openMenu: async (t: string) => (t.includes('key actions') ? 2 : -1) });
     await providersMenu(d, '/providers github-models');
-    expect(lines[0].text).toContain('gh auth login');
+    expect(lines.some((l) => l.text.includes('gh auth login'))).toBe(true);
   });
 
   it('nomatch errors honestly', async () => {
@@ -70,19 +82,64 @@ describe('providersMenu', () => {
   it('full menu selects a provider and shows details with ACTIVE badge', async () => {
     const seen: string[][] = [];
     const { d, lines } = deps({
-      openMenu: async (_t: string, items: string[]) => { seen.push(items); return 0; },
+      openMenu: async (_t: string, items: string[]) => { seen.push(items); return seen.length === 1 ? 0 : 2; },
     });
     await providersMenu(d, '/providers');
-    expect(seen).toHaveLength(1);
+    expect(seen).toHaveLength(2);
     expect(seen[0].length).toBeGreaterThanOrEqual(36);
-    expect(lines).toHaveLength(1);
-    expect(lines[0].text).toContain('Base URL:');
-    expect(lines[0].text).toContain('Models (');
+    expect(lines.some((l) => l.text.includes('Base URL:'))).toBe(true);
+    expect(lines.some((l) => l.text.includes('Models ('))).toBe(true);
   });
 
   it('Esc closes the menu with no output', async () => {
     const { d, lines } = deps({ openMenu: async () => -1 });
     await providersMenu(d, '/providers');
     expect(lines).toHaveLength(0);
+  });
+
+  it('re-authenticate probes before storing and persists the chosen model', async () => {
+    const menus: string[] = [];
+    const { d, lines, persisted } = deps({
+      openMenu: async (t: string) => { menus.push(t); return 0; },
+      ask: async () => 'sk-typed-key',
+      verifyKey: async () => ({ ok: true, message: 'verified' }),
+    });
+    await providersMenu(d, '/providers upstage');
+    expect(persisted).toEqual([{ id: 'upstage', model: 'solar-pro4' }]);
+    expect(lines.some((l) => l.text.includes('Verified key'))).toBe(true);
+    expect(lines.join('\n')).not.toContain('sk-typed-key');
+  });
+
+  it('re-authenticate with a rejected key stores nothing', async () => {
+    const { d, lines, persisted } = deps({
+      openMenu: async () => 0,
+      ask: async () => 'sk-bad-key',
+      verifyKey: async () => ({ ok: false, reason: 'auth', message: 'endpoint rejected the key (HTTP 401)' }),
+    });
+    await providersMenu(d, '/providers upstage');
+    expect(persisted).toEqual([]);
+    expect(lines.some((l) => l.kind === 'error' && l.text.includes('Not stored'))).toBe(true);
+    expect(lines.join('\n')).not.toContain('sk-bad-key');
+  });
+
+  it('clear stored key persists the clear and guides back to re-auth', async () => {
+    const { d, lines, cleared } = deps({
+      openMenu: async (t: string) => (t.includes('key actions') ? 1 : 0),
+      activeProvider: 'openai',
+      storedKey: 'sk-stored',
+    });
+    await providersMenu(d, '/providers openai');
+    expect(cleared.n).toBe(1);
+    expect(lines.some((l) => l.text.includes('Cleared stored key'))).toBe(true);
+    expect(lines.join('\n')).not.toContain('sk-stored');
+  });
+
+  it('clear with no stored key reports honestly and touches nothing', async () => {
+    const { d, lines, cleared } = deps({
+      openMenu: async (t: string) => (t.includes('key actions') ? 1 : 0),
+    });
+    await providersMenu(d, '/providers openai');
+    expect(cleared.n).toBe(0);
+    expect(lines.some((l) => l.text.includes('No stored key'))).toBe(true);
   });
 });
