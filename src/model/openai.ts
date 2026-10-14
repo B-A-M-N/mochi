@@ -181,7 +181,18 @@ export function createOpenAIProvider(config: ProviderConfig) {
         if (rawEffort === 'auto') {
           return {}; // model-default — send nothing
         }
-        if (rawEffort === 'max' || rawEffort === 'extreme' || rawEffort === 'deep' || rawEffort === 'high' || rawEffort === 'hard') {
+        if (rawEffort === 'max' || rawEffort === 'extreme' || rawEffort === 'deep') {
+          // `max` is a real harness tier (7-pass compiler spec, expanded
+          // thinking budgets on Anthropic/Gemini) but the classic OpenAI
+          // effort enum (minimal..high) REJECTS unknown values with a 400, so
+          // the default wire value stays 'high' — a hard crash on every max
+          // run would be worse than the wire collapsing to high. Providers
+          // that DO accept wire 'max' (gpt-5.1+, OpenRouter-style routers)
+          // can opt in: MOCHI_REASONING_EFFORT_MAX=1.
+          if (process.env.MOCHI_REASONING_EFFORT_MAX === '1') return { reasoning_effort: 'max' };
+          return { reasoning_effort: 'high' };
+        }
+        if (rawEffort === 'high' || rawEffort === 'hard') {
           return { reasoning_effort: 'high' };
         }
         if (rawEffort === 'medium') {
