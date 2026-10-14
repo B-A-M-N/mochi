@@ -40,6 +40,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'list', description: 'List skills' },
       { name: 'search', description: 'Search skills' },
       { name: 'lint', description: 'Lint skill files (frontmatter, steps, quality)' },
+      { name: 'suggest', description: 'Surface skill opportunities / promotion candidates' },
       { name: 'audit', description: 'Skill health report' },
       { name: 'repo', description: 'Shared skill registry' },
       { name: 'import', description: 'Import skills' },

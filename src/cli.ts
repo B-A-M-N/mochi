@@ -1211,6 +1211,30 @@ async function main() {
       console.log(`\n${rep.imported.length} installed, ${rep.skipped.length} skipped, ${rep.warnings.length} warnings, ${rep.errors.length} errors (source: ${src.name}).`);
       return;
     }
+    if (sub === 'suggest') {
+      // Surface the next skill opportunities + proven-lesson promotions without
+      // waiting for a full self-train cycle. Read-only unless you run self-train
+      // (which writes the actual learned-* skills).
+      try {
+        const { loadLessons } = await import('./lessons.js');
+        const { detectSkillOpportunities, promoteLessons } = await import('./skills/skill-curator.js');
+        const lessons = loadLessons(cwd);
+        const opps = detectSkillOpportunities(lessons.map((l) => ({ title: l.lesson, pattern: l.signature })) as never, undefined, 0);
+        console.log('Skill opportunities:');
+        if (!opps.length) console.log('  (none detected yet — accumulate more run traces / lessons)');
+        else for (const o of opps) console.log(`  [${o.kind}/${o.confidence.toFixed(2)}] ${o.title} — ${o.signal}`);
+        const promo = promoteLessons(cwd);
+        if (promo.promoted.length) {
+          console.log(`\nLessons ready to promote (${promo.promoted.length}):`);
+          for (const n of promo.promoted) console.log(`  promoted ${n}`);
+        } else {
+          console.log('\nLessons ready to promote: none yet (gated by PROMOTE_MIN_USES/PROMOTE_MIN_SUCCESSES).');
+        }
+      } catch (e) {
+        console.error(`suggest failed: ${(e as Error).message}`);
+      }
+      return;
+    }
     if (sub === 'lint') {
       const { lintSkillDoc, formatSkillLint } = await import('./skills/skill-lint.js');
       const { assessSkillQuality } = await import('./skills/skill-manager.js');
@@ -1957,6 +1981,10 @@ async function main() {
       workspaceDir: wsDir,
       daemon: { running: isRunning, port: info?.port },
     });
+    if (flags.json) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     console.log(formatDoctor(report));
     return;
   }
