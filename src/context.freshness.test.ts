@@ -64,6 +64,8 @@ describe('ContextEngine file freshness (Cline fileContextTracker port)', () => {
     engine.addMessage(toolCall('read', { path: 'c.ts' }));
     await new Promise((r) => setTimeout(r, 15));
     writeFileSync(resolve(dir, 'c.ts'), 'y');
+    // Reset the throttle so this assertion tests live detection, not the cache.
+    (engine as unknown as { lastStaleCheckAt: number }).lastStaleCheckAt = 0;
     const warn = engine.stalenessWarning();
     expect(warn).toContain('STALE FILE ALERT');
     expect(warn).toContain('c.ts');

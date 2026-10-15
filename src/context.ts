@@ -140,6 +140,11 @@ export function approxTokens(text: string): number {
 // tokenized once (WeakMap keys on the message object, so it is GC-safe and
 // never serialized). Read hot path: buildPacket, estimateTokens, rescue scan.
 const messageTokenCache = new WeakMap<object, number>();
+
+/** Staleness re-check interval. File-change detection is not a sub-second
+ *  concern; stat-ing every tracked file every turn is pure overhead on large
+ *  repos. 2s keeps the alert responsive without per-turn syscall cost. */
+const STALE_CHECK_INTERVAL_MS = 2000;
 export function cachedMessageTokens(m: { role: string; content?: unknown; name?: string; tool_calls?: unknown[]; tool_call_id?: string }): number {
   const hit = messageTokenCache.get(m);
   if (hit !== undefined) return hit;
@@ -257,6 +262,8 @@ export class ContextEngine {
    *  and the staleness warning is injected into the volatile state prompt. */
   private fileSnapshots = new Map<string, string>();
   private staleNotified = new Set<string>();
+  private lastStaleCheckAt = 0;
+  private lastStaleResult: string[] = [];
   initialUserPrompt?: string;
 
   constructor(config: MochiConfig, projectRoot: string, userSkillsDir?: string) {
@@ -900,6 +907,9 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
    *  or edited them. Returns paths whose content the agent may be mis-modeling.
    *  Each stale file is reported only once per change (no repeated nagging for
    *  the same external edit); a re-read or re-edit re-arms the alert. */
+  /** Pure "check now" — stats every tracked file and returns what changed since
+   *  its snapshot. Used by tests and by callers that want an immediate answer;
+   *  the per-turn path goes through stalenessWarning() which throttles this. */
   detectStaleFiles(): string[] {
     const stale: string[] = [];
     for (const [p, snap] of this.fileSnapshots) {
@@ -914,9 +924,17 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   }
 
   /** Volatile-tier staleness warning for buildStatePrompt(). Empty when every
-   *  tracked file still matches its snapshot. */
+   *  tracked file still matches its snapshot. Throttled: staleness is not a
+   *  sub-second concern, and stat-ing every tracked file every turn is dozens
+   *  of syscalls on a large repo. Re-check at most every STALE_CHECK_INTERVAL_MS;
+   *  between checks return the last result (idempotent). */
   stalenessWarning(): string {
-    const stale = this.detectStaleFiles();
+    const now = Date.now();
+    if (this.lastStaleCheckAt === 0 || now - this.lastStaleCheckAt >= STALE_CHECK_INTERVAL_MS) {
+      this.lastStaleCheckAt = now;
+      this.lastStaleResult = this.detectStaleFiles();
+    }
+    const stale = this.lastStaleResult;
     if (!stale.length) return '';
     return `STALE FILE ALERT: the following files changed on disk since you last read/edited them — your cached understanding is outdated. Re-read before editing: ${stale.join(', ')}`;
   }
