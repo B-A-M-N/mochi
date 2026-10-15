@@ -235,6 +235,32 @@ describe('validateConfig', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('auto-loads MCP servers from Cursor and VS Code project configs too', async () => {
+    const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-mcp-foreign-'));
+    mkdirSync(resolve(dir, '.cursor'), { recursive: true });
+    mkdirSync(resolve(dir, '.vscode'), { recursive: true });
+    writeFileSync(resolve(dir, '.cursor', 'mcp.json'), JSON.stringify({
+      mcpServers: { filesystem: { command: 'npx', args: ['-y', 'srv-fs'] } },
+    }));
+    // VS Code uses `servers`, and shares a name to prove later files win.
+    writeFileSync(resolve(dir, '.vscode', 'mcp.json'), JSON.stringify({
+      servers: { filesystem: { command: 'uvx', args: ['srv-vscode'] }, memory: { command: 'npx', args: ['srv-mem'] } },
+    }));
+    const origCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const cfg = loadConfig();
+      expect(cfg.mcpServers?.filesystem?.command).toBe('uvx'); // .vscode overrides .cursor
+      expect(cfg.mcpServers?.memory?.command).toBe('npx');
+    } finally {
+      process.chdir(origCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('loadEnvFiles (.env parsing)', () => {

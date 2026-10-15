@@ -121,11 +121,21 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
   const projectMochi = readJsonFile(resolve(cwd, 'mochi.json')) ?? readJsonFile(resolve(cwd, '.mochi', 'config.json'));
   if (projectMochi) merge(cfg as unknown as Record<string, unknown>, projectMochi);
 
-  const mcpJson = readJsonFile(resolve(cwd, '.mcp.json'));
-  if (mcpJson && typeof mcpJson === 'object') {
-    const servers = (mcpJson as { mcpServers?: unknown; servers?: unknown }).mcpServers ?? (mcpJson as { servers?: unknown }).servers;
-    if (servers && typeof servers === 'object') {
-      cfg.mcpServers = { ...(cfg.mcpServers ?? {}), ...servers };
+  // Project-local MCP configs. mochi.json/.mochi/config.json are mochi's own;
+  // .mcp.json (Claude Code), .cursor/mcp.json (Cursor) and .vscode/mcp.json
+  // (VS Code/GitHub Copilot) are the common shapes other agents author. Reading
+  // them keeps the user's existing MCP servers live without re-running
+  // onboarding, which is how mochi reuses other agents' tool ecosystems.
+  // Later files win on a name collision; a project file overrides user config.
+  for (const rel of ['.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json']) {
+    const mcpJson = readJsonFile(resolve(cwd, rel));
+    if (mcpJson && typeof mcpJson === 'object') {
+      const servers = (mcpJson as { mcpServers?: unknown; servers?: unknown; mcp?: unknown }).mcpServers
+        ?? (mcpJson as { servers?: unknown }).servers
+        ?? (mcpJson as { mcp?: unknown }).mcp;
+      if (servers && typeof servers === 'object') {
+        cfg.mcpServers = { ...(cfg.mcpServers ?? {}), ...servers };
+      }
     }
   }
 
