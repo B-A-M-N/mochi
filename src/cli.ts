@@ -229,9 +229,10 @@ Usage:
   mochi mode <normal|spec|security|codemod|chaos>  # set execution mode
   mochi rules [list|add]             # manage modular project rules
   mochi bg [list|logs|kill]          # manage async background tasks
-  mochi discord [run|status]         # run Discord bot gateway
-  mochi telegram [run|status]        # run Telegram bot gateway (HTTP long-poll)
-  mochi slack [run|webhook|status]   # run Slack gateway (polling or Events API webhook)
+  mochi discord [run|status]           # run Discord bot gateway
+  mochi telegram [run|status]          # run Telegram bot gateway (HTTP long-poll)
+  mochi slack [run|webhook|status]     # run Slack gateway (polling or Events API webhook)
+  mochi bluebubbles [run|status]      # run BlueBubbles (iMessage) gateway
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi watch [dir...] [--cmd C]    # run the repo check on every file change
@@ -1530,6 +1531,30 @@ async function main() {
     }
     console.log(`🍡 Mochi Slack gateway configured for channels "${scfg.channels.join(', ')}" with prefix "${scfg.prefix}".`);
     console.log(`Bot Token: ${scfg.token.slice(0, 10)}...`);
+    return;
+  }
+  if (first === 'bluebubbles') {
+    const { loadBlueBubblesConfig, runBlueBubblesGateway } = await import('./bluebubbles.js');
+    const bcfg = loadBlueBubblesConfig(cwd);
+    if (!bcfg) {
+      console.error('No BlueBubbles configuration found. Set BLUEBUBBLES_SERVER_URL (or BLUEBUBBLES_URL) and BLUEBUBBLES_PASSWORD in .env, ~/.mochi/.env, or ~/.hermes/.env.');
+      process.exit(1);
+    }
+    const sub = positional[1] ?? 'status';
+    if (sub === 'run') {
+      console.log(`🍡 Mochi BlueBubbles (iMessage) gateway polling with prefix "${bcfg.prefix}" (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      process.once('SIGINT', () => ctl.abort());
+      const summary = await runBlueBubblesGateway(bcfg, runtime, {
+        fetchJson: fetch as never,
+        onLog: (line: string) => console.log(line),
+        signal: ctl.signal,
+      });
+      console.log(`BlueBubbles gateway stopped (${summary.messages} messages, ${summary.replies} replies).`);
+      return;
+    }
+    console.log(`🍡 Mochi BlueBubbles gateway configured for ${bcfg.serverUrl} with prefix "${bcfg.prefix}".`);
+    console.log(`Allowed senders: ${bcfg.allowedSenders && bcfg.allowedSenders.length ? bcfg.allowedSenders.join(', ') : '(all)'}`);
     return;
   }
   if (first === 'security' || first === 'audit') {
