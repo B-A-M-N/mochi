@@ -89,6 +89,9 @@ export { stripAnsi, visibleLen, visibleCells, cellWidth, sliceCells };
 /** Truncate with ellipsis on a visible-cell budget, preserving ANSI color codes
  *  and never splitting a surrogate pair or wide character. */
 export function ellipsize(s: string, max: number): string {
+  // Zero (or negative) budget means zero cells: emit nothing, not a 1-cell
+  // ellipsis that would overflow its row (narrow dropdowns/menus hit this).
+  if (max <= 0) return '';
   if (visibleLen(s) <= max) return s;
   return sliceCells(s, Math.max(0, max - 1)).text + '\x1b[0m…';
 }
@@ -1324,13 +1327,23 @@ export function renderDropdown(items: DropdownItem[], selected: number, width: n
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const sel = i === selected;
-    const name = padEnd(it.name, 16);
-    const hint = ellipsize(it.hint, Math.max(0, w - 4 - 16 - 3));
+    // Budget-driven columns: the old fixed 16-cell name + 2-cell pointer +
+    // borders needed 20 cells minimum, so every narrower terminal overflowed.
+    // The name column now shrinks (floor 1) and the hint takes the remainder
+    // (possibly 0 → ellipsize emits ''), keeping rows graceful at any width.
+    const inner = Math.max(1, w - 2); // cells between the borders
+    const nameW = Math.max(1, Math.min(16, inner - 2 - 1)); // pointer 2, hint ≥ 1
+    const name = padEnd(it.name, nameW);
+    const hint = ellipsize(it.hint, Math.max(0, inner - 2 - nameW));
     const rowBody = sel
       ? `${T.act}❯ ${T.bold}${name}${T.reset}${T.gray}${hint}${T.reset}`
       : `  ${T.fg}${name}${T.reset}${T.grayDark}${hint}${T.reset}`;
-    const pad = Math.max(0, w - 2 - 2 - 16 - visibleLen(hint));
-    out.push(`${T.rule}│${T.reset}${rowBody}${' '.repeat(pad)}${T.rule}│${T.reset}`);
+    const pad = Math.max(0, inner - 2 - nameW - visibleLen(hint));
+    let row = `${T.rule}│${T.reset}${rowBody}${' '.repeat(pad)}${T.rule}│${T.reset}`;
+    // Airtight invariant: no row ever exceeds the box, at ANY width. The
+    // border is re-appended after the cut so the box never loses its edge.
+    if (visibleLen(row) > w) row = `${ellipsize(row, Math.max(0, w - 1))}${T.rule}│${T.reset}`;
+    out.push(row);
   }
   out.push(`${T.rule}╰${'─'.repeat(Math.max(0, w - 2))}╯${T.reset}`);
   return out;

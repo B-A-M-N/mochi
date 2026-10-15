@@ -888,3 +888,24 @@ describe('renderMarkdown adversarial sweep (nested-escape + overflow guard)', ()
     expect(plain).not.toMatch(/\b38;2;\d/);
   });
 });
+
+describe('dropdown narrow-width guard', () => {
+  it('never overflows at any width down to 10, with emoji/CJK/long hints', () => {
+    const items = [
+      { name: 'alpha ✅', hint: 'run things here' },
+      { name: '日本語 beta gamma delta', hint: 'x'.repeat(100) },
+      { name: 'c', hint: 'short' },
+    ];
+    for (const W of [10, 12, 16, 20, 26, 40, 80]) {
+      for (const r of renderDropdown(items, 1, W)) {
+        expect(visibleLen(r), `dropdown overflow at width ${W}`).toBeLessThanOrEqual(W);
+      }
+    }
+  });
+
+  it('ellipsize with zero budget emits nothing (no phantom ellipsis)', () => {
+    expect(ellipsize('hello', 0)).toBe('');
+    expect(ellipsize('hello', -3)).toBe('');
+    expect(ellipsize('', 0)).toBe('');
+  });
+});
