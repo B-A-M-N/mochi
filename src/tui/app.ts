@@ -2661,11 +2661,12 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     startSpinner();
     scheduleRender();
     let out = '';
+    const beforeAssistantCount = rs.lines.filter((l) => l.kind === 'assistant').length;
     try {
       const result = await fn();
       out = result;
       tabs.setStatus(tabId, 'done');
-      if (echo || !rs.lines.some((l) => l.kind === 'assistant')) {
+      if (echo || rs.lines.filter((l) => l.kind === 'assistant').length === beforeAssistantCount) {
         if (result && result.trim()) {
           pushTo(rs, 'assistant', result);
         }
