@@ -35,6 +35,25 @@ describe('exec policy', () => {
     expect(r.cancelled).toBe(true);
   }, 60_000);
 
+  it('kills the whole process TREE on timeout, not just the direct child', async () => {
+    const { mkdtempSync, readFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-exec-tree-'));
+    const pidFile = join(dir, 'grandchild.pid');
+    // The shell backgrounds a grandchild (`sleep`) that records its PID, then
+    // waits. Before the group-kill fix, only the direct `bash` child was
+    // signalled and this `sleep` was orphaned (still alive after the timeout).
+    const r = await runShellString(`sleep 30 & echo $! > ${JSON.stringify(pidFile)}; wait`, { timeoutMs: 500 });
+    expect(r.timedOut).toBe(true);
+    const grandchildPid = Number(readFileSync(pidFile, 'utf8').trim());
+    expect(Number.isFinite(grandchildPid)).toBe(true);
+    await new Promise((res) => setTimeout(res, 1_000));
+    let alive = true;
+    try { process.kill(grandchildPid, 0); } catch { alive = false; }
+    expect(alive).toBe(false);
+  }, 30_000);
+
   it('truncates firehose output at the cap', async () => {
     const r = await runShellString('seq 1 200000', { maxOutput: 4096, timeoutMs: 15_000 });
     expect(r.stdout.length).toBeLessThan(9000);

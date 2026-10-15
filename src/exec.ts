@@ -5,7 +5,7 @@
 // API for shell-free execution, and an audit hook for risk logging.
 // Long-lived processes (background tasks, daemons, PTY) keep their own
 // lifecycle owners and are intentionally OUT of scope.
-import { spawn, execFile } from 'node:child_process';
+import { spawn, spawnSync, execFile } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { resolve, delimiter } from 'node:path';
 import { accessSync, constants } from 'node:fs';
@@ -97,7 +97,31 @@ function finishSpawn(
         durationMs,
       });
     };
-    const killTree = (sig: NodeJS.Signals) => { try { child.kill(sig); } catch { /* already dead */ } };
+    // Kill the WHOLE process tree, not just the direct child. A shell command
+    // like `npm test` is `sh -c …` -> npm -> node -> test runners; signalling
+    // only the direct child on timeout left the descendants running (CPU/port
+    // leaks, a "finished" run that still pins a core). On POSIX we spawned the
+    // child as its own process-group leader (detached), so a negative pid
+    // signals the entire group; on Windows taskkill /T walks the tree.
+    const killTree = (sig: NodeJS.Signals) => {
+      if (process.platform === 'win32') {
+        if (child.pid) {
+          try {
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+            return;
+          } catch { /* fall through to a direct kill */ }
+        }
+        try { child.kill(sig); } catch { /* already dead */ }
+        return;
+      }
+      try {
+        // Negative pid = the child's process group (it is the group leader).
+        if (child.pid) process.kill(-child.pid, sig);
+        else child.kill(sig);
+      } catch {
+        try { child.kill(sig); } catch { /* already dead */ }
+      }
+    };
     const timer = setTimeout(() => {
       timedOut = true;
       killTree('SIGTERM');
@@ -158,6 +182,9 @@ export function runArgv(cmd: string, args: readonly string[], opts: ExecOptions 
     env: opts.env ?? process.env,
     stdio: 'pipe',
     windowsHide: true,
+    // POSIX: make the child a process-group leader so a timeout/cancel can
+    // signal the entire tree (see killTree). No-op on Windows.
+    detached: process.platform !== 'win32',
   });
   return finishSpawn(child, [cmd, ...args].join(' '), opts, { text: '', truncated: false }, { text: '', truncated: false }, startedAt);
 }
@@ -184,6 +211,8 @@ export function runShellString(command: string, opts: ExecOptions & { shellBin?:
     env: opts.env ?? process.env,
     stdio: 'pipe',
     windowsHide: true,
+    // POSIX: own process group so timeout/cancel kills the whole tree.
+    detached: process.platform !== 'win32',
     ...(isWin ? { windowsVerbatimArguments: true } : {}),
   });
   return finishSpawn(child, command, opts, { text: '', truncated: false }, { text: '', truncated: false }, startedAt);
