@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -174,6 +174,55 @@ describe('VerifierEngine', () => {
     expect(result.status).toBe('PARTIAL');
     expect(result.summary).toContain('Mutation check');
   }, 120_000);
+
+  it('reports FAIL (not BLOCKED) when every verification command fails', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-verify-allfail-'));
+    writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ scripts: { test: 'node -e "process.exit(1)"' } }));
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const verifier = new VerifierEngine({
+      cwd: dir,
+      workspace,
+      config: baseConfig,
+      events: new EventBus(),
+      budget: new BudgetEngine(baseConfig.safety),
+    });
+    const task = createTask('Add feature', 'Implement', { acceptanceCriteria: ['feature works'] });
+    const result = await verifier.verify(task, 'Implemented feature');
+    expect(result.status).toBe('FAIL');
+    expect(result.failed.join('\n')).toContain('npm test');
+  });
+
+  it('fails fast on the tests related to the changed files, before the full suite', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-verify-target-'));
+    execSync('git init -q', { cwd: dir });
+    execSync('git config user.email t@t && git config user.name t', { cwd: dir });
+    // The test script fails ONLY when it receives a file argument, so the
+    // targeted command (`npm test -- <file>`) fails while the full `npm test`
+    // would pass. This proves the targeted set runs first and short-circuits.
+    writeFileSync(
+      resolve(dir, 'package.json'),
+      JSON.stringify({ name: 'x', version: '1.0.0', private: true, scripts: { test: 'node -e "process.exit(process.argv[1]?1:0)"' } }),
+    );
+    mkdirSync(resolve(dir, 'src'), { recursive: true });
+    writeFileSync(resolve(dir, 'src', 'a.test.ts'), '// a test');
+    execSync('git add -A && git commit -qm init', { cwd: dir });
+    writeFileSync(resolve(dir, 'src', 'a.ts'), 'export const a = 1;');
+
+    const workspace = new Workspace(dir, '.mochi');
+    workspace.ensure();
+    const verifier = new VerifierEngine({
+      cwd: dir,
+      workspace,
+      config: baseConfig,
+      events: new EventBus(),
+      budget: new BudgetEngine(baseConfig.safety),
+    });
+    const task = createTask('Add feature', 'Implement', { acceptanceCriteria: ['feature works'] });
+    const result = await verifier.verify(task, 'Implemented feature');
+    expect(result.status).toBe('FAIL');
+    expect(result.evidence.some((e) => e.source.includes('src/a.test.ts'))).toBe(true);
+  });
 
   it('fileScope filters the diff evidence so out-of-scope changes do not poison the judge', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-verify-scope-'));

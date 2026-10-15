@@ -2,6 +2,7 @@ import type { Tool } from './types.js';
 import { detectRepo } from '../repo/repo.js';
 import { runShellString } from '../exec.js';
 import { maybeRedact } from '../security/security.js';
+import { planTargetedTests } from '../core/test-select.js';
 
 // Run project verification commands (test, build, typecheck, lint) with
 // smart command injection and result summarization.
@@ -12,11 +13,13 @@ export const verifyTool: Tool = {
     name: 'verify',
     description:
       'Run a verification command (test, build, typecheck, lint) and return a structured summary. ' +
-      'Automatically detects the appropriate command for the project type. Useful for checking ' +
-      'that changes work correctly.',
+      'Automatically detects the appropriate command for the project type. For tests, by default ' +
+      'runs only the tests related to the files you changed (fast feedback) and says so in the ' +
+      'output — run with scope:"all" for the whole suite before you consider the task done.',
     parameters: [
       { name: 'command', type: 'string', description: 'Verification command to run (e.g. "test", "build", "typecheck", "lint")', required: false },
       { name: 'target', type: 'string', description: 'Specific test file or path to target (e.g. "src/foo.test.ts")', required: false },
+      { name: 'scope', type: 'string', description: 'For tests: "auto" (default; related tests only when safe), "related" (force targeted), "all" (whole suite).', required: false },
       { name: 'timeout', type: 'integer', description: 'Timeout in seconds (default: 120)', required: false },
     ],
     permission: 'shell',
@@ -49,6 +52,24 @@ export const verifyTool: Tool = {
       cmd = `${cmd} ${target.includes('--') ? '' : '-- '}${target}`.trim();
     }
 
+    // Changed-file-aware narrowing: when the caller didn't pin a target and
+    // this is a test run, substitute the related-tests-only command so the loop
+    // gets feedback in seconds instead of the whole suite. Never narrows when a
+    // target was given or scope is "all"; falls back silently when unmappable.
+    let scopeNote = '';
+    const scope = String(args.scope ?? 'auto').toLowerCase();
+    if (!target && scope !== 'all' && (cmdType === 'test' || cmdType === 'auto') && repo.testCommand) {
+      try {
+        const plan = await planTargetedTests(ctx.cwd, repo, repo.testCommand);
+        if (plan.command) {
+          cmd = plan.command;
+          scopeNote = `[TARGETED] ${plan.reason} — this is a SUBSET of the suite. Run verify with scope:"all" (or the full test command) before you finish.\n`;
+        }
+      } catch {
+        /* selection is best-effort; the full suite stands */
+      }
+    }
+
     const start = Date.now();
     try {
       const r = await runShellString(cmd, {
@@ -60,10 +81,10 @@ export const verifyTool: Tool = {
       const duration = Date.now() - start;
       const output = maybeRedact(`${r.stdout}${r.stderr ? `\n[stderr]:\n${r.stderr}` : ''}`).slice(0, 8000);
       if ((r.code ?? 1) === 0) {
-        return `[PASS] Verification PASSED (${Math.round(duration / 1000)}s)\n${output}`;
+        return `${scopeNote}[PASS] Verification PASSED (${Math.round(duration / 1000)}s)\n${output}`;
       }
       const note = r.timedOut ? ' (timed out, SIGKILLed)' : '';
-      return `[FAIL] Verification FAILED (exit ${r.code ?? 1}${note}, ${Math.round(duration / 1000)}s)\n${output}`;
+      return `${scopeNote}[FAIL] Verification FAILED (exit ${r.code ?? 1}${note}, ${Math.round(duration / 1000)}s)\n${output}`;
     } catch (err) {
       return `[ERR] Verification ERROR: ${maybeRedact(err instanceof Error ? err.message : String(err))}`;
     }

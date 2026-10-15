@@ -12,6 +12,7 @@ import { BudgetEngine } from './budget.js';
 import { runMutationCheck, type MutationCheck } from './core/mutation.js';
 import { classifyContentOnly } from './core/one-shot.js';
 import { isGreenfieldTask } from './core/greenfield.js';
+import { planTargetedTests } from './core/test-select.js';
 
 function execFileAsync(cmd: string, args: string[], cwd: string): Promise<string> {
   return execArgvText(cmd, args, { cwd, maxBuffer: 4 * 1024 * 1024 });
@@ -104,8 +105,49 @@ export class VerifierEngine {
       ...((contentOnly || greenfield) ? [] : [repo.testCommand, repo.typecheckCommand, repo.lintCommand, repo.buildCommand]),
     ].filter((c): c is string => Boolean(c));
 
+    // Fail-fast: when the changed files map cleanly to a subset of tests, run
+    // those FIRST. A targeted failure short-circuits before the slow full
+    // suite, typecheck, lint, and build — the common case while the agent is
+    // still iterating. The full suite still runs as the authoritative gate on
+    // success, so a narrow pass can never stand in for the real verdict.
+    const primaryTest = task.verificationCommand ?? repo.testCommand;
+    let targetedPlan: { command?: string; reason: string } | undefined;
+    if (primaryTest && !contentOnly && !greenfield) {
+      try {
+        targetedPlan = await planTargetedTests(this.cwd, repo, primaryTest);
+      } catch {
+        targetedPlan = undefined;
+      }
+    }
+
     for (const command of commands) {
       this.budget.recordToolCall();
+      if (command === primaryTest && targetedPlan?.command) {
+        this.budget.recordToolCall();
+        const tRes = await this.runCommand(targetedPlan.command);
+        const tExit = tRes.match(/^exit_code: (\d+)/);
+        const tCode = tExit ? Number(tExit[1]) : -1;
+        const tMissing = tCode === 127 || tCode === 9009;
+        const tOk = tCode === 0;
+        if (!tOk && !tMissing && !matchesBaseline(resolvedBaseline, targetedPlan.command, tRes)) {
+          evidence.push({
+            source: `command:${targetedPlan.command}`,
+            result: `[TARGETED: ${targetedPlan.reason}] ${tRes.slice(0, 2000)}`,
+            passed: false,
+          });
+          const early = this.build(
+            'FAIL',
+            [],
+            [`${targetedPlan.command} failed`],
+            'The tests related to your changed files failed. Fix them, then verify again (the full suite runs once the targeted set is green).',
+            evidence,
+          );
+          await this.hooks.runAfter('after_verify', { task: task.id, status: early.status });
+          return early;
+        }
+        // Targeted passed or was inconclusive (missing tool / pre-existing
+        // failure) → fall through to the authoritative full gate below.
+      }
       const result = await this.runCommand(command);
       // A check that cannot even run (command not found: exit 127 on POSIX,
       // 9009 on cmd.exe) is an environment gap, not evidence the agent's work
@@ -255,6 +297,11 @@ export class VerifierEngine {
     const hasCommand = cmdEvidence.length > 0;
     if (hasCommand && failed.length === 0) return this.build('PASS', passed, failed, 'All verification commands passed.', evidence);
     if (hasCommand && passed.length > 0) return this.build('PARTIAL', passed, failed, 'Some verification commands failed. Continue and repair.', evidence);
+    // Every check ran and every one failed: that is a FAIL, not BLOCKED. Before
+    // this branch such a run fell through to the "no automated verification
+    // available" BLOCKED fallback, which mislabels a demonstrable breakage as
+    // "couldn't verify" and hides the failing command from the agent.
+    if (hasCommand) return this.build('FAIL', passed, failed, 'Every verification command failed. Repair the failures and re-verify.', evidence);
     const diff = evidence.find((e) => e.source === 'diff');
     const hasDiff = Boolean(diff && diff.result !== 'No git changes detected' && diff.result.length > 0);
     if (!hasCommand && task.acceptanceCriteria.length === 0) {

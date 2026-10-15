@@ -67,6 +67,7 @@ import { statSync, existsSync, readFileSync } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { condenseOutput } from '../core/output-condenser.js';
 import { autoTestCommand, isWeakVerification, cwdForScope, withCwd } from '../core/testdetect.js';
+import { planTargetedTests } from '../core/test-select.js';
 import { classifyOneShot } from '../core/one-shot.js';
 import { classifyContentOnly } from '../core/one-shot.js';
 import { buildMcpTools } from '../mcp/tools.js';
@@ -4596,6 +4597,28 @@ Continue from 'Next:', do not redo completed progress.`,
     const wantsGreen = /\b(make|get|turn)\b[^.\n]{0,60}\b(pass|green)\b|\b(tests?|suite)\b[^.\n]{0,40}\b(must|should|to)\b[^.\n]{0,20}\bpass\b|\ball tests?\b|\b(pytest|npm test|node --test|go test|vitest|jest)\b[^.\n]{0,40}\b(pass(ing|es)?|green)\b/i.test(
       `${task.title} ${task.description} ${(task.acceptanceCriteria ?? []).join(' ')}`,
     );
+
+    // Fast-fail with the tests related to the changed files before paying for
+    // the full suite. A targeted failure is breakage in the code the agent just
+    // touched, so surface it now and skip the slow checks this iteration; on a
+    // targeted pass we still run the authoritative full set below (a narrow
+    // pass never stands in for the real gate).
+    if (repo.testCommand && checks.includes(repo.testCommand)) {
+      try {
+        const plan = await planTargetedTests(this.cwd, repo, repo.testCommand);
+        if (plan.command) {
+          const out = await this.runShell(plan.command, 180);
+          const exitLine = out.match(/^exit_code: (\d+)/);
+          const failedNow = !((exitLine && Number(exitLine[1]) === 0) || out.trim().endsWith('PASS'));
+          if (failedNow && (wantsGreen || !matchesBaseline(baseline, plan.command, out))) {
+            const condensed = condenseOutput(out, { maxLines: 60, preserveContext: 3 });
+            return { passed: false, summary: `Check failed: ${plan.command} (targeted: ${plan.reason})\n${condensed.condensed}` };
+          }
+        }
+      } catch {
+        /* selection is best-effort; the full suite still runs below */
+      }
+    }
 
     // Independent commands run in PARALLEL: test/typecheck/lint/build share no
     // state, so wall-clock per verification is the slowest check, not the sum.
