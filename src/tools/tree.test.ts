@@ -34,4 +34,14 @@ describe('treeTool', () => {
     const result = await treeTool.execute({ depth: 2 }, ctx);
     expect(result).not.toContain('deep.txt');
   });
+
+  it('clips output for a very wide directory (no context bomb)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-tree-wide-'));
+    const name = 'file-with-a-fairly-long-name-'.padEnd(48, 'x');
+    for (let i = 0; i < 2_000; i++) writeFileSync(resolve(dir, `${name}${i}.ts`), '');
+    const ctx = makeCtx(dir);
+    const result = await treeTool.execute({ depth: 1 }, ctx);
+    expect(result).toContain('[mochi: elided');
+    expect(result.length).toBeLessThan(80_000);
+  });
 });

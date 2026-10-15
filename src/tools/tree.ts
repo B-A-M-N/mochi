@@ -2,6 +2,13 @@ import { readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import type { Tool } from './types.js';
+import { clipToolOutput } from './output-budget.js';
+
+// Bound the walk: a tree of a large repo (or a mistyped depth on $HOME) must not
+// block the event loop for seconds or emit a result that blows the context. The
+// sync recursion stops at this many nodes; the rendered string is clipped by the
+// shared tool-result budget.
+const MAX_TREE_NODES = 20_000;
 
 function matchesExclude(name: string, patterns: string[]): boolean {
   for (const pattern of patterns) {
@@ -22,6 +29,7 @@ function buildTree(
   excludePatterns: string[],
   prefix: string,
   lines: string[],
+  budget: { nodes: number },
 ): void {
   if (depth > maxDepth) return;
   let entries: string[];
@@ -32,6 +40,7 @@ function buildTree(
   }
   const filtered = entries.filter((e) => !matchesExclude(e, excludePatterns));
   for (let i = 0; i < filtered.length; i++) {
+    if (budget.nodes >= MAX_TREE_NODES) return;
     const entry = filtered[i];
     const isLast = i === filtered.length - 1;
     const connector = isLast ? '└── ' : '├── ';
@@ -44,11 +53,12 @@ function buildTree(
       isDir = false;
     }
     lines.push(`${prefix}${connector}${entry}${isDir ? '/' : ''}`);
+    budget.nodes++;
     if (isDir) {
       if (dir === homedir() && existsSync(join(fullPath, '.git'))) {
         continue;
       }
-      buildTree(fullPath, depth + 1, maxDepth, excludePatterns, childPrefix, lines);
+      buildTree(fullPath, depth + 1, maxDepth, excludePatterns, childPrefix, lines, budget);
     }
   }
 }
@@ -73,7 +83,10 @@ export const treeTool: Tool = {
       ? String(args.exclude).split(',').map((s) => s.trim()).filter(Boolean)
       : ['node_modules', '.git', 'dist', '.next', '.cache', '__pycache__', '*.pyc'];
     const lines: string[] = [basename(dir) + '/'];
-    buildTree(dir, 1, maxDepth, excludePatterns, '', lines);
-    return lines.join('\n');
+    const budget = { nodes: 0 };
+    buildTree(dir, 1, maxDepth, excludePatterns, '', lines, budget);
+    const body = lines.join('\n');
+    const clipped = clipToolOutput(body);
+    return budget.nodes >= MAX_TREE_NODES ? `${clipped}\n(tree truncated after ${MAX_TREE_NODES} entries — raise depth/exclude or use glob)` : clipped;
   },
 };
