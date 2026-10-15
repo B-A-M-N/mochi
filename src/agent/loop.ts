@@ -798,6 +798,10 @@ export class Agent {
       },
     ).complexity;
     this.tasksScoreMeta.complexity = this.taskComplexity;
+    // Propagate the complexity verdict into the context engine BEFORE any
+    // message is ingested, so a complex task keeps its working memory (file
+    // bodies, tool outputs, deeper recency window) for the whole run.
+    this.context.setTaskComplexity(this.taskComplexity);
     this.events.emit({ type: 'agent:log', agentId: this.id, message: `[complexity] ${this.taskComplexity} for task "${task.title}"` });
     this.events.emit({ type: 'task:started', task, agentId: this.id });
     // Harness-v2 Phase 1: deterministic iteration lifecycle. Every loop turn
@@ -2818,14 +2822,17 @@ Continue from 'Next:', do not redo completed progress.`,
     }, 0);
     if (est() <= floorTokens) return;
     // Digest window: all but the last RECENT_KEEP messages (current working set).
-    const RECENT_KEEP = 8;
+    // Complex tasks keep a much deeper working set (20 vs 8): the digest throws
+    // the source of the old messages away, so a hard refactor must retain the
+    // files/commands it is actively reasoning over instead of a 300-word stub.
+    const RECENT_KEEP = this.taskComplexity === 'complex' ? 20 : 8;
     const oldCount = msgs.length - RECENT_KEEP;
     if (oldCount < 4) return;
     const old = msgs.slice(0, oldCount);
     const transcript = old
       .map((m) => `${m.role}: ${(m.content ?? '').slice(0, 400)}`)
       .join('\n')
-      .slice(0, 12_000);
+      .slice(0, this.taskComplexity === 'complex' ? 24_000 : 12_000);
     const sys = 'Summarize this agent-work transcript into a compact digest (max 300 words). Keep: goal, files touched and their state, commands run and outcomes, errors hit and fixes, open threads. Omit prose fluff. Output ONLY the digest.';
     try {
       const resp = await this.provider.chat(

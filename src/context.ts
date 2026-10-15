@@ -265,6 +265,24 @@ export class ContextEngine {
   private lastStaleCheckAt = 0;
   private lastStaleResult: string[] = [];
   initialUserPrompt?: string;
+  /** Complexity of the ACTIVE task (set per-run by the loop). When 'complex',
+   *  every context-destroying path in this engine (ingestion folding, in-place
+   *  tool-output shrinking, compaction cut point, eviction rescue) relaxes its
+   *  thresholds so a hard multi-file task keeps the file contents and tool
+   *  results it read instead of having them mowed down mid-run. Simple/standard
+   *  tasks keep the exact aggressive/lean defaults, so the fast path and its
+   *  token profile are unchanged. */
+  private complexPreserve = false;
+
+  /** Called by the agent loop once per task, before any message is ingested. */
+  setTaskComplexity(complexity: 'simple' | 'standard' | 'complex' | undefined): void {
+    this.complexPreserve = complexity === 'complex';
+  }
+
+  /** True when this run is preserving working memory (complex task). */
+  get preservingContext(): boolean {
+    return this.complexPreserve;
+  }
 
   constructor(config: MochiConfig, projectRoot: string, userSkillsDir?: string) {
     this.config = config;
@@ -326,17 +344,30 @@ export class ContextEngine {
         /TypeError:/i.test(text) ||
         /TS\d{4,5}:/i.test(text);
 
-      if ((text.length > 2000 || text.split('\n').length > 35) && hasErrors) {
-        const condensed = condenseOutput(text, { maxLines: 50, preserveContext: 3 });
+      // Complex tasks keep far more of each tool result: a multi-file refactor
+      // needs the actual file bodies/command output it read, not a 40-line
+      // stub. The error-condense and head/tail fold thresholds are raised ~10x;
+      // simple/standard tasks keep the original aggressive bounds.
+      const preserve = this.complexPreserve;
+      const errCharLimit = preserve ? 20000 : 2000;
+      const errLineLimit = preserve ? 300 : 35;
+      const foldCharLimit = preserve ? 60000 : 5000;
+      const foldLineLimit = preserve ? 600 : 60;
+      const foldHardCharLimit = preserve ? 120000 : 12000;
+      const foldHead = preserve ? 400 : 40;
+      const foldTail = preserve ? 200 : 20;
+
+      if ((text.length > errCharLimit || text.split('\n').length > errLineLimit) && hasErrors) {
+        const condensed = condenseOutput(text, { maxLines: preserve ? 500 : 50, preserveContext: 3 });
         this.messages.push({ ...msg, content: condensed.condensed });
         return;
       }
 
-      if (text.length > 5000) {
+      if (text.length > foldCharLimit) {
         const lines = text.split('\n');
-        if (lines.length > 60 || text.length > 12000) {
-          const keepHead = lines.length > 60 ? 40 : Math.max(1, Math.min(20, Math.floor(lines.length / 2)));
-          const keepTail = lines.length > 60 ? 20 : Math.max(1, Math.min(10, Math.floor(lines.length / 4)));
+        if (lines.length > foldLineLimit || text.length > foldHardCharLimit) {
+          const keepHead = lines.length > foldLineLimit ? foldHead : Math.max(1, Math.min(20, Math.floor(lines.length / 2)));
+          const keepTail = lines.length > foldLineLimit ? foldTail : Math.max(1, Math.min(10, Math.floor(lines.length / 4)));
           const headLines = lines.slice(0, keepHead);
           const tailLines = lines.slice(-keepTail);
           const omitted = lines.length - keepHead - keepTail;
@@ -757,7 +788,10 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // Add recent messages until budget exhausted; prefer latest. Always retain
     // at least the latest turns so active tool responses and conversation context are never dropped.
     const recent: ChatMessage[] = [];
-    const MIN_RECENT = 12; // keep at least last 6 turns (user+assistant+tool) for conversation continuity
+    // Complex tasks retain a deeper live window and rescue far more of the dense
+    // file-content results that eviction would otherwise strand: a multi-file
+    // refactor needs the code it read/every caller site, not 6 rescued snippets.
+    const MIN_RECENT = this.complexPreserve ? 24 : 12; // keep at least last turns for conversation continuity
     // Repo-aware eviction (competitive parity vs Claude Code): when the budget
     // forces dropping OLDER turns, those older turns often held the dense code
     // the agent is actually editing (`read`/`search`/`grep`/`edit`/`patch`
@@ -767,9 +801,9 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // as shrinkOldToolOutputs) as a trailing system block so the model still
     // sees the code it touched without breaking API validity (no orphaned
     // tool_call_id) or the byte-stable prefix-cache tier.
-    const RESCUE_MAX = 6;
-    const RESCUE_HEAD = 240;
-    const RESCUE_TAIL = 160;
+    const RESCUE_MAX = this.complexPreserve ? 24 : 6;
+    const RESCUE_HEAD = this.complexPreserve ? 1200 : 240;
+    const RESCUE_TAIL = this.complexPreserve ? 800 : 160;
     const CONTENT_TOOLS = new Set(['read', 'search', 'grep', 'edit', 'patch', 'replace_symbol', 'regex-replace', 'search-replace-multi', 'get_function', 'find_definitions', 'find_references']);
     const evictedDense: { name: string; content: string; tokens: number }[] = [];
     for (let i = this.messages.length - 1; i >= 0; i--) {
@@ -979,10 +1013,15 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
    * Returns the estimated tokens saved (0 when nothing was old/large enough).
    */
   shrinkOldToolOutputs(): number {
-    const RECENT_WINDOW = 12;      // never touch the newest ~6 turns
-    const SHRINK_THRESHOLD = 600;  // chars: outputs below this are already cheap
-    const KEEP_HEAD = 240;
-    const KEEP_TAIL = 160;
+    // Complex tasks hold working memory far longer: a multi-file refactor still
+    // needs the file bodies it read several turns ago. Recency window, minimum
+    // size to bother shrinking, and head/tail kept all scale up ~10x. Simple/
+    // standard tasks use the original aggressive constants unchanged.
+    const preserve = this.complexPreserve;
+    const RECENT_WINDOW = preserve ? 40 : 12;      // never touch the newest turns
+    const SHRINK_THRESHOLD = preserve ? 4000 : 600; // chars: outputs below this are already cheap
+    const KEEP_HEAD = preserve ? 2000 : 240;
+    const KEEP_TAIL = preserve ? 1200 : 160;
     const MARK = '\n[…earlier tool output truncated in place to save context; re-run the tool if you need the full text…]';
 
     let saved = 0;
@@ -1021,8 +1060,10 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
    *  back to the inlined TS walk when the binary is unavailable (CI, cold
    *  installs). Never orphans a tool result. */
   private async planCutIndex(): Promise<number | null> {
-    if (this.messages.length <= 6) return null;
-    const keep = 6;
+    // Complex tasks retain more recency through compaction (16 vs 6 messages):
+    // dropping to a 6-message window mid-refactor strands the code under change.
+    const keep = this.complexPreserve ? 16 : 6;
+    if (this.messages.length <= keep) return null;
     const native = await nativePlanCompaction(this.messages as PlanRequestMessage[], keep);
     if (typeof native?.cut === 'number' && native.cut > 0 && native.cut < this.messages.length) {
       return native.cut;
@@ -1055,7 +1096,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
 
   async compact(checkpoint?: string) {
     // Tier 1 (micro): drop everything but the recency window and distill small facts.
-    if (this.messages.length <= 6) return;
+    if (this.messages.length <= (this.complexPreserve ? 16 : 6)) return;
 
     // VALID CUT POINTS (Pi insight): a tool result must stay attached to the
     // assistant message that requested it. planCutIndex() enforces that
