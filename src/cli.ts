@@ -234,6 +234,7 @@ Usage:
   mochi slack [run|webhook|status]   # run Slack gateway (polling or Events API webhook)
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
+  mochi watch [dir...] [--cmd C]    # run the repo check on every file change
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers
@@ -2084,6 +2085,41 @@ async function main() {
     const { writeFileSync } = await import('node:fs');
     writeFileSync(resolve(runtime.cwd, out), lines.join('\n'));
     console.log(`Wrote bundle to ${resolve(runtime.cwd, out)}`);
+    return;
+  }
+  if (first === 'watch') {
+    // Tight edit→test feedback loop: watch files, run the repo's check command
+    // on every change, report pass/fail. Core in ./watch.js (unit-tested with
+    // injected transport); this stays a thin adapter with a real runner.
+    const { loadWatchConfig, watchCheckCommand, runWatch } = await import('./watch.js');
+    const cfg = loadWatchConfig(runtime.cwd);
+    const cmdFlag = typeof flags.cmd === 'string' && flags.cmd ? flags.cmd : null;
+    const dirs = positional.slice(1).filter((a) => !a.startsWith('-'));
+    if (dirs.length) cfg.paths = dirs.map((d) => resolve(runtime.cwd, d));
+    if (cmdFlag) cfg.testCommand = cmdFlag;
+    const cmd = watchCheckCommand(cfg);
+    if (!cmd) {
+      console.error('No test/build/typecheck command detected (and none given via --cmd).');
+      process.exit(1);
+    }
+    console.log(`👁️  Mochi watch: running \`${cmd}\` on every change under ${cfg.paths.join(', ')} (Ctrl+C to stop).`);
+    const ctl = new AbortController();
+    process.once('SIGINT', () => ctl.abort());
+    const { runShellString } = await import('./exec.js');
+    const summary = await runWatch(cfg, {
+      onLog: (line: string) => console.log(line),
+      signal: ctl.signal,
+      runCheck: async (c: string) => {
+        try {
+          const r = await runShellString(c, { cwd: runtime.cwd, timeoutMs: 120_000, maxOutput: 64 * 1024 });
+          const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim();
+          return { ok: r.code === 0, exitCode: r.code ?? -1, output: out };
+        } catch (e) {
+          return { ok: false, exitCode: -1, output: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    });
+    console.log(`Watch stopped (${summary.runs} runs, ${summary.passed} passed, ${summary.failed} failed).`);
     return;
   }
   if (first === 'init') {
