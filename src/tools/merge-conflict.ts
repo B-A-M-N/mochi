@@ -2,9 +2,10 @@
 // Detects, analyzes, and cleanly resolves 2-way and 3-way merge conflict markers
 // (<<<<<<< HEAD ... ======= ... >>>>>>> branch) across any source file.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, isAbsolute } from 'node:path';
 import type { Tool } from './types.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface ConflictBlock {
   index: number;
@@ -180,7 +181,7 @@ export const mergeConflictTool: Tool = {
       throw new Error(`Unknown strategy "${strategy}". Valid options: inspect, ours, theirs, both, custom`);
     }
 
-    writeFileSync(filePath, resolvedContent, 'utf8');
+    atomicWriteFileSync(filePath, resolvedContent);
     return `Resolved ${blocks.length} conflict(s) in ${rawPath} using strategy "${strategy}".`;
   },
 };

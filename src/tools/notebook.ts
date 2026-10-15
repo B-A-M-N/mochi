@@ -7,9 +7,10 @@
 // (JSON.stringify with 1-space indent + trailing newline), the same bytes
 // `jupyter nbconvert`/Jupyter itself writes, so diffs stay minimal.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 import type { Tool } from './types.js';
 
 interface NbCell {
@@ -72,7 +73,7 @@ function loadNotebook(fullPath: string, rawPath: string): { nb: Notebook; cells:
 }
 
 function saveNotebook(fullPath: string, nb: Notebook): void {
-  writeFileSync(fullPath, JSON.stringify(nb, null, 1) + '\n', 'utf8');
+  atomicWriteFileSync(fullPath, JSON.stringify(nb, null, 1) + '\n');
 }
 
 function checkIndex(cells: NbCell[], index: unknown): number {
