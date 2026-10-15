@@ -111,6 +111,11 @@ jobs:
       - name: Skip-budget guard (no silent test-scope shrink)
         run: node scripts/check-skips.mjs
 
+      - name: Process-site budget guard (exec boundary ratchet)
+        # Direct child_process call sites must only shrink: new execution
+        # goes through src/exec.ts (timeout + tree-kill + output cap).
+        run: node scripts/check-proc-sites.mjs
+
       - name: Dependency audit (shipped surface must be clean)
         # Full `npm audit` includes dev-only vitest/vite advisories whose fix
         # is a breaking vitest 5 bump (tracked separately); the SHIPPED agent

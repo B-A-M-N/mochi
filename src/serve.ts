@@ -22,6 +22,8 @@ export interface ServeOpts {
   cwd: string;
   /** Port to bind (0 = ephemeral, printed on start). */
   port?: number;
+  /** Bind address (default 127.0.0.1; containers pass 0.0.0.0). */
+  host?: string;
   /** Bearer token (generated when omitted). */
   token?: string;
   onLog?: (line: string) => void;
@@ -55,8 +57,8 @@ export const SERVE_ROUTES = [
 export async function runServe(opts: ServeOpts): Promise<ServeSummary> {
   const log = opts.onLog ?? (() => {});
   const token = opts.token ?? randomBytes(24).toString('hex');
-  const h = await startDaemonInProcess({ cwd: opts.cwd, port: opts.port ?? 0, token });
-  const base = `http://127.0.0.1:${h.info.port}`;
+  const h = await startDaemonInProcess({ cwd: opts.cwd, port: opts.port ?? 0, token, host: opts.host });
+  const base = `http://${opts.host && opts.host !== '127.0.0.1' ? opts.host : '127.0.0.1'}:${h.info.port}`;
   log(`🍡 Mochi API serving at ${base} (Ctrl+C to stop).`);
   log(`Token: ${token} (also in .mochi/daemon/info.json — keep it secret)`);
   log(`Routes: ${SERVE_ROUTES.join(', ')}`);

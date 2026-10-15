@@ -179,6 +179,37 @@ const SCAN_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.cpp', '.c', '.json', '.yaml', '.yml',
 ]);
 
+/** Documented false-positive exemptions: (file path suffix, rule id) → reason.
+ *  Every entry is REVIEWABLE — a rule silenced here must name the exact file
+ *  it is silenced in and why. The audit is only trustworthy if real findings
+ *  aren't buried under the auditor's own detector strings and heuristic sinks;
+ *  these entries keep `mochi security` signal-rich instead of alarm-fatiguing.
+ *  Secrets/private keys are NEVER exempted — a real key must always surface. */
+const AUDIT_EXEMPTIONS: Array<{ file: string; rule: string; reason: string }> = [
+  // Mochi's OWN detector definitions: the string is the rule's regex/example,
+  // not an executed permission.
+  { file: 'src/plugins.ts', rule: 'DANGEROUS_PERMISSIONS', reason: "the line is Mochi's own chmod-777 detector pattern" },
+  { file: 'src/tools/browser.ts', rule: 'INJECTION_EVAL', reason: "the line is the tool's parameter DESCRIPTION text, not a call" },
+  { file: 'src/tools/security-audit.ts', rule: 'INJECTION_EVAL', reason: 'the auditor documents the eval patterns it detects' },
+  // Identifier-quoted SQL: db_inspect quotes the table name with ""-escaping
+  // (the safe SQLite identifier form) and never concatenates user SQL here.
+  { file: 'src/tools/db-inspect.ts', rule: 'INJECTION_SQL_INTERPOLATION', reason: 'table identifier is ""-escaped, the safe SQLite quoting form' },
+  // The webview markdown renderer escapes via esc() BEFORE building tags.
+  { file: 'editors/vscode/src/extension.ts', rule: 'VULN_XSS_DOM', reason: 'md() runs esc() on the whole string before any tag is built' },
+];
+
+function isExempt(relPath: string, rule: string): boolean {
+  return AUDIT_EXEMPTIONS.some((e) => relPath.endsWith(e.file) && e.rule === rule);
+}
+
+/** Index of the inline Rust test module (`#[cfg(test)]`), or -1. Rust keeps
+ *  unit tests inline and they always trail the file, so secret-looking
+ *  literals at/after that marker are redaction fixtures, not credentials. */
+function rustTestStart(relPath: string, lines: string[]): number {
+  if (!relPath.endsWith('.rs')) return -1;
+  return lines.findIndex((l) => l.includes('#[cfg(test)]'));
+}
+
 /** Scan project files for security vulnerabilities */
 export function runSecurityAudit(
   cwd: string,
@@ -200,11 +231,15 @@ export function runSecurityAudit(
         const content = readFileSync(target, 'utf8');
         const lines = content.split('\n');
         const relPath = relative(cwd, target);
+        const testStart = rustTestStart(relPath, lines);
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
+          const pastTestMarker = testStart >= 0 && i >= testStart;
           for (const pattern of AUDIT_PATTERNS) {
             if (pattern.fileExts && !pattern.fileExts.includes(ext)) continue;
             if (rank[pattern.severity] < minRank) continue;
+            if (isExempt(relPath, pattern.id)) continue;
+            if (pastTestMarker && pattern.id.startsWith('SECRET_')) continue;
             if (pattern.regex.test(line)) {
               findings.push({
                 severity: pattern.severity,
@@ -245,7 +280,8 @@ export function runSecurityAudit(
         entry.name === 'dist' ||
         entry.name === 'target' ||
         entry.name === 'coverage' ||
-        entry.name === 'build'
+        entry.name === 'build' ||
+        entry.name === 'out'
       ) {
         continue;
       }
@@ -265,11 +301,15 @@ export function runSecurityAudit(
           const lines = content.split('\n');
           const relPath = relative(cwd, fullPath);
 
+          const testStart = rustTestStart(relPath, lines);
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
+            const pastTestMarker = testStart >= 0 && i >= testStart;
             for (const pattern of AUDIT_PATTERNS) {
               if (pattern.fileExts && !pattern.fileExts.includes(ext)) continue;
               if (rank[pattern.severity] < minRank) continue;
+              if (isExempt(relPath, pattern.id)) continue;
+              if (pastTestMarker && pattern.id.startsWith('SECRET_')) continue;
               if (pattern.regex.test(line)) {
                 findings.push({
                   severity: pattern.severity,

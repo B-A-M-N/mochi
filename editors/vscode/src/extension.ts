@@ -381,7 +381,11 @@ class MochiChatProvider implements vscode.WebviewViewProvider {
   }
 
   private renderHtml(): string {
-    const nonce = Math.random().toString(36).slice(2);
+    // CSP nonce must be unpredictable: derive from the crypto RNG (webview
+    // exposes crypto.getRandomValues) instead of Math.random.
+    const nonceBytes = new Uint8Array(16);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = Array.from(nonceBytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 24);
     return (
       '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
       '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +

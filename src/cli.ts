@@ -237,7 +237,7 @@ Usage:
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi watch [dir...] [--cmd C]    # run the repo check on every file change
-  mochi serve [--port N] [--token T] # JSON API + OpenAI-compatible (/v1) for CI/tooling
+  mochi serve [--port N] [--token T] [--host H] # JSON API + OpenAI-compatible (/v1); default 127.0.0.1
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers
@@ -2326,8 +2326,9 @@ async function main() {
     const rawPort = typeof flags.port === 'string' ? Number(flags.port) : 0;
     const port = Number.isFinite(rawPort) && rawPort >= 0 && rawPort <= 65535 ? Math.floor(rawPort) : 0;
     const token = typeof flags.token === 'string' && flags.token ? flags.token : undefined;
+    const host = typeof flags.host === 'string' && flags.host ? flags.host : '127.0.0.1';
     const { runServe } = await import('./serve.js');
-    console.log(`Starting Mochi API server${port ? ` on :${port}` : ''} (localhost only)…`);
+    console.log(`Starting Mochi API server${port ? ` on :${port}` : ''} (bind ${host})…`);
     const ctl = new AbortController();
     process.once('SIGINT', () => ctl.abort());
     process.once('SIGTERM', () => ctl.abort());
@@ -2335,6 +2336,7 @@ async function main() {
       cwd: runtime.cwd,
       port,
       token,
+      host,
       onLog: (line: string) => console.log(line),
       signal: ctl.signal,
     });

@@ -1,0 +1,15 @@
+# Keep the build context minimal: only what the image build actually uses.
+.git
+.github
+node_modules
+dist
+native
+coverage
+.mochi
+*.log
+*.env
+*.env.*
+dogfood
+examples
+bench
+**/*.test.ts

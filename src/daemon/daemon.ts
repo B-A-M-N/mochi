@@ -172,6 +172,8 @@ export async function startDaemonInProcess(opts: {
   token?: string;
   /** Override the token deadline (tests). Null/undefined = default TTL. */
   expiresAt?: number | null;
+  /** Bind address. Defaults to 127.0.0.1; containers set '0.0.0.0'. */
+  host?: string;
 }): Promise<{ info: DaemonInfo; close: () => Promise<void>; runtime: Runtime }> {
   const port = opts.port ?? 0;
   const token = opts.token ?? randomBytes(24).toString('hex');
@@ -194,7 +196,8 @@ export async function startDaemonInProcess(opts: {
   const server = createServer(async (req, res) => {
     await handleRequest(req, res, auth, runtime, { onRotate: persist });
   });
-  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', () => resolve()));
+  const host = opts.host ?? '127.0.0.1';
+  await new Promise<void>((resolve) => server.listen(port, host, () => resolve()));
   const addr = server.address() as { port: number };
   const info: DaemonInfo = {
     port: addr.port,

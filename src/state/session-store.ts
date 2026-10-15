@@ -209,7 +209,11 @@ export class SessionStore {
 }
 
 
-/** Hash a goal objective into a stable session filename/id aid. */
+/** Hash a goal objective into a stable session filename/id aid.
+ *  SHA-256 (was sha1 — audit VULN_WEAK_CRYPTO_HASH): the id only needs to be
+ *  stable + collision-free across sessions, and a 12-hex-char digest of a
+ *  model-supplied objective is exactly the kind of surface where weak-hash
+ *  scanners should stay silent. */
 export function sessionKey(objective: string): string {
-  return createHash('sha1').update(objective).digest('hex').slice(0, 12);
+  return createHash('sha256').update(objective).digest('hex').slice(0, 12);
 }
