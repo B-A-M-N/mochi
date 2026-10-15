@@ -11,7 +11,7 @@ const MAX_ENTRIES = 25_000;
 const TIME_BUDGET_MS = 5_000;
 
 // Heavyweight directory names never worth globbing into unless explicitly requested:
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   '.git', 'node_modules', '.mochi', '.cache', '.cargo', '.rustup', '.wine',
   '.wine-gonext', '.wine-nemu', '.wine-thaw',
   '.arduino15', '.android', '__pycache__', '.venv', 'venv', 'target', 'dist',

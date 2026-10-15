@@ -1,6 +1,7 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import { resolve, relative } from 'node:path';
 import type { Tool } from './types.js';
+import { SKIP_DIRS } from './glob.js';
 
 // Cap the recursive sync walk so a huge tree can't block the main-thread event
 // loop (the search-tool freeze class, 4a19bd1). Env-tunable.
@@ -15,7 +16,11 @@ function findFiles(dir: string, pattern: RegExp, extensions: string[] = [], budg
     if (budget && budget.seen >= budget.max) return results;
     const fullPath = resolve(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === '.next') continue;
+      // Never bulk-rewrite dependency/build/VCS trees: only 4 dirs were skipped
+      // before, so a repo-wide replace could silently edit files inside
+      // target/, venv/, build/, .mochi/, ... Now shares glob's skip list and
+      // skips hidden dirs too.
+      if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
       results.push(...findFiles(fullPath, pattern, extensions, budget));
     } else if (entry.isFile()) {
       if (extensions.length === 0 || extensions.some(ext => entry.name.endsWith(ext))) {
@@ -54,7 +59,10 @@ export const searchReplaceMultiTool: Tool = {
     const dirPath = args.path ? resolve(ctx.cwd, String(args.path)) : ctx.cwd;
     const filePattern = args.file_pattern ? new RegExp(String(args.file_pattern)) : /.+/;
     const extensions = (args.extensions ?? []) as string[];
-    const flags = String(args.flags ?? 'g');
+    const rawFlags = String(args.flags ?? 'g');
+    // A replace that only hits the FIRST occurrence contradicts this tool's
+    // whole purpose; force the global flag even if the model omitted it.
+    const flags = rawFlags.includes('g') ? rawFlags : rawFlags + 'g';
     const preview = Boolean(args.preview);
 
     let regex: RegExp;

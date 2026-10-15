@@ -129,6 +129,24 @@ describe('patch tool (real files)', () => {
     expect(after).toContain('    return 0;'); // untouched tail preserved
   });
 
+  it('preserves context lines instead of deleting them (region corruption regression)', async () => {
+    writeFileSync(join(dir, 'app.ts'), 'function setup() {\n  const value = old;\n  return value;\n}\n');
+    await patchTool.execute({
+      patch: [
+        '*** Begin Patch',
+        '*** Update File: app.ts',
+        ' function setup() {',
+        '-  const value = old;',
+        '+  const value = new;',
+        '*** End Patch',
+      ].join('\n'),
+    }, ctx());
+    const after = readFileSync(join(dir, 'app.ts'), 'utf8');
+    // The context line (function header) must survive the edit.
+    expect(after).toBe('function setup() {\n  const value = new;\n  return value;\n}\n');
+    expect(after).toContain('function setup() {');
+  });
+
   it('fails when context cannot be located', async () => {
     writeFileSync(join(dir, 'a.ts'), 'one\ntwo\nthree\n');
     await expect(patchTool.execute({
@@ -151,5 +169,70 @@ describe('applyFilePatch (unit)', () => {
   it('appends pure additions before the trailing newline', () => {
     const out = applyFilePatch('a\nb\n', { op: 'update', path: 'x', lines: [{ kind: 'add', text: 'c' }] });
     expect(out).toBe('a\nb\nc\n');
+  });
+});
+
+describe('patch tool — multi-hunk single file', () => {
+  it('parses @@ groups into separate hunks', () => {
+    const patches = parsePatch([
+      '*** Begin Patch',
+      '*** Update File: f.ts',
+      '@@ first',
+      ' const A = 1;',
+      '-const B = 2;',
+      '+const B = 20;',
+      '@@ second',
+      ' const C = 3;',
+      '-const D = 4;',
+      '+const D = 40;',
+      '*** End Patch',
+    ].join('\n'));
+    expect(patches[0].hunks).toHaveLength(2);
+  });
+
+  it('applies every hunk of a multi-hunk update', async () => {
+    writeFileSync(join(dir, 'f.ts'), 'const A = 1;\nconst B = 2;\nconst C = 3;\nconst D = 4;\n');
+    const out = await patchTool.execute({
+      patch: [
+        '*** Begin Patch',
+        '*** Update File: f.ts',
+        '@@ first',
+        ' const A = 1;',
+        '-const B = 2;',
+        '+const B = 20;',
+        '@@ second',
+        ' const C = 3;',
+        '-const D = 4;',
+        '+const D = 40;',
+        '*** End Patch',
+      ].join('\n'),
+    }, ctx());
+    expect(out).toContain('updated f.ts');
+    const after = readFileSync(join(dir, 'f.ts'), 'utf8');
+    expect(after).toBe('const A = 1;\nconst B = 20;\nconst C = 3;\nconst D = 40;\n');
+  });
+});
+
+describe('patch tool — atomicity', () => {
+  it('writes NOTHING when any file in a multi-file patch fails to locate', async () => {
+    writeFileSync(join(dir, 'a.ts'), 'one\ntwo\n');
+    writeFileSync(join(dir, 'b.ts'), 'alpha\nbeta\n');
+    await expect(patchTool.execute({
+      patch: [
+        '*** Begin Patch',
+        '*** Update File: a.ts',
+        ' one',
+        '-two',
+        '+TWO',
+        '*** Update File: b.ts',
+        ' nope',
+        '-beta',
+        '+BETA',
+        '*** End Patch',
+      ].join('\n'),
+    }, ctx())).rejects.toThrow('Could not locate');
+    // The first file's valid hunk must NOT have been applied.
+    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe('one\ntwo\n');
+    expect(readFileSync(join(dir, 'b.ts'), 'utf8')).toBe('alpha\nbeta\n');
   });
 });

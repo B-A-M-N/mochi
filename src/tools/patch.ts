@@ -33,8 +33,9 @@ interface HunkLine {
 interface FilePatch {
   op: 'add' | 'update' | 'delete';
   path: string;
-  anchor?: string; // text after @@ (optional, informational + search hint)
-  lines: HunkLine[];
+  anchor?: string; // text after the LAST @@ (informational + search hint)
+  lines: HunkLine[]; // flat view of every hunk's lines (unchanged contract)
+  hunks?: HunkLine[][]; // per-@@ groups; >1 means a multi-hunk update
 }
 
 export function parsePatch(patch: string): FilePatch[] {
@@ -52,31 +53,47 @@ export function parsePatch(patch: string): FilePatch[] {
 
   const patches: FilePatch[] = [];
   let cur: FilePatch | null = null;
+  // Each `@@` starts a NEW hunk group. A single `*** Update File:` section with
+  // several `@@` markers is a multi-hunk update (very common); treating all lines
+  // as one contiguous search block made every such patch fail to locate.
+  let curHunk: HunkLine[] | null = null;
+  const flushHunk = () => {
+    if (cur && curHunk && curHunk.length) (cur.hunks ??= []).push(curHunk);
+    curHunk = null;
+  };
   for (; i < raw.length; i++) {
     const line = raw[i];
     if (line.startsWith('*** End Patch')) break;
     if (line.startsWith('*** Add File: ')) {
+      flushHunk();
       cur = { op: 'add', path: line.slice('*** Add File: '.length).trim(), lines: [] };
       patches.push(cur);
     } else if (line.startsWith('*** Update File: ')) {
+      flushHunk();
       cur = { op: 'update', path: line.slice('*** Update File: '.length).trim(), lines: [] };
       patches.push(cur);
     } else if (line.startsWith('*** Delete File: ')) {
+      flushHunk();
       cur = { op: 'delete', path: line.slice('*** Delete File: '.length).trim(), lines: [] };
       patches.push(cur);
     } else if (line.startsWith('*** ')) {
       throw new Error(`Unknown patch directive: ${line}`);
     } else if (line.startsWith('@@') && cur && cur.op === 'update') {
+      flushHunk();
       cur.anchor = line.slice(2).trim();
     } else if (cur) {
-      if (line.startsWith('+')) cur.lines.push({ kind: 'add', text: line.slice(1) });
-      else if (line.startsWith('-')) cur.lines.push({ kind: 'del', text: line.slice(1) });
-      else if (line.startsWith(' ')) cur.lines.push({ kind: 'ctx', text: line.slice(1) });
-      else if (line.trim() === '') cur.lines.push({ kind: 'ctx', text: '' });
+      let h: HunkLine;
+      if (line.startsWith('+')) h = { kind: 'add', text: line.slice(1) };
+      else if (line.startsWith('-')) h = { kind: 'del', text: line.slice(1) };
+      else if (line.startsWith(' ')) h = { kind: 'ctx', text: line.slice(1) };
+      else if (line.trim() === '') h = { kind: 'ctx', text: '' };
       else throw new Error(`Malformed patch line (expected +, -, space, or ***): ${line}`);
+      cur.lines.push(h);
+      (curHunk ??= []).push(h);
     }
     // Lines before any file directive are ignored.
   }
+  flushHunk();
 
   if (patches.length === 0) throw new Error('Patch contains no file sections');
   return patches;
@@ -99,24 +116,40 @@ function applyHunk(fileLines: string[], hunk: HunkLine[]): string[] {
 
   const out: string[] = [];
   for (let i = 0; i < startLine; i++) out.push(fileLines[i]);
+  // Re-emit context + added lines; drop only the removed lines. Previously this
+  // pushed ONLY `add` lines, so every `ctx` line inside the located region was
+  // silently deleted — a one-line change to a function body also wiped the
+  // function header (and any other context lines), corrupting the file.
   for (const l of hunk) {
-    if (l.kind === 'add') out.push(l.text);
-    // del + ctx lines from the hunk replace the located region; ctx lines are
-    // re-emitted from the hunk so any whitespace normalization is applied.
+    if (l.kind === 'del') continue;
+    out.push(l.text);
   }
   for (let i = endLine + 1; i < fileLines.length; i++) out.push(fileLines[i]);
   return out;
 }
 
 export function applyFilePatch(source: string, fp: FilePatch): string {
-  const lines = source.split('\n');
-  let result = lines;
-  // Group consecutive non-add runs into hunks at pure-add boundaries... simpler:
-  // apply the whole section as a single hunk when it contains ctx/del lines,
-  // otherwise it is an append-style insertion.
+  let result = source.split('\n');
+  // Multi-hunk update: locate and apply each `@@` group independently. Each
+  // hunk re-locates by its own context, so earlier hunks shifting later line
+  // numbers is fine. A failure on any hunk throws before anything is written.
+  if (fp.hunks && fp.hunks.length > 1) {
+    for (const hunk of fp.hunks) {
+      const hasCtxOrDel = hunk.some((l) => l.kind !== 'add');
+      if (hasCtxOrDel) {
+        result = applyHunk(result, hunk);
+      } else {
+        const adds = hunk.map((l) => l.text);
+        if (result.length && result[result.length - 1] === '') result.splice(result.length - 1, 0, ...adds);
+        else result = [...result, ...adds];
+      }
+    }
+    return result.join('\n');
+  }
+  // Single hunk (or pure-add section): unchanged behavior.
   const hasCtxOrDel = fp.lines.some((l) => l.kind !== 'add');
   if (hasCtxOrDel) {
-    result = applyHunk(lines, fp.lines);
+    result = applyHunk(result, fp.lines);
   } else {
     // Pure additions: insert before the final empty line (EOF newline) if present.
     const adds = fp.lines.map((l) => l.text);
@@ -139,41 +172,54 @@ export const patchTool: Tool = {
   async execute(args, ctx) {
     const patchText = String(args.patch ?? '');
     const patches = parsePatch(patchText);
-    const results: string[] = [];
 
+    // Phase 1 — PLAN every file operation as a pure transformation. Any
+    // parse/locate/conflict error throws HERE, before a single byte is written,
+    // so a 5-file patch whose 4th file has drifted context does not leave the
+    // first three half-applied (which the model then can't retry cleanly).
+    type Plan =
+      | { op: 'add'; path: string; fullPath: string; content: string }
+      | { op: 'delete'; path: string; fullPath: string }
+      | { op: 'update'; path: string; fullPath: string; content: string; before: string };
+    const plans: Plan[] = [];
     for (const fp of patches) {
       const fullPath = resolve(ctx.cwd, fp.path);
       if (fp.op === 'add') {
         if (existsSync(fullPath)) throw new Error(`*** Add File: ${fp.path} already exists`);
-        mkdirSync(dirname(fullPath), { recursive: true });
         const content = fp.lines.filter((l) => l.kind === 'add').map((l) => l.text).join('\n');
-        const finalContent = content.endsWith('\n') || content === '' ? content : content + '\n';
-        writeFileSync(fullPath, finalContent);
-        ctx.events.emit({ type: 'file:changed', path: fullPath, operation: 'write', agentId: ctx.agentId });
-        const diag = validateFileSyntax(fullPath, finalContent);
-        if (!diag.valid && diag.summary) {
-          results.push(`added ${fp.path} (${fp.lines.length} lines) ⚠️ [AST Syntax Alert]: ${diag.summary}`);
-        } else {
-          results.push(`added ${fp.path} (${fp.lines.length} lines)`);
-        }
+        plans.push({ op: 'add', path: fp.path, fullPath, content: content.endsWith('\n') || content === '' ? content : content + '\n' });
       } else if (fp.op === 'delete') {
         if (!existsSync(fullPath)) throw new Error(`*** Delete File: ${fp.path} not found`);
-        rmSync(fullPath);
-        ctx.events.emit({ type: 'file:changed', path: fullPath, operation: 'delete', agentId: ctx.agentId });
-        results.push(`deleted ${fp.path}`);
+        plans.push({ op: 'delete', path: fp.path, fullPath });
       } else {
         if (!existsSync(fullPath)) throw new Error(`*** Update File: ${fp.path} not found`);
         const before = readFileSync(fullPath, 'utf8');
         const after = applyFilePatch(before, fp);
         if (after === before) throw new Error(`Patch produced no change to ${fp.path}`);
-        writeFileSync(fullPath, after);
-        ctx.events.emit({ type: 'file:changed', path: fullPath, operation: 'edit', agentId: ctx.agentId });
-        const diag = validateFileSyntax(fullPath, after);
-        if (!diag.valid && diag.summary) {
-          results.push(`updated ${fp.path} ⚠️ [AST Syntax Alert]: ${diag.summary}`);
-        } else {
-          results.push(`updated ${fp.path}`);
-        }
+        plans.push({ op: 'update', path: fp.path, fullPath, content: after, before });
+      }
+    }
+
+    // Phase 2 — EXECUTE. Every plan already validated, so this is just I/O.
+    const results: string[] = [];
+    for (const p of plans) {
+      if (p.op === 'add') {
+        mkdirSync(dirname(p.fullPath), { recursive: true });
+        writeFileSync(p.fullPath, p.content);
+        ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'write', agentId: ctx.agentId });
+        const diag = validateFileSyntax(p.fullPath, p.content);
+        const note = !diag.valid && diag.summary ? ` ⚠️ [AST Syntax Alert]: ${diag.summary}` : '';
+        results.push(`added ${p.path} (${p.content.split('\n').length - 1} lines)${note}`);
+      } else if (p.op === 'delete') {
+        rmSync(p.fullPath);
+        ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'delete', agentId: ctx.agentId });
+        results.push(`deleted ${p.path}`);
+      } else {
+        writeFileSync(p.fullPath, p.content);
+        ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'edit', agentId: ctx.agentId });
+        const diag = validateFileSyntax(p.fullPath, p.content);
+        const note = !diag.valid && diag.summary ? ` ⚠️ [AST Syntax Alert]: ${diag.summary}` : '';
+        results.push(`updated ${p.path}${note}`);
       }
       markMutation();
     }
