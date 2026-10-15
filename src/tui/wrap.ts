@@ -47,9 +47,41 @@ export function cellWidth(cp: number): number {
   return 1;
 }
 
-/** Visible terminal cell width of a string (ANSI-stripped, CJK/emoji-aware). */
+/** Expand tab characters to spaces at tab stops (default every 8 columns),
+ *  tracking the cell column ANSI-aware. A raw `\t` counts 0 cells in
+ *  cellWidth() but renders as up to 8 in the terminal — measuring without
+ *  expanding misaligns every column after a tab and breaks the width-harness
+ *  invariant for tabbed tool output and code. */
+export function expandTabs(s: string, tabWidth = 8): string {
+  if (!s.includes('\t')) return s;
+  let out = '';
+  let col = 0;
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    // Pass ANSI sequences through without advancing the column.
+    const skip = ansiSeqLen(s, i);
+    if (skip > 0) { out += s.slice(i, i + skip); i += skip; continue; }
+    if (ch === '\x1b') { out += ch; i++; continue; } // lone ESC: emit, no column
+    if (ch === '\n' || ch === '\r') { out += ch; col = 0; i++; continue; }
+    if (ch === '\t') {
+      const spaces = tabWidth - (col % tabWidth);
+      out += ' '.repeat(spaces);
+      col += spaces;
+      i++;
+      continue;
+    }
+    const cp = s.codePointAt(i) as number;
+    out += String.fromCodePoint(cp);
+    col += cellWidth(cp);
+    i += cp > 0xffff ? 2 : 1;
+  }
+  return out;
+}
+
+/** Visible terminal cell width of a string (tabs expanded, ANSI-stripped, CJK/emoji-aware). */
 export function visibleCells(s: string): number {
-  const plain = stripAnsi(s);
+  const plain = stripAnsi(expandTabs(s));
   let cells = 0;
   for (const ch of plain) cells += cellWidth(ch.codePointAt(0) as number);
   return cells;
@@ -60,10 +92,67 @@ export function visibleLen(s: string): number {
   return visibleCells(s);
 }
 
+/** Length of the ANSI escape sequence starting at `s[i]` (0 when none).
+ *  Shared by the tab expander and the column/index converters so all three
+ *  agree on what is invisible. */
+function ansiSeqLen(s: string, i: number): number {
+  if (s[i] !== '\x1b') return 0;
+  const osc = s.slice(i).match(/^\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/);
+  if (osc) return osc[0].length;
+  const csi = s.slice(i).match(/^\x1b\[[0-9;?]*[ -/]*[@-~]/);
+  if (csi) return csi[0].length;
+  const cs = s.slice(i).match(/^\x1b[()][0-9A-B]/);
+  if (cs) return cs[0].length;
+  return 0;
+}
+
+/** Convert a terminal-cell column to a UTF-16 string index into the RAW `s`
+ *  (which may contain tabs and ANSI — both are accounted for, so the result
+ *  slices the original string correctly). A column landing inside a wide char
+ *  snaps to the index just past it. Out-of-range columns clamp to the end. */
+export function cellColToIndex(s: string, col: number): number {
+  if (col <= 0) return 0;
+  let cells = 0;
+  let i = 0;
+  while (i < s.length && cells < col) {
+    const skip = ansiSeqLen(s, i);
+    if (skip > 0) { i += skip; continue; }
+    const ch = s[i];
+    if (ch === '\n' || ch === '\r') { i++; continue; }
+    if (ch === '\t') { cells += 8 - (cells % 8); i++; continue; }
+    const cp = s.codePointAt(i) as number;
+    cells += cellWidth(cp);
+    i += cp > 0xffff ? 2 : 1;
+  }
+  return i;
+}
+
+/** Convert a UTF-16 string index into the RAW `s` to a terminal-cell column:
+ *  the display column where `s[idx]` renders. Tabs count to their stop,
+ *  ANSI sequences count 0. The inverse of cellColToIndex (modulo
+ *  mid-wide-char snapping). */
+export function indexToCellCol(s: string, idx: number): number {
+  let cells = 0;
+  let i = 0;
+  const end = Math.max(0, Math.min(idx, s.length));
+  while (i < end) {
+    const skip = ansiSeqLen(s, i);
+    if (skip > 0) { i += skip > end - i ? end - i : skip; continue; }
+    const ch = s[i];
+    if (ch === '\n' || ch === '\r') { i++; continue; }
+    if (ch === '\t') { cells += 8 - (cells % 8); i++; continue; }
+    const cp = s.codePointAt(i) as number;
+    cells += cellWidth(cp);
+    i += cp > 0xffff ? 2 : 1;
+  }
+  return cells;
+}
+
 /** Slice the first `max` terminal cells of `s`, preserving ANSI codes and
  *  never splitting a surrogate pair or a wide character. Returns the slice
  *  plus the cell count consumed. */
 export function sliceCells(s: string, max: number): { text: string; cells: number } {
+  s = expandTabs(s);
   let out = '';
   let cells = 0;
   let i = 0;
@@ -96,7 +185,7 @@ export function wrap(text: string, max: number): string[] {
   if (!text) return [''];
   const out: string[] = [];
   const maxN = Math.max(1, max);
-  for (const paragraph of text.split('\n')) {
+  for (const paragraph of expandTabs(text).split('\n')) {
     let line = '';
     let lineVis = 0; // visible cells of `line`, kept O(1)
     const flush = () => { if (line.trim()) out.push(line.trimEnd()); line = ''; lineVis = 0; };

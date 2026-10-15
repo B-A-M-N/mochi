@@ -8,7 +8,7 @@ import { PROVIDERS, providerById } from '../model/providers.js';
 import { loadKeyring, storedKeyForProvider, deleteKeyringKey, accountsFor as accountsForKr, activeAccountName as activeAccountForKr, switchAccount as switchAccountKr, deleteAccount as deleteAccountKr } from '../model/keyring.js';
 import { reduceEvent, trimTranscript, rewrapSummaries, resolveCommandPrefix, type TuiLine } from './state.js';
 import { describeProviderFailure } from '../model/provider-failure.js';
-import { wrap, visibleLen } from './wrap.js';
+import { wrap, visibleLen, cellColToIndex, indexToCellCol } from './wrap.js';
 import { terminateRow, paintCanvasBg } from './ansi-hygiene.js';
 import { prefersReducedMotion, applyTheme, canvasBg, tabActiveBg } from './themes.js';
 import { TabManager, tabBarCells, tabBarHit, slugTitle } from './tabs.js';
@@ -145,6 +145,10 @@ const COMMANDS = [
   { name: '/run', hint: 'Run a shell command and show output' },
   { name: '/shell', hint: 'Run a shell command and show output' },
   { name: '/test', hint: 'Run the detected repo test command [extra args]' },
+  { name: '/watch', hint: 'Run the repo check now (test > typecheck > build); CLI `mochi watch` for continuous' },
+  { name: '/bundle', hint: 'Write a diagnostic bundle (transcript + diff + doctor) to a file' },
+  { name: '/update', hint: 'Check GitHub releases for a newer Mochi (prints notes + upgrade command)' },
+  { name: '/explain', hint: 'Explain how a symbol, file, or concept works [target]' },
   { name: '/checkpoint', hint: 'Save a named git snapshot of the workspace' },
   { name: '/rollback', hint: 'Restore the last checkpoint' },
   { name: '/tools', hint: 'Browse, inspect & run agent tools' },
@@ -1013,17 +1017,21 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     for (let idx = topRow; idx <= bottomRow; idx++) {
       if (idx < 0 || idx >= linesSource.length) continue;
       const bare = stripAnsi(linesSource[idx]);
+      // Selection columns are terminal CELLS; slicing needs string INDICES.
+      // Convert per line (wide chars/tabs make them differ) so copy grabs the
+      // visually selected span on CJK/emoji/tabbed rows.
+      const maxIdx = bare.length;
       if (topRow === bottomRow) {
         const minCol = Math.min(state.selStart.col, state.selEnd.col);
         const maxCol = Math.max(state.selStart.col, state.selEnd.col);
-        const from = Math.max(0, minCol - indent);
-        const to = Math.min(bare.length, sliceEnd(maxCol));
+        const from = cellColToIndex(bare, Math.max(0, minCol - indent));
+        const to = cellColToIndex(bare, Math.min(indexToCellCol(bare, maxIdx), sliceEnd(maxCol)));
         lines.push(from < to ? bare.slice(from, to) : '');
       } else if (idx === topRow) {
-        const from = Math.max(0, startCol - indent);
+        const from = cellColToIndex(bare, Math.max(0, startCol - indent));
         lines.push(bare.slice(from));
       } else if (idx === bottomRow) {
-        const to = Math.min(bare.length, sliceEnd(endCol));
+        const to = cellColToIndex(bare, Math.min(indexToCellCol(bare, maxIdx), sliceEnd(endCol)));
         lines.push(bare.slice(0, to));
       } else {
         lines.push(bare);
@@ -1092,15 +1100,18 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     const line = linesSource[lineIdx];
     if (!line) return;
     const bare = stripAnsi(line);
-    if (contentCol < 0 || contentCol > bare.length) return;
-    // Word boundaries: expand to non-whitespace on either side of the click col.
-    let start = contentCol;
+    // Mouse columns are terminal CELLS; word scanning needs string INDICES.
+    // Convert once (wide chars/tabs make them differ) so double-click selects
+    // the right word on CJK/emoji/tabbed rows.
+    const maxCells = indexToCellCol(bare, bare.length);
+    if (contentCol < 0 || contentCol > maxCells) return;
+    let start = cellColToIndex(bare, contentCol);
     while (start > 0 && !/\s/.test(bare[start - 1])) start--;
-    let end = contentCol;
+    let end = cellColToIndex(bare, contentCol);
     while (end < bare.length && !/\s/.test(bare[end])) end++;
     if (end <= start) end = start + 1;
-    state.selStart = { row: lineIdx, col: start + indent };
-    state.selEnd = { row: lineIdx, col: end + indent };
+    state.selStart = { row: lineIdx, col: indent + indexToCellCol(bare, start) };
+    state.selEnd = { row: lineIdx, col: indent + indexToCellCol(bare, end) };
     state.selActive = true;
     lastFrame = [];
     scheduleRender();
@@ -1121,7 +1132,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (!line) return;
     const bare = stripAnsi(line);
     state.selStart = { row: lineIdx, col: indent };
-    state.selEnd = { row: lineIdx, col: indent + Math.max(1, bare.length) };
+    state.selEnd = { row: lineIdx, col: indent + Math.max(1, indexToCellCol(bare, bare.length)) };
     state.selActive = true;
     lastFrame = [];
     scheduleRender();
@@ -2377,6 +2388,89 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     if (line === '/test' || line.startsWith('/test ')) {
       const extra = line.slice(6).trim();
       await runTest(extra);
+      return;
+    }
+    if (line === '/watch' || line.startsWith('/watch ')) {
+      // TUI /watch: run the repo check ONCE right now (same command preference
+      // as `mochi watch`: test > typecheck > build). Continuous watching blocks
+      // the TUI event loop — use the `mochi watch` CLI for that.
+      const arg = line.slice(6).trim();
+      await run(async () => {
+        const { loadWatchConfig, watchCheckCommand } = await import('../watch.js');
+        const cfg = loadWatchConfig(projectRoot);
+        if (arg) cfg.testCommand = arg;
+        const cmd = watchCheckCommand(cfg);
+        if (!cmd) return 'No test/build/typecheck command detected (and none given: /watch <command>).';
+        const { runShellString } = await import('../exec.js');
+        const r = await runShellString(cmd, { cwd: projectRoot, timeoutMs: 120_000, maxOutput: 64 * 1024 });
+        const tail = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n').filter(Boolean).slice(-8).join('\n');
+        return r.code === 0 ? `watch: PASS \`${cmd}\`` : `watch: FAIL \`${cmd}\` (exit ${r.code})\n${tail}`;
+      });
+      return;
+    }
+    if (line === '/bundle' || line.startsWith('/bundle ')) {
+      const out = line.slice(7).trim() || 'mochi-bundle.md';
+      await run(async () => {
+        const { resolve: rp } = await import('node:path');
+        const { writeFileSync } = await import('node:fs');
+        let gitDiff = '';
+        try {
+          const { execFileSync } = await import('node:child_process');
+          gitDiff = execFileSync('git', ['diff', 'HEAD'], { cwd: projectRoot, encoding: 'utf8' });
+        } catch { gitDiff = '(git diff unavailable)'; }
+        const { doctorReport } = await import('../doctor.js');
+        const report = await doctorReport({
+          version: pkg.version,
+          probeProvider: false,
+          provider: runtime.config.model.provider,
+          baseUrl: runtime.config.model.baseUrl ?? '',
+          model: runtime.config.model.model,
+          apiKey: (runtime.config.model as { apiKey?: string }).apiKey ?? null,
+          workspaceDir: projectRoot,
+        });
+        const body = [
+          `# Mochi Diagnostic Bundle`, ``,
+          `- Exports: ${new Date().toISOString()}`,
+          `- Provider: ${runtime.config.model.provider} / ${runtime.config.model.model}`,
+          `- Usage: ${runtime.usage.summary()}`, ``,
+          `## Session transcript`,
+          state.lines.map((l) => `### ${l.kind}\n${String(l.text).slice(0, 5000)}`).join('\n\n') || '(empty)', ``,
+          `## Git diff`, '```diff', gitDiff.slice(0, 20000), '```', ``,
+          `## Doctor`, '```json', JSON.stringify(report, null, 2).slice(0, 20000), '```',
+        ].join('\n');
+        const full = rp(projectRoot, out);
+        writeFileSync(full, body);
+        return `Wrote bundle to ${full}`;
+      });
+      return;
+    }
+    if (line === '/update') {
+      await run(async () => {
+        try {
+          const res = await fetch('https://api.github.com/repos/xanstomper/mochi/releases/latest', { headers: { 'user-agent': `mochi/${pkg.version}` } });
+          if (!res.ok) return `Could not check for updates (HTTP ${res.status}).`;
+          const data = (await res.json()) as { tag_name?: string; html_url?: string; body?: string };
+          const latest = String(data.tag_name ?? '').replace(/^v/i, '');
+          const cur = pkg.version.split('.').map(Number);
+          const lat = latest.split('.').map(Number);
+          let newer = false;
+          for (let i = 0; i < 3; i++) { if ((lat[i] ?? 0) !== (cur[i] ?? 0)) { newer = (lat[i] ?? 0) > (cur[i] ?? 0); break; } }
+          if (!newer) return `Already up to date (v${pkg.version}).`;
+          return `New release available: v${latest} (you have v${pkg.version})\n${data.html_url ?? ''}\n\n${(data.body ?? '').split('\n').slice(0, 15).join('\n')}\n\nUpgrade with: mochi update --apply`;
+        } catch (e) {
+          return `Update check failed: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      });
+      return;
+    }
+    if (line === '/explain' || line.startsWith('/explain ')) {
+      const target = line.slice(8).trim();
+      if (!target) { push('system', 'Usage: /explain <symbol, file, or concept>'); return; }
+      await run(async () => {
+        const { explainTool } = await import('../tools/explain.js');
+        const out = await explainTool.execute({ target }, { cwd: projectRoot } as never);
+        return String(out).slice(0, 6000);
+      });
       return;
     }
     if (line === '/stop' || line === '/abort' || line === '/skip') {
