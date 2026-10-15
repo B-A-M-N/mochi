@@ -155,6 +155,10 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
       { name: 'webhook', description: 'Events API HTTP webhook server' },
       { name: 'status', description: 'Config check' },
     ] },
+  { name: 'bluebubbles', description: 'BlueBubbles (iMessage) gateway (run: live bot, status: config check)', subcommands: [
+      { name: 'run', description: 'Polling gateway' },
+      { name: 'status', description: 'Config check' },
+    ] },
   { name: 'ambient', description: 'Ambient agent mode' },
   { name: 'termix', description: 'Multi-agent broadcast' },
   { name: 'bg', description: 'Background tasks' },
