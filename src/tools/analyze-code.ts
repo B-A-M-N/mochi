@@ -1,6 +1,13 @@
 import { existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import {resolve} from 'node:path';
 import type { Tool } from './types.js';
+import { SKIP_DIRS } from './glob.js';
+
+// Bound the synchronous walk+read: `depth: -1` on a monorepo would otherwise
+// read every source file on the main thread (the search-freeze class). Stop at
+// this many files and say so.
+const MAX_ANALYZE_FILES = 5_000;
 
 // Analyze code complexity metrics for a project or file
 export const analyzeCodeTool: Tool = {
@@ -58,11 +65,20 @@ export const analyzeCodeTool: Tool = {
 
     const analyzeDir = (dir: string, currentDepth: number) => {
       if (maxDepth >= 0 && currentDepth > maxDepth) return;
-      const entries = readdirSync(dir, { withFileTypes: true });
+      if (stats.files >= MAX_ANALYZE_FILES) return;
+      let entries: Dirent[];
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
       for (const entry of entries) {
+        if (stats.files >= MAX_ANALYZE_FILES) return;
         const full = resolve(dir, entry.name);
         if (entry.isDirectory()) {
-          if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
+          // Share the glob skip list (was only node_modules/.git/dist, so a
+          // repo-wide analyze crawled target/, venv/, build/, coverage/, ...).
+          if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
           analyzeDir(full, currentDepth + 1);
         } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.js'))) {
           checkFile(full);
@@ -76,8 +92,9 @@ export const analyzeCodeTool: Tool = {
       checkFile(fullPath);
     }
 
+    const truncated = stats.files >= MAX_ANALYZE_FILES;
     return `Code Analysis for ${targetPath}:
-Files: ${stats.files}
+Files: ${stats.files}${truncated ? ` (stopped at the ${MAX_ANALYZE_FILES}-file cap — narrow the path)` : ''}
 Lines: ${stats.lines}
 Functions: ${stats.functions}
 Classes: ${stats.classes}

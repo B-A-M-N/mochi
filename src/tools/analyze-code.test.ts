@@ -42,6 +42,18 @@ describe('analyze_code', () => {
     await expect(analyzeCodeTool.execute({ path: 'nope.ts' }, makeCtx(dir))).rejects.toThrow(/not found/i);
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it('skips dependency/build trees even at depth -1', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-analyze-'));
+    writeFileSync(resolve(dir, 'top.ts'), 'const a = 1;\n');
+    for (const d of ['venv', 'target', 'build', 'node_modules']) {
+      mkdirSync(resolve(dir, d));
+      writeFileSync(resolve(dir, d, 'dep.ts'), 'const x = 1;\n');
+    }
+    const out = await analyzeCodeTool.execute({ path: '.', depth: -1 }, makeCtx(dir));
+    expect(out).toContain('Files: 1');
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe('search_replace_multi', () => {
