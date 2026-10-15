@@ -1342,6 +1342,12 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const roles = activeSubs.map((s) => `#${s.role}`).join(', ');
       extra.push(`◆ ${activeSubs.length} subagents (${roles})`);
     }
+    if (runtime.config.model.provider === 'antigravity') {
+      const activeAcct = activeAccountForKr('antigravity');
+      if (activeAcct && activeAcct !== 'default') {
+        extra.push(`account: ${activeAcct}`);
+      }
+    }
     const statusModel = {
       modelId: modelShort,
       totalTokens: state.inTokens + state.outTokens + state.cacheTokens,
@@ -2609,7 +2615,11 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       const result = await fn();
       out = result;
       tabs.setStatus(tabId, 'done');
-      if (echo) pushTo(rs, 'assistant', result);
+      if (echo || !rs.lines.some((l) => l.kind === 'assistant')) {
+        if (result && result.trim()) {
+          pushTo(rs, 'assistant', result);
+        }
+      }
       const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
       sendSystemNotification('Task Complete', `Completed in ${elapsed}`, 'normal');
     } catch (e) {
@@ -4426,8 +4436,11 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       startSpinner();
       // echo:false — the agent streams assistant turns already.
       runtime.runPrompt(initialPrompt)
-        .then(() => {
+        .then((res) => {
           tabs.setStatus(activeTabId, 'done');
+          if (!state.lines.some((l) => l.kind === 'assistant') && res && res.trim()) {
+            push('assistant', res);
+          }
         })
         .catch((e) => {
           tabs.setStatus(activeTabId, 'error');

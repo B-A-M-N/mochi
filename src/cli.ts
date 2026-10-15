@@ -1834,7 +1834,48 @@ async function main() {
     }
     const p = providerById(provider);
     if (!p) { console.error('Unknown provider: ' + provider); return; }
-    const key = process.env[p.envKey] || positional.find((x) => x.startsWith('env:'))?.slice(4) || (typeof flags.key === 'string' && flags.key ? flags.key : undefined);
+    let key = process.env[p.envKey] || positional.find((x) => x.startsWith('env:'))?.slice(4) || (typeof flags.key === 'string' && flags.key ? flags.key : undefined);
+    let keySourceType: 'api-key' | 'oauth' = 'api-key';
+    if (!key && (p.id === 'antigravity' || p.id === 'google-antigravity')) {
+      const { antigravityAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = await antigravityAmbientToken();
+      if (ambient && !flags.browser && !flags.oauth) {
+        console.log(`Discovered ambient Google Antigravity OAuth token (${ambient.source}).`);
+        key = ambient.token;
+        keySourceType = 'oauth';
+      } else {
+        const { runAntigravityOAuth } = await import('./model/antigravity-oauth.js');
+        const cred = await runAntigravityOAuth({
+          onProgress: (m: string) => console.log(m),
+        });
+        key = JSON.stringify(cred);
+        keySourceType = 'oauth';
+        console.log(`Successfully authenticated with Google Antigravity (${cred.email ?? 'authorized'}).`);
+      }
+    } else if (!key && (p.id === 'openai-codex' || p.id === 'openai')) {
+      const { codexAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = await codexAmbientToken();
+      if (ambient?.token) {
+        console.log(`Discovered ambient OpenAI Codex OAuth token (${ambient.source}).`);
+        key = ambient.token;
+        keySourceType = 'oauth';
+      }
+    } else if (!key && p.id === 'kilo') {
+      const { kiloAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = await kiloAmbientToken();
+      if (ambient?.token) {
+        console.log(`Discovered ambient Kilo OAuth token (${ambient.source}).`);
+        key = ambient.token;
+        keySourceType = 'oauth';
+      }
+    } else if (!key && p.id === 'tokenjuice') {
+      const { tokenjuiceAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = tokenjuiceAmbientToken();
+      if (ambient?.token) {
+        console.log(`Discovered ambient TokenJuice API key (${ambient.source}).`);
+        key = ambient.token;
+      }
+    }
     if (!key && p.envKey) {
       console.log(`Set ${p.envKey} or run 'mochi tui' and use /login to input an API key interactively.`);
       return;
@@ -1853,7 +1894,7 @@ async function main() {
       else console.log(`Verified key with ${p.name}.`);
     }
     const account = typeof flags.account === 'string' && flags.account.length ? flags.account : undefined;
-    const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel, 'api-key', account) : await runtime.useProvider(p.id, model || p.defaultModel);
+    const info = key ? await runtime.loginProvider(p.id, key, model || p.defaultModel, keySourceType, account) : await runtime.useProvider(p.id, model || p.defaultModel);
     const { redact } = await import('./security/security.js');
     console.log(redact(info));
     return;
@@ -2351,16 +2392,41 @@ async function main() {
     // the prompt and print the result instead of spewing escape codes.
     const isTTY = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     if (flags.p || flags.print || !isTTY) {
-      // MCH-94: one-shot runs have no human watching a TUI — the print-mode
-      // caller reads `summary` directly. Skip the ~5s post-run narrative
-      // model call entirely; it only beautifies output nobody renders.
       process.env.MOCHI_NARRATIVE_SUMMARY = '0';
-      const detailed = await runtime.runPromptDetailed(prompt);
+      let streamedAny = false;
+      let streamedThinking = false;
+      const off = runtime.events.onAll((event: import('./types.js').MochiEvent) => {
+        if (flags.json) return;
+        if (event.type === 'agent:reasoning' && typeof event.content === 'string') {
+          if (!streamedThinking) {
+            process.stderr.write('\x1b[2m[thinking] ');
+            streamedThinking = true;
+          }
+          process.stderr.write(event.content);
+        } else if (event.type === 'message:chunk' && typeof event.content === 'string') {
+          if (streamedThinking) {
+            process.stderr.write('\x1b[0m\n\n');
+            streamedThinking = false;
+          }
+          process.stdout.write(event.content);
+          streamedAny = true;
+        }
+      });
+      let detailed;
+      try {
+        detailed = await runtime.runPromptDetailed(prompt);
+      } finally {
+        off();
+        if (streamedThinking) process.stderr.write('\x1b[0m\n\n');
+      }
       if (flags.json) {
-        // Machine-readable output for scripts/CI: the full structured result.
         console.log(JSON.stringify(detailed, null, 2));
       } else {
-        console.log(detailed.summary);
+        if (!streamedAny) {
+          console.log(detailed.summary);
+        } else {
+          process.stdout.write('\n');
+        }
         if (detailed.filesModified && detailed.filesModified.length > 0) {
           console.log('\nFiles modified:');
           for (const f of detailed.filesModified) {
