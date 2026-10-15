@@ -698,5 +698,15 @@
     "name": "chaos-engineering",
     "path": "chaos-engineering",
     "description": "Prove a system survives failure by injecting it deliberately — game days, fault injection, and steady-state hypotheses. Use when you need evidence, not hope, that a system is resilient."
+  },
+  {
+    "name": "regression-test-on-fix",
+    "path": "regression-test-on-fix",
+    "description": "When you fix a bug, write a regression test that fails on the old code and passes on the fix — so the bug can never return. Use after fixing any bug or defect."
+  },
+  {
+    "name": "code-review-checklist",
+    "path": "code-review-checklist",
+    "description": "Review code for the defects that actually reach production — correctness, security, and maintainability — not style. Use when reviewing a PR, a diff, or your own changes before declaring done."
   }
 ]
