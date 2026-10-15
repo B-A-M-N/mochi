@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
   login, setProvider, selectProviderById, currentConfig, listProviderIds,
-  listModelsForProvider, describeConfig, maskApiKey,
+  listModelsForProvider, describeConfig, maskApiKey, modelContextBudget,
 } from './model-manager.js';
 import { saveConfigFile, loadConfigFile } from './providers.js';
 import type { MochiConfig } from '../types.js';
@@ -116,5 +116,31 @@ describe('list + describe', () => {
   it('currentConfig reads the persisted file', () => {
     setProvider(base(), { provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: 'k' });
     expect(currentConfig().model?.model).toBe('deepseek-chat');
+  });
+});
+
+describe('modelContextBudget (working budget prior)', () => {
+  const prev = process.env.MOCHI_CONTEXT_WINDOW;
+  afterEach(() => {
+    if (prev === undefined) delete process.env.MOCHI_CONTEXT_WINDOW;
+    else process.env.MOCHI_CONTEXT_WINDOW = prev;
+  });
+
+  it('rounds DOWN to a conservative window per family, never an inflated one', () => {
+    // DeepSeek/GLM/Qwen are 128k-class; the old table returned 500k/110k and
+    // let the compaction floor sit past the provider's hard limit.
+    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(128_000);
+    expect(modelContextBudget('glm-5', 'zhipu')).toBe(128_000);
+    expect(modelContextBudget('claude-sonnet-4-5', 'anthropic')).toBe(200_000);
+    expect(modelContextBudget('gemini-2.5-pro', 'google')).toBe(1_000_000);
+    expect(modelContextBudget('gpt-5.4-nano', 'openai')).toBe(400_000);
+    expect(modelContextBudget('some-local-8b', 'ollama')).toBe(32_000);
+  });
+
+  it('honors the MOCHI_CONTEXT_WINDOW override', () => {
+    process.env.MOCHI_CONTEXT_WINDOW = '65536';
+    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(65_536);
+    process.env.MOCHI_CONTEXT_WINDOW = 'nonsense';
+    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(128_000);
   });
 });

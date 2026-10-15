@@ -177,6 +177,34 @@ describe('scoreTaskComplexity', () => {
     expect(scoreTaskComplexity('Refactor add.js', 'clean it up', { greenfield: false, fileScope: ['add.js'] }).complexity).not.toBe('complex');
     expect(scoreTaskComplexity('hello', 'hi there').complexity).toBe('simple');
   });
+  it('is complex for an enumerated multi-step deliverable on live code', () => {
+    // A task that literally enumerates its own steps (3+ acceptance criteria)
+    // while mutating an existing repo is structurally hard even without the
+    // scope/verify vocabulary.
+    expect(scoreTaskComplexity(
+      'Add rate limiting to the API',
+      'implement throttling per API key',
+      { greenfield: false, acceptanceCriteria: ['reject over-limit requests', 'emit metrics', 'add integration tests', 'document the headers'] },
+    ).complexity).toBe('complex');
+    // A numbered spec is the same signal.
+    expect(scoreTaskComplexity(
+      'Improve onboarding',
+      '1. add a welcome step\n2. persist progress\n3. resume mid-flow\n4. add an e2e test',
+      { greenfield: false },
+    ).complexity).toBe('complex');
+  });
+  it('is complex for integration/e2e breadth on live code, without a keyword sweep', () => {
+    expect(scoreTaskComplexity(
+      'Wire up billing',
+      'add an end-to-end path for invoice generation and a schema migration for plans',
+      { greenfield: false },
+    ).complexity).toBe('complex');
+  });
+  it('stays simple when the enumerated shape has no real-code mutation', () => {
+    // Numbered steps alone, on a bare prompt with no mutation/scope/repo signal,
+    // must NOT be dragged onto the heavy path.
+    expect(scoreTaskComplexity('hello', '1. hi\n2. there\n3. friend').complexity).not.toBe('complex');
+  });
 });
 
 describe('isComplexTask', () => {

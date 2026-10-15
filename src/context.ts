@@ -284,6 +284,14 @@ export class ContextEngine {
     return this.complexPreserve;
   }
 
+  /** Clamp the working budget to the active model's real window. The loop
+   *  computes min(configured budget, model window) once per run and pushes it
+   *  here so the packet builder never assembles a prompt the provider will
+   *  reject; a smaller budget means graceful eviction instead of a hard cliff. */
+  setBudgetTokens(tokens: number): void {
+    if (Number.isFinite(tokens) && tokens >= 1000) this.budget = Math.floor(tokens);
+  }
+
   constructor(config: MochiConfig, projectRoot: string, userSkillsDir?: string) {
     this.config = config;
     this.budget = config.safety.contextBudgetTokens;

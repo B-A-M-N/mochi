@@ -177,6 +177,11 @@ const COMPLEX_VERIFY_RE = /\b(add|write|update|extend|fix|run)\s+(tests?|integra
  *  across an unknown surface, not make a named edit. */
 const COMPLEX_TRACE_RE = /\b(figure\s+out|trace|track\s+down|narrow\s+down|root\s+cause|understand\s+(why|how|where)|why\s+is\s+this|intermittent|sporadic|hard\s+to\s+repro|flaky|no\s+(crash|error|stack)\s+visible|data\s+race)\b/i;
 
+/** Integration/migration/e2e breadth: the change spans a running system (data
+ *  migration, end-to-end path, a service boundary), not one isolated unit — the
+ *  edit-verify loop a hard task needs full tools + max reasoning for. */
+const COMPLEX_INTEGRATION_RE = /\b(end-?to-?end|e2e\b|integration\s+(test|suite|flow)|full-?stack|backfill|schema\s+(migration|change)|data\s+migration|state\s+machine|cache\s+invalidat|feature\s+flag|rollout|idempotent|multi-?service|microservice)\b/i;
+
 /** A weighted structural complexity score. Returns {complexity, score, reasons}.
  *  Score >= COMPLEX_THRESHOLD (or scope/repo/verify evidence) → 'complex'.
  *  Score >= SIMPLE_CAP and no complex evidence → 'standard'.
@@ -184,7 +189,7 @@ const COMPLEX_TRACE_RE = /\b(figure\s+out|trace|track\s+down|narrow\s+down|root\
 export function scoreTaskComplexity(
   title: string,
   description = '',
-  opts: { role?: string; fileScope?: string[]; greenfield?: boolean } = {},
+  opts: { role?: string; fileScope?: string[]; greenfield?: boolean; acceptanceCriteria?: string[] } = {},
 ): { complexity: TaskComplexity; score: number; reasons: string[] } {
   const text = `${title} ${description}`.trim();
   const lower = text.toLowerCase();
@@ -224,6 +229,18 @@ export function scoreTaskComplexity(
   const traceEvidence = COMPLEX_TRACE_RE.test(lower);
   if (traceEvidence) { score += 3; reasons.push('vague/hard investigation (trace/root-cause/intermittent)'); }
 
+  // Integration/migration/e2e breadth: spans a running system, not one unit.
+  const integrationEvidence = COMPLEX_INTEGRATION_RE.test(lower);
+  if (integrationEvidence) { score += 2; reasons.push('integration/migration breadth'); }
+
+  // Multi-step deliverable shape: many acceptance criteria, or a numbered spec.
+  // These are structural (the task literally enumerates its own steps), so they
+  // co-occur with real work rather than firing on a keyword.
+  const criteriaCount = opts.acceptanceCriteria?.length ?? 0;
+  if (criteriaCount >= 3) { score += 2; reasons.push(`${criteriaCount} acceptance criteria (multi-step deliverable)`); }
+  const numberedSteps = (text.match(/(?:^|\s)\d+[.)]\s/g) ?? []).length;
+  if (numberedSteps >= 3) { score += 2; reasons.push(`${numberedSteps}-step numbered spec`); }
+
   // Length is a weak proxy for multi-step scope.
   if (wordCount >= 45) { score += 1; reasons.push('long multi-step spec'); }
   else if (wordCount >= 15 && sentenceCount >= 2) { score += 1; reasons.push('multi-sentence spec'); }
@@ -247,8 +264,13 @@ export function scoreTaskComplexity(
   const bigScaffold = fileCount >= 3;
   // Repo-shaping refactor that also spans files or a test loop is complex.
   const shapingMulti = repoShapeEvidence && mutateRepoEvidence && (scopeEvidence || verifyEvidence || traceEvidence);
+  // A structurally enumerated deliverable (3+ criteria, a numbered spec, or
+  // integration/migration/e2e breadth) that also mutates real code is complex:
+  // it has its own multi-step shape even without the scope/verify vocabulary.
+  const deepDeliverable = integrationEvidence || criteriaCount >= 3 || numberedSteps >= 3;
+  const deepMultiStep = deepDeliverable && (mutateRepoEvidence || repoShapeEvidence || scopeEvidence || opts.greenfield === false);
 
-  const complex = hardInvestigation || broadVerify || wideScopeRealWork || bigScaffold || shapingMulti || score >= 5;
+  const complex = hardInvestigation || broadVerify || wideScopeRealWork || bigScaffold || shapingMulti || deepMultiStep || score >= 5;
 
   if (complex) return { complexity: 'complex', score, reasons };
   if (score >= 3) return { complexity: 'standard', score, reasons };
@@ -257,11 +279,12 @@ export function scoreTaskComplexity(
 
 /** Convenience predicate: is this task complex enough to demand the full
  *  toolset + max reasoning? Conservative by construction. */
-export function isComplexTask(task: Pick<Task, 'title' | 'description' | 'role'>, opts?: { fileScope?: string[]; greenfield?: boolean }): boolean {
+export function isComplexTask(task: Pick<Task, 'title' | 'description' | 'role'>, opts?: { fileScope?: string[]; greenfield?: boolean; acceptanceCriteria?: string[] }): boolean {
   return scoreTaskComplexity(task.title, task.description ?? '', {
     role: task.role,
     fileScope: opts?.fileScope,
     greenfield: opts?.greenfield,
+    acceptanceCriteria: opts?.acceptanceCriteria,
   }).complexity === 'complex';
 }
 

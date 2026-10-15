@@ -14,24 +14,39 @@ export function currentConfig(): MochiConfig {
   return loadConfigFile();
 }
 
+/** Conservative context budget (in tokens) for a model: the WORKING budget the
+ *  harness may fill before it starts compacting. This is intentionally below the
+ *  model's advertised hard window — the loop's compaction floor is a fraction of
+ *  this, so the smaller the prior, the earlier (and safer) compaction fires.
+ *  Under-estimating costs a little extra compaction; over-estimating means the
+ *  provider hard-rejects mid-task and the run dies on a context cliff, so every
+ *  value here rounds DOWN. Override per-host with `MOCHI_CONTEXT_WINDOW`. */
 export function modelContextBudget(model: string, provider?: string): number {
+  const override = Number(process.env.MOCHI_CONTEXT_WINDOW);
+  if (Number.isFinite(override) && override >= 1000) return override;
   const m = (model || '').toLowerCase();
   const p = (provider || '').toLowerCase();
-  if (m.includes('gemini') || p.includes('gemini')) return 400_000;
-  if (m.includes('claude') || p.includes('anthropic') || m.includes('kimi') || m.includes('moonshot')) return 160_000;
-  if (p.includes('freeinference') || m.includes('glm-5') || m.includes('deepseek-v4')) return 500_000;
+  // 1M-class long-context models.
+  if (m.includes('gemini')) return 1_000_000;
+  // 200k-class.
+  if (m.includes('claude') || p.includes('anthropic')) return 200_000;
+  // 256k-class.
+  if (m.includes('kimi') || m.includes('moonshot')) return 256_000;
+  // 128k-class (DeepSeek v3/v4, GLM, Qwen, Mistral, Llama-3 long, Grok).
   if (
-    m.includes('gpt-4') || m.includes('gpt-5') || m.includes('o3') || m.includes('o4') ||
     m.includes('deepseek') || m.includes('glm') || m.includes('qwen') ||
-    m.includes('minimax') || m.includes('llama-3') || m.includes('codestral') ||
-    m.includes('mistral') || m.includes('grok')
+    m.includes('minimax') || m.includes('mistral') || m.includes('codestral') ||
+    m.includes('grok') || m.includes('llama-3') || m.includes('llama-4')
   ) {
-    return 110_000;
+    return 128_000;
   }
+  // 400k-class.
+  if (m.includes('gpt-4') || m.includes('gpt-5') || m.includes('o3') || m.includes('o4')) return 400_000;
+  // Small local models.
   if (p === 'ollama' || p === 'llamacpp' || p === 'lmstudio' || m.includes('local') || m.includes('8b')) {
     return 32_000;
   }
-  return 110_000;
+  return 128_000;
 }
 
 export function setProvider(config: MochiConfig, selection: ProviderSelection): MochiConfig {

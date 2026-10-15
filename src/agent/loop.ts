@@ -20,6 +20,7 @@ import { detectRepo, languageHint } from '../repo/repo.js';
 import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask, scoreTaskComplexity } from '../core/taskkind.js';
 import { trimToLeanTier, trimToReadTier } from '../tools/index.js';
 import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
+import { modelContextBudget } from '../model/model-manager.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
@@ -458,6 +459,9 @@ export class Agent {
    *  the old uncapped `i = Math.max(0, i-1)` retry re-consumed the same
    *  iteration forever when compaction could not shrink the prompt. */
   private contextLimitRetries = 0;
+  /** Working context budget after clamping to the active model's real window
+   *  (set per-run in run(); falls back to the configured budget). */
+  private effectiveBudgetTokens = 0;
   /** Checkpoint taken before the first file edit, restored if verification
    *  fails repeatedly so a broken agent run never leaves the tree dirty. */
   private preEditCheckpoint?: CheckpointResult;
@@ -732,6 +736,13 @@ export class Agent {
     this.events.emit({ type: 'agent:spawned', id: this.id, role: opts.role as import('../types.js').AgentRole, taskId: '' });
   }
 
+  /** Effective working context budget for this run: the configured budget
+   *  clamped to the active model's real window (computed in run()). Falls back to
+   *  the configured budget before run() has computed the clamp. */
+  private budgetTokens(): number {
+    return this.effectiveBudgetTokens > 0 ? this.effectiveBudgetTokens : this.config.safety.contextBudgetTokens;
+  }
+
   /** Effective reasoning tier for a task. Distilled from Claude Code's
    *  `--effort auto`: when `reasoning: "auto"` is configured, map the task
    *  kind to a tier so simple work doesn't burn deep-reasoning tokens and
@@ -794,11 +805,27 @@ export class Agent {
       {
         role: task.role,
         fileScope: task.fileScope ?? [],
+        acceptanceCriteria: task.acceptanceCriteria ?? [],
         greenfield: isGreenfieldTask(task.title, task.description ?? '', task.fileScope, (p) => { try { return existsSync(p); } catch { return false; } }),
       },
     );
     this.taskComplexity = complexityScore.complexity;
     this.tasksScoreMeta = { complexity: complexityScore.complexity, score: complexityScore.score, reasons: complexityScore.reasons };
+    // Clamp the working budget to the active model's REAL window. The configured
+    // budget can be larger than what the provider actually accepts (a stale
+    // default, or a model switch), which pushed the compaction floor past the
+    // provider's hard limit — hard tasks then died on a context cliff instead of
+    // compacting gracefully. min() means we only ever compact earlier, never send
+    // a prompt the provider will reject. Override with MOCHI_CONTEXT_WINDOW.
+    const windowBudget = Math.min(
+      this.config.safety.contextBudgetTokens,
+      modelContextBudget(this.config.model.model, this.config.model.provider),
+    );
+    this.effectiveBudgetTokens = windowBudget;
+    this.context.setBudgetTokens(windowBudget);
+    if (windowBudget < this.config.safety.contextBudgetTokens) {
+      this.events.emit({ type: 'agent:log', agentId: this.id, message: `[context] working budget clamped ${this.config.safety.contextBudgetTokens} -> ${windowBudget} tokens (model window)` });
+    }
     // Propagate the complexity verdict into the context engine BEFORE any
     // message is ingested, so a complex task keeps its working memory (file
     // bodies, tool outputs, deeper recency window) for the whole run.
@@ -1295,8 +1322,8 @@ Continue from 'Next:', do not redo completed progress.`,
       // upper guard (80% of budget) solely so a typo'd giant budget can't
       // balloon the transcript to a non-response; the *floor* itself stays
       // proportional so long coding runs hold live repo code in-window.
-      const ceiling = Math.floor(this.config.safety.contextBudgetTokens * 0.8);
-      const floor = Math.min(this.config.safety.contextBudgetTokens * 0.6, ceiling);
+      const ceiling = Math.floor(this.budgetTokens() * 0.8);
+      const floor = Math.min(this.budgetTokens() * 0.6, ceiling);
       const msgCount = this.context.messageCount;
       // Batch token count via the Rust runtime (1 stdio round-trip instead of
       // N FFI calls); falls back to the sync estimate when native is absent.
