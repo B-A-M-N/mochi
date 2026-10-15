@@ -1752,6 +1752,18 @@ async function main() {
     console.log(JSON.stringify(runtime.config, null, 2));
     return;
   }
+  if (first === 'interop') {
+    // Adopt an existing third-party agent setup instead of re-authoring it.
+    const sub = positional[1];
+    if (sub === 'claude') {
+      const { importClaudeInterop, formatClaudeReport } = await import('./interop/claude.js');
+      const report = importClaudeInterop(runtime.cwd, { force: !!flags.force, dryRun: !!flags['dry-run'] });
+      console.log(formatClaudeReport(report));
+      return;
+    }
+    console.log('Usage: mochi interop claude [--dry-run] [--force]');
+    return;
+  }
   if (first === 'hooks') {
     // MCH-37: user-facing hooks management — init a hooks.json template,
     // list discovered hooks, or test-fire one. Claude Code-hooks parity.

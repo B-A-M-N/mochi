@@ -111,6 +111,10 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   },
   { name: 'hooks', description: 'List hooks' },
   {
+    name: 'interop', description: 'Import config from other agents',
+    subcommands: [{ name: 'claude', description: 'Import Claude Code hooks, agents, and commands' }],
+  },
+  {
     name: 'mcp', description: 'Search, add & manage MCP servers',
     subcommands: [
       { name: 'list', description: 'List built-in MCP servers' },
