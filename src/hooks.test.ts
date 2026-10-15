@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +46,48 @@ describe('programmatic (JS) hooks', () => {
       expect(rs.every((r) => r.exitCode === 0)).toBe(true);
     } finally { off(); }
   });
+});
+
+describe('sandboxed plugin hooks + crash isolation', () => {
+  it('scrubs secrets from sandboxed plugin hook commands', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-jshooks-'));
+    const probe = resolve(dir, 'probe.cjs');
+    writeFileSync(probe, "require('node:fs').writeFileSync(process.argv[2], JSON.stringify({ sandbox: process.env.MOCHI_SANDBOX || '', secret: process.env.MOCHI_TEST_API_KEY || '', hook: process.env.MOCHI_HOOK || '' }));");
+    const out = resolve(dir, 'out.json');
+    const cmd = `node "${probe}" "${out}"`;
+    // The reserved __sandbox__ key marks this command as sandbox-plugin-owned.
+    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ after_tool: [cmd], __sandbox__: [cmd] }));
+    const prev = process.env.MOCHI_TEST_API_KEY;
+    process.env.MOCHI_TEST_API_KEY = 'topsecret';
+    try {
+      const hooks = new HookManager(dir);
+      expect(hooks.list()).not.toContain('__sandbox__'); // reserved key is not a hook
+      const rs = await hooks.runAfter('after_tool', {});
+      expect(rs[0].exitCode).toBe(0);
+      const seen = JSON.parse(readFileSync(out, 'utf8'));
+      expect(seen.sandbox).toBe('1');
+      expect(seen.secret).toBe(''); // API key dropped from the env
+      expect(seen.hook).toBe('1');
+    } finally {
+      if (prev === undefined) delete process.env.MOCHI_TEST_API_KEY;
+      else process.env.MOCHI_TEST_API_KEY = prev;
+    }
+  }, 30_000);
+
+  it('isolates a timed-out before hook and can fail open on request', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-jshooks-'));
+    writeFileSync(resolve(dir, 'hang.cjs'), 'setTimeout(() => {}, 20000);\n');
+    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ before_tool: `node "${resolve(dir, 'hang.cjs')}"` }));
+    const hooks = new HookManager(dir);
+    const r = await hooks.runBefore('before_tool', { tool: 'shell' });
+    expect(r.timedOut).toBe(true);
+    expect(r.allowed).toBe(false); // default: fail-closed on the action
+    process.env.MOCHI_HOOKS_FAIL_OPEN = '1';
+    try {
+      const r2 = await hooks.runBefore('before_tool', { tool: 'shell' });
+      expect(r2.allowed).toBe(true); // infra fault no longer blocks the run
+    } finally { delete process.env.MOCHI_HOOKS_FAIL_OPEN; }
+  }, 30_000);
 });
 
 

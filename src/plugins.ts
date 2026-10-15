@@ -9,7 +9,7 @@
 // `node`/`bun` commands; Lua via `lua` when the plugin declares it.
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, cpSync, readdirSync, statSync } from 'node:fs';
 import {resolve} from 'node:path';
-import type { HookConfig, HookName } from './hooks.js';
+import { SANDBOX_KEY, type HookConfig, type HookName } from './hooks.js';
 
 export interface PluginManifest {
   name: string;
@@ -115,6 +115,10 @@ export class PluginRegistry {
   install(sourceDir: string, opts: { scope?: 'project' | 'user'; overwrite?: boolean } = {}): PluginRecord {
     const source = resolve(sourceDir);
     const manifest = readManifest(source);
+    // Refuse obviously-broken manifests (unknown hooks, non-credible sandbox
+    // claim) at install time instead of silently loading a half-broken plugin.
+    const problems = PluginRegistry.validateDir(source);
+    if (problems.length) throw new Error(`Invalid plugin:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
     const name = manifest.name;
     // Default scope is project for the CLI; user scope is explicit (--user).
     const scope = opts.scope ?? 'project';
@@ -163,11 +167,52 @@ export class PluginRegistry {
     const dead = new Set(commands);
     const out: HookConfig = {};
     for (const [hook, value] of Object.entries(existing)) {
+      if (hook === SANDBOX_KEY) {
+        const keptSandbox = toArray(value).filter((c) => !dead.has(c));
+        if (keptSandbox.length) out[hook] = keptSandbox;
+        continue;
+      }
       if (!isHookName(hook)) continue;
       const kept = toArray(value).filter((c) => !dead.has(c));
       if (kept.length) out[hook] = kept;
     }
     return out;
+  }
+
+  /** Hook commands contributed by sandbox:true plugins (they run sandboxed).
+   *  Only enabled plugins contribute. */
+  sandboxCommands(): string[] {
+    const out: string[] = [];
+    for (const plugin of this.list()) {
+      if (!plugin.enabled) continue;
+      try {
+        const manifest = readManifest(plugin.dir);
+        if (!manifest.sandbox) continue;
+        for (const v of Object.values(manifest.hooks ?? {})) out.push(...toArray(v));
+      } catch { /* skip malformed */ }
+    }
+    return [...new Set(out)];
+  }
+
+  /** Run a plugin's `activation` command (e.g. "node ./activate.js"), sandboxed
+   *  when the manifest declares `sandbox: true`. Returns the outcome. Called on
+   *  explicit load (install / enable) — never implicitly at session start, so
+   *  installing a plugin is the moment arbitrary code runs. */
+  async runActivation(name: string): Promise<{ ok: boolean; exitCode: number; stdout: string; stderr: string; skipped?: boolean }> {
+    const hit = this.list().find((p) => p.name === name);
+    if (!hit) throw new Error(`No plugin "${name}" installed.`);
+    const manifest = readManifest(hit.dir);
+    if (!manifest.activation) return { ok: true, exitCode: 0, stdout: '', stderr: '', skipped: true };
+    const { runShellString } = await import('./exec.js');
+    const r = await runShellString(manifest.activation, {
+      cwd: hit.dir,
+      env: { ...process.env, MOCHI_PLUGIN: name, MOCHI_PLUGIN_DIR: hit.dir },
+      timeoutMs: 30_000,
+      maxOutput: 1024 * 1024,
+      ...(manifest.sandbox ? { sandbox: { mode: 'auto' as const, network: false } } : {}),
+    });
+    const exitCode = r.code ?? (r.timedOut ? 124 : 1);
+    return { ok: exitCode === 0, exitCode, stdout: r.stdout, stderr: r.stderr };
   }
 
   /** Disable without deleting (writes a `.disabled` sentinel; hooks stop merging). */
@@ -197,6 +242,7 @@ export class PluginRegistry {
       `  dir: ${hit.dir}`,
       hit.hooks.length ? `  hooks: ${hit.hooks.join(', ')}` : '  hooks: (none)',
       manifest.activation ? `  activation: ${manifest.activation}` : '',
+      manifest.sandbox ? '  sandbox: true (network off + secrets scrubbed; unsafe commands rejected)' : '',
     ].filter(Boolean);
     return lines.join('\n');
   }
@@ -209,6 +255,13 @@ export class PluginRegistry {
       if (!manifest.version) problems.push('plugin.json missing "version"');
       for (const k of Object.keys(manifest.hooks ?? {})) {
         if (!isHookName(k)) problems.push(`unknown hook "${k}"`);
+      }
+      // Enforce the sandbox CLAIM: a manifest that says sandbox:true must not
+      // ship commands that plainly escape a sandbox. Refusing install here is
+      // what makes the flag meaningful instead of decorative.
+      if (manifest.sandbox) {
+        const unsafe = PluginRegistry.lintSandbox(dir).filter((w) => !w.startsWith('manifest claims'));
+        for (const w of unsafe) problems.push(`sandbox:true is not credible — ${w}`);
       }
     } catch (e) {
       problems.push(e instanceof Error ? e.message : String(e));
@@ -305,6 +358,11 @@ export class PluginRegistry {
       }
       merged[hook] = mergedList;
     }
+    // Reserved key consumed by HookManager: commands from sandbox:true plugins
+    // run with OS sandboxing + a secrets-scrubbed environment.
+    const sandboxed = this.sandboxCommands();
+    if (sandboxed.length) merged[SANDBOX_KEY] = sandboxed;
+    else delete merged[SANDBOX_KEY];
     mkdirSync(resolve(hooksFile, '..'), { recursive: true });
     writeFileSync(hooksFile, JSON.stringify(merged, null, 2) + '\n');
   }

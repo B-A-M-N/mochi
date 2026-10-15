@@ -1355,6 +1355,13 @@ async function main() {
         reg.syncToHooksFile(hooksFile, existing);
         console.log(`Installed plugin "${rec.name}" v${rec.version} (${rec.scope} scope).`);
         console.log(`Hooks merged into ${hooksFile}`);
+        if (!flags['no-activate']) {
+          const act = await reg.runActivation(rec.name);
+          if (!act.skipped) {
+            if (act.ok) console.log(`Activation ran (exit ${act.exitCode}).`);
+            else console.error(`Activation failed (exit ${act.exitCode}): ${(act.stderr || act.stdout).trim().slice(0, 400)}`);
+          }
+        }
         return;
       } catch (e) {
         console.error(`Install failed: ${(e as Error).message}`);
@@ -1388,6 +1395,13 @@ async function main() {
       const existing = existsSync(hooksFile) ? JSON.parse(readFileSync(hooksFile, 'utf8')) : {};
       reg.syncToHooksFile(hooksFile, enabled ? existing : reg.stripCommands(existing, commands));
       console.log(`${enabled ? 'Enabled' : 'Disabled'} plugin "${name}". Its hooks are now ${enabled ? 'active' : 'inactive'}.`);
+      if (enabled && !flags['no-activate']) {
+        const act = await reg.runActivation(name);
+        if (!act.skipped) {
+          if (act.ok) console.log(`Activation ran (exit ${act.exitCode}).`);
+          else console.error(`Activation failed (exit ${act.exitCode}): ${(act.stderr || act.stdout).trim().slice(0, 400)}`);
+        }
+      }
       return;
     }
     console.log('Usage: mochi plugin <add <dir>|remove <name>|enable <name>|disable <name>|list>');

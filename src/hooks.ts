@@ -28,7 +28,26 @@ export interface HookResult {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  /** The hook could not execute (spawn failure) — an infrastructure fault, not
+   *  a deliberate veto. Surfaces the crash cause so a broken hook is diagnosable
+   *  instead of silently blocking the run. */
+  crashed?: boolean;
+  /** The hook exceeded its time budget and was killed. */
+  timedOut?: boolean;
 }
+
+/** Reserved hooks.json key: the hook commands that belong to a `sandbox: true`
+ *  plugin. Those run under OS sandboxing + a secrets-scrubbed environment. */
+export const SANDBOX_KEY = '__sandbox__';
+
+/** Set MOCHI_HOOKS_FAIL_OPEN=1 to skip (rather than block on) hooks that crash
+ *  or time out. Deliberate non-zero exits still veto. Default: fail-closed. */
+function hookFailOpen(): boolean {
+  const v = process.env.MOCHI_HOOKS_FAIL_OPEN;
+  return v === '1' || v === 'true';
+}
+
+const SECRET_ENV = /(API_KEY|_TOKEN|^TOKEN$|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
 /** Return value of a programmatic hook handler. `false` (or a HookResult with
  *  allowed:false) vetoes a `before_*` hook; anything else allows. */
@@ -63,6 +82,9 @@ const OK: HookResult = { allowed: true, exitCode: 0, stdout: '', stderr: '' };
 
 export class HookManager {
   private config: HookConfig = {};
+  /** Commands owned by a `sandbox: true` plugin (from the reserved
+   *  SANDBOX_KEY). Cached after the constructor's file reads. */
+  private sandboxed: Set<string> | null = null;
 
   constructor(workspaceDir: string) {
     // MCH-37: hooks.json is read from BOTH the workspace (.mochi/) and the
@@ -85,7 +107,15 @@ export class HookManager {
   }
 
   list(): HookName[] {
-    return Object.keys(this.config) as HookName[];
+    return (Object.keys(this.config) as HookName[]).filter((h) => h !== (SANDBOX_KEY as string));
+  }
+
+  /** Commands that must run sandboxed (declared by sandbox:true plugins). */
+  private sandboxCommands(): Set<string> {
+    if (this.sandboxed) return this.sandboxed;
+    const raw = (this.config as Record<string, unknown>)[SANDBOX_KEY];
+    this.sandboxed = new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
+    return this.sandboxed;
   }
 
   enabled(name: HookName): boolean {
@@ -109,26 +139,28 @@ export class HookManager {
       if (r && typeof r === 'object') return r;
       return OK;
     } catch (err) {
-      return { allowed: false, exitCode: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) };
+      return { allowed: false, exitCode: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err), crashed: true };
     }
   }
 
   async runBefore(name: HookName, context: Record<string, string> = {}): Promise<HookResult> {
-    const results: HookResult[] = [];
-    // In-process handlers run first so a host-level veto is cheapest.
-    for (const handler of hookHandlersFor(name)) {
-      const r = await this.runHandler(handler, context);
-      results.push(r);
-      if (!r.allowed) return r;
+    const failOpen = hookFailOpen();
+    // Lazily sequenced so a deliberate veto short-circuits, while a crashed /
+    // timed-out hook is isolated: the run continues, the fault is surfaced.
+    const steps: Array<() => Promise<HookResult>> = [
+      ...hookHandlersFor(name).map((h) => () => this.runHandler(h, context)),
+      ...this.commandsFor(name).map((c) => () => this.run(c, context)),
+    ];
+    let last: HookResult = OK;
+    for (const step of steps) {
+      const r = await step();
+      if (r.allowed) { last = r; continue; }
+      // Infrastructure fault (crash/timeout) is not a security decision: never
+      // fail the whole run on it — but only skip it when explicitly opted in.
+      if (failOpen && (r.crashed || r.timedOut)) continue;
+      return r;
     }
-    for (const command of this.commandsFor(name)) {
-      results.push(await this.run(command, context));
-    }
-    // A failing before hook vetoes the action.
-    for (const r of results) {
-      if (!r.allowed) return r;
-    }
-    return results[results.length - 1] ?? OK;
+    return last;
   }
 
   async runAfter(name: HookName, context: Record<string, string> = {}): Promise<HookResult[]> {
@@ -143,7 +175,18 @@ export class HookManager {
   }
 
   private async run(command: string, context: Record<string, string>): Promise<HookResult> {
-    const env: NodeJS.ProcessEnv = { ...process.env, MOCHI_HOOK: '1' };
+    const sandboxed = this.sandboxCommands().has(command);
+    let env: NodeJS.ProcessEnv = { ...process.env, MOCHI_HOOK: '1' };
+    if (sandboxed) {
+      // A sandbox:true plugin opted out of secrets: run its hooks without
+      // API keys/tokens in the environment.
+      env = {};
+      for (const [k, v] of Object.entries(process.env)) {
+        if (!SECRET_ENV.test(k)) env[k] = v;
+      }
+      env.MOCHI_HOOK = '1';
+      env.MOCHI_SANDBOX = '1';
+    }
     for (const [k, v] of Object.entries(context)) env[`MOCHI_${k.toUpperCase()}`] = v;
     // Central exec policy (timeout → SIGTERM → SIGKILL, output cap) instead
     // of a bare execFile: a hanging hook can no longer stall a run forever.
@@ -152,11 +195,22 @@ export class HookManager {
     // Windows binary), silently breaking the whole hook system there.
     const { runShellString } = await import('./exec.js');
     try {
-      const r = await runShellString(command, { env, timeoutMs: 5000, maxOutput: 1024 * 1024 });
-      const exitCode = r.code ?? (r.timedOut ? 124 : 1);
+      const r = await runShellString(command, {
+        env,
+        timeoutMs: 5000,
+        maxOutput: 1024 * 1024,
+        // Sandboxed plugin hooks get OS-level isolation (network off) where
+        // bubblewrap is available; elsewhere the env scrub still applies.
+        ...(sandboxed ? { sandbox: { mode: 'auto' as const, network: false } } : {}),
+      });
+      if (r.timedOut) {
+        return { allowed: false, exitCode: 124, stdout: r.stdout, stderr: r.stderr || 'hook timed out', timedOut: true };
+      }
+      const exitCode = r.code ?? 1;
       return { allowed: exitCode === 0, exitCode, stdout: r.stdout, stderr: r.stderr };
-    } catch {
-      return { allowed: false, exitCode: 1, stdout: '', stderr: '' };
+    } catch (err) {
+      // Spawn/exec failure — an infrastructure fault, not a deliberate veto.
+      return { allowed: false, exitCode: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err), crashed: true };
     }
   }
 }
