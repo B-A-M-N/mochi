@@ -42,6 +42,7 @@ import { findReferencesTool, findDefinitionsTool } from './find-references.js';
 import { dbInspectTool } from './db-inspect.js';
 import { createPrTool } from './create-pr.js';
 import { reviewPrTool } from './review-pr.js';
+import { explainTool } from './explain.js';
 import { thinkTool } from './think.js';
 import { renameSymbolTool } from './rename-symbol.js';
 import { replTool } from './repl.js';
@@ -95,6 +96,7 @@ export const ALL_TOOLS: Tool[] = [
   askQuestionTool,
   notebookTool,
   reviewPrTool,
+  explainTool,
 ];
 
 export const ALL_TOOLS_MAP = new Map<string, Tool>(ALL_TOOLS.map((t) => [t.def.name, t]));
@@ -394,6 +396,12 @@ export const TOOL_ALIASES: Record<string, string> = {
   reviewPr: 'review_pr',
   pr_review: 'review_pr',
   review_pull_request: 'review_pr',
+
+  // Code comprehension
+  explain: 'explain',
+  explainCode: 'explain',
+  explain_code: 'explain',
+  howDoesThisWork: 'explain',
 
   // Memory & session recall
   session_search: 'session_recall',

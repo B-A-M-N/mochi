@@ -4104,6 +4104,13 @@ Continue from 'Next:', do not redo completed progress.`,
     await this.hooks.runAfter('after_tool', { tool: toolName, agent: this.id });
     if (['edit', 'write', 'delete', 'patch'].includes(toolName)) {
       await this.hooks.runAfter('after_edit', { tool: toolName });
+      // Auto-format on edit: after a successful edit/write/patch, run the
+      // repo's formatter on the changed file so style drift never accumulates.
+      // Silent + best-effort: format output is never surfaced to the model, and
+      // a missing formatter or format failure is a no-op (never blocks the edit).
+      if (!err && toolName !== 'delete') {
+        try { await this.autoFormatAfterEdit(toolName, args); } catch { /* best-effort */ }
+      }
     }
     if (toolName === 'shell') {
       await this.hooks.runAfter('after_shell', { tool: toolName });
@@ -4124,6 +4131,28 @@ Continue from 'Next:', do not redo completed progress.`,
     }
     this.trackFileChange(toolName, args, { output: out, error: err });
   }
+  /** Auto-format a file after a successful edit/write/patch. Silent + best-effort:
+   *  - Only runs when a formatter is configured (prettier/biome/black/gofmt/rustfmt).
+   *  - Never surfaces output to the model (would be noise) and never blocks the edit.
+   *  - patch/write may touch many files; format only the ones we can identify. */
+  private async autoFormatAfterEdit(toolName: string, args: Record<string, unknown>): Promise<void> {
+    // Identify target file(s) from the tool args.
+    const targets: string[] = [];
+    const pathArg = typeof args.path === 'string' ? args.path : typeof args.file_path === 'string' ? args.file_path : '';
+    if (pathArg) targets.push(pathArg);
+    // patch carries a diff; pull +++ b/ paths out of it.
+    if (toolName === 'patch' && typeof args.diff === 'string') {
+      for (const m of args.diff.matchAll(/^\+\+\+ b\/(.+)$/gm)) targets.push(m[1]);
+    }
+    if (!targets.length) return;
+    const { formatTool } = await import('../tools/format.js');
+    for (const t of targets) {
+      try {
+        await formatTool.execute({ path: t }, { cwd: this.cwd } as never);
+      } catch { /* best-effort: formatting must never block an edit */ }
+    }
+  }
+
   private parseArgs(raw: string): Record<string, unknown> {
     if (!raw || !raw.trim()) return {};
     const trimmed = raw.trim();

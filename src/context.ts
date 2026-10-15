@@ -533,6 +533,8 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
       if (names.some((n) => have.has(n))) lines.push('   - ' + text);
     };
     add(['codebase_map'], 'codebase_map: generate an architectural blueprint of the repository (ecosystem, LOC metrics, module hierarchy, entry points, and key exports) for instant mental orientation in large codebases.');
+    add(['explain'], 'explain: explain how a specific symbol, file, or concept works in plain language. Use for code review, onboarding into unfamiliar code, or understanding a dependency before changing it.');
+    add(['explain'], 'explain: explain how a specific symbol, file, or concept works in plain language. Use for code review, onboarding into unfamiliar code, or understanding a dependency before changing it.');
     add(['security_audit'], 'security_audit: perform deep static security audit for secrets, OWASP vulnerabilities (SQLi, command injection, path traversal, prototype pollution, SSRF, XSS, insecure deserialization, weak crypto, and API stubs).');
     add(['edit'], 'edit: use for a single precise replacement. oldText must be unique in the file; include surrounding context if it is not. Whitespace drift is tolerated, ambiguity is not.');
     add(['replace_symbol'], 'replace_symbol: use when REWRITING a whole function/class/method. Give the symbol name and the complete new source — boundaries come from the symbol index, so no anchor matching and no mismatch retries.');
