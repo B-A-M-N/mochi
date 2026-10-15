@@ -166,6 +166,7 @@ export interface ToolDefinition {
 
 export interface ToolCall {
   id: string;
+  tool_call_id?: string;
   type: 'function';
   function: {
     name: string;

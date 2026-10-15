@@ -323,7 +323,22 @@ export type AgentStopReason =
   | 'max_iterations'     // safety.maxIterations hit
   | 'model_error'        // model request failed twice
   | 'tool_loop'          // too many tool calls (anti-infinite-loop)
+  | 'stuck_no_progress'  // progress heartbeat: turns with no new files/edits/passes
   | 'verification_failed'; // verify kept failing past the retry budget
+
+/** Progress snapshot for the no-progress heartbeat. Pure data. */
+export interface ProgressSnap { read: number; edited: number; verifyPass: number }
+
+/** Did the agent advance between two heartbeats? Any growth counts: a new
+ *  file read, a new file edited, or a passing verification. Pure (tested). */
+export function heartbeatShowsProgress(prev: ProgressSnap, cur: ProgressSnap): boolean {
+  return cur.read > prev.read || cur.edited > prev.edited || cur.verifyPass > prev.verifyPass;
+}
+
+/** Turns between progress-heartbeat checks. */
+export const HEARTBEAT_EVERY = 8;
+/** Consecutive no-progress heartbeats before stopping honestly. */
+export const HEARTBEAT_MAX_STALL = 2;
 
 export interface AgentResult {
   success: boolean;
@@ -475,6 +490,11 @@ export class Agent {
   private planAcceptedText = '';
   private emptyResponseCount = 0;
   private selfReviewCount = 0;
+  /** Progress-heartbeat state (no-progress wandering guard). */
+  private lastHeartbeatIter = 0;
+  private lastProgressSnap: ProgressSnap = { read: 0, edited: 0, verifyPass: 0 };
+  private noProgressStreak = 0;
+  private verifyPassTotal = 0;
   private taskRunExecuted = false;
   private finishHintSent = false;
   private taskKind?: import('../core/taskkind.js').TaskKind;
@@ -1144,6 +1164,10 @@ Continue from 'Next:', do not redo completed progress.`,
       // per 2 iterations and a no-op when no struggle signals exist, so the
       // cost is zero on healthy runs.
       this.injectStruggleState(i);
+      // Progress heartbeat: stop honestly on sustained no-progress wandering
+      // instead of burning all 80 iterations going in circles.
+      const heartbeat = await this.progressHeartbeat(i, task);
+      if (heartbeat) return heartbeat;
       sm.beginIteration(i);
       // Deliver completed background tasks as events into the transcript.
       try {
@@ -2531,6 +2555,7 @@ Continue from 'Next:', do not redo completed progress.`,
       this.verifyCount++;
       if (verification.passed) {
         this.lastVerifyPassed = true;
+        this.verifyPassTotal++;
         this.consecutiveVerifyFailures = 0;
         this.consecutiveToolErrorsCount = 0;
         this.cycleNudges = 0;
@@ -4676,6 +4701,50 @@ Continue from 'Next:', do not redo completed progress.`,
    * of its situation; a healthy model pays no cost (the message is
    * dropped before it reaches the system role).
    */
+  /** Progress heartbeat: every HEARTBEAT_EVERY turns, check whether the
+   *  agent actually advanced (new files read/edited, or a passing verify).
+   *  Exact-repeat and oscillation guards catch IDENTICAL thrash; this catches
+   *  the worse failure — DIFFERENT actions every turn that go nowhere (the
+   *  "loops and never gets anything done" run that burns all 80 iterations).
+   *  First stalled heartbeat nudges (refocus or declare blocked); the second
+   *  consecutive one stops honestly with a tried-this summary instead of
+   *  burning the remaining budget. Skipped for content-only (chat) tasks,
+   *  where acting isn't the point. Returns a finish result when stopping,
+   *  null otherwise (caller returns it directly). */
+  private async progressHeartbeat(iter: number, task: Task): Promise<AgentResult | null> {
+    if (this.contentOnly) return null;
+    if (iter - this.lastHeartbeatIter < HEARTBEAT_EVERY) return null;
+    this.lastHeartbeatIter = iter;
+    const counts = this.context.fileOpCounts();
+    const cur: ProgressSnap = { read: counts.read, edited: counts.edited, verifyPass: this.verifyPassTotal };
+    if (heartbeatShowsProgress(this.lastProgressSnap, cur)) {
+      this.lastProgressSnap = cur;
+      this.noProgressStreak = 0;
+      return null;
+    }
+    this.noProgressStreak++;
+    if (this.noProgressStreak === 1) {
+      this.context.addMessage({
+        role: 'system',
+        content: `PROGRESS CHECK (turn ${iter + 1}): ${HEARTBEAT_EVERY} turns with no new files read, no edits, and no passing verification. You may be going in circles. Refocus on the acceptance criteria NOW: take one concrete step toward them (read the ONE most relevant file you haven't opened, make the smallest edit that could satisfy a criterion, or run verification) — or state exactly what is blocking you so the run can end honestly instead of wandering.`,
+      });
+      return null;
+    }
+    // Second consecutive stalled heartbeat: stop honestly.
+    const touched = [...(this.context['state']?.filesModified as string[] | undefined ?? [])].slice(-8);
+    const known = (this.context['state']?.knownErrors as string[] | undefined ?? []).slice(-3);
+    const tried = (task.attempts ?? []).slice(-6).map((a) => `${a.strategy}:${a.result}`).join(', ') || 'no recorded attempts';
+    const criteria = (task.acceptanceCriteria ?? []).join('; ') || '(no acceptance criteria stated)';
+    this.addAttempt(task, 'stalled', [], 'failure', `no progress for ${this.noProgressStreak * HEARTBEAT_EVERY} turns`);
+    return this.finish(task, false,
+      `Stuck: ${this.noProgressStreak * HEARTBEAT_EVERY} turns with no new files read, no edits, and no passing verification. ` +
+      `Tried: ${tried}. Files touched: ${touched.join(', ') || 'none'}. ` +
+      `Last errors: ${known.map((e) => String(e).slice(0, 120)).join(' | ') || 'none'}. ` +
+      `Unmet acceptance criteria: ${criteria}. ` +
+      `Stopping instead of burning the remaining iterations — narrow the scope or provide more direction and re-run.`,
+      'stuck_no_progress');
+  }
+
   private injectStruggleState(iter: number): void {
     if (iter - this.lastStruggleInjectIter < 2) return;
     const parts: string[] = [];

@@ -353,6 +353,14 @@ export class ContextEngine {
     return this.messages;
   }
 
+  /** Cumulative file-op counts for the progress heartbeat: how many distinct
+   *  files have been read / edited so far. A heartbeat showing zero growth in
+   *  both (plus no passing verification) means the agent is re-treading the
+   *  same ground. */
+  fileOpCounts(): { read: number; edited: number } {
+    return { read: this.filesRead.size, edited: this.filesEdited.size };
+  }
+
   /** Transcript length without exposing the private array (the TUI's budget
    *  floor check needs the count, not the messages). */
   get messageCount(): number {

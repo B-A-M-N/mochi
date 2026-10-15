@@ -101,10 +101,10 @@ export function createOpenAIProvider(config: ProviderConfig) {
         for (let i = 0; i < reuseLen; i++) {
           const item = lastMapped!.out[i];
           out.push(item);
-          const itemCalls = (item as any).tool_calls || (item as any).toolCalls;
+          const itemCalls = item.tool_calls;
           if (item.role === 'assistant' && Array.isArray(itemCalls)) {
             for (const tc of itemCalls) {
-              const id = tc.id || tc.tool_call_id;
+              const id = tc.id;
               if (id) declaredToolCallIds.add(id);
             }
           }
@@ -113,7 +113,7 @@ export function createOpenAIProvider(config: ProviderConfig) {
     }
     for (let i = reuseLen; i < messages.length; i++) {
       const m = messages[i];
-      const tcs = m.tool_calls || (m as any).toolCalls;
+      const tcs = m.tool_calls;
       if (m.role === 'assistant' && Array.isArray(tcs)) {
         for (const tc of tcs) {
           const id = tc.id || tc.tool_call_id;

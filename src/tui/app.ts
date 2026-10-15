@@ -4306,7 +4306,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       console.error = origError;
       console.info = origInfo;
       console.debug = origDebug;
-      try { (process.stderr as any).write = origStderrWrite; } catch { /* ignore */ }
+      try { process.stderr.write = origStderrWrite; } catch { /* ignore */ }
     };
 
     const noop = () => {};
@@ -4315,7 +4315,11 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     console.error = noop;
     console.info = noop;
     console.debug = noop;
-    (process.stderr as any).write = (_chunk: any, encoding?: any, cb?: any) => {
+    (process.stderr.write as NodeJS.WriteStream['write']) = (
+      _chunk: string | Uint8Array,
+      encoding?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void,
+    ) => {
       if (typeof encoding === 'function') encoding();
       else if (typeof cb === 'function') cb();
       return true;
