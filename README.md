@@ -223,6 +223,15 @@ No Node.js needed — the installer fetches a standalone binary for your OS from
 npm install -g @mochi/agent
 ```
 
+### Run via Docker
+
+Containerized API + OpenAI-compatible server (healthcheck on `/api/health`, token printed on start):
+
+```bash
+docker build -t mochi .
+docker run --rm -p 8787:8787 -v "$PWD:/workspace" -w /workspace mochi
+```
+
 ### Prebuilt native binary
 
 For deployments where even Node/Bun aren't guaranteed, compile Mochi into a single self-contained executable. The binary embeds the runtime and all modules — no `node_modules`, no runtime install:
