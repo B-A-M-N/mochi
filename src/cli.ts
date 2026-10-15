@@ -1875,6 +1875,22 @@ async function main() {
         console.log(`Discovered ambient TokenJuice API key (${ambient.source}).`);
         key = ambient.token;
       }
+    } else if (!key && p.id === 'github-models') {
+      const { githubAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = await githubAmbientToken();
+      if (ambient?.token) {
+        console.log(`Discovered ambient GitHub OAuth token (${ambient.source}).`);
+        key = ambient.token;
+        keySourceType = 'oauth';
+      }
+    } else if (!key && p.id === 'huggingface') {
+      const { huggingfaceAmbientToken } = await import('./model/ambient-auth.js');
+      const ambient = huggingfaceAmbientToken();
+      if (ambient?.token) {
+        console.log(`Discovered ambient Hugging Face token (${ambient.source}).`);
+        key = ambient.token;
+        keySourceType = 'oauth';
+      }
     }
     if (!key && p.envKey) {
       console.log(`Set ${p.envKey} or run 'mochi tui' and use /login to input an API key interactively.`);

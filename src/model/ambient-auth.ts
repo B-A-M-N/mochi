@@ -362,7 +362,37 @@ export async function anyAmbientToken(deps: AmbientDeps = {}): Promise<AmbientTo
     ?? (await antigravityAmbientToken(deps))
     ?? tokenjuiceAmbientToken(deps)
     ?? (await kiloAmbientToken(deps))
+    ?? (await githubAmbientToken(deps))
+    ?? huggingfaceAmbientToken(deps)
     ?? geminiAmbientToken(deps)
     ?? claudeAmbientToken(deps)
     ?? (await gcloudAmbientToken(deps));
+}
+
+/** GitHub Models: `gh auth token` (GitHub CLI OAuth user session). */
+export async function githubAmbientToken(deps: AmbientDeps = {}): Promise<AmbientToken | undefined> {
+  const execFile = deps.execFile ?? (async (cmd: string, args: string[]) => {
+    const { execFile: ef } = await import('node:child_process');
+    return await new Promise<string>((res, rej) => ef(cmd, args, { timeout: 8000 }, (e, out) => (e ? rej(e) : res(String(out ?? '').trim()))));
+  });
+  try {
+    const out = await execFile('gh', ['auth', 'token'], { timeout: 8000 } as { timeout?: number });
+    const token = (out ?? '').trim();
+    if (token) return { token, source: 'gh-cli-oauth' };
+  } catch { /* gh not installed / not authed */ }
+  return undefined;
+}
+
+/** Hugging Face: ~/.cache/huggingface/token or `hf auth token`. */
+export function huggingfaceAmbientToken(deps: AmbientDeps = {}): AmbientToken | undefined {
+  const read = deps.readFileSync ?? ((p: string) => readFileSync(p, 'utf8'));
+  const exists = deps.existsSync ?? existsSync;
+  const path = home('.cache/huggingface/token', deps.homeDir);
+  if (exists(path)) {
+    try {
+      const token = read(path).trim();
+      if (token) return { token, source: 'hf-cli-cache' };
+    } catch { /* best-effort */ }
+  }
+  return undefined;
 }

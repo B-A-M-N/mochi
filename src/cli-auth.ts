@@ -28,7 +28,7 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
     // Per-provider stored keys (keyring first, legacy active slot second) so
     // every provider reports its real source — not just the active one.
     const { loadKeyring, storedKeyForProvider, accountsFor, activeAccountName } = await import('./model/keyring.js');
-    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken, listAntigravityAccounts, tokenjuiceAmbientToken, kiloAmbientToken } = await import('./model/ambient-auth.js');
+    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken, listAntigravityAccounts, tokenjuiceAmbientToken, kiloAmbientToken, githubAmbientToken, huggingfaceAmbientToken } = await import('./model/ambient-auth.js');
     const ring = loadKeyring();
     const legacyKey = runtime.config.model.apiKey;
     const storedFor = (pid: string) => storedKeyForProvider(ring, pid, activeId, legacyKey);
@@ -53,6 +53,10 @@ export async function runAuthCommand(deps: AuthCommandDeps): Promise<void> {
           }
         } else if (p.id === 'tokenjuice') {
           tok = tokenjuiceAmbientToken()?.token;
+        } else if (p.id === 'github-models') {
+          tok = (await githubAmbientToken())?.token;
+        } else if (p.id === 'huggingface') {
+          tok = huggingfaceAmbientToken()?.token;
         }
         if (tok) ambientMap.set(p.id, tok);
       } catch { /* ambient is best-effort */ }

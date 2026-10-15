@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
 import {
-  codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken, tokenjuiceAmbientToken, kiloAmbientToken,
+  codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken, tokenjuiceAmbientToken, kiloAmbientToken, githubAmbientToken, huggingfaceAmbientToken,
   type AmbientDeps,
 } from './ambient-auth.js';
 
@@ -143,5 +143,31 @@ describe('ambient-auth', () => {
     const t = await kiloAmbientToken({ ...deps, execFile: async () => row });
     expect(t?.token).toBe('kilo-secret-token');
     expect(t?.source).toBe('omp-kilo-oauth');
+  });
+
+  it('github: reads gh auth token when available', async () => {
+    const { deps } = memFs({});
+    const t = await githubAmbientToken({ ...deps, execFile: async () => 'gho_test_token_123\n' });
+    expect(t?.token).toBe('gho_test_token_123');
+    expect(t?.source).toBe('gh-cli-oauth');
+  });
+
+  it('github: returns undefined when gh is unavailable', async () => {
+    const { deps } = memFs({});
+    const t = await githubAmbientToken({ ...deps, execFile: async () => { throw new Error('not installed'); } });
+    expect(t).toBeUndefined();
+  });
+
+  it('huggingface: reads ~/.cache/huggingface/token when present', () => {
+    const { deps } = memFs({ '.cache/huggingface/token': 'hf_secret_key_456\n' });
+    const t = huggingfaceAmbientToken(deps);
+    expect(t?.token).toBe('hf_secret_key_456');
+    expect(t?.source).toBe('hf-cli-cache');
+  });
+
+  it('huggingface: returns undefined when absent', () => {
+    const { deps } = memFs({});
+    const t = huggingfaceAmbientToken(deps);
+    expect(t).toBeUndefined();
   });
 });

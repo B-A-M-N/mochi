@@ -303,7 +303,7 @@ function editorHealth(): { vscodeInstalled: boolean; jetbrainsPluginPresent: boo
 async function ambientAuthHealth(): Promise<Array<{ provider: string; source: string; expiresAtMs?: number }>> {
   const out: Array<{ provider: string; source: string; expiresAtMs?: number }> = [];
   try {
-    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken } = await import('./model/ambient-auth.js');
+    const { codexAmbientToken, geminiAmbientToken, claudeAmbientToken, gcloudAmbientToken, antigravityAmbientToken, githubAmbientToken, huggingfaceAmbientToken } = await import('./model/ambient-auth.js');
     const codex = await codexAmbientToken();
     if (codex) out.push({ provider: 'openai', source: codex.source, expiresAtMs: codex.expiresAtMs });
     const gemini = geminiAmbientToken() ?? (await gcloudAmbientToken());
@@ -312,6 +312,10 @@ async function ambientAuthHealth(): Promise<Array<{ provider: string; source: st
     if (claude) out.push({ provider: 'anthropic', source: claude.source, expiresAtMs: claude.expiresAtMs });
     const antigravity = await antigravityAmbientToken();
     if (antigravity) out.push({ provider: 'antigravity', source: antigravity.source, expiresAtMs: antigravity.expiresAtMs });
+    const gh = await githubAmbientToken();
+    if (gh) out.push({ provider: 'github-models', source: gh.source, expiresAtMs: gh.expiresAtMs });
+    const hf = huggingfaceAmbientToken();
+    if (hf) out.push({ provider: 'huggingface', source: hf.source, expiresAtMs: hf.expiresAtMs });
   } catch { /* best-effort */ }
   return out;
 }
