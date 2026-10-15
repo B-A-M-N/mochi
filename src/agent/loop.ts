@@ -381,6 +381,23 @@ export interface AgentResult {
   stopReason: AgentStopReason;
 }
 
+/**
+ * Tools that mutate the workspace. Used both for the sibling-project scope
+ * fence and for the before_edit/after_edit lifecycle hooks. It must be
+ * module-level (not a per-call local) so the after_edit gate — which runs in a
+ * different block than the fence — sees the same set. An edit-guard hook that
+ * only covered write/edit/delete/patch was bypassable by calling
+ * replace_symbol, regex_replace, search_replace_multi, notebook, or a file op.
+ */
+const MUTATING_TOOLS = new Set([
+  'write', 'edit', 'delete', 'patch',
+  'create_directory', 'mkdir',
+  'move_file', 'copy_file',
+  'replace_symbol', 'rename_symbol',
+  'regex_replace', 'search_replace_multi',
+  'notebook',
+]);
+
 export class Agent {
   private id: string;
   private profile: AgentProfile;
@@ -3829,10 +3846,11 @@ Continue from 'Next:', do not redo completed progress.`,
       this.vetoToolCall(tc, `before_tool hook vetoed ${toolName}.${reason ? ` Hook says: ${reason}` : ''}`);
       return;
     }
-    if (['edit', 'write', 'delete', 'patch'].includes(toolName)) {
-      const editHook = await this.hooks.runBefore('before_edit', { tool: toolName });
+    if (MUTATING_TOOLS.has(toolName)) {
+      const editHook = await this.hooks.runBefore('before_edit', { tool: toolName, args: tc.function.arguments ?? '{}', agent: this.id });
       if (!editHook.allowed) {
-        this.vetoToolCall(tc, 'before_edit hook vetoed this edit.');
+        const reason = (editHook.stderr || editHook.stdout).trim().slice(0, 160);
+        this.vetoToolCall(tc, `before_edit hook vetoed this edit.${reason ? ` Hook says: ${reason}` : ''}`);
         return;
       }
     }
@@ -3849,14 +3867,6 @@ Continue from 'Next:', do not redo completed progress.`,
 
     // WORKSPACE & SCOPE FENCE (drift guard):
     // 1. Mutating tool boundary check: prevent wandering into sibling projects or mutating external files
-    const MUTATING_TOOLS = new Set([
-      'write', 'edit', 'delete', 'patch',
-      'create_directory', 'mkdir',
-      'move_file', 'copy_file',
-      'replace_symbol', 'rename_symbol',
-      'regex_replace', 'search_replace_multi',
-      'notebook',
-    ]);
     if (MUTATING_TOOLS.has(toolName)) {
       const targets: string[] = [];
       if (args.path) targets.push(String(args.path));
@@ -4315,8 +4325,8 @@ Continue from 'Next:', do not redo completed progress.`,
     this.context.addMessage({ role: 'tool', tool_call_id: tc.id, content: foldedOutput, name: tc.function.name });
     this.events.emit({ type: 'tool:completed', tool: tc.function.name, result, agentId: this.id });
     await this.hooks.runAfter('after_tool', { tool: toolName, agent: this.id });
-    if (['edit', 'write', 'delete', 'patch'].includes(toolName)) {
-      await this.hooks.runAfter('after_edit', { tool: toolName });
+    if (MUTATING_TOOLS.has(toolName)) {
+      await this.hooks.runAfter('after_edit', { tool: toolName, agent: this.id });
       // Auto-format on edit: after a successful edit/write/patch, run the
       // repo's formatter on the changed file so style drift never accumulates.
       // Silent + best-effort: format output is never surfaced to the model, and

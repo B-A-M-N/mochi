@@ -34,7 +34,7 @@ export function findDoxChain(cwd: string, targetPath: string): string[] {
   const checkedDirs = new Set<string>();
   while (curr.startsWith(root) && !checkedDirs.has(curr)) {
     checkedDirs.add(curr);
-    for (const name of ['AGENTS.md', 'MOCHI.md', 'CLAUDE.md']) {
+    for (const name of ['AGENTS.md', 'MOCHI.md', 'CLAUDE.md', 'GEMINI.md']) {
       const p = join(curr, name);
       if (existsSync(p) && !chain.includes(p)) {
         chain.unshift(p); // Root-most first

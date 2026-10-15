@@ -139,6 +139,37 @@ export class PluginRegistry {
     return removed;
   }
 
+  /** The hook commands a named plugin contributes (from its manifest). Read
+   *  BEFORE remove(), since remove deletes the manifest. */
+  pluginCommands(name: string): string[] {
+    const hit = this.list().find((p) => p.name === name);
+    if (!hit) return [];
+    let hooks: HookConfig = {};
+    try {
+      hooks = readManifest(hit.dir).hooks ?? {};
+    } catch {
+      return [];
+    }
+    const out: string[] = [];
+    for (const v of Object.values(hooks)) for (const c of toArray(v)) out.push(c);
+    return out;
+  }
+
+  /** Drop specific hook commands from a hooks config (returns a new config).
+   *  syncToHooksFile only APPENDS, so removing a plugin without stripping its
+   *  commands first left them live in hooks.json — a removed/disabled plugin
+   *  kept running every hook until the next install. */
+  stripCommands(existing: HookConfig, commands: Iterable<string>): HookConfig {
+    const dead = new Set(commands);
+    const out: HookConfig = {};
+    for (const [hook, value] of Object.entries(existing)) {
+      if (!isHookName(hook)) continue;
+      const kept = toArray(value).filter((c) => !dead.has(c));
+      if (kept.length) out[hook] = kept;
+    }
+    return out;
+  }
+
   /** Disable without deleting (writes a `.disabled` sentinel; hooks stop merging). */
   setEnabled(name: string, enabled: boolean): boolean {
     let changed = false;

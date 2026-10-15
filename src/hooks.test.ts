@@ -84,14 +84,23 @@ describe('hook lifecycle coverage audit', () => {
       for (const e of readdirSync(d)) {
         const p = resolve(d, e);
         if (statSync(p).isDirectory()) { if (!e.startsWith('.') && e !== 'node_modules') walk(p); continue; }
-        if (p.endsWith('.ts') && !p.endsWith('.test.ts') && !p.endsWith('hooks.ts')) {
+        // hooks.ts defines the names; plugins.ts lists ALL of them in its
+        // validation set (HOOK_KEYS) — either would make this assertion pass
+        // vacuously even if every firing site were deleted. Exclude both so the
+        // check only sees real lifecycle call sites.
+        if (p.endsWith('.ts') && !p.endsWith('.test.ts') && !p.endsWith('hooks.ts') && !p.endsWith('plugins.ts')) {
           sources.push(readFileSync(p, 'utf8'));
         }
       }
     };
     walk(root);
     const haystack = sources.join('\n');
-    const missing = ALL_HOOKS.filter((h) => !haystack.includes(`'${h}'`));
+    // Require an actual invocation, not a bare string literal: `runBefore('x'`
+    // or `runAfter('x'` — so a name that only appears in an array/type union
+    // does not count as "fired".
+    const missing = ALL_HOOKS.filter(
+      (h) => !haystack.includes(`runBefore('${h}'`) && !haystack.includes(`runAfter('${h}'`),
+    );
     expect(missing, `dead hook names with no lifecycle call site: ${missing.join(', ')}`).toEqual([]);
   });
 });

@@ -124,6 +124,10 @@ export async function handleMcp(
       }
       case 'ping':
         return { id, result: {} };
+      case 'shutdown':
+        // Acknowledge BEFORE the stdio loop exits, otherwise the client sees a
+        // spurious "Method not found: shutdown" frame on every graceful close.
+        return { id, result: {} };
       default:
         return { id, error: { code: -32601, message: `Method not found: ${method}` } };
     }

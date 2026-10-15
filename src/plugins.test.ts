@@ -119,6 +119,28 @@ describe('PluginRegistry', () => {
     rmSync(project, { recursive: true, force: true });
   });
 
+  it('pluginCommands + stripCommands remove a plugin\'s hooks from hooks.json on remove', () => {
+    const project = makeProject(mkdtempSync(resolve(tmpdir(), 'mochi-plug-')));
+    const reg = makeReg(project);
+    reg.install(makeSource('lint', { after_tool: 'echo lint', before_shell: 'echo guard' }));
+    const hooksFile = resolve(project, '.mochi', 'hooks.json');
+    // A user-authored hook that must survive the plugin removal.
+    reg.syncToHooksFile(hooksFile, { after_tool: 'echo user-hook', before_tool: 'echo user-before' });
+    let parsed = JSON.parse(readFileSync(hooksFile, 'utf8'));
+    expect(parsed.after_tool).toEqual(['echo user-hook', 'echo lint']);
+    expect(parsed.before_shell).toEqual(['echo guard']);
+
+    const commands = reg.pluginCommands('lint');
+    expect(commands.sort()).toEqual(['echo guard', 'echo lint']);
+    reg.remove('lint');
+    reg.syncToHooksFile(hooksFile, reg.stripCommands(parsed, commands));
+    parsed = JSON.parse(readFileSync(hooksFile, 'utf8'));
+    expect(parsed.after_tool).toEqual(['echo user-hook']);
+    expect(parsed.before_tool).toEqual(['echo user-before']);
+    expect(parsed.before_shell).toBeUndefined();
+    rmSync(project, { recursive: true, force: true });
+  });
+
   it('validateDir reports unknown hooks', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-plug-'));
     writeFileSync(resolve(dir, 'plugin.json'), JSON.stringify({ name: 'bad', version: '1', hooks: { nope_hook: 'echo x' } }));

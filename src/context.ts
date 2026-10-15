@@ -23,7 +23,7 @@ import { evaluateOwl } from './cognitive/owl.js';
 import { formatEnvironmentBlock } from './core/env-profiler.js';
 import { condenseOutput } from './core/output-condenser.js';
 
-const CANDIDATE_RULES = ['MOCHI.md', 'mochi.md', 'AGENTS.md', 'CLAUDE.md', '.cursorrules', '.github/copilot-instructions.md'];
+const CANDIDATE_RULES = ['MOCHI.md', 'mochi.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.cursorrules', '.github/copilot-instructions.md'];
 
 /** MCH-93: tiny-workspace fast path — at/below this file count, skip scouting. */
 const TINY_WORKSPACE_FILES = 12;

@@ -233,6 +233,7 @@ Usage:
   mochi telegram [run|status]          # run Telegram bot gateway (HTTP long-poll)
   mochi slack [run|webhook|status]     # run Slack gateway (polling or Events API webhook)
   mochi bluebubbles [run|status]      # run BlueBubbles (iMessage) gateway
+  mochi connectors [status]           # list all messaging gateways + config state
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi watch [dir...] [--cmd C]    # run the repo check on every file change
@@ -1363,11 +1364,33 @@ async function main() {
     if (sub === 'remove' || sub === 'rm') {
       const name = positional[2];
       if (!name) { console.log('Usage: mochi plugin remove <name>'); return; }
-      if (reg.remove(name)) { console.log(`Removed plugin "${name}".`); }
-      else { console.error(`No plugin "${name}" installed.`); }
+      // Read the plugin's hook commands BEFORE deleting it, then strip them from
+      // hooks.json and re-sync — otherwise a removed plugin keeps firing.
+      const commands = reg.pluginCommands(name);
+      if (reg.remove(name)) {
+        const hooksFile = resolve(cwd, '.mochi', 'hooks.json');
+        const { existsSync, readFileSync } = await import('node:fs');
+        const existing = existsSync(hooksFile) ? JSON.parse(readFileSync(hooksFile, 'utf8')) : {};
+        reg.syncToHooksFile(hooksFile, reg.stripCommands(existing, commands));
+        console.log(`Removed plugin "${name}" and its hooks.`);
+      } else { console.error(`No plugin "${name}" installed.`); }
       return;
     }
-    console.log('Usage: mochi plugin <add <dir>|remove <name>|list>');
+    if (sub === 'disable' || sub === 'enable') {
+      const name = positional[2];
+      const enabled = sub === 'enable';
+      if (!name) { console.log(`Usage: mochi plugin ${sub} <name>`); return; }
+      if (!reg.has(name)) { console.error(`No plugin "${name}" installed.`); return; }
+      const commands = reg.pluginCommands(name);
+      reg.setEnabled(name, enabled);
+      const hooksFile = resolve(cwd, '.mochi', 'hooks.json');
+      const { existsSync, readFileSync } = await import('node:fs');
+      const existing = existsSync(hooksFile) ? JSON.parse(readFileSync(hooksFile, 'utf8')) : {};
+      reg.syncToHooksFile(hooksFile, enabled ? existing : reg.stripCommands(existing, commands));
+      console.log(`${enabled ? 'Enabled' : 'Disabled'} plugin "${name}". Its hooks are now ${enabled ? 'active' : 'inactive'}.`);
+      return;
+    }
+    console.log('Usage: mochi plugin <add <dir>|remove <name>|enable <name>|disable <name>|list>');
     return;
   }
   if (first === 'rules' || first === 'rule') {
@@ -1557,6 +1580,61 @@ async function main() {
     console.log(`Allowed senders: ${bcfg.allowedSenders && bcfg.allowedSenders.length ? bcfg.allowedSenders.join(', ') : '(all)'}`);
     return;
   }
+  if (first === 'connectors' || first === 'gateways' || first === 'channels' || first === 'platforms') {
+    const cwd2 = cwd;
+    // Load each gateway module lazily so a missing config never crashes the listing.
+    const lines: string[] = [];
+    lines.push(`🍡 Mochi connectors / gateways for ${cwd2}`);
+    const tryLoad = async (label: string, modPath: string, loaderName: string, summary: (cfg: any) => string) => {
+      try {
+        const mod = await import(modPath);
+        const loader = (mod as any)[loaderName];
+        const cfg = loader ? loader(cwd2) : null;
+        if (!cfg) { lines.push(`  ○ ${label.padEnd(14)} not configured`); return; }
+        lines.push(`  ● ${label.padEnd(14)} configured  ${summary(cfg)}`);
+      } catch (e) {
+        lines.push(`  ! ${label.padEnd(14)} error: ${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`);
+      }
+    };
+    await tryLoad('discord', './discord.js', 'loadDiscordConfig', (c) => `prefix "${c.prefix || '!mochi'}" · users ${c.allowAllUsers ? 'all' : (c.allowedUserIds?.length ?? 0)}`);
+    await tryLoad('telegram', './telegram.js', 'loadTelegramConfig', (c) => `prefix "${c.prefix}" · users ${c.allowAllUsers ? 'all' : (c.allowedUserIds?.length ?? 0)}`);
+    await tryLoad('slack', './slack.js', 'loadSlackConfig', (c) => `channels "${(c.channels || []).join(', ')}" · prefix "${c.prefix}"`);
+    await tryLoad('bluebubbles', './bluebubbles.js', 'loadBlueBubblesConfig', (c) => `server ${c.serverUrl} · senders ${c.allowedSenders?.length ? c.allowedSenders.length : 'all'}`);
+    for (const l of lines) console.log(l);
+    console.log(`Run \`mochi <platform> run\` to start a gateway (discord, telegram, slack, bluebubbles).`);
+    return;
+  }
+
+  // Aliases for BlueBubbles / iMessage
+  if (first === 'bluebubble' || first === 'imessage' || first === 'bb') {
+    // delegate by rewriting positional in place is unsafe; instead re-enter logic by setting first
+    positional[0] = 'bluebubbles';
+    // fall through: handled below? The bluebubbles block checks positional[0] not first. Set first too.
+    // We can't easily set const; instead handle redirect here.
+    const { loadBlueBubblesConfig, runBlueBubblesGateway } = await import('./bluebubbles.js');
+    const bcfg = loadBlueBubblesConfig(cwd);
+    if (!bcfg) {
+      console.error('No BlueBubbles configuration found. Set BLUEBUBBLES_SERVER_URL (or BLUEBUBBLES_URL) and BLUEBUBBLES_PASSWORD in .env, ~/.mochi/.env, or ~/.hermes/.env.');
+      process.exit(1);
+    }
+    const sub = positional[1] ?? 'status';
+    if (sub === 'run') {
+      console.log(`🍡 Mochi BlueBubbles (iMessage) gateway polling with prefix "${bcfg.prefix}" (Ctrl+C to stop).`);
+      const ctl = new AbortController();
+      process.once('SIGINT', () => ctl.abort());
+      const summary = await runBlueBubblesGateway(bcfg, runtime, {
+        fetchJson: fetch as never,
+        onLog: (line: string) => console.log(line),
+        signal: ctl.signal,
+      });
+      console.log(`BlueBubbles gateway stopped (${summary.messages} messages, ${summary.replies} replies).`);
+      return;
+    }
+    console.log(`🍡 Mochi BlueBubbles gateway configured for ${bcfg.serverUrl} with prefix "${bcfg.prefix}".`);
+    console.log(`Allowed senders: ${bcfg.allowedSenders && bcfg.allowedSenders.length ? bcfg.allowedSenders.join(', ') : '(all)'}`);
+    return;
+  }
+
   if (first === 'security' || first === 'audit') {
     const { runSecurityAudit, formatSecurityReport } = await import('./tools/security-audit.js');
     const findings = runSecurityAudit(cwd);
