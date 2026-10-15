@@ -66,6 +66,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'login', description: 'Authenticate a provider' },
   { name: 'bundle', description: 'Write a diagnostic bundle (transcript + diff + doctor)', aliases: ['export-bundle'] },
   { name: 'watch', description: 'Run the repo check command on every file change' },
+  { name: 'serve', description: 'Foreground JSON API server for CI/tooling (localhost only)' },
   { name: 'update', description: 'Check GitHub releases for updates and upgrade Mochi', aliases: ['upgrade', 'self-update'] },
   {
     name: 'auth', description: 'Credential status across providers',

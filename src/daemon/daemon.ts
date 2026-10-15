@@ -32,6 +32,20 @@ export interface DaemonInfo {
  *  / POST /api/rotate) issues a fresh token with a fresh deadline. */
 export const DAEMON_TOKEN_TTL_MS = 30 * 24 * 3600 * 1000;
 
+/** Server version for the unauthenticated /api/health probe. Resolved once
+ *  at module load (package.json next to the source tree, or baked fallback). */
+let cachedVersion: string | null = null;
+export function daemonVersion(): string {
+  if (cachedVersion) return cachedVersion;
+  try {
+    const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
+    cachedVersion = String(JSON.parse(readFileSync(pkgPath, 'utf8')).version ?? 'unknown');
+  } catch {
+    cachedVersion = 'unknown';
+  }
+  return cachedVersion;
+}
+
 /** Mutable auth holder shared by the HTTP handler: rotation swaps the token
  *  in place so a live server never needs a restart. */
 export interface DaemonAuth {
@@ -429,12 +443,40 @@ async function handleRequest(
     return;
   }
 
+  // Unauthenticated health probe (containers / load balancers / CI): version
+  // + uptime only, never state or secrets. Must precede the token gate.
+  if (req.method === 'GET' && path === '/api/health') {
+    send(200, { ok: true, version: daemonVersion(), uptimeSec: Math.floor(process.uptime()) });
+    return;
+  }
+
+
   if (!tokenOk) {
     send(401, { error: 'unauthorized' });
     return;
   }
   if (expired) {
     send(401, { error: 'token_expired', hint: 'run `mochi daemon rotate` in the workspace to issue a fresh token' });
+    return;
+  }
+  // Read-only GET endpoints (authenticated): inventory for CI/tooling without
+  // a POST body. Mutating/expensive calls stay POST-only below.
+  if (req.method === 'GET' && path === '/api/models') {
+    try {
+      send(200, { ok: true, provider: runtime.config.model.provider, models: runtime.modelList() });
+    } catch (e) {
+      send(500, { ok: false, error: (e as Error).message });
+    }
+    return;
+  }
+  if (req.method === 'GET' && path === '/api/skills') {
+    try {
+      const { loadAllSkills } = await import('../skills/skills.js');
+      const { skills } = loadAllSkills(runtime.cwd);
+      send(200, { ok: true, count: skills.length, skills: skills.map((s) => ({ name: s.name, description: s.description })) });
+    } catch (e) {
+      send(500, { ok: false, error: (e as Error).message });
+    }
     return;
   }
   if (req.method !== 'POST') {
@@ -574,6 +616,38 @@ async function handleRequest(
       if (!task) { send(400, { ok: false, error: 'task required' }); return; }
       const r = await runtime.runPromptDetailed(task);
       send(200, { ok: true, ...r });
+    } else if (path === '/api/review') {
+      // Authenticated CI/tooling call: review a diff without spawning a CLI.
+      // Empty/absent diff falls back to the working tree's `git diff HEAD`.
+      let diff = String(body.diff ?? '');
+      if (!diff) {
+        const { execFileSync } = await import('node:child_process');
+        try {
+          diff = execFileSync('git', ['diff', 'HEAD'], { cwd: runtime.cwd, encoding: 'utf8' });
+        } catch {
+          send(400, { ok: false, error: 'no diff given and no git diff available' });
+          return;
+        }
+      }
+      if (!diff.trim()) { send(200, { ok: true, out: 'Nothing to review (empty diff).' }); return; }
+      const out = await runtime.review(diff);
+      send(200, { ok: true, out });
+    } else if (path === '/api/verify') {
+      // Authenticated CI/tooling call: run the repo's checks (test/build/
+      // typecheck/lint) and return the structured result. No shell access —
+      // only the detected repo command runs, with an optional file target.
+      const { detectRepo } = await import('../repo/repo.js');
+      const { runShellString } = await import('../exec.js');
+      const repo = detectRepo(runtime.cwd);
+      const which = String(body.command ?? 'test');
+      const cmd = which === 'build' ? repo.buildCommand ?? null
+        : which === 'typecheck' ? repo.typecheckCommand ?? null
+        : which === 'lint' ? repo.lintCommand ?? null
+        : repo.testCommand ?? null;
+      if (!cmd) { send(400, { ok: false, error: `no ${which} command detected for this repo` }); return; }
+      const target = typeof body.target === 'string' && body.target ? ` ${body.target}` : '';
+      const r = await runShellString(cmd + target, { cwd: runtime.cwd, timeoutMs: 300_000, maxOutput: 256 * 1024 });
+      send(200, { ok: r.code === 0, exitCode: r.code, output: `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().slice(-8000) });
     } else {
       send(404, { error: 'not found' });
     }

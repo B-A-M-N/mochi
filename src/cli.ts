@@ -235,6 +235,7 @@ Usage:
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi watch [dir...] [--cmd C]    # run the repo check on every file change
+  mochi serve [--port N] [--token T] # foreground JSON API for CI/tooling (localhost only)
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers
@@ -2120,6 +2121,27 @@ async function main() {
       },
     });
     console.log(`Watch stopped (${summary.runs} runs, ${summary.passed} passed, ${summary.failed} failed).`);
+    return;
+  }
+  if (first === 'serve') {
+    // Foreground JSON API for CI/external tooling (localhost only).
+    // Same routes + bearer auth as the daemon; thin adapter over ./serve.js.
+    const rawPort = typeof flags.port === 'string' ? Number(flags.port) : 0;
+    const port = Number.isFinite(rawPort) && rawPort >= 0 && rawPort <= 65535 ? Math.floor(rawPort) : 0;
+    const token = typeof flags.token === 'string' && flags.token ? flags.token : undefined;
+    const { runServe } = await import('./serve.js');
+    console.log(`Starting Mochi API server${port ? ` on :${port}` : ''} (localhost only)…`);
+    const ctl = new AbortController();
+    process.once('SIGINT', () => ctl.abort());
+    process.once('SIGTERM', () => ctl.abort());
+    const summary = await runServe({
+      cwd: runtime.cwd,
+      port,
+      token,
+      onLog: (line: string) => console.log(line),
+      signal: ctl.signal,
+    });
+    console.log(`API server stopped (was :${summary.port}).`);
     return;
   }
   if (first === 'init') {
