@@ -553,12 +553,16 @@ export function toolDescriptions(tools: Map<string, Tool>): string {
 }
 
 export function validateArgs(tool: Tool, args: Record<string, unknown>): string | undefined {
-  for (const p of tool.def.parameters) {
-    if (p.required && (args[p.name] === undefined || args[p.name] === null || args[p.name] === '')) {
-      return `Missing required parameter: ${p.name}`;
-    }
-  }
-  return undefined;
+  const missing = tool.def.parameters.filter(
+    (p) => p.required && (args[p.name] === undefined || args[p.name] === null || args[p.name] === ''),
+  );
+  if (missing.length === 0) return undefined;
+  // Give the model everything it needs to self-correct in ONE retry: which tool,
+  // which parameter, the full required set, and the keys it actually sent (a
+  // wrong-key name like `file` instead of `path` is the usual cause).
+  const required = tool.def.parameters.filter((p) => p.required).map((p) => p.name);
+  const provided = Object.keys(args);
+  return `Missing required parameter: ${missing.map((p) => p.name).join(', ')} for tool "${tool.def.name}". Required: [${required.join(', ')}]. Provided keys: [${provided.join(', ') || '(none)'}]. Re-call with the required parameter(s).`;
 }
 
 // Partial-output recovery for the generic tool catch below. A tool that

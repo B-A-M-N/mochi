@@ -1,8 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { buildTools, trimHeavyTools, trimToReadTier, CHAT_TOOL_NAMES, loadToolsTool, HEAVY_TOOL_NAMES, ALL_TOOLS_MAP, TOOL_ALIASES } from './index.js';
+import { buildTools, trimHeavyTools, trimToReadTier, CHAT_TOOL_NAMES, loadToolsTool, HEAVY_TOOL_NAMES, ALL_TOOLS_MAP, TOOL_ALIASES, validateArgs } from './index.js';
 import type { MochiConfig } from '../types.js';
 
 const cfg = { projectDir: '/tmp/mch91-test' } as unknown as MochiConfig;
+
+describe('validateArgs', () => {
+  it('names the tool, the missing param, the required set, and what was provided', () => {
+    const read = ALL_TOOLS_MAP.get('read')!;
+    const msg = validateArgs(read, { file_path: 'x.ts' });
+    expect(msg).toContain('path');
+    expect(msg).toContain('read');
+    expect(msg).toContain('Required');
+    expect(msg).toContain('file_path'); // the wrong key the model actually sent
+  });
+
+  it('returns undefined when required params are present', () => {
+    const read = ALL_TOOLS_MAP.get('read')!;
+    expect(validateArgs(read, { path: 'x.ts' })).toBeUndefined();
+  });
+});
 
 describe('MCH-91 task-adaptive tool advertising', () => {
   it('default advertised set includes heavy tools until trimmed', () => {

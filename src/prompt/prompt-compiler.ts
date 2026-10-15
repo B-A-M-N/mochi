@@ -886,6 +886,16 @@ export class MochiPromptCompiler {
     for (const rule of spec.antiLoopRules) lines.push(`- [x] ${rule}`);
     lines.push('');
 
+    // §26a — TOOL SELECTION (harness-level: shell cat/ls lose line numbers and
+    // the read cache, which is the top cause of follow-up edit mismatches)
+    lines.push('## TOOL SELECTION §26a');
+    lines.push('');
+    lines.push('Inspect code with the DEDICATED tools, not shell:');
+    lines.push('- `read` (line-numbered, cached) instead of `cat`/`head`/`tail`/`sed -n`.');
+    lines.push('- `glob` instead of `ls`/`find`; `search` instead of `grep`/`rg`; `tree` instead of `ls -R`.');
+    lines.push('- Reserved for shell: building, testing, running, git, and anything needing pipes/redirects.');
+    lines.push('');
+
     // §27–28 — CONTEXT MANAGEMENT + MEMORY MODEL
     lines.push('## CONTEXT MANAGEMENT §27–28');
     lines.push('');
