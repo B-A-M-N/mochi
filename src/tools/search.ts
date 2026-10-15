@@ -72,7 +72,7 @@ async function ripgrep(cwd: string, query: string, glob?: string): Promise<strin
     if (glob) {
       args.push('-g', glob);
     } else {
-      args.push('-g', '!{dist,build,.next,coverage,node_modules,.cache,.npm-global,.hermes,.gemini,.local,.config}/**');
+      args.push('-g', '!{dist,build,.next,coverage,node_modules,.cache,.npm-global,.hermes,.gemini,.local,.config,target,out,venv,.venv,__pycache__,.turbo,.parcel-cache,.gradle,.cargo,.m2,.pytest_cache,.tox,.mypy_cache,.ruff_cache,.dotnet,.nuget}/**');
       if (cwd === homedir()) {
         try {
           const topEntries = readdirSync(cwd);
@@ -114,6 +114,9 @@ function* walkFiles(root: string, dir: string, budget: { seen: number; max: numb
     let st: ReturnType<typeof statSync>;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) {
+      // Match ripgrep's default: hidden directories are not searched unless the
+      // caller opts in (SKIP_DIRS already covers the heavyweight ones).
+      if (e.startsWith('.')) continue;
       if (dir === homedir() && existsSync(resolve(full, '.git'))) continue;
       yield* walkFiles(root, full, budget);
     } else if (st.size < 5_000_000) {
