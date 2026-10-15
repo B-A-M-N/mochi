@@ -720,6 +720,40 @@ describe('Agent', () => {
     }
   });
 
+  it('escalates a struggling standard task to complex mid-run (full toolset + preservation)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-escalate-'));
+    try {
+      const config = makeConfig(dir, 'http://127.0.0.1:1/v1');
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const bus = new EventBus();
+      const logs: string[] = [];
+      bus.on('agent:log', (e: any) => logs.push(e.message));
+      const agent: any = new Agent({ id: 'escalate-midrun', role: 'coder', config, workspace, events: bus, cwd: dir, context });
+      // A standard task starts on the lean path with heavy tools deferred.
+      agent.taskComplexity = 'standard';
+      const removed: string[] = [];
+      for (const n of ['analyze_code', 'tree', 'browser']) {
+        if (agent.tools.delete(n)) removed.push(n);
+      }
+      expect(removed.length).toBeGreaterThan(0);
+      // Accumulated struggle evidence (distinct-tool error mass).
+      agent.consecutiveToolErrors.set('read', { error: 'boom', count: 6 });
+      agent.maybeEscalateComplexity(4);
+      expect(agent.taskComplexity).toBe('complex');
+      expect(context.preservingContext).toBe(true); // context preservation turned on
+      for (const n of removed) expect(agent.tools.has(n)).toBe(true); // full set restored
+      expect(logs.some((m) => m.includes('[complexity] escalated'))).toBe(true);
+      // Idempotent / one-way: a second call is a no-op.
+      logs.length = 0;
+      agent.maybeEscalateComplexity(5);
+      expect(logs.length).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('writes an autopsy record when verification fails repeatedly', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-autopsy-loop-'));
     // Script: the model claims "done" but verification always fails (exit 1),

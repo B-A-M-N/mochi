@@ -288,6 +288,40 @@ export function isComplexTask(task: Pick<Task, 'title' | 'description' | 'role'>
   }).complexity === 'complex';
 }
 
+/** Tolerance thresholds for promoting a running (non-complex) task to `complex`
+ *  once the RUN itself proves it was mis-classified. Kept here (pure, testable)
+ *  so the loop's wiring stays trivial and the policy is documented in one spot. */
+export const COMPLEXITY_ESCALATION = {
+  /** Repeated verification failures = the model can't crack it. */
+  verifyFailures: 2,
+  /** Distinct tool errors accumulated across the run. */
+  toolErrors: 6,
+  /** A `standard` task still going this long has outgrown its tier. */
+  iteration: 25,
+} as const;
+
+/**
+ * Self-tuning complexity signal: should a running task be promoted to `complex`?
+ * The up-front classifier only sees the task TEXT; a run that turns out to be a
+ * multi-file beast (or that the regex simply got wrong) should still get the
+ * full toolset + context preservation + max reasoning before it flails. Pure and
+ * one-way so it can be unit-tested without orchestrating the whole loop.
+ */
+export function shouldEscalateComplexity(state: {
+  complexity: TaskComplexity;
+  alreadyEscalated: boolean;
+  consecutiveVerifyFailures: number;
+  toolErrors: number;
+  iteration: number;
+}): boolean {
+  if (state.complexity === 'complex' || state.alreadyEscalated) return false;
+  return (
+    state.consecutiveVerifyFailures >= COMPLEXITY_ESCALATION.verifyFailures ||
+    state.toolErrors >= COMPLEXITY_ESCALATION.toolErrors ||
+    (state.iteration >= COMPLEXITY_ESCALATION.iteration && state.complexity === 'standard')
+  );
+}
+
 /** Tailored hint added to the system prompt per task kind. */
 export function isTrivialWriteTask(task: Task): boolean {
   const text = `${task.title} ${task.description ?? ''}`.toLowerCase();

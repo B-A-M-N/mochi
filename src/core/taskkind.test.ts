@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyTaskKind, kindHint, resolveAutoReasoning, isReviewTask, scoreTaskComplexity, isComplexTask } from './taskkind.js';
+import { classifyTaskKind, kindHint, resolveAutoReasoning, isReviewTask, scoreTaskComplexity, isComplexTask, shouldEscalateComplexity } from './taskkind.js';
 
 describe('classifyTaskKind', () => {
   it('classifies a bug-fix task as fix', () => {
@@ -217,5 +217,32 @@ describe('isComplexTask', () => {
       { title: 'Add multiply to calc.js', description: 'and run node calc.js', role: 'coder' as any },
       { greenfield: false, fileScope: ['calc.js'] },
     )).toBe(false);
+  });
+});
+
+describe('shouldEscalateComplexity (self-tuning mid-run signal)', () => {
+  const base = { complexity: 'standard' as const, alreadyEscalated: false, consecutiveVerifyFailures: 0, toolErrors: 0, iteration: 1 };
+
+  it('stays put on a healthy run', () => {
+    expect(shouldEscalateComplexity(base)).toBe(false);
+    expect(shouldEscalateComplexity({ ...base, iteration: 24, toolErrors: 5, consecutiveVerifyFailures: 1 })).toBe(false);
+  });
+
+  it('promotes after repeated verification failures', () => {
+    expect(shouldEscalateComplexity({ ...base, consecutiveVerifyFailures: 2 })).toBe(true);
+  });
+
+  it('promotes after sustained accumulated tool errors', () => {
+    expect(shouldEscalateComplexity({ ...base, toolErrors: 6 })).toBe(true);
+  });
+
+  it('promotes a standard task that runs long, but not a simple one', () => {
+    expect(shouldEscalateComplexity({ ...base, iteration: 25 })).toBe(true);
+    expect(shouldEscalateComplexity({ ...base, complexity: 'simple', iteration: 40 })).toBe(false);
+  });
+
+  it('is a no-op once already complex or already escalated (one-way, idempotent)', () => {
+    expect(shouldEscalateComplexity({ ...base, complexity: 'complex', toolErrors: 99, iteration: 99 })).toBe(false);
+    expect(shouldEscalateComplexity({ ...base, alreadyEscalated: true, consecutiveVerifyFailures: 9 })).toBe(false);
   });
 });

@@ -22,29 +22,31 @@ const SKIP_DIRS = new Set([
 ]);
 
 function matches(pattern: string, parts: string[]): boolean {
+  // Backtracking match with a memo over (patternIndex, partIndex). The previous
+  // single-pass version greedily consumed a segment with the *next* pattern
+  // segment instead of letting `**` absorb it, so `**` (the default pattern when
+  // the model calls glob with no argument) matched NOTHING and `**/*` matched
+  // only root-level files — the model saw "No files matched." on a full repo and
+  // lost its file map on hard tasks. `**` must match zero or more whole segments.
   const pats = pattern.split('/');
-  let pi = 0;
-  let si = 0;
-  let doubleStar = false;
-  while (pi < pats.length && si < parts.length) {
-    const pat = pats[pi];
-    if (pat === '**') {
-      doubleStar = true;
-      pi++;
-      continue;
-    }
-    if (matchSegment(pat, parts[si])) {
-      doubleStar = false;
-      pi++;
-      si++;
-    } else if (doubleStar) {
-      si++;
+  const width = parts.length + 1;
+  const memo = new Map<number, boolean>();
+  const rec = (pi: number, si: number): boolean => {
+    const key = pi * width + si;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    let res: boolean;
+    if (pi === pats.length) {
+      res = si === parts.length;
+    } else if (pats[pi] === '**') {
+      res = rec(pi + 1, si) || (si < parts.length && rec(pi, si + 1));
     } else {
-      return false;
+      res = si < parts.length && matchSegment(pats[pi], parts[si]) && rec(pi + 1, si + 1);
     }
-  }
-  while (pi < pats.length && pats[pi] === '**') pi++;
-  return pi === pats.length && si === parts.length;
+    memo.set(key, res);
+    return res;
+  };
+  return rec(0, 0);
 }
 
 function matchSegment(pat: string, seg: string): boolean {
@@ -93,6 +95,7 @@ async function* walk(
   currentDepth: number,
   maxAllowedDepth: number,
   allowsHidden: boolean,
+  requestedDirs: Set<string>,
   state: WalkState
 ): AsyncGenerator<string> {
   if (currentDepth > maxAllowedDepth || currentDepth > MAX_DEPTH || state.truncated) return;
@@ -116,7 +119,10 @@ async function* walk(
 
     if (e.isDirectory()) {
       if (!allowsHidden && e.name.startsWith('.')) continue;
-      if (SKIP_DIRS.has(e.name)) continue;
+      // Skip heavyweight dirs UNLESS the pattern explicitly names one (e.g.
+      // `dist/**` or `node_modules/**`), which is a deliberate request to look
+      // inside it rather than an accidental broad scan.
+      if (SKIP_DIRS.has(e.name) && !requestedDirs.has(e.name)) continue;
       if (dir === homedir() && existsSync(resolve(dir, e.name, '.git'))) continue;
       subdirs.push(e.name);
       continue;
@@ -142,6 +148,7 @@ async function* walk(
         currentDepth + 1,
         maxAllowedDepth,
         allowsHidden,
+        requestedDirs,
         state
       );
     }
@@ -240,11 +247,14 @@ export const globTool: Tool = {
 
     // Allow hidden files only if pattern or prefix explicitly starts with a dot
     const allowsHidden = normPattern.startsWith('.') || normPattern.includes('/.') || Boolean(rawPath && rawPath.startsWith('.'));
+    // Directory names the pattern explicitly names, so an intentional scan of a
+    // normally-skipped dir (dist/, node_modules/, ...) is honored.
+    const requestedDirs = new Set(normPattern.split('/'));
 
     const results: string[] = [];
     const state: WalkState = { entriesVisited: 0, truncated: false, startedAt: Date.now() };
 
-    for await (const rel of walk(searchRoot, walkDir, 1, maxAllowedDepth, allowsHidden, state)) {
+    for await (const rel of walk(searchRoot, walkDir, 1, maxAllowedDepth, allowsHidden, requestedDirs, state)) {
       if (matches(normPattern, rel.split('/'))) {
         const fullMatched = resolve(searchRoot, rel);
         let finalRel = relative(ctx.cwd, fullMatched);

@@ -82,6 +82,33 @@ describe('glob tool', () => {
     expect(out).toContain('src/deep/d.ts');
     expect(out).not.toContain('src/a.ts');
   });
+
+  it('** alone lists every file recursively (default pattern must not return nothing)', async () => {
+    // The model calls glob with no pattern on almost every discovery turn; that
+    // becomes '**'. The old matcher returned "No files matched." even on a full
+    // repo, so the model lost its file map and floundered on hard tasks.
+    const out = await runGlob('**');
+    expect(out).toContain('README.md');
+    expect(out).toContain('src/a.ts');
+    expect(out).toContain('src/deep/d.ts');
+    expect(out).not.toContain('.gitignore'); // hidden: not implicitly requested
+  });
+
+  it('**/* matches nested files, not just root-level ones', async () => {
+    const bare = await runGlob('**/*');
+    expect(bare).toContain('README.md');
+    expect(bare).toContain('src/a.ts');
+    expect(bare).toContain('src/deep/d.ts');
+  });
+
+  it('descends into a normally-skipped dir only when the pattern names it', async () => {
+    mkdirSync(resolve(dir, 'dist'), { recursive: true });
+    writeFileSync(resolve(dir, 'dist', 'bundle.js'), '');
+    const implicit = await runGlob('**/*.js');
+    expect(implicit).not.toContain('dist/bundle.js'); // broad scan still skips dist
+    const requested = await runGlob('dist/**/*.js');
+    expect(requested).toContain('dist/bundle.js'); // explicit request is honored
+  });
 });
 
 // Walk-budget regressions: the old glob walker recursed synchronously over

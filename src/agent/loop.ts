@@ -17,10 +17,11 @@ import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTool
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo/repo.js';
-import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask, scoreTaskComplexity } from '../core/taskkind.js';
-import { trimToLeanTier, trimToReadTier } from '../tools/index.js';
+import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask, scoreTaskComplexity, shouldEscalateComplexity } from '../core/taskkind.js';
+import { trimToLeanTier, trimToReadTier, ALL_TOOLS_MAP } from '../tools/index.js';
 import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
 import { modelContextBudget } from '../model/model-manager.js';
+import { learnedWindowBudget, recordContextRejection } from '../model/window-memory.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
 import { diagnoseFile, renderDiagnostics } from '../observability/diagnostics.js';
 import type { AgentProfile } from '../types.js';
@@ -436,6 +437,8 @@ export class Agent {
   private verifyCount = 0;
   private consecutiveVerifyFailures = 0;
   private escalatedThisTask = false;
+  /** One-way promotion flag for the self-tuning complexity signal. */
+  private complexityEscalated = false;
   private autopsy: Autopsy | undefined;
   private hypotheses: Hypothesis[] = [];
   private diagnosis: DiagnosisResult | undefined;
@@ -743,6 +746,45 @@ export class Agent {
     return this.effectiveBudgetTokens > 0 ? this.effectiveBudgetTokens : this.config.safety.contextBudgetTokens;
   }
 
+  /**
+   * Self-tuning complexity signal. The up-front gate can only read the task
+   * TEXT; a task that looks standard can still turn out to be a multi-file
+   * beast, and the regex classifier can simply be wrong. Instead of paying for
+   * a separate LLM classification call on EVERY task (which would tax the lean
+   * fast path Codex/Claude-Code-class throughput depends on), we promote a
+   * running task to `complex` once the RUN ITSELF produces hard-task evidence:
+   * sustained tool errors, repeated verification failures, or a prolonged
+   * struggle past the point a simple task would have finished. Promotion is
+   * one-way and idempotent; it restores the full toolset and hands the rest of
+   * the run the same context preservation + max reasoning the gate grants.
+   */
+  private maybeEscalateComplexity(iteration: number): void {
+    if (this.taskComplexity === undefined) return;
+    const toolErrors = this.totalToolErrors();
+    const should = shouldEscalateComplexity({
+      complexity: this.taskComplexity,
+      alreadyEscalated: this.complexityEscalated,
+      consecutiveVerifyFailures: this.consecutiveVerifyFailures,
+      toolErrors,
+      iteration,
+    });
+    if (!should) return;
+    this.complexityEscalated = true;
+    this.taskComplexity = 'complex';
+    this.context.setTaskComplexity('complex');
+    // Restore every registered tool the lean/read/chat tiers deferred, so deeper
+    // analysis (find_definitions/analyze_code/blast_radius/...) is available.
+    for (const [name, tool] of ALL_TOOLS_MAP) {
+      if (!this.tools.has(name)) this.tools.set(name, tool);
+    }
+    this.toolDefs = [...this.tools.values()].map((t) => t.def);
+    this.events.emit({
+      type: 'agent:log',
+      agentId: this.id,
+      message: `[complexity] escalated to complex mid-run (iter ${iteration}, toolErrors ${toolErrors}, verifyFails ${this.consecutiveVerifyFailures}) — full toolset + context preservation restored`,
+    });
+  }
+
   /** Effective reasoning tier for a task. Distilled from Claude Code's
    *  `--effort auto`: when `reasoning: "auto"` is configured, map the task
    *  kind to a tier so simple work doesn't burn deep-reasoning tokens and
@@ -794,6 +836,7 @@ export class Agent {
     this.runStartMarker = hist.length > 0 ? hist[hist.length - 1] : undefined;
     this.consecutiveVerifyFailures = 0;
     this.escalatedThisTask = false;
+    this.complexityEscalated = false;
     // Complexity must be computed here — BEFORE resolveReasoning (line ~799)
     // and the tool-advertising gate — so both hard-task levers (max reasoning
     // + full toolset) see a `complex` task. Conservative: only strong
@@ -817,9 +860,11 @@ export class Agent {
     // provider's hard limit — hard tasks then died on a context cliff instead of
     // compacting gracefully. min() means we only ever compact earlier, never send
     // a prompt the provider will reject. Override with MOCHI_CONTEXT_WINDOW.
+    const learned = learnedWindowBudget(this.config.model.model, this.config.model.provider);
     const windowBudget = Math.min(
       this.config.safety.contextBudgetTokens,
       modelContextBudget(this.config.model.model, this.config.model.provider),
+      learned ?? Number.POSITIVE_INFINITY,
     );
     this.effectiveBudgetTokens = windowBudget;
     this.context.setBudgetTokens(windowBudget);
@@ -1265,6 +1310,10 @@ Continue from 'Next:', do not redo completed progress.`,
       // per 2 iterations and a no-op when no struggle signals exist, so the
       // cost is zero on healthy runs.
       this.injectStruggleState(i);
+      // Self-tuning complexity: promote a struggling task to `complex` mid-run
+      // (full toolset + context preservation) once real hard-task evidence
+      // accumulates — no separate classification LLM call on the fast path.
+      this.maybeEscalateComplexity(i);
       // Progress heartbeat: stop honestly on sustained no-progress wandering
       // instead of burning all 80 iterations going in circles.
       const heartbeat = await this.progressHeartbeat(i, task);
@@ -2020,6 +2069,16 @@ Continue from 'Next:', do not redo completed progress.`,
               agentId: this.id,
               message: `[context-limit] Model context window reached (${rMsg.slice(0, 80)}). Auto-compacting history and retrying... (${this.contextLimitRetries}/3)`,
             });
+            // Learn the real window from the rejection: the prompt we just sent
+            // was too long, so it is an upper bound on what this model accepts.
+            // Tighten the budget now so THIS retry compacts below the cliff.
+            const rejectedAt = this.context.effectiveContextTokens();
+            recordContextRejection(this.config.model.model, this.config.model.provider, rejectedAt);
+            const tightened = Math.min(this.budgetTokens(), learnedWindowBudget(this.config.model.model, this.config.model.provider) ?? this.budgetTokens(), Math.floor(rejectedAt * 0.85));
+            if (tightened < this.budgetTokens()) {
+              this.effectiveBudgetTokens = tightened;
+              this.context.setBudgetTokens(tightened);
+            }
             await this.checkpointAndCompact('floor');
             i = Math.max(0, i - 1);
             continue;
