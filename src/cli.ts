@@ -1645,6 +1645,17 @@ async function main() {
     return;
   }
   if (first === 'dashboard' || first === 'web') {
+    // Prefer the standalone Mochi Control dashboard (:9121) when it's up —
+    // it fronts this daemon (plus sessions, analytics, audit, files) with a
+    // full UI. Fall back to the daemon's built-in single-page console.
+    const dashUrl = 'http://localhost:9121';
+    const controlUp = await fetch(`${dashUrl}/api/health`).then((r: any) => r.ok).catch(() => false);
+    if (controlUp) {
+      console.log(`🍡 Mochi Control dashboard running at:\n${dashUrl}\n(sign in with your dashboard credentials; it drives the daemon on your behalf)\n`);
+      const { execFileSync } = await import('node:child_process');
+      try { execFileSync('xdg-open', [dashUrl], { stdio: 'ignore', detached: true } as any); } catch { /* headless */ }
+      return;
+    }
     const wsDir = resolve(cwd, '.mochi');
     const { readDaemonInfo, startDaemon, daemonRunning } = await import('./daemon/daemon.js');
     let info = readDaemonInfo(wsDir);
