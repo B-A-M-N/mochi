@@ -2392,16 +2392,41 @@ async function main() {
     // the prompt and print the result instead of spewing escape codes.
     const isTTY = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     if (flags.p || flags.print || !isTTY) {
-      // MCH-94: one-shot runs have no human watching a TUI — the print-mode
-      // caller reads `summary` directly. Skip the ~5s post-run narrative
-      // model call entirely; it only beautifies output nobody renders.
       process.env.MOCHI_NARRATIVE_SUMMARY = '0';
-      const detailed = await runtime.runPromptDetailed(prompt);
+      let streamedAny = false;
+      let streamedThinking = false;
+      const off = runtime.events.onAll((event: import('./types.js').MochiEvent) => {
+        if (flags.json) return;
+        if (event.type === 'agent:reasoning' && typeof event.content === 'string') {
+          if (!streamedThinking) {
+            process.stderr.write('\x1b[2m[thinking] ');
+            streamedThinking = true;
+          }
+          process.stderr.write(event.content);
+        } else if (event.type === 'message:chunk' && typeof event.content === 'string') {
+          if (streamedThinking) {
+            process.stderr.write('\x1b[0m\n\n');
+            streamedThinking = false;
+          }
+          process.stdout.write(event.content);
+          streamedAny = true;
+        }
+      });
+      let detailed;
+      try {
+        detailed = await runtime.runPromptDetailed(prompt);
+      } finally {
+        off();
+        if (streamedThinking) process.stderr.write('\x1b[0m\n\n');
+      }
       if (flags.json) {
-        // Machine-readable output for scripts/CI: the full structured result.
         console.log(JSON.stringify(detailed, null, 2));
       } else {
-        console.log(detailed.summary);
+        if (!streamedAny) {
+          console.log(detailed.summary);
+        } else {
+          process.stdout.write('\n');
+        }
         if (detailed.filesModified && detailed.filesModified.length > 0) {
           console.log('\nFiles modified:');
           for (const f of detailed.filesModified) {
