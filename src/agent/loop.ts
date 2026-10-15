@@ -789,15 +789,16 @@ export class Agent {
     // structural evidence (multi-file scope, existing-repo mutation, broad
     // test loops, hard investigation) forces 'complex'; anything ambiguous
     // stays on the lean/fast path.
-    this.taskComplexity = scoreTaskComplexity(
+    const complexityScore = scoreTaskComplexity(
       task.title, task.description ?? '',
       {
         role: task.role,
         fileScope: task.fileScope ?? [],
         greenfield: isGreenfieldTask(task.title, task.description ?? '', task.fileScope, (p) => { try { return existsSync(p); } catch { return false; } }),
       },
-    ).complexity;
-    this.tasksScoreMeta.complexity = this.taskComplexity;
+    );
+    this.taskComplexity = complexityScore.complexity;
+    this.tasksScoreMeta = { complexity: complexityScore.complexity, score: complexityScore.score, reasons: complexityScore.reasons };
     // Propagate the complexity verdict into the context engine BEFORE any
     // message is ingested, so a complex task keeps its working memory (file
     // bodies, tool outputs, deeper recency window) for the whole run.
