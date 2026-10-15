@@ -175,7 +175,7 @@ describe('ACP session/resume + persisted list + mode notify', () => {
     expect(sessions.get('r1')!.loadedGoal?.objective).toBe('persisted work');
 
     // session/list surfaces the persisted goal (session/load-able) on page one.
-    const listed = await handleRpc({ id: 2, method: 'session/list', params: { limit: 50 } }, sessions, process.cwd());
+    const listed = await handleRpc({ id: 2, method: 'session/list', params: { limit: 50, includePersisted: true } }, sessions, process.cwd());
     const found = (listed.result as { sessions: Array<{ sessionId: string; persisted?: boolean }> }).sessions.find((s) => s.sessionId === goal.id);
     expect(found?.persisted).toBe(true);
 

@@ -301,11 +301,14 @@ export async function handleRpc(
         });
         // First page also surfaces persisted goals (session/load-able) so a
         // client can discover prior work that has no live in-memory session.
-        if (!rawCursor) {
+        // Opt-in: keep the default session list to live sessions only.
+        if (!rawCursor && params.includePersisted === true) {
           const seen = new Set(sessionInfos.map((i) => i.sessionId));
           for (const se of sessions.values()) {
             try {
-              for (const gid of se.runtime.workspace.listGoals?.() ?? []) {
+              for (const file of se.runtime.workspace.listGoals?.() ?? []) {
+                // listGoals yields file names ("<id>.json"); the goal id is bare.
+                const gid = file.endsWith('.json') ? file.slice(0, -'.json'.length) : file;
                 if (seen.has(gid) || sessionInfos.length >= limit) continue;
                 const g = se.runtime.workspace.loadGoal(gid);
                 if (!g) continue;
