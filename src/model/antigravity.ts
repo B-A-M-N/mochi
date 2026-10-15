@@ -139,8 +139,32 @@ function mapAntigravityFinish(reason?: string): StreamChunk['finishReason'] {
   if (reason === 'MAX_TOKENS') return 'length';
   return 'stop';
 }
+function computeAntigravityCost(model: string, inTokens: number, outTokens: number, cachedTokens = 0): number {
+  const m = model.toLowerCase();
+  let inRate = 0.15 / 1_000_000;
+  let outRate = 0.60 / 1_000_000;
+  let cacheRate = 0.0375 / 1_000_000;
 
-function extractAntigravity(data: AntigravityResponsePayload): ModelResponse {
+  if (m.includes('opus')) {
+    inRate = 5.00 / 1_000_000;
+    outRate = 25.00 / 1_000_000;
+    cacheRate = 0.50 / 1_000_000;
+  } else if (m.includes('sonnet') || m.includes('claude')) {
+    inRate = 3.00 / 1_000_000;
+    outRate = 15.00 / 1_000_000;
+    cacheRate = 0.30 / 1_000_000;
+  } else if (m.includes('pro')) {
+    inRate = 1.25 / 1_000_000;
+    outRate = 5.00 / 1_000_000;
+    cacheRate = 0.3125 / 1_000_000;
+  }
+
+  const billableIn = Math.max(0, inTokens - cachedTokens);
+  const cost = billableIn * inRate + cachedTokens * cacheRate + outTokens * outRate;
+  return Math.round(cost * 10_000_000) / 10_000_000;
+}
+
+function extractAntigravity(data: AntigravityResponsePayload, defaultModel = 'gemini-3.8-flash'): ModelResponse {
   const container = data.response ?? data;
   const candidates = container.candidates ?? [];
   const parts = candidates[0]?.content?.parts ?? [];
@@ -158,16 +182,23 @@ function extractAntigravity(data: AntigravityResponsePayload): ModelResponse {
     }));
 
   const u = container.usageMetadata ?? {};
+  const pTok = u.promptTokenCount ?? 0;
+  const cTok = u.candidatesTokenCount ?? 0;
+  const tTok = u.totalTokenCount ?? 0;
+  const caTok = u.cachedContentTokenCount ?? 0;
+  const costUsd = computeAntigravityCost(defaultModel, pTok, cTok, caTok);
+
   return {
     content: textParts.join(''),
     reasoningContent: thoughtParts.length ? thoughtParts.join('') : undefined,
     toolCalls: toolCalls.length ? toolCalls : undefined,
     finishReason: candidates[0]?.finishReason,
     usage: {
-      promptTokens: u.promptTokenCount ?? 0,
-      completionTokens: u.candidatesTokenCount ?? 0,
-      totalTokens: u.totalTokenCount ?? 0,
-      cachedTokens: u.cachedContentTokenCount ?? 0,
+      promptTokens: pTok,
+      completionTokens: cTok,
+      totalTokens: tTok,
+      cachedTokens: caTok,
+      costUsd,
     },
   };
 }
@@ -474,7 +505,7 @@ export function createAntigravityProvider(config: ProviderConfig) {
         }, { maxAttempts: 3, onBackoff: (attempt, delayMs, err) => logBackoff(attempt, delayMs, err) });
 
         const json = (await res.json()) as AntigravityResponsePayload;
-        return extractAntigravity(json);
+        return extractAntigravity(json, model);
       } catch (err) {
         lastError = err;
       }
@@ -500,8 +531,8 @@ export function createAntigravityProvider(config: ProviderConfig) {
       completionTokens,
       totalTokens: promptTokens + completionTokens,
       cachedTokens: cachedTokens > 0 ? cachedTokens : undefined,
+      costUsd: computeAntigravityCost(model, promptTokens, completionTokens, cachedTokens),
     });
-
     const primaryUrl = `${endpoints[0]}/v1internal:streamGenerateContent?alt=sse`;
 
     const frames = openSSEStream(
@@ -512,7 +543,7 @@ export function createAntigravityProvider(config: ProviderConfig) {
     for await (const frame of frames) {
       if (frame.kind === 'json') {
         const raw = frame.data as AntigravityResponsePayload;
-        const resp = extractAntigravity(raw);
+        const resp = extractAntigravity(raw, model);
         yield {
           content: resp.content,
           reasoningContent: resp.reasoningContent,
