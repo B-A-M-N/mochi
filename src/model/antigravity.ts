@@ -337,6 +337,10 @@ export function createAntigravityProvider(config: ProviderConfig) {
 
   function resolveWireModel(rawModel: string, reasoningEffort?: string): string {
     const effort = (reasoningEffort || process.env.MOCHI_REASONING || '').toLowerCase().trim();
+    // Antigravity does not accept gemini-3.7-flash in any wire tier; alias it
+    // to the closest supported family before suffix resolution.
+    const aliases: Record<string, string> = { 'gemini-3.7-flash': 'gemini-3.8-flash' };
+    rawModel = aliases[rawModel] ?? rawModel;
     const revMatch = /^gemini-(3\.[6-9])-flash$/i.exec(rawModel);
     if (revMatch) {
       const rev = revMatch[1];
@@ -345,11 +349,10 @@ export function createAntigravityProvider(config: ProviderConfig) {
       return `gemini-${rev}-flash-high`;
     }
     const map: Record<string, string> = {
-      'gemini-3.5-flash': 'gemini-3-flash',
+      'gemini-3.7-flash': 'gemini-3.8-flash',
+      'gemini-3.5-flash': 'gemini-3.5-flash',
       'gemini-3.1-pro': 'gemini-3-flash',
       'claude-opus-4-6': 'claude-opus-4-6-thinking',
-      'claude-sonnet-4-5': 'claude-sonnet-4-5-thinking',
-      'claude-opus-4-5': 'claude-opus-4-5-thinking',
       'gemini-2.5-flash': 'gemini-2.5-flash-thinking',
       'gpt-oss-120b': 'gpt-oss-120b-medium',
       'gemini-4-argon-disabled': 'gemini-4-argon',

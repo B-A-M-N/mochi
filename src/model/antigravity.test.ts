@@ -74,7 +74,7 @@ describe('antigravity provider', () => {
 
     const body = captured.body as Record<string, unknown>;
     expect(body.project).toBe('custom-proj-123');
-    expect(body.model).toBe('gemini-3-flash');
+    expect(body.model).toBe('gemini-3.5-flash');
     expect(body.userAgent).toBe('antigravity');
     expect(body.requestType).toBe('agent');
 
