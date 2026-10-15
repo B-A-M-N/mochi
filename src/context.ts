@@ -134,6 +134,25 @@ export function approxTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+// Per-message token-count cache. buildPacket() walks the ENTIRE history every
+// turn and used to JSON.stringify + approxTokens each message each turn — O(n)
+// serialization+tokenization per turn. With this cache each message is
+// tokenized once (WeakMap keys on the message object, so it is GC-safe and
+// never serialized). Read hot path: buildPacket, estimateTokens, rescue scan.
+const messageTokenCache = new WeakMap<object, number>();
+export function cachedMessageTokens(m: { role: string; content?: unknown; name?: string; tool_calls?: unknown[]; tool_call_id?: string }): number {
+  const hit = messageTokenCache.get(m);
+  if (hit !== undefined) return hit;
+  const n = approxTokens(JSON.stringify(m));
+  messageTokenCache.set(m, n);
+  return n;
+}
+/** Invalidate a message's cached token count after its content mutates
+ *  (shrinkOldToolOutputs / condenseOutput rewrite tool results in place). */
+export function invalidateMessageTokens(m: object): void {
+  messageTokenCache.delete(m);
+}
+
 /** Max skills to advertise in the system prompt for a given task. Keeping this
  *  small prevents the 100+ skill inventory (incl. unrelated security/emulator/
  *  red-team schemas) from diluting focus on free-tier / flash models. */
@@ -337,7 +356,7 @@ export class ContextEngine {
    *  per-request system/state/tool headers, which are re-added separately). */
   estimateTokens(): number {
     let sum = 0;
-    for (const m of this.messages) sum += approxTokens(JSON.stringify(m));
+    for (const m of this.messages) sum += cachedMessageTokens(m);
     return sum;
   }
 
@@ -740,8 +759,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     const evictedDense: { name: string; content: string; tokens: number }[] = [];
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const m = this.messages[i];
-      const text = JSON.stringify(m);
-      const tokens = approxTokens(text);
+      const tokens = cachedMessageTokens(m);
       const overBudget = recent.length >= MIN_RECENT && remaining - tokens < 0;
       if (overBudget) {
         // Candidate rescue: dense content-bearing tool result being evicted.
@@ -776,7 +794,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     while (recent.length > 0 && recent[0].role === 'tool' && (!recent[0].tool_call_id || !validCallIds.has(recent[0].tool_call_id))) {
       const orphaned = recent.shift();
       if (orphaned && typeof orphaned.content === 'string' && orphaned.name && orphaned.content.length > 300 && evictedDense.length < RESCUE_MAX) {
-        evictedDense.push({ name: orphaned.name, content: orphaned.content, tokens: approxTokens(JSON.stringify(orphaned)) });
+        evictedDense.push({ name: orphaned.name, content: orphaned.content, tokens: cachedMessageTokens(orphaned) });
       }
     }
 
@@ -956,6 +974,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
       const shrunk = c.slice(0, KEEP_HEAD) + MARK + (c.length > KEEP_HEAD + KEEP_TAIL ? c.slice(-KEEP_TAIL) : '');
       saved += c.length - shrunk.length;
       m.content = shrunk;
+      invalidateMessageTokens(m); // content mutated: drop cached token count
     }
     return Math.floor(saved / 3.8);
   }
