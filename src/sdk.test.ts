@@ -1,6 +1,6 @@
 // SDK surface: in-process prompt/branch/sessions against a fake provider.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -116,6 +116,47 @@ describe('Mochi SDK (in-process mode)', () => {
     expect(after.done).toBe(true);
     iter.close(); // idempotent
   });
+});
+
+describe('Mochi SDK programmatic tools + hooks + cancellation', () => {
+  it('registerTool exposes an in-process tool to the agent', async () => {
+    const mochi = await setup([
+      { toolCalls: [{ id: 'c1', type: 'function', function: { name: 'sdk_echo', arguments: JSON.stringify({ text: 'ping' }) } }], finishReason: 'tool_calls' },
+      { content: 'Done echoing.', finishReason: 'stop' },
+    ]);
+    const calls: string[] = [];
+    const off = mochi.registerTool({
+      def: { name: 'sdk_echo', description: 'Echo text back', parameters: [{ name: 'text', type: 'string', description: 'text', required: true }] },
+      execute: async (args) => { calls.push(String(args.text)); return `echoed:${args.text}`; },
+    });
+    try {
+      await mochi.prompt('Use the sdk_echo tool to echo ping.');
+      expect(calls).toEqual(['ping']);
+    } finally { off(); }
+  }, 30_000);
+
+  it('onHook before_tool vetoes a mutating tool', async () => {
+    const mochi = await setup([
+      { toolCalls: [{ id: 'w1', type: 'function', function: { name: 'write', arguments: JSON.stringify({ path: 'blocked.txt', content: 'x' }) } }], finishReason: 'tool_calls' },
+      { content: 'Could not write; the hook blocked it.', finishReason: 'stop' },
+    ]);
+    const off = mochi.onHook('before_tool', (ctx) => (ctx.tool === 'write' ? false : undefined));
+    try {
+      await mochi.prompt('Create blocked.txt and verify. fix tests too');
+      expect(existsSync(resolve(dir, 'blocked.txt'))).toBe(false);
+    } finally { off(); }
+  }, 30_000);
+
+  it('prompt accepts an AbortSignal and stops before a slow provider responds', async () => {
+    const mochi = await setup([{ content: 'late reply', finishReason: 'stop', delayMs: 4000 }]);
+    const ac = new AbortController();
+    const t0 = Date.now();
+    const p = mochi.prompt('Say hello to the user', { signal: ac.signal });
+    setTimeout(() => ac.abort(), 100);
+    const r = await p;
+    expect(Date.now() - t0).toBeLessThan(3500);
+    expect(typeof r.summary).toBe('string');
+  }, 30_000);
 });
 
 describe('Mochi SDK streaming + discovery', () => {

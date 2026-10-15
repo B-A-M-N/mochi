@@ -1,5 +1,5 @@
 export { Runtime } from './runtime.js';
-export { Mochi, RemoteMochi, type RunResult, type GoalResultSdk } from './sdk.js';
+export { Mochi, RemoteMochi, type RunResult, type GoalResultSdk, type RunOptions } from './sdk.js';
 export { EventBus } from './events.js';
 export { Workspace } from './workspace.js';
 export { GoalEngine } from './goals/goal.js';
@@ -7,7 +7,7 @@ export { TaskScheduler } from './goals/scheduler.js';
 export { Agent } from './agent/loop.js';
 export { ContextEngine } from './context.js';
 export { BudgetEngine } from './budget.js';
-export { HookManager } from './hooks.js';
+export { HookManager, registerHook, type HookName, type HookHandler, type HookHandlerResult } from './hooks.js';
 export { MemoryStore } from './memory/memory.js';
 export { consolidate } from './memory/consolidate.js';
 export { RetrievalEngine } from './memory/retrieval.js';

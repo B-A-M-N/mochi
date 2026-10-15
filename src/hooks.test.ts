@@ -3,7 +3,51 @@ import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HookManager, type HookName } from './hooks.js';
+import { HookManager, registerHook, type HookName } from './hooks.js';
+
+describe('programmatic (JS) hooks', () => {
+  it('runs a registered handler and honors a false veto', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-jshooks-'));
+    const hooks = new HookManager(dir);
+    const seen: string[] = [];
+    const off = registerHook('before_tool', (ctx) => { seen.push(ctx.tool ?? ''); return false; });
+    try {
+      expect(hooks.enabled('before_tool')).toBe(true); // JS handler, no hooks.json
+      const r = await hooks.runBefore('before_tool', { tool: 'shell' });
+      expect(r.allowed).toBe(false);
+      expect(seen).toEqual(['shell']);
+    } finally { off(); }
+    // Unregistered: the same call is allowed again.
+    expect(hooks.enabled('before_tool')).toBe(false);
+    expect((await hooks.runBefore('before_tool', { tool: 'shell' })).allowed).toBe(true);
+  });
+
+  it('treats a throwing handler as a veto (fail-closed)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-jshooks-'));
+    const hooks = new HookManager(dir);
+    const off = registerHook('before_edit', () => { throw new Error('boom'); });
+    try {
+      const r = await hooks.runBefore('before_edit', { file: 'a.ts' });
+      expect(r.allowed).toBe(false);
+      expect(r.stderr).toContain('boom');
+    } finally { off(); }
+  });
+
+  it('runs JS and command after hooks together', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-jshooks-'));
+    writeFileSync(resolve(dir, 'hooks.json'), JSON.stringify({ after_edit: 'exit 0' }));
+    const hooks = new HookManager(dir);
+    const calls: string[] = [];
+    const off = registerHook('after_edit', () => { calls.push('js'); });
+    try {
+      const rs = await hooks.runAfter('after_edit', { file: 'a.ts' });
+      expect(calls).toEqual(['js']);
+      expect(rs).toHaveLength(2);
+      expect(rs.every((r) => r.exitCode === 0)).toBe(true);
+    } finally { off(); }
+  });
+});
+
 
 describe('HookManager', () => {
   it('runs after hooks and records output', async () => {

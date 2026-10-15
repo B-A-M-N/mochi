@@ -421,6 +421,8 @@ export class Agent {
   /** Cached PermissionManager, rebuilt when the tier changes (/yolo mid-run). */
   private permMgr?: { policy: PermissionPolicy; mgr: PermissionManager };
   private tools: Map<string, import('../tools/types.js').Tool>;
+  /** Host-registered in-process tools, inherited by subagents. */
+  private extraTools?: Map<string, import('../tools/types.js').Tool>;
   private toolDefs: ToolDefinition[];
   private provider: ReturnType<typeof createProvider>;
   private providers = new Map<ModelProfile, ReturnType<typeof createProvider>>();
@@ -742,6 +744,7 @@ export class Agent {
     this.profile = opts.profile ?? profileService.get(opts.role) ?? profileService.get('coder')!;
     this.tools = buildTools(this.config, this.profile.tools);
     if (opts.extraTools) {
+      this.extraTools = opts.extraTools;
       for (const [name, tool] of opts.extraTools) {
         if (!this.tools.has(name)) this.tools.set(name, tool);
       }
@@ -3514,6 +3517,7 @@ Continue from 'Next:', do not redo completed progress.`,
       abortSignal: combinedAbort,
       readCache: this.readCache,
       subagentDepth: this.subagentDepth + 1,
+      extraTools: this.extraTools,
     });
     const task: Task = {
       id: `sub-${Math.random().toString(36).slice(2, 10)}`,

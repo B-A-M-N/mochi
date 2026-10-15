@@ -86,6 +86,9 @@ export class GoalEngine {
    *  Set by the host via Runtime.setApprovalHandler / setPermPolicy. */
   approvalHandler?: import('../security/approval.js').ApprovalHandler;
   permPolicy?: string;
+  /** Host-registered in-process tools (SDK `registerTool`), shared by every
+   *  agent this engine spawns. Set by the host via Runtime.registerTool. */
+  extraTools?: Map<string, import('../tools/types.js').Tool>;
   /** Session "allow always" memory, shared by every agent this engine spawns:
    *  an approval remembered for the tab session, not just one task run. */
   readonly approvedAlways = new Set<string>();
@@ -805,6 +808,7 @@ Return ONLY the JSON array, no markdown.`;
       approvalHandler: this.approvalHandler,
       permPolicy: this.permPolicy,
       approvedAlways: this.approvedAlways,
+      extraTools: this.extraTools,
     });
     // MCH-74: register as a steer target for the lifetime of the run.
     this.liveAgents.set(task.id, agent);

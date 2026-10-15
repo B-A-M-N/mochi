@@ -63,6 +63,9 @@ export class Runtime {
   /** Interactive approval resolver (TUI allow/deny menu). Assign via
    *  setApprovalHandler(). Unset headless: the gate allows + audits. */
   approvalHandler?: import('./security/approval.js').ApprovalHandler;
+  /** Host-registered in-process tools (SDK `registerTool`). Shared with the
+   *  goal engine so every spawned agent (and subagent) can call them. */
+  private extraTools = new Map<string, import('./tools/types.js').Tool>();
 
   constructor(opts: RuntimeOptions = {}) {
     this.config = loadConfig(opts.config);
@@ -661,7 +664,7 @@ export class Runtime {
   /** Structured one-shot run: like runPrompt but returns the goal status,
    *  stop reason, and stats so headless consumers (`--json`, CI exit codes)
    *  can branch on real outcomes instead of parsing prose. */
-  async runPromptDetailed(prompt: string, opts?: { sessionId?: string; images?: string[] }): Promise<{ summary: string; status: string; stopReason?: string; success: boolean; tokensUsed: number; costUsd: number; durationMs: number; goalId: string; filesModified: string[] }> {
+  async runPromptDetailed(prompt: string, opts?: { sessionId?: string; images?: string[]; signal?: AbortSignal }): Promise<{ summary: string; status: string; stopReason?: string; success: boolean; tokensUsed: number; costUsd: number; durationMs: number; goalId: string; filesModified: string[] }> {
     if (this.abortController.signal.aborted) this.resetAbort();
     if (opts?.sessionId) {
       this.activeSessionId = opts.sessionId;
@@ -683,6 +686,7 @@ export class Runtime {
           this.goals = new GoalEngine(this.config, this.workspace, this.events, projectRoot);
           this.hooks = new HookManager(this.workspace.dir);
           this.usage = new UsageStore(this.workspace.dir);
+          this.syncEngines();
           this.events.emit({ type: 'agent:log', agentId: 'runtime', message: `[workspace] Anchored project workspace to ${detected}` });
         }
       }
@@ -701,7 +705,7 @@ export class Runtime {
     const { TraceRecorder } = await import('./observability/trace.js');
     const recorder = new TraceRecorder(this.workspace.dir, goal.id).attach(this.events);
     try {
-      const result = await this.goals.runGoal(goal, [task], [], this.abortSignal, sessionId);
+      const result = await this.goals.runGoal(goal, [task], [], opts?.signal ?? this.abortSignal, sessionId);
       this.recordUsage(prompt, result);
       recorder.log({ t: Date.now(), kind: 'goal:summary', status: goal.status, tokensUsed: result.tokensUsed, costUsd: result.costUsd, durationMs: result.durationMs });
       let summary = result.summary;
@@ -859,6 +863,7 @@ export class Runtime {
     this.goals.promptUser = this.promptUser;
     this.goals.approvalHandler = this.approvalHandler;
     this.goals.permPolicy = this.permPolicy;
+    this.goals.extraTools = this.extraTools;
   }
 
   /** Attach the interactive user-prompt resolver (TUI option menu) and
@@ -879,6 +884,20 @@ export class Runtime {
   setPermPolicy(p?: string): void {
     this.permPolicy = p;
     this.goals.permPolicy = p;
+  }
+
+  /** Register an in-process tool on top of the built-ins, available to every
+   *  agent this runtime spawns (SDK/tests can inject custom capabilities).
+   *  Returns an unregister fn that restores any prior tool of the same name. */
+  registerTool(tool: import('./tools/types.js').Tool): () => void {
+    const name = tool.def.name;
+    const prev = this.extraTools.get(name);
+    this.extraTools.set(name, tool);
+    this.goals.extraTools = this.extraTools;
+    return () => {
+      if (prev) this.extraTools.set(name, prev);
+      else this.extraTools.delete(name);
+    };
   }
 
   private async runChecks(): Promise<Record<string, string>> {

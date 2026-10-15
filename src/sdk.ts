@@ -19,6 +19,8 @@ import { SessionStore } from './state/session-store.js';
 import { addFact, recallFacts } from './memory/memory-store.js';
 import { loadAllSkills, searchSkills } from './skills/skills.js';
 import { addMcpServerConfig } from './tools/mcp-manage.js';
+import { registerHook, type HookName, type HookHandler } from './hooks.js';
+import type { Tool } from './tools/types.js';
 import type { MochiConfig, MochiEvent } from './types.js';
 
 export interface RunResult {
@@ -31,6 +33,12 @@ export interface RunResult {
   filesModified: string[];
 }
 
+/** Cancellation + run options shared by the in-process entrypoints. */
+export interface RunOptions {
+  /** Abort the run; the runtime stops at its next checkpoint. */
+  signal?: AbortSignal;
+}
+
 export interface GoalResultSdk {
   goalId: string;
   status: string;
@@ -39,6 +47,10 @@ export interface GoalResultSdk {
 }
 
 export class Mochi {
+  /** Unsubscribers for hooks/tools registered through this client, cleared on close(). */
+  private hookOffs: Array<() => void> = [];
+  private toolOffs: Array<() => void> = [];
+
   private constructor(private rt: Runtime) {}
 
   /** In-process SDK: construct a Runtime and wrap it. */
@@ -51,9 +63,45 @@ export class Mochi {
     return new RemoteMochi(opts.port, opts.token ?? '');
   }
 
-  /** One-shot prompt → full agent run → structured result. */
-  async prompt(task: string): Promise<RunResult> {
-    const r = await this.rt.runPromptDetailed(task);
+  /** Register an in-process tool on top of the built-ins (available to every
+   *  run, including subagents). Returns an unregister fn; also released on
+   *  close(). */
+  registerTool(tool: Tool): () => void {
+    const off = this.rt.registerTool(tool);
+    let live = true;
+    const unregister = () => {
+      if (!live) return;
+      live = false;
+      off();
+      const i = this.toolOffs.indexOf(unregister);
+      if (i >= 0) this.toolOffs.splice(i, 1);
+    };
+    this.toolOffs.push(unregister);
+    return unregister;
+  }
+
+  /** Register a JS hook handler (before_tool/after_edit/...). Runs in-process
+   *  ahead of any hooks.json command hooks; a before_* handler returning false
+   *  vetoes the action, and a throw is treated as a veto (fail-closed).
+   *  Returns an unregister fn; also released on close(). */
+  onHook(name: HookName, handler: HookHandler): () => void {
+    const off = registerHook(name, handler);
+    let live = true;
+    const unregister = () => {
+      if (!live) return;
+      live = false;
+      off();
+      const i = this.hookOffs.indexOf(unregister);
+      if (i >= 0) this.hookOffs.splice(i, 1);
+    };
+    this.hookOffs.push(unregister);
+    return unregister;
+  }
+
+  /** One-shot prompt → full agent run → structured result. Pass `{ signal }`
+   *  to cancel the run (stops at the next checkpoint). */
+  async prompt(task: string, opts: RunOptions = {}): Promise<RunResult> {
+    const r = await this.rt.runPromptDetailed(task, opts.signal ? { signal: opts.signal } : undefined);
     return {
       summary: r.summary, status: r.status, success: r.success,
       tokensUsed: r.tokensUsed, costUsd: r.costUsd, durationMs: r.durationMs,
@@ -62,7 +110,7 @@ export class Mochi {
   }
 
   /** Alias of prompt() — reads as an instruction. */
-  async run(task: string): Promise<RunResult> { return this.prompt(task); }
+  async run(task: string, opts: RunOptions = {}): Promise<RunResult> { return this.prompt(task, opts); }
 
   /** Streaming prompt: yields every runtime event live, then RETURNS the
    *  final RunResult (use `for await` for progress + capture the return for
@@ -78,7 +126,7 @@ export class Mochi {
    *    console.log(n.value.type);
    *  }
    *  ``` */
-  async *promptStream(task: string): AsyncGenerator<MochiEvent, RunResult, void> {
+  async *promptStream(task: string, opts: RunOptions = {}): AsyncGenerator<MochiEvent, RunResult, void> {
     const SENTINEL = Symbol('mochi-prompt-settled');
     type Item = MochiEvent | typeof SENTINEL;
     const backlog: Item[] = [];
@@ -92,7 +140,7 @@ export class Mochi {
       }
     };
     const off = this.onAny((e) => push(e));
-    const doneP = this.prompt(task).then(
+    const doneP = this.prompt(task, opts).then(
       (r) => { push(SENTINEL); return r; },
       (e) => { push(SENTINEL); throw e; },
     );
@@ -124,8 +172,8 @@ export class Mochi {
   }
 
   /** Structured multi-step objective (task DAG + verifier + self-review). */
-  async goal(objective: string, constraints: string[] = []): Promise<GoalResultSdk> {
-    const r = await this.rt.runGoal(objective, constraints);
+  async goal(objective: string, constraints: string[] = [], opts: RunOptions = {}): Promise<GoalResultSdk> {
+    const r = await this.rt.runGoal(objective, constraints, undefined, opts.signal);
     return {
       goalId: r.goalId, status: r.status, summary: r.summary,
       tasks: r.tasks.map((t) => ({ title: t.title, status: t.status })),
@@ -196,6 +244,10 @@ export class Mochi {
    *  runtime). Call before deleting a workspace dir on Windows, where an
    *  open SQLite handle keeps an exclusive lock. Idempotent, best-effort. */
   close(): void {
+    // Release process-global hooks/tools this client registered so a closed
+    // SDK never leaks handlers into other Mochi instances in the same process.
+    for (const off of [...this.hookOffs]) { try { off(); } catch { /* best-effort */ } }
+    for (const off of [...this.toolOffs]) { try { off(); } catch { /* best-effort */ } }
     try { this.rt.close(); } catch { /* best-effort */ }
   }
 
