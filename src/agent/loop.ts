@@ -339,6 +339,23 @@ export function heartbeatShowsProgress(prev: ProgressSnap, cur: ProgressSnap): b
 export const HEARTBEAT_EVERY = 8;
 /** Consecutive no-progress heartbeats before stopping honestly. */
 export const HEARTBEAT_MAX_STALL = 2;
+/** Post-verify-pass tool turns before nudging to finish (verified work +
+ *  wandering model). */
+export const POST_PASS_NUDGE_TURNS = 3;
+/** Post-verify-pass tool turns before the harness finishes for them. */
+export const POST_PASS_FINISH_TURNS = 6;
+
+/** Did a shell invocation just pass a repo check? Pure (tested): the command
+ *  must look like a check (test/typecheck/lint/build via a known runner)
+ *  AND the tool result must report exit 0. Plain commands that exit 0
+ *  (grep, git status, smoke runs) are NOT verification. */
+export function isManualCheckPass(command: string, output: string): boolean {
+  if (!/exit_code:\s*0\b/.test(output)) return false;
+  const cmd = command.trim();
+  if (/(^|[;|&]\s*|\s&&\s*)(npm|npx|yarn|pnpm|bun)\s+(test|run\s+(test|check|typecheck|lint|build))\b/.test(cmd)) return true;
+  if (/\b(vitest|jest|pytest|tsc|eslint|tslint|ruff|clippy|cargo\s+test|go\s+test|node\s+--test)\b/.test(cmd)) return true;
+  return false;
+}
 
 export interface AgentResult {
   success: boolean;
@@ -495,6 +512,12 @@ export class Agent {
   private lastProgressSnap: ProgressSnap = { read: 0, edited: 0, verifyPass: 0 };
   private noProgressStreak = 0;
   private verifyPassTotal = 0;
+  /** Post-verify-pass finish drive: a passing check arms this; subsequent
+   *  non-editing tool turns count up. Nudge at NUDGE_TURNS, harness-finish
+   *  at FINISH_TURNS. Any new edit disarms (the pass is stale). */
+  private verifyPassArmed = false;
+  private postPassToolTurns = 0;
+  private lastVerifySummary = '';
   private taskRunExecuted = false;
   private finishHintSent = false;
   private taskKind?: import('../core/taskkind.js').TaskKind;
@@ -2340,6 +2363,12 @@ Continue from 'Next:', do not redo completed progress.`,
           return this.finish(task, false, 'Too many tool calls; stopping to avoid an infinite loop.', 'tool_loop');
         }
         await this.executeToolCalls(response.toolCalls);
+        // Post-verify-pass finish drive: verified work + a wandering model
+        // gets nudged to conclude, then harness-finished. Edits disarm
+        // (pass is stale); reads/shells-only turns count up.
+        const driveNames = response.toolCalls.map((c) => c.function.name);
+        const driveResult = await this.postPassDrive(task, driveNames);
+        if (driveResult) return driveResult;
         // MCH-100: simple-script fast path. After a write/edit batch in a
         // script task whose prompt names the run command, execute it
         // harness-side right here and hand the output to the model — the
@@ -2555,7 +2584,7 @@ Continue from 'Next:', do not redo completed progress.`,
       this.verifyCount++;
       if (verification.passed) {
         this.lastVerifyPassed = true;
-        this.verifyPassTotal++;
+        this.recordVerifyPass(verification.summary);
         this.consecutiveVerifyFailures = 0;
         this.consecutiveToolErrorsCount = 0;
         this.cycleNudges = 0;
@@ -4154,6 +4183,17 @@ Continue from 'Next:', do not redo completed progress.`,
         this.learning.record(classified.pattern, this.lastStrategy ?? 'unclassified', false);
       }
     }
+    // Manual verification recognition: the agent ran a repo check via shell
+    // and it exited 0. Harness verify() only runs on prose-completion, so
+    // shell-verified work was previously invisible — the finish drive never
+    // armed and verified runs wandered. Recognize it as a pass (arms the
+    // post-pass nudge/finish; feeds the progress heartbeat too).
+    if (!err && toolName === 'shell' && typeof args.command === 'string' && typeof out === 'string'
+      && isManualCheckPass(args.command, out)) {
+      this.lastVerifyPassed = true;
+      this.recordVerifyPass(`Manual check passed: \`${args.command.slice(0, 120)}\` (exit 0)`);
+      this.consecutiveVerifyFailures = 0;
+    }
     this.trackFileChange(toolName, args, { output: out, error: err });
   }
   /** Auto-format a file after a successful edit/write/patch. Silent + best-effort:
@@ -4711,6 +4751,48 @@ Continue from 'Next:', do not redo completed progress.`,
    *  burning the remaining budget. Skipped for content-only (chat) tasks,
    *  where acting isn't the point. Returns a finish result when stopping,
    *  null otherwise (caller returns it directly). */
+  /** Record a passing verification (harness or recognized manual check).
+   *  Arms the post-pass finish drive: the NEXT non-editing tool turns count
+   *  toward nudging/stopping instead of wandering forever after success. */
+  private recordVerifyPass(summary: string): void {
+    this.verifyPassTotal++;
+    this.verifyPassArmed = true;
+    this.postPassToolTurns = 0;
+    this.lastVerifySummary = summary.slice(0, 500);
+  }
+
+  /** Post-pass finish drive. Call once per turn that executed tool calls:
+   *  - a turn containing any edit disarms (the pass is stale, re-verify later);
+   *  - otherwise, when a pass is armed, count up: nudge at NUDGE_TURNS
+   *  ("verification passed — finish now"), harness-finish at FINISH_TURNS.
+   *  Returns a finish result when the harness concludes, null otherwise. */
+  private async postPassDrive(task: Task, toolNames: string[]): Promise<AgentResult | null> {
+    const MUTATING = new Set(['edit', 'write', 'delete', 'patch', 'replace_symbol']);
+    if (toolNames.some((n) => MUTATING.has(TOOL_ALIASES[n] || n))) {
+      this.verifyPassArmed = false;
+      this.postPassToolTurns = 0;
+      return null;
+    }
+    if (!this.verifyPassArmed) return null;
+    this.postPassToolTurns++;
+    if (this.postPassToolTurns === POST_PASS_NUDGE_TURNS) {
+      this.context.addMessage({
+        role: 'system',
+        content: `VERIFIED — FINISH NOW: verification already PASSED (${this.lastVerifySummary.slice(0, 200)}). The work is done. Write your final summary with NO tool calls: what changed, how it was verified. Do NOT start new work, do NOT re-run passing checks, do NOT polish. If something is genuinely still broken, say exactly what — otherwise conclude.`,
+      });
+      return null;
+    }
+    if (this.postPassToolTurns >= POST_PASS_FINISH_TURNS) {
+      const touched = [...(this.context['state']?.filesModified as string[] | undefined ?? [])].slice(-8);
+      this.addAttempt(task, 'verified-complete', [], 'success', this.lastVerifySummary);
+      return this.finish(task, true,
+        `Complete (verified): ${this.lastVerifySummary} Files modified: ${touched.join(', ') || 'none'}. ` +
+        `(Finished by harness: verification had passed and ${POST_PASS_FINISH_TURNS} further tool turns produced no new edits.)`,
+        'completed');
+    }
+    return null;
+  }
+
   private async progressHeartbeat(iter: number, task: Task): Promise<AgentResult | null> {
     if (this.contentOnly) return null;
     if (iter - this.lastHeartbeatIter < HEARTBEAT_EVERY) return null;
