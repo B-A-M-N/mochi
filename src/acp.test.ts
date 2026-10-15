@@ -155,6 +155,108 @@ describe('ACP session/list + delete + mode', () => {
   });
 });
 
+describe('ACP session/resume + persisted list + mode notify', () => {
+  it('resume reopens a persisted goal and list surfaces persisted goals', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const { Runtime } = await import('./runtime.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-acp-resume-'));
+    const cfg = { model: { provider: 'openai', baseUrl: 'http://127.0.0.1:1', model: 'x' }, telemetry: false, projectDir: '.mochi', quiet: true } as any;
+    const runtime = Runtime.create({ cwd: dir, config: cfg });
+    const goal = await runtime.goals.createGoal('persisted work');
+    runtime.close();
+
+    const sessions = new Map<string, AcpSession>();
+    // resume with no live session but a persisted goalId must restore it.
+    const resumed = await handleRpc({ id: 1, method: 'session/resume', params: { sessionId: 'r1', cwd: dir, goalId: goal.id } }, sessions, process.cwd());
+    expect(resumed.error).toBeUndefined();
+    expect(sessions.get('r1')!.loadedGoal?.goalId).toBe(goal.id);
+    expect(sessions.get('r1')!.loadedGoal?.objective).toBe('persisted work');
+
+    // session/list surfaces the persisted goal (session/load-able) on page one.
+    const listed = await handleRpc({ id: 2, method: 'session/list', params: { limit: 50 } }, sessions, process.cwd());
+    const found = (listed.result as { sessions: Array<{ sessionId: string; persisted?: boolean }> }).sessions.find((s) => s.sessionId === goal.id);
+    expect(found?.persisted).toBe(true);
+
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }, 30_000);
+
+  it('set_mode notifies the client with current_mode_update', async () => {
+    const sessions = freshSessions();
+    const created = await handleRpc({ id: 1, method: 'session/new', params: { cwd: process.cwd() } }, sessions, process.cwd());
+    const sid = (created.result as any).sessionId;
+    const updates: string[] = [];
+    const m = await handleRpc(
+      { id: 2, method: 'session/set_mode', params: { sessionId: sid, modeId: 'plan' } },
+      sessions, process.cwd(),
+      (_sid, update) => updates.push(JSON.stringify(update)),
+    );
+    expect((m.result as any).modeId).toBe('plan');
+    expect(updates.some((u) => u.includes('current_mode_update') && u.includes('plan'))).toBe(true);
+  });
+});
+
+describe('ACP permission gate', () => {
+  it('asks the client for non-auto-approved tools and honors a denial', async () => {
+    const { startFakeOpenAI } = await import('./testutil/fake-openai.js');
+    const { mkdtempSync, writeFileSync, rmSync, existsSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve } = await import('node:path');
+    const { Runtime } = await import('./runtime.js');
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-acp-perm-'));
+    writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'x' }));
+    // Sticky router: harness-internal planning/summary calls answer inline so
+    // the scripted agent turns below stay aligned.
+    const turns: Array<{ content?: string; toolCalls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>; finishReason: string }> = [
+      { toolCalls: [{ id: 'c1', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'touch deny-marker.txt' }) } }], finishReason: 'tool_calls' },
+      { content: 'done', finishReason: 'stop' },
+    ];
+    const fake = await startFakeOpenAI([
+      {
+        sticky: true,
+        respondFn: (body: { messages?: Array<{ content?: unknown }> }) => {
+          const texts = (body?.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''))).join('\n');
+          if (/planning agent/i.test(texts) || texts.includes('Decompose the goal into a JSON array')) {
+            const goalLine = texts.split('\n').find((l) => l.startsWith('Goal:'))?.slice(5).trim() || 'Do the prompted work';
+            return { content: JSON.stringify([{ title: goalLine.slice(0, 80), description: goalLine, role: 'coder', dependencies: [], acceptanceCriteria: [] }]), finishReason: 'stop' as const };
+          }
+          if (/concise summary/i.test(texts)) return { content: 'Run summarized.', finishReason: 'stop' as const };
+          return turns.length ? turns.shift()! : { content: 'done', finishReason: 'stop' as const };
+        },
+      },
+    ]);
+    const cfg = { model: { provider: 'openai', baseUrl: fake.url, model: 'fake-model' }, safety: { mode: 'auto', commandTimeoutSeconds: 10, maxIterations: 3, maxRuntimeMinutes: 2, maxConcurrentAgents: 1, contextBudgetTokens: 4000 }, permissions: { read: true, write: true, shell: true, network: true, gitDestructive: true }, telemetry: false, projectDir: '.mochi', quiet: true, verbose: false, debug: false } as any;
+    const sessions = new Map<string, AcpSession>();
+    const sid = 'perm-sid';
+    const runtime = Runtime.create({ cwd: dir, config: cfg });
+    runtime.setPermPolicy('strict'); // strict: shell is never auto-approved
+    sessions.set(sid, { id: sid, cwd: dir, runtime });
+
+    const asks: Array<Record<string, unknown>> = [];
+    const clientRequest = async (method: string, params: Record<string, unknown>) => {
+      asks.push({ method, ...params });
+      return { optionId: 'reject_once' };
+    };
+    const r = await handleRpc(
+      { id: 1, method: 'session/prompt', params: { sessionId: sid, prompt: 'write the file deny-marker.txt with a shell touch command' } },
+      sessions, process.cwd(), () => {}, { clientRequest },
+    );
+    expect(r.error).toBeUndefined();
+    // The gate engaged: the agent asked the client for permission.
+    const permAsk = asks.find((a) => a.method === 'session/request_permission');
+    expect(permAsk).toBeDefined();
+    expect((permAsk as any).options.some((o: any) => o.optionId === 'allow_once')).toBe(true);
+    // The denial was honored: the shell command never ran.
+    expect(existsSync(resolve(dir, 'deny-marker.txt'))).toBe(false);
+
+    await fake.close();
+    for (const s of sessions.values()) { try { s.runtime.close(); } catch { /* best-effort */ } }
+    rmSync(dir, { recursive: true, force: true });
+  }, 60_000);
+});
+
 describe('ACP session/load', () => {
   it('restores a persisted goal and resumes its tasks', async () => {
     const { startFakeOpenAI } = await import('./testutil/fake-openai.js');

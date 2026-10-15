@@ -73,6 +73,13 @@ export interface RpcResponse {
   error?: { code: number; message: string };
 }
 
+/** Host hooks for the RPC core. `clientRequest` lets the agent send a request
+ *  TO the client and await its answer (used for real permission gating). When
+ *  absent (headless/tests), the agent runs under mochi's own policy. */
+export interface AcpRpcOptions {
+  clientRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+}
+
 /** Extract user text from a spec-valid prompt payload (ContentBlock[] array
  *  or, for leniency, a plain string). */
 function promptText(prompt: unknown): string {
@@ -112,6 +119,7 @@ export async function handleRpc(
   sessions: Map<string, AcpSession>,
   cwd: string,
   onNotify: AcpNotify = () => {},
+  opts: AcpRpcOptions = {},
 ): Promise<RpcResponse> {
   const id = call.id ?? null;
   const method = call.method ?? '';
@@ -188,6 +196,45 @@ export async function handleRpc(
         };
 
         const off = session.runtime.events.onAll(handleEvent);
+        // Real permission gate: when the client can answer permission requests,
+        // route mochi's approval prompts (shell / non-idempotent writes under a
+        // stricter policy) to the editor instead of silently running them. The
+        // loop calls this only for tools its policy does not auto-allow.
+        let setGate = false;
+        if (opts.clientRequest) {
+          const requestPermission = opts.clientRequest;
+          session.runtime.setApprovalHandler(async (req) => {
+            try {
+              const res = await requestPermission('session/request_permission', {
+                sessionId: sid,
+                toolCall: {
+                  toolCallId: `perm_${randomUUID().slice(0, 8)}`,
+                  title: req.summary,
+                  kind: toolKind(req.tool),
+                  rawInput: { tool: req.tool, risk: req.risk },
+                },
+                options: [
+                  { optionId: 'allow_once', name: 'Allow once', kind: 'allow_once' },
+                  { optionId: 'allow_always', name: 'Allow always', kind: 'allow_always' },
+                  { optionId: 'reject_once', name: 'Reject', kind: 'reject_once' },
+                ],
+              });
+              const r = (res && typeof res === 'object' ? res : {}) as Record<string, unknown>;
+              const nested = r.outcome && typeof r.outcome === 'object' ? (r.outcome as Record<string, unknown>) : undefined;
+              const optionId = typeof r.optionId === 'string'
+                ? (r.optionId as string)
+                : typeof nested?.optionId === 'string'
+                  ? (nested.optionId as string)
+                  : '';
+              if (optionId === 'allow_once') return 'allow-once';
+              if (optionId === 'allow_always') return 'allow-always';
+              return 'deny';
+            } catch {
+              return 'deny'; // no answer / broken client → fail closed, never hang
+            }
+          });
+          setGate = true;
+        }
         let stopReason = 'end_turn';
         try {
           if (session.loadedGoal) {
@@ -207,7 +254,10 @@ export async function handleRpc(
         } catch (err) {
           if (session.runtime.aborted) stopReason = 'cancelled';
           else return { id, error: { code: -32603, message: err instanceof Error ? err.message : String(err) } };
-        } finally { off(); }
+        } finally {
+          off();
+          if (setGate) session.runtime.setApprovalHandler(undefined);
+        }
         return { id, result: { stopReason } };
       }
       case 'session/cancel': {
@@ -249,6 +299,22 @@ export async function handleRpc(
           if (se.additionalDirectories && se.additionalDirectories.length) info.additionalDirectories = se.additionalDirectories;
           return info;
         });
+        // First page also surfaces persisted goals (session/load-able) so a
+        // client can discover prior work that has no live in-memory session.
+        if (!rawCursor) {
+          const seen = new Set(sessionInfos.map((i) => i.sessionId));
+          for (const se of sessions.values()) {
+            try {
+              for (const gid of se.runtime.workspace.listGoals?.() ?? []) {
+                if (seen.has(gid) || sessionInfos.length >= limit) continue;
+                const g = se.runtime.workspace.loadGoal(gid);
+                if (!g) continue;
+                seen.add(gid);
+                sessionInfos.push({ sessionId: gid, cwd: se.cwd, title: g.objective, updatedAt: Date.now(), persisted: true });
+              }
+            } catch { /* best-effort */ }
+          }
+        }
         const nextCursor = sessionIdSlice.length < limit ? undefined : Buffer.from(sessionIdSlice[sessionIdSlice.length - 1]).toString('base64');
         return { id, result: { sessions: sessionInfos, nextCursor } };
       }
@@ -263,7 +329,16 @@ export async function handleRpc(
         const sessionCwd = typeof params.cwd === 'string' && params.cwd ? resolve(params.cwd) : cwd;
         if (sessions.has(sid)) return { id, result: {} };
         const runtime = Runtime.create({ cwd: sessionCwd });
-        sessions.set(sid, { id: sid, cwd: sessionCwd, runtime });
+        const session: AcpSession = { id: sid, cwd: sessionCwd, runtime };
+        // Reconnect to a persisted goal (not a blank runtime): the next
+        // session/prompt then continues the goal's task decomposition instead
+        // of silently restarting from scratch, which is what resume means.
+        const goalId = typeof params.goalId === 'string' ? params.goalId : '';
+        if (goalId) {
+          const goal = runtime.workspace.loadGoal(goalId);
+          if (goal) { session.loadedGoal = { goalId: goal.id, objective: goal.objective }; session.goalId = goal.id; }
+        }
+        sessions.set(sid, session);
         return { id, result: {} };
       }
       case 'session/close': {
@@ -281,6 +356,7 @@ export async function handleRpc(
         if (!session) return { id, error: { code: -32602, message: `Unknown session ${sid}` } };
         const modeId = typeof params.modeId === 'string' ? params.modeId : 'act';
         session.runtime.setPlanMode(modeId === 'plan');
+        onNotify(sid, { sessionUpdate: 'current_mode_update', currentModeId: modeId });
         return { id, result: { modeId } };
       }
       case 'session/set_config_option': {
@@ -363,6 +439,19 @@ export async function serverLoop(cwd: string): Promise<void> {
     }
   };
 
+  // Server→client requests (session/request_permission): send with an id and
+  // resolve when the client's matching response line arrives. Without this the
+  // agent had no way to ask the editor for permission.
+  const pendingClient = new Map<string | number, { resolve: (v: unknown) => void }>();
+  let clientReqSeq = 0;
+  const clientRequest = (method: string, params: Record<string, unknown>): Promise<unknown> => {
+    const rid = `srv-${++clientReqSeq}`;
+    return new Promise((resolve) => {
+      pendingClient.set(rid, { resolve });
+      send({ jsonrpc: '2.0', id: rid, method, params });
+    });
+  };
+
   rl.on('line', (line) => {
     const trimmed = line.trim();
     if (!trimmed) return;
@@ -370,7 +459,16 @@ export async function serverLoop(cwd: string): Promise<void> {
     try {
       msg = JSON.parse(trimmed);
     } catch { return; }
-    if (!msg.method) return;
+    if (!msg.method) {
+      // A response to one of OUR requests (id present, no method).
+      const entry = pendingClient.get(msg.id as string | number);
+      if (entry) {
+        pendingClient.delete(msg.id as string | number);
+        const m = msg as unknown as { result?: unknown; error?: unknown };
+        entry.resolve(m.result ?? m.error);
+      }
+      return;
+    }
     const isNotification = msg.id === undefined || msg.id === null;
     // session/cancel is spec'd as a notification (no id). Some clients send
     // it as a request; handle both, but never reply to a notification.
@@ -380,7 +478,7 @@ export async function serverLoop(cwd: string): Promise<void> {
       const run = prev.catch(() => {}).then(async () => {
         const res = await handleRpc(msg, sessions, cwd, (sessionId, update) => {
           send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
-        });
+        }, { clientRequest });
         if (!isNotification) send({ jsonrpc: '2.0', ...res });
         if (msg.method === 'shutdown') process.exit(0);
       });
@@ -393,7 +491,7 @@ export async function serverLoop(cwd: string): Promise<void> {
     void (async () => {
       const res = await handleRpc(msg, sessions, cwd, (sessionId, update) => {
         send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
-      });
+      }, { clientRequest });
       if (!isNotification) send({ jsonrpc: '2.0', ...res });
       if (msg.method === 'shutdown') process.exit(0);
     })();
