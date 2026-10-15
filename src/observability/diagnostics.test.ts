@@ -60,6 +60,20 @@ describe('diagnoseFile (python)', () => {
   }, 60_000);
 });
 
+describe('diagnoseFile (plain JS, no TS opt-in)', () => {
+  it('skips tsc diagnostics so it does not inject bogus config errors', async () => {
+    // package.json present (so root detection stops there) but NO tsconfig:
+    // running `npx tsc` here emits TS6504/TS2307 config noise for every JS edit.
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-diag-js-'));
+    writeFileSync(resolve(dir, 'package.json'), '{"name":"x"}');
+    const f = resolve(dir, 'app.js');
+    writeFileSync(f, 'const x = require("node:path");\nmodule.exports = { x };\n');
+    const d = await diagnoseFile(f, dir);
+    expect(d.ok).toBe(true);
+    expect(d.errors).toEqual([]);
+  }, 30_000);
+});
+
 describe('diagnoseFile (unknown)', () => {
   it('is best-effort ok for other extensions', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-diag-x-'));

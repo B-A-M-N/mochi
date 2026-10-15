@@ -145,7 +145,9 @@ export async function diagnoseFile(path: string, cwd: string): Promise<FileDiagn
   const t0 = Date.now();
   try {
     if (!existsSync(path)) return { path, ok: true, errors: [], warnings: [], ms: Date.now() - t0 };
-    if (/\.(ts|tsx|js|jsx|mts|cts)$/.test(path)) {
+    const extMatch = path.match(/\.(ts|tsx|js|jsx|mts|cts)$/i);
+    if (extMatch) {
+      const ext = extMatch[0].toLowerCase();
       // Find the project root for the file: nearest tsconfig/package.json.
       let root = dirname(path);
       for (let i = 0; i < 6; i++) {
@@ -153,6 +155,16 @@ export async function diagnoseFile(path: string, cwd: string): Promise<FileDiagn
         const parent = dirname(root);
         if (parent === root) break;
         root = parent;
+      }
+      const isTs = ext === '.ts' || ext === '.tsx' || ext === '.mts' || ext === '.cts';
+      // Plain JavaScript in a project that never opted into TypeScript: running
+      // tsc here emits bogus CONFIG diagnostics (TS6504 "File is a CommonJS
+      // module…", TS2307 on `require`) after every JS edit, injecting noise the
+      // model then has to reason about and dismiss. JS is validated by actually
+      // running it (tests/shell), so skip TS diagnostics unless the repo has a
+      // tsconfig (an explicit TS opt-in, incl. allowJs/checkJs).
+      if (!isTs && !existsSync(resolve(root, 'tsconfig.json'))) {
+        return { path, ok: true, errors: [], warnings: [], ms: Date.now() - t0 };
       }
       if (getTsService(root)) return diagnoseTs(path, root);
       // No importable typescript in the edited project: fall back to the CLI
