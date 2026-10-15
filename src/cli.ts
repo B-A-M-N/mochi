@@ -237,7 +237,7 @@ Usage:
   mochi update [--check|--apply]    # check GitHub releases and upgrade Mochi
   mochi bundle [outFile]            # write a diagnostic bundle (transcript+diff+doctor)
   mochi watch [dir...] [--cmd C]    # run the repo check on every file change
-  mochi serve [--port N] [--token T] # foreground JSON API for CI/tooling (localhost only)
+  mochi serve [--port N] [--token T] # JSON API + OpenAI-compatible (/v1) for CI/tooling
   mochi auth [status|accounts|switch|...]  # per-provider credentials & multi-account
   mochi skills [list|lint]           # list and validate skills
   mochi providers                   # list AI model providers

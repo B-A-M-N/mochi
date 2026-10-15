@@ -39,6 +39,8 @@ export const SERVE_ROUTES = [
   'POST /api/prompt',
   'POST /api/review',
   'POST /api/verify',
+  'GET /v1/models',
+  'POST /v1/chat/completions',
   'POST /api/plan',
   'POST /api/approve',
   'POST /api/resume',

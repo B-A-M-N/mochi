@@ -418,6 +418,12 @@ export async function repairDoctor(opts: {
       'OPENCODE_GO_API_KEY=',
       'DISCORD_BOT_TOKEN=',
       'DISCORD_ALLOW_ALL_USERS=true',
+      'TELEGRAM_BOT_TOKEN=',
+      'TELEGRAM_ALLOW_ALL_USERS=true',
+      'SLACK_BOT_TOKEN=',
+      'SLACK_CHANNEL=',
+      'BLUEBUBBLES_SERVER_URL=',
+      'BLUEBUBBLES_PASSWORD=',
       '',
     ].join('\n');
     writeFileSync(envPath, template, 'utf8');

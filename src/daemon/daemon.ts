@@ -413,8 +413,9 @@ async function handleRequest(
   runtime: Runtime,
   opts?: { onRotate?: () => void },
 ): Promise<void> {
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-allow-headers': 'authorization,content-type' };
   const send = (code: number, body: unknown) => {
-    res.writeHead(code, { 'content-type': 'application/json' });
+    res.writeHead(code, { 'content-type': 'application/json', ...cors });
     res.end(JSON.stringify(body));
   };
 
@@ -443,10 +444,19 @@ async function handleRequest(
     return;
   }
 
+  // CORS preflight (browsers / Open WebUI / AnythingLLM).
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '86400' });
+    res.end();
+    return;
+  }
+
   // Unauthenticated health probe (containers / load balancers / CI): version
   // + uptime only, never state or secrets. Must precede the token gate.
   if (req.method === 'GET' && path === '/api/health') {
-    send(200, { ok: true, version: daemonVersion(), uptimeSec: Math.floor(process.uptime()) });
+    res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify({ ok: true, version: daemonVersion(), uptimeSec: Math.floor(process.uptime()) }));
+    return;
     return;
   }
 
@@ -461,9 +471,18 @@ async function handleRequest(
   }
   // Read-only GET endpoints (authenticated): inventory for CI/tooling without
   // a POST body. Mutating/expensive calls stay POST-only below.
-  if (req.method === 'GET' && path === '/api/models') {
+  if (req.method === 'GET' && (path === '/api/models' || path === '/v1/models')) {
     try {
-      send(200, { ok: true, provider: runtime.config.model.provider, models: runtime.modelList() });
+      const m = runtime.config.model.model;
+      const models = Array.isArray(runtime.modelList?.()) ? runtime.modelList() : [m];
+      if (path === '/v1/models') {
+        const data = (models.length ? models : [m]).map((id: string) => ({
+          id, object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'mochi',
+        }));
+        send(200, { object: 'list', data });
+      } else {
+        send(200, { ok: true, provider: runtime.config.model.provider, models });
+      }
     } catch (e) {
       send(500, { ok: false, error: (e as Error).message });
     }
@@ -616,6 +635,49 @@ async function handleRequest(
       if (!task) { send(400, { ok: false, error: 'task required' }); return; }
       const r = await runtime.runPromptDetailed(task);
       send(200, { ok: true, ...r });
+    } else if (path === '/v1/chat/completions') {
+      // OpenAI-compatible chat completions: map the conversation to a single
+      // Mochi goal/prompt run. Supports non-streaming and basic SSE streaming.
+      const messages = Array.isArray(body.messages) ? body.messages as Array<{ role?: string; content?: string }> : [];
+      const model = String(body.model ?? runtime.config.model.model);
+      const lastUser = [...messages].reverse().find((m) => m?.role === 'user')?.content ?? messages.map((m) => m?.content ?? '').join('\n');
+      const wantsStream = body.stream === true;
+      if (wantsStream) {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'access-control-allow-origin': '*' });
+        const chunkId = `chatcmpl-${Date.now()}`;
+        const created = Math.floor(Date.now() / 1000);
+        const writeChunk = (content: string, finish = false) => {
+          const choice = { index: 0, delta: finish ? {} : { role: 'assistant', content }, finish_reason: finish ? 'stop' : null };
+          res.write(`data: ${JSON.stringify({ id: chunkId, object: 'chat.completion.chunk', created, model, choices: [choice] })}\n\n`);
+        };
+        try {
+          const out = await runtime.goal(String(lastUser));
+          // Stream in a single chunk for simplicity; OpenAI clients accept it.
+          writeChunk(out);
+          writeChunk('', true);
+          res.write('data: [DONE]\n\n');
+        } catch (e) {
+          writeChunk(`\n[error] ${(e as Error).message}`, true);
+          res.write('data: [DONE]\n\n');
+        } finally {
+          res.end();
+        }
+        return;
+      }
+      try {
+        const out = await runtime.goal(String(lastUser));
+        send(200, {
+          id: `chatcmpl-${Date.now()}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model,
+          choices: [{ index: 0, message: { role: 'assistant', content: out }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        });
+      } catch (e) {
+        send(500, { error: { message: (e as Error).message, type: 'server_error' } });
+      }
+      return;
     } else if (path === '/api/review') {
       // Authenticated CI/tooling call: review a diff without spawning a CLI.
       // Empty/absent diff falls back to the working tree's `git diff HEAD`.

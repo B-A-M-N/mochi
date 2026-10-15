@@ -160,6 +160,96 @@ fn match_private_key(input: &[u8], start: usize) -> Option<usize> {
     None
 }
 
+
+/// Locate a Telegram bot token (`<digits>:<secret>`) at `start`.
+#[inline]
+fn match_telegram_token(input: &[u8], start: usize) -> Option<usize> {
+    if start >= input.len() || !input[start].is_ascii_digit() {
+        return None;
+    }
+    let mut i = start;
+    let mut digits = 0usize;
+    while i < input.len() && input[i].is_ascii_digit() {
+        i += 1; digits += 1;
+    }
+    if digits < 5 { return None; }
+    if i >= input.len() || input[i] != b':' { return None; }
+    i += 1;
+    // optional whitespace after colon (Telegram allows none; defensive)
+    let mut secret_len = 0usize;
+    while i < input.len() && secret_len < 4096
+        && (input[i].is_ascii_alphanumeric() || input[i] == b'_' || input[i] == b'-')
+    {
+        i += 1; secret_len += 1;
+    }
+    if secret_len < 20 { return None; }
+    Some(i)
+}
+
+/// Locate a Discord bot token (`chunk.chunk.chunk`) at `start`.
+#[inline]
+fn match_discord_token(input: &[u8], start: usize) -> Option<usize> {
+    // First chunk
+    let mut i = start;
+    let mut n1 = 0usize;
+    while i < input.len() && n1 < 4096
+        && (input[i].is_ascii_alphanumeric() || input[i] == b'_' || input[i] == b'-')
+    {
+        i += 1; n1 += 1;
+    }
+    if n1 < 20 { return None; }
+    if i >= input.len() || input[i] != b'.' { return None; }
+    i += 1;
+    let mut n2 = 0usize;
+    while i < input.len() && n2 < 4096
+        && (input[i].is_ascii_alphanumeric() || input[i] == b'_' || input[i] == b'-')
+    {
+        i += 1; n2 += 1;
+    }
+    if n2 < 6 { return None; }
+    if i >= input.len() || input[i] != b'.' { return None; }
+    i += 1;
+    let mut n3 = 0usize;
+    while i < input.len() && n3 < 4096
+        && (input[i].is_ascii_alphanumeric() || input[i] == b'_' || input[i] == b'-')
+    {
+        i += 1; n3 += 1;
+    }
+    if n3 < 20 { return None; }
+    Some(i)
+}
+
+/// Locate a password-bearing assignment/query parameter at `start`.
+/// Matches `<name>=<value>` or `<name>: <value>` (case-insensitive name).
+#[inline]
+fn match_password_assignment(input: &[u8], start: usize, name: &[u8]) -> Option<usize> {
+    let mut i = start;
+    // case-insensitive name
+    if i + name.len() > input.len() { return None; }
+    for j in 0..name.len() {
+        if !input[i + j].eq_ignore_ascii_case(&name[j]) { return None; }
+    }
+    i += name.len();
+    // optional '=' or ':' with optional spaces
+    while i < input.len() && input[i] == b' ' { i += 1; }
+    if i >= input.len() { return None; }
+    if input[i] != b'=' && input[i] != b':' { return None; }
+    i += 1;
+    while i < input.len() && input[i] == b' ' { i += 1; }
+    if i >= input.len() { return None; }
+    // value runs until whitespace, &, quote, or comma
+    let mut val_len = 0usize;
+    while i < input.len() && val_len < 4096 {
+        let b = input[i];
+        if b.is_ascii_whitespace() || b == b'&' || b == b'"' || b == b'\'' || b == b',' {
+            break;
+        }
+        i += 1; val_len += 1;
+    }
+    if val_len < 4 { return None; }
+    Some(i)
+}
+
 /// Replace every secret-shaped match in `input` with `[secret-redacted]`.
 pub fn redact_secrets(input: &str) -> String {
     if input.is_empty() {
@@ -176,6 +266,29 @@ pub fn redact_secrets(input: &str) -> String {
             i = end;
             continue;
         }
+        // Telegram bot token (<digits>:<secret>)
+        if let Some(end) = match_telegram_token(bytes, i) {
+            out.extend_from_slice(REDACTED);
+            i = end;
+            continue;
+        }
+        // Discord bot token (three base64url chunks)
+        if let Some(end) = match_discord_token(bytes, i) {
+            out.extend_from_slice(REDACTED);
+            i = end;
+            continue;
+        }
+        // Named secret assignments / query parameters
+        let mut assigned = false;
+        for name in &[b"password" as &[u8], b"BLUEBUBBLES_PASSWORD", b"BLUEBUBBLES_TOKEN", b"DISCORD_BOT_TOKEN", b"TELEGRAM_BOT_TOKEN"] {
+            if let Some(end) = match_password_assignment(bytes, i, name) {
+                out.extend_from_slice(REDACTED);
+                i = end;
+                assigned = true;
+                break;
+            }
+        }
+        if assigned { continue; }
         for p in PATTERNS {
             if let Some(end) = match_pattern(bytes, i, p) {
                 out.extend_from_slice(REDACTED);

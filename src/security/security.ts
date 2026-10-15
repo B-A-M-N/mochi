@@ -23,6 +23,18 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/g, // private key blocks
   /xox[baprs]-[A-Za-z0-9-]{10,}/g,      // Slack
   /glpat-[A-Za-z0-9_-]{20,}/g,          // GitLab
+  // Discord bot token (three base64url chunks)
+  /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{20,}/g,
+  // Telegram bot token (<bot id>:<secret>)
+  /\b\d{5,}:[A-Za-z0-9_-]{20,}\b/g,
+  // password assignments / query parameters (password=, password:)
+  /password\s*[=:][^\s&'"]{4,}/gi,
+  // env-style secret assignments for gateway tokens
+  /DISCORD_BOT_TOKEN\s*=\s*[^\s]+/gi,
+  /TELEGRAM_BOT_TOKEN\s*=\s*[^\s]+/gi,
+  /BLUEBUBBLES_(?:PASSWORD|TOKEN)\s*=\s*[^\s]+/gi,
+  // Discord webhook URLs (embed the secret token)
+  /discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+/gi,
 ];
 
 /** Replace known secret shapes with `[secret-redacted]`. Idempotent and cheap.
