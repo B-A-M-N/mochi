@@ -675,6 +675,51 @@ describe('Agent', () => {
     }
   });
 
+  it('advertises the full toolset + max reasoning for a structurally-complex task, lean tier for a simple one', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-complexity-gate-'));
+    const reply = 'Done.';
+    const fake = await startFakeOpenAI([
+      { content: reply, finishReason: 'stop' },
+      { content: reply, finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      config.model.profiles = { fast: 'fake-fast', coding: 'fake-coding', reasoning: 'fake-reasoning' };
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+
+      const runOne = async (title: string, description: string, fileScope: string[]) => {
+        const bus = new EventBus();
+        const logs: string[] = [];
+        bus.on('agent:log', (e: any) => logs.push(e.message));
+        const task = Object.assign(createTask(title, description), { fileScope });
+        const agent = new Agent({ id: 'complexity-agent', role: 'coder', config, workspace, events: bus, cwd: dir, context });
+        await agent.run(task);
+        const body = fake.requests[fake.requests.length - 1]?.body;
+        const toolCount = body?.tools?.length ?? 0;
+        const anySys = (body?.messages ?? []).filter((m: any) => m.role === 'system').map((m: any) => String(m.content ?? '')).join('\n');
+        return { toolCount, maxReas: /Active reasoning mode:\s*MAX/.test(anySys), logs };
+      };
+
+      const { toolCount: simpleTools, maxReas: simpleMax, logs: sLogs } =
+        await runOne('Add multiply to calc.js', 'implement multiply(a,b) and run node calc.js', ['calc.js']);
+      expect(simpleTools).toBeLessThan(30); // lean tier, NOT the full ~60
+      expect(simpleMax).toBe(false); // fast path: LOW reasoning, not max
+      expect(sLogs.some((m) => m.includes('[mch110] lean tier'))).toBe(true);
+
+      const { toolCount: complexTools, maxReas: complexMax, logs: cLogs } =
+        await runOne('Refactor module boundaries', 'Move the state handling across all callers so the API contract is preserved, extend the tests in every affected module and make the whole suite green', ['a.ts', 'b.ts', 'c.ts']);
+      expect(complexTools).toBeGreaterThanOrEqual(40); // full toolset
+      expect(complexMax).toBe(true); // max reasoning
+      expect(cLogs.some((m) => m.includes('[complexity] complex'))).toBe(true);
+      expect(cLogs.some((m) => m.includes('[mch110] lean tier'))).toBe(false);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('writes an autopsy record when verification fails repeatedly', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-autopsy-loop-'));
     // Script: the model claims "done" but verification always fails (exit 1),

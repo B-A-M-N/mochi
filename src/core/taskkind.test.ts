@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyTaskKind, kindHint, resolveAutoReasoning, isReviewTask } from './taskkind.js';
+import { classifyTaskKind, kindHint, resolveAutoReasoning, isReviewTask, scoreTaskComplexity, isComplexTask } from './taskkind.js';
 
 describe('classifyTaskKind', () => {
   it('classifies a bug-fix task as fix', () => {
@@ -127,5 +127,67 @@ describe('resolveAutoReasoning', () => {
     expect(resolveAutoReasoning('implement')).toBe('max');
     expect(resolveAutoReasoning('plan')).toBe('max');
     expect(resolveAutoReasoning('unknown')).toBe('max');
+  });
+});
+
+describe('scoreTaskComplexity', () => {
+  it('is simple for a tiny greenfield create-and-run task', () => {
+    const r = scoreTaskComplexity('Create add.js', 'add a multiply function to calc.js and run node calc.js', { greenfield: false, fileScope: ['calc.js'] });
+    expect(r.complexity).toBe('simple');
+    expect(r.score).toBeLessThan(3);
+  });
+  it('stays simple for a short one-file fix with no structural evidence', () => {
+    expect(scoreTaskComplexity('Fix the typo in util.js', 'change foo to bar').complexity).toBe('simple');
+  });
+  it('is complex for a multi-file refactor in an existing repo', () => {
+    const r = scoreTaskComplexity(
+      'Refactor the async pipeline',
+      'Convert callback hell into async/await across several modules while preserving the API contract, update all callers, and keep existing integration tests passing',
+      { greenfield: false, fileScope: ['src/a.ts', 'src/b.ts', 'src/c.ts'] },
+    );
+    expect(r.complexity).toBe('complex');
+    expect(r.reasons.length).toBeGreaterThan(0);
+  });
+  it('is complex for a hard ambiguous investigation (trace/root-cause)', () => {
+    // Real scenario: debugging flaky/test infra in an existing repo (greenfield
+    // is false — this is live code), where the model must trace and reason.
+    expect(scoreTaskComplexity(
+      'Debug flaky test',
+      'Figure out why the build intermittently fails in CI, trace the root cause, narrow down the race condition',
+      { greenfield: false },
+    ).complexity).toBe('complex');
+  });
+  it('is complex for an existing-repo refactor even without heavy keywords', () => {
+    // The failure mode this fix targets: no "audit/security/database/browser"
+    // literal, yet genuinely hard. Must NOT be starved to the lean tier.
+    const r = scoreTaskComplexity(
+      'Refactor module boundaries',
+      'Move the state handling across all callers so the contract is preserved, extend the tests in every affected module and make the whole suite green',
+      { greenfield: false },
+    );
+    expect(r.complexity).toBe('complex');
+  });
+  it('is complex for a multi-file scope even when greenfield', () => {
+    expect(scoreTaskComplexity('Scaffold new service', 'create these files: a.ts b.ts c.ts d.ts', { greenfield: true, fileScope: ['a.ts', 'b.ts', 'c.ts', 'd.ts'] }).complexity).toBe('complex');
+  });
+  it('does not misfire complex on a keyword-but-simple task or a bare chat', () => {
+    // 'refactor' alone in a single-file trivial task is not enough without
+    // structural evidence (scope/verify/investigation) — the conservatism
+    // guarantee. It stays on the lean path (standard or simple, never complex).
+    expect(scoreTaskComplexity('Refactor add.js', 'clean it up', { greenfield: false, fileScope: ['add.js'] }).complexity).not.toBe('complex');
+    expect(scoreTaskComplexity('hello', 'hi there').complexity).toBe('simple');
+  });
+});
+
+describe('isComplexTask', () => {
+  it('is true for a hard existing-repo refactor and false for a trivial one', () => {
+    expect(isComplexTask(
+      { title: 'Refactor async pipeline', description: 'across all callers preserve the contract and keep tests green', role: 'coder' as any },
+      { greenfield: false },
+    )).toBe(true);
+    expect(isComplexTask(
+      { title: 'Add multiply to calc.js', description: 'and run node calc.js', role: 'coder' as any },
+      { greenfield: false, fileScope: ['calc.js'] },
+    )).toBe(false);
   });
 });

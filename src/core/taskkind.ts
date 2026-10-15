@@ -140,6 +140,131 @@ export function isReviewTask(task: Pick<Task, 'title' | 'description'>): boolean
   return REVIEW_RE.test(text);
 }
 
+/** Complexity classification for a task. Drives TWO capability levers:
+ *  1. Tool advertising — `complex` tasks keep the FULL toolset (deep-analysis
+ *     tools like find_definitions/analyze_code/type_hierarchy/blast_radius are
+ *     deferred by the lean tier), because a multi-file refactor or an
+ *     existing-repo change needs them.
+ *  2. Reasoning/model tier — `complex` tasks get max reasoning + the frontier
+ *     model tier, so hard work isn't run at medium effort.
+ *
+ * Deliberately CONSERVATIVE: it returns 'complex' ONLY on strong structural
+ * evidence, never on a single keyword. Anything ambiguous keeps the lean/fast
+ * path so a trivial task never pays a latency or token tax. Signals are
+ * score-weighted and independent, so no one literal keyword is a trigger:
+ * this is what separates it from the keyword-sweep LEAN_SIGNAL_RE, which
+ * could starve a genuinely hard task that doesn't happen to mention
+ * "audit/security/database/browser".
+ */
+export type TaskComplexity = 'simple' | 'standard' | 'complex';
+
+/** Multi-token scope words: the task touches several files/modules/callers
+ *  rather than one file. Strongest single signal for "this needs the full
+ *  toolset" — cross-module work can't be done blind. */
+const COMPLEX_SCOPE_RE = /\b(across\s+(the\s+)?(entire|whole|many|several|multiple|all|[\d]+\s+files|dozens?\s+of\s+files))|(in\s+(every|all|multiple|each)\s+(file|module|class|function|place|location|caller))|(callers?|callsites?|call\s+sites?)\b/i;
+
+/** Existing-repo mutation signals: NOT greenfield. Editing shared/live code
+ *  means the model must understand blast radius, callers, and git history —
+ *  the tools the lean tier defers. */
+const COMPLEX_REPO_RE = /\b(refactor|migrat|conver|parity|preserve|contract|api\s+compat|backward|breaking\s+change|regression|stabiliz|performanc|concurr|async\s+pipel|thread|memory\s+leak|race\s+condition|deadlock|distributed|cross-module|integrat|plugin|extension\s*point|config\s*format)\b/i;
+
+/** Verification/test breadth: the task demands the suite pass or new tests
+ *  across behaviors — implies a multi-step edit-then-verify loop the lean
+ *  tier's "run one command" fast path doesn't cover. */
+const COMPLEX_VERIFY_RE = /\b(add|write|update|extend|fix|run)\s+(tests?|integration|unit\s+tests?|coverage)|(make|keep|get)\s+(all|existing|the)?\s*(tests?|suite|build|checks?)\s+(pass|green|passing)|(buy|run)\s+(build|test).*suite\b/i;
+
+/** Vague/hard-to-pin-down investigation: the model must trace and reason
+ *  across an unknown surface, not make a named edit. */
+const COMPLEX_TRACE_RE = /\b(figure\s+out|trace|track\s+down|narrow\s+down|root\s+cause|understand\s+(why|how|where)|why\s+is\s+this|intermittent|sporadic|hard\s+to\s+repro|flaky|no\s+(crash|error|stack)\s+visible|data\s+race)\b/i;
+
+/** A weighted structural complexity score. Returns {complexity, score, reasons}.
+ *  Score >= COMPLEX_THRESHOLD (or scope/repo/verify evidence) → 'complex'.
+ *  Score >= SIMPLE_CAP and no complex evidence → 'standard'.
+ *  Bottomed-out / tiny greenfield → 'simple'. Pure, deterministic. */
+export function scoreTaskComplexity(
+  title: string,
+  description = '',
+  opts: { role?: string; fileScope?: string[]; greenfield?: boolean } = {},
+): { complexity: TaskComplexity; score: number; reasons: string[] } {
+  const text = `${title} ${description}`.trim();
+  const lower = text.toLowerCase();
+  if (!text) return { complexity: 'simple', score: 0, reasons: [] };
+  const reasons: string[] = [];
+  let score = 0;
+
+  const sentenceCount = text.split(/[.!?]\s+/).filter(Boolean).length;
+  const wordCount = lower.split(/\s+/).length;
+
+  // --- Evidence flags (each independently verifiable, no single literal) ---
+  // Multi-file / cross-caller scope.
+  const fileCount = opts.fileScope?.length ?? 0;
+  const scopeMatches = lower.match(COMPLEX_SCOPE_RE);
+  const scopeEvidence = fileCount > 1 || !!scopeMatches;
+  if (scopeEvidence) {
+    score += Math.min(3, (scopeMatches?.length ?? 0) + (fileCount > 1 ? 2 : 1));
+    reasons.push(fileCount > 1 ? `multi-file scope (${fileCount} paths)` : 'cross-file/multi-caller scope');
+  }
+
+  // Existing-repo mutation (NOT greenfield): edits shared/live code -> the
+  // model must understand blast radius / callers, the tools the lean tier defers.
+  const mutatingVerb = /refactor|migrat|conver|optimi|fix|debug|integrat|add\s+.*support|extend|change|modify|update|remove|delete/.test(lower);
+  const mutateRepoEvidence = opts.greenfield === false && mutatingVerb;
+  if (mutateRepoEvidence) { score += 2; reasons.push('edits existing repo code (non-greenfield)'); }
+  else if (opts.greenfield === false && fileCount === 1) { score += 1; reasons.push('single-file edit to existing repo'); }
+
+  // Repo-shaping vocabulary (refactor/migrate/contract/parity/threading).
+  const repoShapeEvidence = COMPLEX_REPO_RE.test(lower);
+  if (repoShapeEvidence) { score += 2; reasons.push('repo-shaping vocabulary (refactor/migrate/contract/parity)'); }
+
+  // Broad test/verify loop (whole suite, integration, add tests across files).
+  const verifyEvidence = COMPLEX_VERIFY_RE.test(lower);
+  if (verifyEvidence) { score += 3; reasons.push('broad test/verify loop required'); }
+
+  // Hard / ambiguous investigation (figure out, trace, root-cause, intermittent).
+  const traceEvidence = COMPLEX_TRACE_RE.test(lower);
+  if (traceEvidence) { score += 3; reasons.push('vague/hard investigation (trace/root-cause/intermittent)'); }
+
+  // Length is a weak proxy for multi-step scope.
+  if (wordCount >= 45) { score += 1; reasons.push('long multi-step spec'); }
+  else if (wordCount >= 15 && sentenceCount >= 2) { score += 1; reasons.push('multi-sentence spec'); }
+
+  const role = (opts.role ?? '').toLowerCase();
+  if (/architect|security|developer|engineer/.test(role) && score >= 3) { score += 1; reasons.push(`specialist role:${role}`); }
+
+  // --- Decision (evidence-based, conservative) ---
+  // A genuinely hard investigation on real code — even in a single file, with
+  // no scope keyword — is complex: the model must trace and reason, then make
+  // a careful edit against live behavior. This is the root-cause / flaky-test
+  // path the lean tier starved.
+  const hardInvestigation = traceEvidence && (mutateRepoEvidence || repoShapeEvidence || scopeEvidence || verifyEvidence);
+  // Running the whole suite / integration across a real codebase is complex:
+  // edit-verify loops and cross-behavior correctness are exactly what needs
+  // full tools + max reasoning.
+  const broadVerify = verifyEvidence && (mutateRepoEvidence || repoShapeEvidence || scopeEvidence || traceEvidence);
+  // Multi-file scope co-occurring with ANY real-work signal is complex.
+  const wideScopeRealWork = scopeEvidence && (mutateRepoEvidence || repoShapeEvidence || verifyEvidence || traceEvidence);
+  // A genuinely multi-file greenfield scaffold (>=3 paths) is non-trivial too.
+  const bigScaffold = fileCount >= 3;
+  // Repo-shaping refactor that also spans files or a test loop is complex.
+  const shapingMulti = repoShapeEvidence && mutateRepoEvidence && (scopeEvidence || verifyEvidence || traceEvidence);
+
+  const complex = hardInvestigation || broadVerify || wideScopeRealWork || bigScaffold || shapingMulti || score >= 5;
+
+  if (complex) return { complexity: 'complex', score, reasons };
+  if (score >= 3) return { complexity: 'standard', score, reasons };
+  return { complexity: 'simple', score, reasons };
+}
+
+/** Convenience predicate: is this task complex enough to demand the full
+ *  toolset + max reasoning? Conservative by construction. */
+export function isComplexTask(task: Pick<Task, 'title' | 'description' | 'role'>, opts?: { fileScope?: string[]; greenfield?: boolean }): boolean {
+  return scoreTaskComplexity(task.title, task.description ?? '', {
+    role: task.role,
+    fileScope: opts?.fileScope,
+    greenfield: opts?.greenfield,
+  }).complexity === 'complex';
+}
+
 /** Tailored hint added to the system prompt per task kind. */
 export function isTrivialWriteTask(task: Task): boolean {
   const text = `${task.title} ${task.description ?? ''}`.toLowerCase();

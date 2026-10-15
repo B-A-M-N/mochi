@@ -17,7 +17,7 @@ import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTool
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo/repo.js';
-import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask } from '../core/taskkind.js';
+import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask, scoreTaskComplexity } from '../core/taskkind.js';
 import { trimToLeanTier, trimToReadTier } from '../tools/index.js';
 import { classifyTaskTier, nextEscalationTier, type TaskTier } from '../model/model-router.js';
 import { matchesBaseline, type VerificationBaseline } from '../verification.js';
@@ -521,6 +521,12 @@ export class Agent {
   private taskRunExecuted = false;
   private finishHintSent = false;
   private taskKind?: import('../core/taskkind.js').TaskKind;
+  /** Complexity classification of the current task (simple|standard|complex).
+   *  `complex` forces the full toolset + max reasoning (Claude Code / Codex
+   *  parity on hard tasks); `simple`/`standard` keep the lean-tier fast path. */
+  private taskComplexity?: import('../core/taskkind.js').TaskComplexity;
+  /** Scored complexity breakdown for the current task (score + reasons). */
+  private tasksScoreMeta: { complexity?: string; score?: number; reasons?: string[] } = {};
   /** Scope-fence (drift guard) state: consecutive out-of-scope write vetoes. */
   private scopeVetoCount = 0;
 
@@ -746,6 +752,20 @@ export class Agent {
       // rubber-stamps under the chat-tier tool cap. 'medium' funds careful
       // analysis without max-tier burn on every "lgtm this".
       if (isReviewTask(task)) return 'medium';
+      // Complexity override (NEW, 2026-10-15): a structurally complex task MUST
+      // get max reasoning regardless of its coarse kind. `refactor` kinds
+      // default to 'medium' via resolveAutoReasoning, but a multi-file /
+      // existing-repo / contract-preserving refactor is Claude Code / Codex
+      // class work — it gets the full cognitive budget, same as the full
+      // toolset (see tool-advertising gate). Pure at this point in the loop:
+      // taskComplexity was already computed in buildPrompt.
+      if (this.taskComplexity === 'complex') return 'max';
+      // Symmetric fast-path (2026-10-15): a verified-simple task gets LOW
+      // reasoning even if its coarse kind is 'implement' (which would otherwise
+      // default to 'max' here). This preserves the ~2s fast path on genuinely
+      // trivial one-file edit-and-run tasks — the same "don't burn 50k thinking
+      // tokens on a 1-line task" budget the isTrivialWriteTask guard serves.
+      if (this.taskComplexity === 'simple') return 'low';
       return resolveAutoReasoning(kind);
     }
     // Guard against any stray invalid value (config re-validates, but stay safe).
@@ -763,6 +783,22 @@ export class Agent {
     this.runStartMarker = hist.length > 0 ? hist[hist.length - 1] : undefined;
     this.consecutiveVerifyFailures = 0;
     this.escalatedThisTask = false;
+    // Complexity must be computed here — BEFORE resolveReasoning (line ~799)
+    // and the tool-advertising gate — so both hard-task levers (max reasoning
+    // + full toolset) see a `complex` task. Conservative: only strong
+    // structural evidence (multi-file scope, existing-repo mutation, broad
+    // test loops, hard investigation) forces 'complex'; anything ambiguous
+    // stays on the lean/fast path.
+    this.taskComplexity = scoreTaskComplexity(
+      task.title, task.description ?? '',
+      {
+        role: task.role,
+        fileScope: task.fileScope ?? [],
+        greenfield: isGreenfieldTask(task.title, task.description ?? '', task.fileScope, (p) => { try { return existsSync(p); } catch { return false; } }),
+      },
+    ).complexity;
+    this.tasksScoreMeta.complexity = this.taskComplexity;
+    this.events.emit({ type: 'agent:log', agentId: this.id, message: `[complexity] ${this.taskComplexity} for task "${task.title}"` });
     this.events.emit({ type: 'task:started', task, agentId: this.id });
     // Harness-v2 Phase 1: deterministic iteration lifecycle. Every loop turn
     // flows preflight → model-call → stream-guard → tool-exec → verify →
@@ -888,62 +924,72 @@ Continue from 'Next:', do not redo completed progress.`,
 
     let taskKind = this.taskKind = classifyTaskKind(task);
     this.task = task;
-    // MCH-91: task-adaptive tool advertising — focused coding tasks don't need
-    // browser/db/PR/SQL schemas burning ~4-5K tokens on EVERY call. Trim heavy
-    // tools unless the task text itself signals them (trimHeavyTools is a no-op
-    // then); the model can pull any back mid-run via `load_tools`.
-    if (taskKind === 'implement' || taskKind === 'fix' || taskKind === 'refactor' || taskKind === 'test') {
-      const taskText = `${task.title} ${task.description ?? ''}`;
-      // MCH-110: lean tier first — simple focused coding tasks advertise only
-      // the ~20 core tools (~2.5K tokens) instead of ~56 (~7K). Restores are
-      // identical to mch91: the model calls `load_tools` mid-run.
-      const leaned = trimToLeanTier(this.tools, taskText);
-      if (leaned > 0) {
-        this.toolDefs = [...this.tools.values()].map((t) => t.def);
-        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch110] lean tier: deferred ${leaned} tools for ${taskKind} task (load_tools restores them)` });
-      } else {
-      const trimmed = trimHeavyTools(this.tools, taskText);
-      if (trimmed > 0) {
-        this.toolDefs = [...this.tools.values()].map((t) => t.def);
-        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
-      }
-      }
-    } else if (taskKind === 'chat') {
-      // MCH-111: chat tasks tell the model "do not call any tools", yet were
-      // still advertised ~62 tool schemas (~5K tokens) on every call — the
-      // single largest avoidable latency cost on a trivial question. Advertise
-      // only the read-only essentials (+ load_tools for escape hatch); any
-      // other tool stays restorable mid-run exactly like mch91/mch110.
-      // ask_question stays advertised: it is how the model asks the user back
-      // (interactive menu), which is a legitimate chat-turn move.
-      // NOTE: 'search' is the tool name ('grep' is only an alias and never
-      // matches a map key — listing it here silently dropped search).
-      const kept = new Set<string>();
-      for (const [name] of this.tools) {
-        if (CHAT_TOOL_NAMES.has(name)) kept.add(name);
-      }
-      if (this.tools.size - kept.size > 0) {
-        this.toolDefs = [...kept].map((n) => this.tools.get(n)!.def);
-        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch111] chat tier: advertised ${kept.size} tools, deferred ${this.tools.size - kept.size} (load_tools restores them)` });
-      }
-    } else if (taskKind === 'research' || taskKind === 'document' || taskKind === 'plan' || taskKind === 'unknown') {
-      // READ tier: read-only task shapes advertised the full ~65-tool schema
-      // (~10K tokens/call) despite never legitimately mutating (plan mode
-      // vetoes mutations anyway). Advertise the 16 read-only essentials;
-      // anything else restores mid-run via load_tools.
-      const taskText = `${task.title} ${task.description ?? ''}`;
-      const readTrimmed = trimToReadTier(this.tools, taskText);
-      if (readTrimmed > 0) {
-        this.toolDefs = [...this.tools.values()].map((t) => t.def);
-        this.events.emit({ type: 'agent:log', agentId: this.id, message: `[read-tier] advertised ${this.tools.size} read-only tools for ${taskKind} task (load_tools restores them)` });
-      } else {
+    // Complexity gate: taskComplexity was already computed at the top of run().
+    // When 'complex', keep the FULL toolset (deep-analysis tools like
+    // find_definitions/analyze_code/type_hierarchy/blast_radius are otherwise
+    // deferred by the lean tier) so hard tasks get Claude Code / Codex-class
+    // capability. Otherwise fall through to the lean/read/heavy tiers, which
+    // preserve the ~2s / ~2.5K-token fast path for simple/standard tasks.
+    if (this.taskComplexity === 'complex') {
+      this.events.emit({ type: 'agent:log', agentId: this.id, message: `[complexity] full toolset for ${taskKind} task (score ${this.tasksScoreMeta.score ?? 0}: ${(this.tasksScoreMeta.reasons ?? []).join('; ')})` });
+    } else {
+      // MCH-91: task-adaptive tool advertising — focused coding tasks don't need
+      // browser/db/PR/SQL schemas burning ~4-5K tokens on EVERY call. Trim heavy
+      // tools unless the task text itself signals them (trimHeavyTools is a no-op
+      // then); the model can pull any back mid-run via `load_tools`.
+      if (taskKind === 'implement' || taskKind === 'fix' || taskKind === 'refactor' || taskKind === 'test') {
+        const taskText = `${task.title} ${task.description ?? ''}`;
+        // MCH-110: lean tier first — simple focused coding tasks advertise only
+        // the ~20 core tools (~2.5K tokens) instead of ~56 (~7K). Restores are
+        // identical to mch91: the model calls `load_tools` mid-run.
+        const leaned = trimToLeanTier(this.tools, taskText);
+        if (leaned > 0) {
+          this.toolDefs = [...this.tools.values()].map((t) => t.def);
+          this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch110] lean tier: deferred ${leaned} tools for ${taskKind} task (load_tools restores them)` });
+        } else {
         const trimmed = trimHeavyTools(this.tools, taskText);
         if (trimmed > 0) {
           this.toolDefs = [...this.tools.values()].map((t) => t.def);
           this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
         }
-      }
-    }
+        }
+      } else if (taskKind === 'chat') {
+            // MCH-111: chat tasks tell the model "do not call any tools", yet were
+            // still advertised ~62 tool schemas (~5K tokens) on every call — the
+            // single largest avoidable latency cost on a trivial question. Advertise
+            // only the read-only essentials (+ load_tools for escape hatch); any
+            // other tool stays restorable mid-run exactly like mch91/mch110.
+            // ask_question stays advertised: it is how the model asks the user back
+            // (interactive menu), which is a legitimate chat-turn move.
+            // NOTE: 'search' is the tool name ('grep' is only an alias and never
+            // matches a map key — listing it here once silently dropped search).
+            const kept = new Set<string>();
+            for (const [name] of this.tools) {
+              if (CHAT_TOOL_NAMES.has(name)) kept.add(name);
+            }
+            if (this.tools.size - kept.size > 0) {
+              this.toolDefs = [...kept].map((n) => this.tools.get(n)!.def);
+              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch111] chat tier: advertised ${kept.size} tools, deferred ${this.tools.size - kept.size} (load_tools restores them)` });
+            }
+          } else if (taskKind === 'research' || taskKind === 'document' || taskKind === 'plan' || taskKind === 'unknown') {
+            // READ tier: read-only task shapes advertised the full ~65-tool schema
+            // (~10K tokens/call) despite never legitimately mutating (plan mode
+            // vetoes mutations anyway). Advertise the 16 read-only essentials;
+            // anything else restores mid-run via load_tools.
+            const taskText = `${task.title} ${task.description ?? ''}`;
+            const readTrimmed = trimToReadTier(this.tools, taskText);
+            if (readTrimmed > 0) {
+              this.toolDefs = [...this.tools.values()].map((t) => t.def);
+              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[read-tier] advertised ${this.tools.size} read-only tools for ${taskKind} task (load_tools restores them)` });
+            } else {
+              const trimmed = trimHeavyTools(this.tools, taskText);
+              if (trimmed > 0) {
+                this.toolDefs = [...this.tools.values()].map((t) => t.def);
+                this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
+              }
+            }
+          }
+        }
     const repo = detectRepo(this.cwd);
     // Harness-v2 perf (FREEZE FIX 2026-08-22): warm codegraph grammars and the
     // Chameleon scaffold strictly in the BACKGROUND - fire-and-forget, never
@@ -2726,8 +2772,14 @@ Continue from 'Next:', do not redo completed progress.`,
     // MCH-111: route hard tasks (architecture/audit/multi-file) to the
     // 'reasoning' profile when one is configured, before the cheap-phase
     // downgrade — a strong model up front beats recovering from a bad plan.
+    // Complexity override (2026-10-15): a structurally-complex task (multi-file
+    // refactor, existing-repo mutation with blast radius, broad test loops, or
+    // hard investigation) must get the frontier reasoning model from the START,
+    // not only after verify-failover escalation — same Claude Code / Codex
+    // class-work guarantee as the full-toolset gate and max-reasoning override.
     if (this.taskKind && this.task && !this.budget?.shouldUseCheaperModel()) {
-      const tier = classifyTaskTier(this.task.title + ' ' + (this.task.description ?? ''), this.task.role);
+      const structurallyComplex = this.taskComplexity === 'complex';
+      const tier = structurallyComplex ? 'reasoning' : classifyTaskTier(this.task.title + ' ' + (this.task.description ?? ''), this.task.role);
       if (tier === 'reasoning') profile = 'reasoning';
     }
     if (this.budget && this.budget.shouldUseCheaperModel()) {
