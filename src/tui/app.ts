@@ -774,6 +774,9 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
    *  tokenized BEFORE the wrap decision so a sequence is never split in half
    *  (a broken SGR prints its tail — e.g. "230;250m" — as literal text). */
   function wrapAnsi(line: string, max: number): string[] {
+    // CR rule (same as wrap()/renderMarkdown): a `\r` would render as a
+    // mid-row carriage return and overwrite the row's own content.
+    line = line.replace(/\r\n?/g, '\n').replace(/\n/g, ' ');
     if (visibleLen(line) <= max) return [line];
     const rows: string[] = [];
     let cur = '';

@@ -736,7 +736,9 @@ function highlightCodeLine(line: string): string {
  */
 /** Parse cells from a markdown table row (handles escaped pipes). */
 export function parseTableCells(line: string): string[] {
-  const trimmed = line.trim();
+  // Cells are single-line by definition — a CR has no business inside one
+  // (direct renderTable callers bypass renderMarkdown's normalization).
+  const trimmed = line.replace(/\r/g, '').trim();
   const inner = trimmed.replace(/^\|/, '').replace(/\|$/, '');
   const placeholder = '\u0000PIPE\u0000';
   const escaped = inner.replace(/\\\|/g, placeholder);
@@ -965,7 +967,9 @@ export function renderTable(headerRaw: string, delimRaw: string, bodyRaws: strin
 export function renderMarkdown(text: string, width?: string | number): string[] {
   const termW = typeof width === 'number' ? width : (process.stdout.columns || 100);
   const W = Math.max(20, Math.min(Number(termW) || 100, 200));
-  const rawLines = text.split('\n');
+  // Same CR rule as wrap(): a `\r` inside code fences or table cells would
+  // render as a mid-row carriage return and overwrite the row's own border.
+  const rawLines = text.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
   let inCodeBlock = false;
   let codeBlockLang = '';
@@ -1242,14 +1246,16 @@ export function maskSecretInput(text: string): string {
 export function composerRow(text: string, width: number, isFirst = true): string {
   const inner = Math.max(1, width - 6);
   const shown = visibleLen(text) > inner ? ellipsize(text, inner) : text;
-  // First row: `│ ❯ <text> │`; continuation rows: `│    <text> │`.
-  // Skeleton per row is `│ ` + prompt + padEnd + ` │` = prompt + pad + 4 cells.
-  // First prompt `❯ ` is 2 wide, so pad to `inner`; the continuation prompt is
-  // 3 spaces so pad to `inner - 1` — both sum to `inner + 6 == width`, keeping
-  // the right border `│` at a fixed column and the box perfectly square.
-  const prompt = isFirst ? `${T.act}${T.bold}❯${T.reset} ` : '   ';
-  const padLen = isFirst ? inner : inner - 1;
-  return `${T.rule}│${T.reset} ${prompt}${T.fg}${padEnd(shown, padLen)}${T.reset} ${T.rule}│${T.reset}`;
+  // First row: `│ ❯ <text> │`; continuation rows: `│   <text> │` — text starts
+  // at column 4 on EVERY row so wrapped input reads as one block. (The old
+  // 3-space continuation put text at column 5: continuation text visibly
+  // jogged right AND the caret math, which assumes a 4-cell prefix, landed
+  // one cell left — on top of the character being typed.)
+  // Skeleton per row is `│ ` + prompt + padEnd + ` │`; both prompts are
+  // 2 cells so both rows sum to `inner + 6 == width`, keeping the right
+  // border `│` at a fixed column and the box perfectly square.
+  const prompt = isFirst ? `${T.act}${T.bold}❯${T.reset} ` : '  ';
+  return `${T.rule}│${T.reset} ${prompt}${T.fg}${padEnd(shown, inner)}${T.reset} ${T.rule}│${T.reset}`;
 }
 
 export function composerPlaceholderRow(placeholder: string, width: number): string {

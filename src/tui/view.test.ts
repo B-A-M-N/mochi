@@ -36,6 +36,8 @@ import {
   highlightShellCommand,
   renderMetricGauge,
   renderMarkdown,
+  parseTableCells,
+  stripAnsi,
 } from './view.js';
 const m = { renderMarkdown };
 import { formatToolInvocationCard } from './cards.js';
@@ -822,5 +824,24 @@ describe('renderMarkdown tables with status emoji (border-alignment guard)', () 
     const rows = m.renderMarkdown(md, 80);
     const widths = rows.map((r) => visibleLen(r));
     expect(new Set(widths).size).toBe(1);
+  });
+});
+
+describe('composer box alignment', () => {
+  it('starts continuation text at the same column as the first row', () => {
+    const first = composerRow('hello world this is long', 40, true);
+    const cont = composerRow('continuation row here', 40, false);
+    const b1 = stripAnsi(first);
+    const b2 = stripAnsi(cont);
+    // Text starts at column 4 on both rows (│ + space + 2-cell prompt).
+    expect(b1.indexOf('hello')).toBe(4);
+    expect(b2.indexOf('continuation')).toBe(4);
+    // Box stays square.
+    expect(visibleLen(first)).toBe(40);
+    expect(visibleLen(cont)).toBe(40);
+  });
+
+  it('strips CR from table cells', () => {
+    expect(parseTableCells('| a\r | b\r\n |')).toEqual(['a', 'b']);
   });
 });

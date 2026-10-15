@@ -200,6 +200,12 @@ export function sliceCells(s: string, max: number): { text: string; cells: numbe
  *  surrogate pair or wide character. */
 export function wrap(text: string, max: number): string[] {
   if (!text) return [''];
+  // Normalize Windows/mac-classic line endings FIRST: a surviving `\r` renders
+  // as a carriage return mid-row (cursor jumps to column 0 and the border
+  // overwrites the text) while measuring 0 cells — pasted Windows text
+  // corrupted the composer box and threw the caret off. Lone `\r` (progress
+  // bars like `50%\r60%`) becomes a break so both states stay visible.
+  text = text.replace(/\r\n?/g, '\n');
   const out: string[] = [];
   const maxN = Math.max(1, max);
   for (const paragraph of expandTabs(text).split('\n')) {

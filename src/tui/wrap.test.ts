@@ -173,3 +173,18 @@ describe('emoji-presentation status glyphs (table-border guard)', () => {
     }
   });
 });
+
+describe('carriage returns (Windows paste)', () => {
+  it('normalizes CRLF and lone CR to line breaks (never emits \\r)', () => {
+    const rows = wrap('line one\r\nline two\rline three', 40);
+    expect(rows).toEqual(['line one', 'line two', 'line three']);
+    for (const r of rows) expect(r).not.toContain('\r');
+  });
+
+  it('keeps caret-row math consistent on CRLF input', () => {
+    const full = wrap('ab\r\ncdef', 40);
+    const before = wrap('ab\r\nc'.slice(0, 5), 40);
+    expect(full.length).toBe(2);
+    expect(before.length).toBeLessThanOrEqual(2);
+  });
+});
