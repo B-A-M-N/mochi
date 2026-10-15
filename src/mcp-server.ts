@@ -15,6 +15,9 @@
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { Runtime } from './runtime.js';
+import { SessionStore } from './state/session-store.js';
+import { loadAllSkills } from './skills/skills.js';
+import { loadFacts } from './memory/memory-store.js';
 
 export interface McpCall {
   id?: number | string | null;
@@ -69,6 +72,101 @@ function getRuntime(state: ServerState): Runtime {
   return state.runtime;
 }
 
+// ── Resources (MCP parity with tools: read-only workspace/session state) ────
+
+const RESOURCES = [
+  { uri: 'mochi://goals', name: 'Mochi goals', description: 'Persisted goals/sessions with status', mimeType: 'application/json' },
+  { uri: 'mochi://sessions', name: 'Mochi sessions', description: 'Recent sessions (id, objective, updated)', mimeType: 'application/json' },
+  { uri: 'mochi://skills', name: 'Mochi skills', description: 'Available skills (name + description)', mimeType: 'application/json' },
+  { uri: 'mochi://memory', name: 'Mochi memory', description: 'Durable memory facts', mimeType: 'application/json' },
+];
+
+const RESOURCE_TEMPLATES = [
+  { uriTemplate: 'mochi://goal/{id}', name: 'Mochi goal', description: 'A single persisted goal by id', mimeType: 'application/json' },
+];
+
+interface ResourceContent { uri: string; mimeType: string; text: string }
+
+/** Resolve a resource URI to its contents, or null when unknown. */
+function readResource(uri: string, state: ServerState): ResourceContent[] | null {
+  const rt = getRuntime(state);
+  if (uri === 'mochi://goals') {
+    const files = rt.workspace.listGoals?.() ?? [];
+    const goals = files.map((f) => {
+      const id = f.endsWith('.json') ? f.slice(0, -'.json'.length) : f;
+      const g = rt.workspace.loadGoal(id);
+      return g ? { id: g.id, objective: g.objective, status: g.status } : { id };
+    });
+    return [{ uri, mimeType: 'application/json', text: JSON.stringify({ goals }, null, 2) }];
+  }
+  if (uri === 'mochi://sessions') {
+    const store = new SessionStore(rt.cwd);
+    try {
+      const sessions = store.list(20).map((s) => ({ id: s.id, objective: s.objective, updated: s.updatedAt }));
+      return [{ uri, mimeType: 'application/json', text: JSON.stringify({ sessions }, null, 2) }];
+    } finally {
+      // Windows locks an open SQLite file — release it before the dir can be removed.
+      try { store.close(); } catch { /* best-effort */ }
+    }
+  }
+  if (uri === 'mochi://skills') {
+    const { skills } = loadAllSkills(rt.cwd);
+    const list = skills.map((s) => ({ name: s.name, description: s.description }));
+    return [{ uri, mimeType: 'application/json', text: JSON.stringify({ skills: list }, null, 2) }];
+  }
+  if (uri === 'mochi://memory') {
+    const facts = loadFacts().map((f) => ({ statement: f.statement, category: f.category }));
+    return [{ uri, mimeType: 'application/json', text: JSON.stringify({ facts }, null, 2) }];
+  }
+  const m = /^mochi:\/\/goal\/(.+)$/.exec(uri);
+  if (m) {
+    const g = rt.workspace.loadGoal(decodeURIComponent(m[1]));
+    if (!g) return null;
+    return [{ uri, mimeType: 'application/json', text: JSON.stringify(g, null, 2) }];
+  }
+  return null;
+}
+
+// ── Prompts (reusable Mochi workflows surfaced to MCP clients) ──────────────
+
+const PROMPTS = [
+  { name: 'fix-tests', description: 'Find and fix failing tests, verifying with the project test command.' },
+  { name: 'review', description: 'Review the current uncommitted diff for correctness, security, and style.' },
+  {
+    name: 'implement', description: 'Implement a feature end-to-end and verify it.',
+    arguments: [{ name: 'feature', description: 'What to build', required: true }],
+  },
+  {
+    name: 'explain', description: 'Explain how a file or symbol works.',
+    arguments: [{ name: 'target', description: 'File path or symbol to explain', required: true }],
+  },
+];
+
+interface PromptResult { description: string; messages: Array<{ role: 'user'; content: { type: 'text'; text: string } }> }
+
+function buildPrompt(name: string, args: Record<string, unknown>): PromptResult | null {
+  const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const msg = (t: string): PromptResult['messages'] => [{ role: 'user', content: { type: 'text', text: t } }];
+  switch (name) {
+    case 'fix-tests':
+      return { description: 'Fix failing tests', messages: msg('Find the failing tests in this workspace, fix them, and verify by running the project\'s test command. Do not silence tests by deleting them.') };
+    case 'review':
+      return { description: 'Review the working diff', messages: msg('Review the current uncommitted diff (git diff HEAD). Report correctness, security, and style issues with concrete file:line references and suggested fixes.') };
+    case 'implement': {
+      const feature = text(args.feature);
+      if (!feature) return null;
+      return { description: `Implement: ${feature}`, messages: msg(`Implement the following feature end-to-end and verify it with the project's own tests/build: ${feature}`) };
+    }
+    case 'explain': {
+      const target = text(args.target);
+      if (!target) return null;
+      return { description: `Explain: ${target}`, messages: msg(`Explain how ${target} works: its role, key functions, and how it fits into the surrounding code.`) };
+    }
+    default:
+      return null;
+  }
+}
+
 /** Pure MCP protocol core. Unit-testable without spawning. */
 export async function handleMcp(
   call: McpCall,
@@ -83,7 +181,7 @@ export async function handleMcp(
           id,
           result: {
             protocolVersion: '2024-11-05',
-            capabilities: { tools: {} },
+            capabilities: { tools: {}, resources: {}, prompts: {} },
             serverInfo: { name: 'mochi', version: '1.0.0' },
           },
         };
@@ -121,6 +219,25 @@ export async function handleMcp(
           return { id, error: { code: -32602, message: `Unknown tool: ${name}` } };
         }
         return { id, result: { content: [{ type: 'text', text: String(text).slice(0, 20_000) }] } };
+      }
+      case 'resources/list':
+        return { id, result: { resources: RESOURCES } };
+      case 'resources/templates/list':
+        return { id, result: { resourceTemplates: RESOURCE_TEMPLATES } };
+      case 'resources/read': {
+        const uri = String(call.params?.uri ?? '');
+        const contents = readResource(uri, state);
+        if (!contents) return { id, error: { code: -32602, message: `Unknown resource: ${uri}` } };
+        return { id, result: { contents } };
+      }
+      case 'prompts/list':
+        return { id, result: { prompts: PROMPTS } };
+      case 'prompts/get': {
+        const name = String(call.params?.name ?? '');
+        const args = (call.params?.arguments ?? {}) as Record<string, unknown>;
+        const prompt = buildPrompt(name, args);
+        if (!prompt) return { id, error: { code: -32602, message: `Unknown or incomplete prompt: ${name}` } };
+        return { id, result: prompt };
       }
       case 'ping':
         return { id, result: {} };
