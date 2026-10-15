@@ -845,3 +845,46 @@ describe('composer box alignment', () => {
     expect(parseTableCells('| a\r | b\r\n |')).toEqual(['a', 'b']);
   });
 });
+
+describe('renderMarkdown adversarial sweep (nested-escape + overflow guard)', () => {
+  // Permanent pin for the codeblock highlighter shred bug: 7 sequential
+  // passes re-matched digits inside escapes emitted by earlier passes,
+  // orphaning `\x1b[` and printing SGR params as text. The single-pass
+  // tokenizer must never nest escapes, at any width.
+  const ADVERSARIAL = [
+    '✅❌⭐✨❤️🎉🔥💡📌📁🚀 status soup here',
+    '日本語テスト mixed CJK and emoji ✅ together now',
+    'tabs\there\tand\there',
+    'a'.repeat(200),
+    '\x1b[31mred\x1b[0m and \x1b[1mbold\x1b[0m ANSI pasted',
+    '`code with tick` and **bold** and *italic*',
+    '> quote level one\n>> nested quote',
+    '- item one\n  - nested two\n    - nested three',
+    '1. first\n2. second\n3. third',
+    '| a | b |\n|---|---|\n| x ✅ | y |\n| z | w ❌ |',
+    '```ts\nconst x = 123;\nlet s = "hi";\n```',
+    '# Big heading here\n\nSome paragraph text that wraps around a bit here.',
+    '👨‍👩‍👧‍👦 family ZWJ sequence test here',
+    '1️⃣ keycap sequence here now',
+    '[label](https://example.com) link here',
+  ];
+  for (const W of [26, 40, 80, 110]) {
+    it(`no nested escapes and no overflow at width ${W}`, () => {
+      for (const text of ADVERSARIAL) {
+        const rows = m.renderMarkdown(text, W);
+        for (const r of rows) {
+          expect(r, `nested ESC in ${JSON.stringify(text.slice(0, 40))}`).not.toMatch(/\x1b\[[0-9;?]*\x1b/);
+          expect(visibleLen(r), `overflow in ${JSON.stringify(text.slice(0, 40))}`).toBeLessThanOrEqual(W);
+        }
+      }
+    });
+  }
+
+  it('highlights code without shredding its own escapes', () => {
+    const rows = m.renderMarkdown('```ts\nconst total = price * 1.2; // sum\n```', 60);
+    const plain = rows.map((r) => r.replace(/\x1b\[[0-9;]*m/g, '')).join('\n');
+    expect(plain).toContain('const total = price * 1.2; // sum');
+    // No SGR parameters leak as text.
+    expect(plain).not.toMatch(/\b38;2;\d/);
+  });
+});

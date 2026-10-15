@@ -707,17 +707,35 @@ function highlightCodeLine(line: string): string {
   // Syntax highlight using semantically-coordinated role colors. Each
   // token emits a single SGR so a downstream wrap that splits the line
   // resumes the base color cleanly at the next row.
+  //
+  // SINGLE-PASS tokenizer (one combined regex, one replace call). The old
+  // code ran 7 sequential passes, and later passes matched INSIDE escape
+  // sequences emitted by earlier ones — e.g. the number pass re-wrapped the
+  // `38`, `2`, `216`… inside `\x1b[38;2;216;180;254m`, orphaning the `\x1b[`
+  // intro and printing SGR parameters as literal text (plus phantom width
+  // that broke every row after it). One pass can never re-scan its output.
   const BASE = R.assistantText;
-  let s = line;
-  // Order matters: comments first (so a // string isn't re-stringed),
-  // then strings (so a string containing "if" isn't re-keyworded).
-  s = s.replace(/(\/\/[^\n]*)/g, `${R.codeComment}$1${T.reset}`);
-  s = s.replace(/(['"`])(?:\\.|(?!\1)[^\\\n])*?\1/g, (m) => `${R.codeString}${m}${T.reset}`);
-  s = s.replace(/\b(const|let|var|function|return|import|export|from|class|extends|interface|type|async|await|if|else|switch|case|break|for|while|try|catch|throw|finally|new|typeof|instanceof|in|of|do|continue|delete)\b/g, (m) => `${R.codeKeyword}${m}${T.reset}`);
-  s = s.replace(/\b(string|number|boolean|void|any|unknown|never|null|undefined|Promise|Array|Record|Set|Map|Object|Function|true|false)\b/g, (m) => `${R.codeType}${m}${T.reset}`);
-  s = s.replace(/\b\d+(?:\.\d+)?\b/g, (m) => `${R.codeNumber}${m}${T.reset}`);
-  s = s.replace(/\b([a-zA-Z_$][\w$]*)(?=\s*\()/g, (m) => `${R.codeFn}${m}${T.reset}`);
-  s = s.replace(/([{}();,<>[\]=+\-*/%!&|?:])/g, `${R.codePunct}$1${T.reset}`);
+  const KEYWORDS = 'const|let|var|function|return|import|export|from|class|extends|interface|type|async|await|if|else|switch|case|break|for|while|try|catch|throw|finally|new|typeof|instanceof|in|of|do|continue|delete';
+  const TYPES = 'string|number|boolean|void|any|unknown|never|null|undefined|Promise|Array|Record|Set|Map|Object|Function|true|false';
+  const TOKEN = new RegExp(
+    `(\\/\\/[^\\n]*)` +                                        // 1: comment
+    `|('(?:\\\\.|[^'\\\\\\n])*'|"(?:\\\\.|[^"\\\\\\n])*"|\`(?:\\\\.|[^\`\\\\\\n])*\`)` + // 2: string
+    `|\\b(${KEYWORDS})\\b` +                                  // 3: keyword
+    `|\\b(${TYPES})\\b` +                                     // 4: type
+    `|\\b(\\d+(?:\\.\\d+)?)\\b` +                             // 5: number
+    `|\\b([a-zA-Z_$][\\w$]*)(?=\\s*\\()` +                    // 6: function call
+    `|([{}();,<>\\[\\]=+\\-*/%!&|?:])`,                       // 7: punctuation
+    'g',
+  );
+  const s = line.replace(TOKEN, (m, comment, str, kw, type, num, fn) => {
+    if (comment !== undefined) return `${R.codeComment}${m}${T.reset}`;
+    if (str !== undefined) return `${R.codeString}${m}${T.reset}`;
+    if (kw !== undefined) return `${R.codeKeyword}${m}${T.reset}`;
+    if (type !== undefined) return `${R.codeType}${m}${T.reset}`;
+    if (num !== undefined) return `${R.codeNumber}${m}${T.reset}`;
+    if (fn !== undefined) return `${R.codeFn}${m}${T.reset}`;
+    return `${R.codePunct}${m}${T.reset}`; // punct
+  });
   return `${BASE}${s}${T.reset}`;
 }
 
