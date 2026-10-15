@@ -10,6 +10,7 @@
  */
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, isAbsolute } from 'node:path';
+import { atomicWriteFileSync } from './core/atomic-fs.js';
 
 export interface ApplyResult {
   applied: string[];   // paths written/updated
@@ -128,7 +129,7 @@ export function applyDiffAtomically(root: string, diffText: string): ApplyResult
         if (next === prev) { result.skipped.push(op.path); continue; }
       }
       mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, next, 'utf8');
+      atomicWriteFileSync(target, next);
       rollback.push({ path: target, prev });
       if (prev === null) result.created.push(op.path);
       result.applied.push(op.path);

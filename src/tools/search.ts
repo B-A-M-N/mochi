@@ -6,6 +6,7 @@ import { nativeSearchDir } from '../native/core.js';
 import type { Tool, ToolContext } from './types.js';
 import { clipToolOutput } from './output-budget.js';
 import { mutationGeneration } from './fs-signal.js';
+import { SKIP_DIRS } from './glob.js';
 
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -108,7 +109,7 @@ function* walkFiles(root: string, dir: string, budget: { seen: number; max: numb
   try { entries = readdirSync(dir); } catch { return; }
   for (const e of entries) {
     if (budget.seen >= budget.max) return;
-    if (['.git', 'node_modules', '.mochi', 'dist', 'build', '.next', '.turbo', 'coverage', '.cache', '.npm-global', '.hermes', '.gemini', '.local', '.config'].includes(e)) continue;
+    if (SKIP_DIRS.has(e)) continue;
     const full = resolve(dir, e);
     let st: ReturnType<typeof statSync>;
     try { st = statSync(full); } catch { continue; }

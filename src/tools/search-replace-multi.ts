@@ -1,7 +1,8 @@
-import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import { resolve, relative } from 'node:path';
 import type { Tool } from './types.js';
 import { SKIP_DIRS } from './glob.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 // Cap the recursive sync walk so a huge tree can't block the main-thread event
 // loop (the search-tool freeze class, 4a19bd1). Env-tunable.
@@ -100,7 +101,7 @@ export const searchReplaceMultiTool: Tool = {
           }
         }
       } else {
-        writeFileSync(file, modified, 'utf8');
+        atomicWriteFileSync(file, modified);
         ctx.events?.emit({ type: 'file:changed', path: file, operation: 'edit', agentId: ctx.agentId });
       }
       totalMatches += matchesInFile;

@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Tool } from './types.js';
 import { markMutation } from './fs-signal.js';
 import { fuzzyFindUniqueNative as fuzzyFindUnique } from './native-match.js';
 import { validateFileSyntax } from '../core/ast-guard.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 // Codex-style patch application. The model emits a compact, token-efficient
 // patch format instead of full-file rewrites or fragile exact-match blocks:
@@ -205,7 +206,7 @@ export const patchTool: Tool = {
     for (const p of plans) {
       if (p.op === 'add') {
         mkdirSync(dirname(p.fullPath), { recursive: true });
-        writeFileSync(p.fullPath, p.content);
+        atomicWriteFileSync(p.fullPath, p.content);
         ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'write', agentId: ctx.agentId });
         const diag = validateFileSyntax(p.fullPath, p.content);
         const note = !diag.valid && diag.summary ? ` ⚠️ [AST Syntax Alert]: ${diag.summary}` : '';
@@ -215,7 +216,7 @@ export const patchTool: Tool = {
         ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'delete', agentId: ctx.agentId });
         results.push(`deleted ${p.path}`);
       } else {
-        writeFileSync(p.fullPath, p.content);
+        atomicWriteFileSync(p.fullPath, p.content);
         ctx.events.emit({ type: 'file:changed', path: p.fullPath, operation: 'edit', agentId: ctx.agentId });
         const diag = validateFileSyntax(p.fullPath, p.content);
         const note = !diag.valid && diag.summary ? ` ⚠️ [AST Syntax Alert]: ${diag.summary}` : '';

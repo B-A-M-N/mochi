@@ -2,9 +2,10 @@
 // whole function/class/method by NAME using the codegraph symbol index, which
 // resolves exact boundaries — no whitespace/anchor matching, no mismatch
 // retries, no full-file rewrites.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getFunctionSynapse } from '../repo/codegraph.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface ReplaceSymbolResult {
   ok: boolean;
@@ -40,7 +41,7 @@ export async function replaceSymbol(cwd: string, name: string, newBody: string):
   const before = lines.slice(0, startLine - 1);
   const after = lines.slice(end);
   const replacement = newBody.endsWith('\n') ? newBody : newBody + '\n';
-  writeFileSync(abs, [...before, replacement.replace(/\n$/, ''), ...after].join('\n'));
+  atomicWriteFileSync(abs, [...before, replacement.replace(/\n$/, ''), ...after].join('\n'));
   return {
     ok: true,
     message: `Replaced ${symName} (${rel}:${startLine}) — ${end - startLine + 1} line(s) -> ${replacement.split('\n').length} line(s).`,
@@ -62,7 +63,7 @@ export async function insertSymbolBefore(cwd: string, name: string, text: string
   const lines = readFileSync(abs, 'utf8').split('\n');
   const at = Number(lineStr) - 1;
   const out = [...lines.slice(0, at), insertion.replace(/\n\n$/, '\n'), ...lines.slice(at)];
-  writeFileSync(abs, out.join('\n'));
+  atomicWriteFileSync(abs, out.join('\n'));
   return { ok: true, message: `Inserted before ${symName} (${rel}:${lineStr}).` };
 }
 

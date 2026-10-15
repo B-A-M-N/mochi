@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import type { Tool } from './types.js';
 import { markMutation } from './fs-signal.js';
 import { validateFileSyntax } from '../core/ast-guard.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export const writeTool: Tool = {
   def: {
@@ -26,7 +27,7 @@ export const writeTool: Tool = {
     if (append) {
       writeFileSync(fullPath, content, { flag: 'a' });
     } else {
-      writeFileSync(fullPath, content);
+      atomicWriteFileSync(fullPath, content);
     }
     ctx.events.emit({ type: 'file:changed', path: fullPath, operation: 'write', agentId: ctx.agentId });
     markMutation();

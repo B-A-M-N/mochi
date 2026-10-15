@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Tool } from './types.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export const regexReplaceTool: Tool = {
   def: {
@@ -23,7 +24,11 @@ export const regexReplaceTool: Tool = {
     const pattern = String(args.pattern ?? '');
     if (!pattern) throw new Error('pattern is required');
     const replacement = String(args.replacement ?? '');
-    const flags = String(args.flags ?? 'g');
+    // Replace ALL matches, matching the reported count and the tool's intent —
+    // without 'g' the model got "Replaced 5 occurrence(s)" while only the first
+    // was actually changed.
+    const rawFlags = String(args.flags ?? 'g');
+    const flags = rawFlags.includes('g') ? rawFlags : rawFlags + 'g';
     const preview = Boolean(args.preview);
 
     const fullPath = resolve(ctx.cwd, rawPath);
@@ -41,7 +46,7 @@ export const regexReplaceTool: Tool = {
 
     if (original === modified) return `No matches found for pattern /${pattern}/${flags} in ${rawPath}.`;
 
-    const matchCount = (original.match(new RegExp(pattern, flags.includes('g') ? flags : flags + 'g')) ?? []).length;
+    const matchCount = (original.match(new RegExp(pattern, flags)) ?? []).length;
 
     if (preview) {
       // Return a simple diff
@@ -60,7 +65,7 @@ export const regexReplaceTool: Tool = {
       return `Preview (${matchCount} replacement(s)):\n${diffLines.join('\n')}`;
     }
 
-    writeFileSync(fullPath, modified, 'utf8');
+    atomicWriteFileSync(fullPath, modified);
     ctx.events?.emit({ type: 'file:changed', path: fullPath, operation: 'edit', agentId: ctx.agentId });
     return `Replaced ${matchCount} occurrence(s) of /${pattern}/${flags} in ${rawPath}.`;
   },

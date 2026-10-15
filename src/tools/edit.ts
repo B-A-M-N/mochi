@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Tool } from './types.js';
 import { markMutation } from './fs-signal.js';
 import { fuzzyFindUniqueNative as fuzzyFindUnique } from './native-match.js';
 import { validateFileSyntax } from '../core/ast-guard.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 function trimIndent(text: string): string {
   const lines = text.split('\n');
@@ -154,7 +155,7 @@ export const editTool: Tool = {
       content = content.replace(oldText, newText);
     }
     if (content === original) throw new Error(`oldText was found but replacement did not change ${rawPath}`);
-    writeFileSync(fullPath, content);
+    atomicWriteFileSync(fullPath, content);
     ctx.events.emit({ type: 'file:changed', path: fullPath, operation: 'edit', agentId: ctx.agentId });
     markMutation();
     const diag = validateFileSyntax(fullPath, content);

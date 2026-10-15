@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, join, extname } from 'node:path';
 import type { Tool } from './types.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 // Extensions the AST renamer can parse as real syntax (rename touches only
 // true identifiers — never comments or strings). Everything else uses the
@@ -124,7 +125,7 @@ export const renameSymbolTool: Tool = {
       totalReplacements += count;
 
       if (!preview) {
-        writeFileSync(f, replaced, 'utf8');
+        atomicWriteFileSync(f, replaced);
         if (ctx.events && typeof (ctx.events as { emit?: unknown }).emit === 'function') {
           ctx.events.emit({ type: 'file:changed', path: f, operation: 'edit', agentId: ctx.agentId });
         }

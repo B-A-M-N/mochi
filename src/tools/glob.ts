@@ -18,7 +18,8 @@ export const SKIP_DIRS = new Set([
   'build', 'out', '.next', '.gradle', '.m2', '.ivy2', '.stack', '.cabal',
   '.npm-global', '.hermes', '.gemini', '.local', '.config', '.jcode',
   '.terminus', '.steam', '.npm', '.bun', '.vscode', '.vscode-shared',
-  '.pytest_cache', '.dotnet', '.nuget', 'android-sdk'
+  '.pytest_cache', '.dotnet', '.nuget', 'android-sdk',
+  'coverage', '.turbo', '.nyc_output', '.tox', '.mypy_cache', '.ruff_cache', '.parcel-cache',
 ]);
 
 function matches(pattern: string, parts: string[]): boolean {

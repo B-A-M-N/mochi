@@ -739,6 +739,16 @@ export class Agent {
     this.events.emit({ type: 'agent:spawned', id: this.id, role: opts.role as import('../types.js').AgentRole, taskId: '' });
   }
 
+  /**
+   * After compaction the model no longer has earlier tool output in context, so
+   * a read "cache-hit, reuse it from context" stub would strand it with no
+   * content. Clearing the repeat-read marker forces the next read of that
+   * path/range to return real text again.
+   */
+  private clearReadStub(): void {
+    delete (this.readCache as { __lastRead?: string }).__lastRead;
+  }
+
   /** Effective working context budget for this run: the configured budget
    *  clamped to the active model's real window (computed in run()). Falls back to
    *  the configured budget before run() has computed the clamp. */
@@ -2991,6 +3001,7 @@ Continue from 'Next:', do not redo completed progress.`,
     const dropped = await this.context.previewCompact();
     if (!dropped || dropped.length === 0) {
       this.context.compact().catch(() => {});
+      this.clearReadStub();
       return;
     }
     // Render the to-be-dropped slice compactly. Tool outputs carry most of the
@@ -3047,6 +3058,7 @@ Continue from 'Next:', do not redo completed progress.`,
       }
     }
     await this.context.compact(checkpoint);
+    this.clearReadStub();
     // Phase 7: durable checkpoint — survives process restarts for resume.
     if (checkpoint) {
       try { this.workspace.saveCheckpoint('', checkpoint); } catch { /* best-effort */ }
