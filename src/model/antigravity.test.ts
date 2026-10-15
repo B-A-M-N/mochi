@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createAntigravityProvider } from './antigravity.js';
+import { createAntigravityProvider, computeAntigravityCost, ANTIGRAVITY_PRICING_TABLE } from './antigravity.js';
 import type { ChatMessage, StreamChunk } from '../types.js';
 
 function sseBody(frames: unknown[]): string {
@@ -277,5 +277,16 @@ describe('antigravity provider', () => {
     const reqHigh = captured.body?.request as Record<string, unknown>;
     const genHigh = reqHigh.generationConfig as Record<string, Record<string, unknown>>;
     expect(genHigh.thinkingConfig.thinkingLevel).toBe('HIGH');
+  });
+
+  it('computes accurate pricing matching omp rates for all available models', () => {
+    expect(ANTIGRAVITY_PRICING_TABLE['gemini-3.8-flash']).toEqual({ in: 0.75, out: 3.75, cache: 0.075 });
+    expect(computeAntigravityCost('gemini-3.8-flash', 1000, 100)).toBeCloseTo(0.001125);
+
+    expect(ANTIGRAVITY_PRICING_TABLE['claude-sonnet-4-6']).toEqual({ in: 3.00, out: 15.00, cache: 0.30 });
+    expect(computeAntigravityCost('claude-sonnet-4-6', 1000, 100)).toBeCloseTo(0.0045);
+
+    expect(ANTIGRAVITY_PRICING_TABLE['claude-opus-4-6']).toEqual({ in: 5.00, out: 25.00, cache: 0.50 });
+    expect(computeAntigravityCost('claude-opus-4-6', 1000, 100)).toBeCloseTo(0.0075);
   });
 });

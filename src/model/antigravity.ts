@@ -139,25 +139,48 @@ function mapAntigravityFinish(reason?: string): StreamChunk['finishReason'] {
   if (reason === 'MAX_TOKENS') return 'length';
   return 'stop';
 }
-function computeAntigravityCost(model: string, inTokens: number, outTokens: number, cachedTokens = 0): number {
-  const m = model.toLowerCase();
-  let inRate = 0.15 / 1_000_000;
-  let outRate = 0.60 / 1_000_000;
-  let cacheRate = 0.0375 / 1_000_000;
+export const ANTIGRAVITY_PRICING_TABLE: Record<string, { in: number; out: number; cache: number }> = {
+  // Gemini 3.8 / 3.7 / 3.6 Flash ($0.75 / $3.75 per 1M tokens, cache read $0.075)
+  'gemini-3.8-flash': { in: 0.75, out: 3.75, cache: 0.075 },
+  'gemini-3.7-flash': { in: 0.75, out: 3.75, cache: 0.075 },
+  // Gemini 3 Flash ($0.50 / $3.00 per 1M tokens, cache read $0.05)
+  'gemini-3-flash': { in: 0.50, out: 3.00, cache: 0.05 },
+  // Gemini 3.5 Flash ($1.50 / $9.00 per 1M tokens, cache read $0.15)
+  'gemini-3.5-flash': { in: 1.50, out: 9.00, cache: 0.15 },
+  'gemini-3.5-flash-lite': { in: 0.30, out: 2.50, cache: 0.03 },
+  'gemini-3.1-flash-lite': { in: 0.25, out: 1.50, cache: 0.025 },
+  // Gemini 2.5 Flash ($0.30 / $2.50 per 1M tokens, cache read $0.03)
+  'gemini-2.5-flash': { in: 0.30, out: 2.50, cache: 0.03 },
+  'gemini-2.5-flash-lite': { in: 0.10, out: 0.40, cache: 0.01 },
+  // Claude Sonnet 4.6 / 4.5 ($3.00 / $15.00 per 1M tokens, cache read $0.30)
+  'claude-sonnet-4-6': { in: 3.00, out: 15.00, cache: 0.30 },
+  'claude-sonnet-4-5': { in: 3.00, out: 15.00, cache: 0.30 },
+  // Claude Opus 4.6 / 4.5 ($5.00 / $25.00 per 1M tokens, cache read $0.50)
+  'claude-opus-4-6': { in: 5.00, out: 25.00, cache: 0.50 },
+  'claude-opus-4-5': { in: 5.00, out: 25.00, cache: 0.50 },
+  // Free / preview tiers ($0)
+  'gpt-oss-120b': { in: 0, out: 0, cache: 0 },
+  'gemini-4-argon-disabled': { in: 0, out: 0, cache: 0 },
+  'tab_flash_lite_preview': { in: 0, out: 0, cache: 0 },
+  'tab_jump_flash_lite_preview': { in: 0, out: 0, cache: 0 },
+};
 
-  if (m.includes('opus')) {
-    inRate = 5.00 / 1_000_000;
-    outRate = 25.00 / 1_000_000;
-    cacheRate = 0.50 / 1_000_000;
-  } else if (m.includes('sonnet') || m.includes('claude')) {
-    inRate = 3.00 / 1_000_000;
-    outRate = 15.00 / 1_000_000;
-    cacheRate = 0.30 / 1_000_000;
-  } else if (m.includes('pro')) {
-    inRate = 1.25 / 1_000_000;
-    outRate = 5.00 / 1_000_000;
-    cacheRate = 0.3125 / 1_000_000;
+export function computeAntigravityCost(model: string, inTokens: number, outTokens: number, cachedTokens = 0): number {
+  const m = model.toLowerCase();
+  const direct = ANTIGRAVITY_PRICING_TABLE[m];
+  let rates = direct;
+  if (!rates) {
+    if (m.includes('opus')) rates = ANTIGRAVITY_PRICING_TABLE['claude-opus-4-6'];
+    else if (m.includes('sonnet') || m.includes('claude')) rates = ANTIGRAVITY_PRICING_TABLE['claude-sonnet-4-6'];
+    else if (m.includes('3.8') || m.includes('3.7') || m.includes('3.6')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.8-flash'];
+    else if (m.includes('3.5')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.5-flash'];
+    else if (m.includes('flash')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3-flash'];
+    else rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.8-flash'];
   }
+
+  const inRate = rates.in / 1_000_000;
+  const outRate = rates.out / 1_000_000;
+  const cacheRate = rates.cache / 1_000_000;
 
   const billableIn = Math.max(0, inTokens - cachedTokens);
   const cost = billableIn * inRate + cachedTokens * cacheRate + outTokens * outRate;
