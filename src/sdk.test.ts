@@ -147,7 +147,7 @@ describe('Mochi SDK streaming + discovery', () => {
 describe('Mochi SDK (remote daemon mode)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('GETs status with auth headers and coerces statusTyped', async () => {
+  it('POSTs status with auth headers and coerces statusTyped', async () => {
     const m = Mochi.connect({ port: 1234, token: 'tok' });
     const fetchMock = vi.fn(async () => ({ json: async () => ({ ready: true, tasks: '3', activeAgents: null }) }));
     vi.stubGlobal('fetch', fetchMock);
@@ -156,10 +156,77 @@ describe('Mochi SDK (remote daemon mode)', () => {
     expect(s.ready).toBe(true);
     expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:1234/api/status');
     const opts = fetchMock.mock.calls[0][1] as RequestInit;
+    // The daemon rejects GET on authenticated routes — status must POST.
+    expect(opts.method).toBe('POST');
     expect((opts.headers as Record<string, string>).authorization).toBe('Bearer tok');
     expect((opts.headers as Record<string, string>)['content-type']).toBe('application/json');
 
     expect(await m.statusTyped()).toEqual({ ready: true, tasks: 3, activeAgents: 0 });
+  });
+
+  it('hits the new inventory/review/verify/health routes', async () => {
+    const m = Mochi.connect({ port: 4444, token: 't' });
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ ok: 1 }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await m.health()).toEqual({ ok: 1 });
+    expect(await m.models()).toEqual({ ok: 1 });
+    expect(await m.skills()).toEqual({ ok: 1 });
+    expect(await m.review('diff-text')).toEqual({ ok: 1 });
+    expect(await m.verify('test', 'a.ts')).toEqual({ ok: 1 });
+
+    const calls = fetchMock.mock.calls.map((c) => c[0]);
+    expect(calls).toEqual([
+      'http://127.0.0.1:4444/api/health',
+      'http://127.0.0.1:4444/api/models',
+      'http://127.0.0.1:4444/api/skills',
+      'http://127.0.0.1:4444/api/review',
+      'http://127.0.0.1:4444/api/verify',
+    ]);
+    // Health carries no auth at all (unauthenticated probe); the rest do.
+    expect(fetchMock.mock.calls[0][1]).toBeUndefined();
+    expect((fetchMock.mock.calls[1][1]!.headers as Record<string, string>).authorization).toBe('Bearer t');
+    expect(fetchMock.mock.calls[3][1]!.body).toBe('{"diff":"diff-text"}');
+    expect(fetchMock.mock.calls[4][1]!.body).toBe('{"command":"test","target":"a.ts"}');
+  });
+
+  it('goalStream yields SSE events and returns the terminal payload', async () => {
+    const m = Mochi.connect({ port: 5555, token: 't' });
+    const chunks = [
+      'event: task:started\ndata: {"task":"build"}\n\n',
+      'event: log\ndata: {"message":"working"}\n\n',
+      'event: done\ndata: {"ok":true,"out":"shipped"}\n\n',
+    ];
+    const enc = new TextEncoder();
+    const queue = chunks.map((c) => enc.encode(c));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () => (queue.length ? { done: false, value: queue.shift() } : { done: true, value: undefined }),
+          cancel: async () => {},
+        }),
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const seen: Array<{ event: string; data: unknown }> = [];
+    const gen = m.goalStream('build it');
+    for (;;) {
+      const n = await gen.next();
+      if (n.done) {
+        expect(n.value).toEqual({ ok: true, out: 'shipped' });
+        break;
+      }
+      seen.push(n.value);
+    }
+    expect(seen).toEqual([
+      { event: 'task:started', data: { task: 'build' } },
+      { event: 'log', data: { message: 'working' } },
+    ]);
+    const opts = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(opts.method).toBe('POST');
+    expect((opts.headers as Record<string, string>).accept).toBe('text/event-stream');
   });
 
   it('POSTs prompt, applying defaults when the daemon omits fields', async () => {

@@ -267,9 +267,86 @@ export class RemoteMochi {
     return res.json() as Promise<Record<string, unknown>>;
   }
 
+  /** Daemon status (POST: the daemon rejects GET on authenticated routes). */
   async status(): Promise<Record<string, unknown>> {
-    const res = await fetch(`${this.base()}/api/status`, { headers: this.headers() });
+    return this.post('/api/status', {});
+  }
+
+  /** Unauthenticated health probe (version + uptime, no token needed). */
+  async health(): Promise<Record<string, unknown>> {
+    const res = await fetch(`${this.base()}/api/health`);
     return res.json() as Promise<Record<string, unknown>>;
+  }
+
+  /** Provider + model inventory. */
+  async models(): Promise<Record<string, unknown>> {
+    const res = await fetch(`${this.base()}/api/models`, { headers: this.headers() });
+    return res.json() as Promise<Record<string, unknown>>;
+  }
+
+  /** Skill names + descriptions. */
+  async skills(): Promise<Record<string, unknown>> {
+    const res = await fetch(`${this.base()}/api/skills`, { headers: this.headers() });
+    return res.json() as Promise<Record<string, unknown>>;
+  }
+
+  /** Review a diff (defaults to the server's `git diff HEAD` when omitted). */
+  async review(diff?: string): Promise<Record<string, unknown>> {
+    return this.post('/api/review', diff ? { diff } : {});
+  }
+
+  /** Run the server repo's checks (test/build/typecheck/lint + file target). */
+  async verify(command?: string, target?: string): Promise<Record<string, unknown>> {
+    return this.post('/api/verify', { ...(command ? { command } : {}), ...(target ? { target } : {}) });
+  }
+
+  /** Streaming goal execution over the daemon's SSE channel. Yields live
+   *  events (task:started, task:completed, log) and RETURNS the terminal
+   *  payload ({ok, out} on done, {ok:false, error} on error or cutoff).
+   *  Never retries: a goal must not execute twice. */
+  async *goalStream(objective: string, opts: { signal?: AbortSignal } = {}): AsyncGenerator<{ event: string; data: unknown }, Record<string, unknown>, void> {
+    const res = await fetch(`${this.base()}/api/goal`, {
+      method: 'POST',
+      headers: { ...this.headers(), accept: 'text/event-stream' },
+      body: JSON.stringify({ objective }),
+      signal: opts.signal,
+    });
+    if (!res.ok || !res.body) {
+      return { ok: false, error: `goal stream failed: HTTP ${res.status}` };
+    }
+    // Structural reader (same shape as model/sse.ts: independent of undici's
+    // overloaded getReader() typings).
+    const reader = (res.body.getReader() as unknown as {
+      read(): Promise<{ done: boolean; value?: Uint8Array }>;
+      cancel(): Promise<void>;
+    });
+    const decoder = new TextDecoder();
+    let buf = '';
+    let final: Record<string, unknown> = { ok: false, error: 'stream cut off before done' };
+    try {
+      for (;;) {
+        if (opts.signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const chunk of parts) {
+          const ev = (/^event:\s*(.+)$/m.exec(chunk)?.[1] ?? 'message').trim();
+          const dataRaw = chunk.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('\n');
+          let data: unknown = dataRaw;
+          try { data = JSON.parse(dataRaw); } catch { /* keep raw text */ }
+          if (ev === 'done' || ev === 'error') {
+            final = (typeof data === 'object' && data !== null ? data : { ok: false, error: String(data) }) as Record<string, unknown>;
+          } else {
+            yield { event: ev, data };
+          }
+        }
+      }
+    } finally {
+      try { await reader.cancel(); } catch { /* already closed */ }
+    }
+    return final;
   }
 
   /** One-shot prompt against the daemon (same semantics as local prompt()). */
