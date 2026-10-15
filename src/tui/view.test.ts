@@ -794,3 +794,33 @@ describe('renderMarkdown', () => {
     expect(plain).toContain('✦ src/tui/view.ts · typescript');
   });
 });
+
+describe('renderMarkdown tables with status emoji (border-alignment guard)', () => {
+  it('keeps every border row the same visible width when cells contain ✅/❌/⭐', () => {
+    const md = [
+      '| Gateway | Transport | Status |',
+      '|---|---|---|',
+      '| Discord | Zero-dependency Gateway v10 WebSocket | ✅ Live bot |',
+      '| Telegram | Plain HTTP long-poll (getUpdates/sendMessage) | ✅ Live bot |',
+      '| Slack | Polling plus Events API webhook server | ❌ Not configured |',
+    ].join('\n');
+    const rows = m.renderMarkdown(md, 100);
+    const widths = rows.map((r) => visibleLen(r));
+    // All rows (borders + content) share one width: no jagged right edge.
+    expect(new Set(widths).size).toBe(1);
+    // And that width fits the terminal.
+    for (const w of widths) expect(w).toBeLessThanOrEqual(100);
+  });
+
+  it('aligns borders when cells mix CJK, emoji, and inline code', () => {
+    const md = [
+      '| Name | Note |',
+      '|---|---|',
+      '| 日本語テスト | `code` and ⭐ stars |',
+      '| plain | ✅ done ❌ pending |',
+    ].join('\n');
+    const rows = m.renderMarkdown(md, 80);
+    const widths = rows.map((r) => visibleLen(r));
+    expect(new Set(widths).size).toBe(1);
+  });
+});

@@ -151,3 +151,25 @@ describe('cell column <-> string index', () => {
     expect(cellColToIndex(s, 0)).toBe(0);
   });
 });
+
+describe('emoji-presentation status glyphs (table-border guard)', () => {
+  it('counts ✅❌⭐✨❤️ and friends as 2 cells (they render 2)', () => {
+    // These default to emoji presentation even without VS16 — the status
+    // glyphs agents emit constantly. Counting them as 1 jagged every bordered
+    // table with a status column (measured 1, rendered 2).
+    for (const ch of ['✅', '❌', '⭐', '✨', '❤️', '➕', 'Ⓜ️', '⌨️', '↔️', '‼️', '™️', '◀️'.slice(0, 1)]) {
+      const cp = ch.codePointAt(0) as number;
+      if (cp === 0x25c0) continue; // ◀ text-presentation: stays 1 (tested below)
+      expect(cellWidth(cp), `${ch} U+${cp.toString(16)}`).toBe(2);
+    }
+    // '✅ Live bot' renders 11 cells: 2 + 1 + 4 + 1 + 3.
+    expect(visibleCells('✅ Live bot')).toBe(11);
+  });
+
+  it('keeps text-presentation glyphs at 1 cell', () => {
+    // ◀ ▶ ▪ (no emoji presentation) render 1 cell on Linux terminals.
+    for (const ch of ['◀', '▶', '▪', '★']) {
+      expect(cellWidth(ch.codePointAt(0) as number), ch).toBe(1);
+    }
+  });
+});
