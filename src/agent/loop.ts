@@ -4724,9 +4724,14 @@ Continue from 'Next:', do not redo completed progress.`,
     }
     this.noProgressStreak++;
     if (this.noProgressStreak === 1) {
+      // Restate the objective + criteria verbatim: a drifted model may have
+      // forgotten what it was asked to do (long context, compaction). A bare
+      // "refocus" without the target is nagging, not guidance.
+      const objective = task.title + (task.description && task.description !== task.title ? ` — ${task.description}` : '');
+      const criteria = (task.acceptanceCriteria ?? []).join('; ') || '(none stated — finish the objective as described)';
       this.context.addMessage({
         role: 'system',
-        content: `PROGRESS CHECK (turn ${iter + 1}): ${HEARTBEAT_EVERY} turns with no new files read, no edits, and no passing verification. You may be going in circles. Refocus on the acceptance criteria NOW: take one concrete step toward them (read the ONE most relevant file you haven't opened, make the smallest edit that could satisfy a criterion, or run verification) — or state exactly what is blocking you so the run can end honestly instead of wandering.`,
+        content: `PROGRESS CHECK (turn ${iter + 1}): ${HEARTBEAT_EVERY} turns with no new files read, no edits, and no passing verification. You may be going in circles.\n\nYour ACTUAL task (do this, nothing else): ${objective}\nAcceptance criteria: ${criteria}\n\nTake one concrete step toward THOSE criteria now (read the ONE most relevant file you haven't opened, make the smallest edit that could satisfy one, or run verification) — or state exactly what is blocking you so the run can end honestly instead of wandering.`,
       });
       return null;
     }
