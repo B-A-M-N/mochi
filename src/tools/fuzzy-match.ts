@@ -99,6 +99,15 @@ export function fuzzyFindUnique(text: string, needle: string): FuzzyMatch | null
 
   // 3-Way Tolerant Fallback: if strict whitespace match found 0 occurrences (e.g. 1 drifted line),
   // slide a window of size `normNeedle.length` across `normText` and score overall block similarity.
+  // Cost is O(windows * needleLines * Levenshtein). On a large file with no
+  // strict match this was unbounded and could freeze the agent for seconds (the
+  // JS matcher runs whenever the native binary isn't built). Bound the work: a
+  // miss is cheap and safe — the caller reports "not found" and the model
+  // re-reads — whereas a multi-second CPU spin stalls the whole run.
+  const tolerantWork = (normText.length - normNeedle.length + 1) * normNeedle.length;
+  const MAX_TOLERANT_WORK = 100_000;
+  if (tolerantWork > MAX_TOLERANT_WORK) return null;
+
   let bestScore = 0;
   let bestIndex = -1;
   let secondBestScore = 0;

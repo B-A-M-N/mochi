@@ -96,4 +96,11 @@ describe('edit tool', () => {
     expect(out).toContain('fuzzy match');
     expect(readFileSync(resolve(dir, F), 'utf8')).toContain('goodbye world');
   });
+
+  it('inserts $ replacement patterns in newText literally (no $$ / $& mangling)', async () => {
+    seed('const shell = "PID";\n');
+    await editTool.execute({ path: F, oldText: 'const shell = "PID";', newText: 'const shell = "$$:$&";' }, ctx);
+    // A naive replace(oldText, newText) would expand $$ -> $ and $& -> the match.
+    expect(readFileSync(resolve(dir, F), 'utf8')).toBe('const shell = "$$:$&";\n');
+  });
 });

@@ -152,7 +152,11 @@ export const editTool: Tool = {
         }
         throw new Error(`oldText matches ${count} locations in ${rawPath} (at lines ${lines.join(', ')}); include more surrounding context so it is unique`);
       }
-      content = content.replace(oldText, newText);
+      // Function replacement: a plain-string `replace(oldText, newText)` treats
+      // `$&`, `$$`, `$'`, and `` $` `` in newText as replacement patterns and
+      // corrupts the inserted text (e.g. editing shell/PHP code containing
+      // `$$`). The arrow form inserts newText verbatim.
+      content = content.replace(oldText, () => newText);
     }
     if (content === original) throw new Error(`oldText was found but replacement did not change ${rawPath}`);
     atomicWriteFileSync(fullPath, content);

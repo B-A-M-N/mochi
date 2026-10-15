@@ -53,4 +53,14 @@ describe('3-Way Tolerant Fuzzy Matcher', () => {
     const needle = 'class DatabaseConnectionPool {\n  connect() {}\n}';
     expect(fuzzyFindUnique(text, needle)).toBeNull();
   });
+
+  it('bounds the tolerant fallback so a huge file cannot freeze matching', () => {
+    // 30k lines x 8-line needle = 240k line-comparisons > the cap: the tolerant
+    // scan must be skipped rather than burn seconds of CPU.
+    const text = Array.from({ length: 30_000 }, (_, i) => `const v${i} = ${i};`).join('\n');
+    const needle = Array.from({ length: 8 }, (_, i) => `let totally different line ${i} here`).join('\n');
+    const t0 = Date.now();
+    expect(fuzzyFindUnique(text, needle)).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(1_000);
+  });
 });
