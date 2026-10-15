@@ -203,6 +203,7 @@ export class Runtime {
       : raw === 'low' || raw === 'easy' ? 'low'
       : raw === 'off' ? 'off'
       : raw === 'auto' ? 'auto'
+      : raw === 'med' || raw === 'medium' || raw === 'mid' ? 'medium'
       : 'medium';
     this.config.reasoning = normalized;
     process.env.MOCHI_REASONING = normalized;
