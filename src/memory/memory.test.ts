@@ -48,4 +48,14 @@ describe('MemoryStore', () => {
     expect(kept[kept.length - 1].title).toContain(`task-${cap + 4}`);
     expect(kept.some((e) => e.title.includes('task-0'))).toBe(false);
   });
+
+  it('removes failure lessons once a later successful run proves them resolved', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-memory-'));
+    const store = new MemoryStore(dir);
+    expect(store.addFailure('Failed: flaky task', 'exit code 1')).toBe(true);
+    expect(store.entries('failure').map((e) => e.title)).toContain('failure: Failed: flaky task');
+    expect(store.removeFailure('flaky task')).toBe(true);
+    expect(store.removeFailure('flaky task')).toBe(false);
+    expect(store.entries('failure')).toHaveLength(0);
+  });
 });

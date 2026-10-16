@@ -83,6 +83,25 @@ export class MemoryStore {
     return this.add({ kind: 'failure', title, body, source });
   }
 
+  /** Remove every entry of `kind` whose stored title matches `title`
+   *  (header is `${kind}: ${title}`). Returns true if at least one entry was
+   *  removed. Used by the consolidation loop to resolve failure lessons that
+   *  a later successful run proved wrong -- keeps memory from accumulating a
+   *  permanent "you failed at X" bias for issues the agent already fixed. */
+  remove(kind: MemoryEntry['kind'], title: string): boolean {
+    this.ensure();
+    const target = `${kind}: ${title}`;
+    const entries = this.entries(kind);
+    const keep = entries.filter((e) => e.title !== target);
+    if (keep.length === entries.length) return false;
+    writeFileSync(this.files[kind], (keep.length ? keep.map((e) => entryToMarkdown(e)).join('\n') + '\n' : ''));
+    return true;
+  }
+
+  removeFailure(taskTitle: string): boolean {
+    return this.remove('failure', `Failed: ${taskTitle}`);
+  }
+
   load(kind?: MemoryEntry['kind']): string {
     this.ensure();
     const entries = this.entries(kind);

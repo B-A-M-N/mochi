@@ -51,12 +51,21 @@ export interface ConsolidationResult {
   failures: string[];
 }
 
-/** Distill a finished run's failures into persistent, deduped memory. */
+/** Distill a finished run's failures into persistent, deduped memory. A
+ *  successful run resolves (removes) failure entries for the tasks that ran
+ *  in it — a previous failure that the next effort fixes should not stay in
+ *  memory as if it still failed. Successful runs therefore write nothing new. */
 export function consolidate(workspaceDir: string, result: GoalResult, model = 'mochi'): ConsolidationResult {
   if (!workspaceDir) return { added: 0, failures: [] };
   const out: ConsolidationResult = { added: 0, failures: [] };
-  if (result.success) return out;
   const store = new MemoryStore(workspaceDir);
+  if (result.success) {
+    // Resolve resolved failure lessons instead of repeating stale "you failed".
+    for (const task of [...result.completedTasks, ...result.failedTasks]) {
+      if (task.title) store.removeFailure(task.title);
+    }
+    return out;
+  }
   const seenTitles = new Set(store.entries('failure').map((e) => e.title));
   for (const task of result.failedTasks) {
     const reason = summarizeFailure(failureReason(task)).slice(0, MAX_BODY);
