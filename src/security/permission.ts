@@ -24,6 +24,9 @@ export function detectPolicy(flags: Record<string, string | boolean>): Permissio
     process.env.MOCHI_DANGEROUSLY_SKIP_PERMISSIONS === '1' ||
     process.env.MOCHI_UNCENSORED === '1' ||
     flags['dangerously-skip-permissions'] === true ||
+    flags['dangerously-skip-permissions'] === 'true' ||
+    flags['dangerously-skip-permissions'] === '1' ||
+    flags.dangerouslySkipPermissions === true ||
     flags.yolo === true ||
     flags.y === true ||
     flags.uncensored === true ||
@@ -78,8 +81,9 @@ export class PermissionManager {
       // Allow edits within the project workspace
       const editTools = new Set(['write', 'edit', 'patch', 'delete', 'notebook', 'replace_symbol', 'regex_replace']);
       if (editTools.has(req.tool)) {
-        const path = String(req.args.path ?? req.args.file ?? '');
-        if (!path) return true; // no path = probably ok
+        const editPath = req.args.path ?? req.args.file;
+        if (typeof editPath !== 'string' || !editPath.trim()) return false; // must be a real, non-empty path
+        const path = editPath;
         const absPath = resolve(req.cwd, path);
         // Boundary-aware containment: a raw startsWith prefix lets
         // `/workspace-evil` pass for root `/workspace` (and on win32,
@@ -92,7 +96,9 @@ export class PermissionManager {
         return inside(req.workspaceDir) || inside(req.cwd);
       }
       if (req.tool === 'shell') {
-        const cmd = String(req.args.command ?? '');
+        const cmdRaw = req.args.command;
+        if (typeof cmdRaw !== 'string' || !cmdRaw.trim()) return false;
+        const cmd = cmdRaw;
         const risk: CommandRisk = classifyCommand(cmd);
         return risk === 'low'; // auto-approve safe read-only shell commands
       }

@@ -29,6 +29,18 @@ const SECRET_PATTERNS = [
   /\b\d{5,}:[A-Za-z0-9_-]{20,}\b/g,
   // password assignments / query parameters (password=, password:)
   /password\s*[=:][^\s&'"]{4,}/gi,
+  // GitHub personal/installation/app tokens
+  /gh[poseuro]_[A-Za-z0-9_]{30,}/gi,
+  // OpenAI API keys (sk-... and project keys)
+  /sk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9_-]{20,}/gi,
+  // Anthropic API keys
+  /sk-ant-[A-Za-z0-9_-]{20,}/gi,
+  // AWS access key IDs
+  /AKIA[0-9A-Z]{16}/g,
+  // Authorization Bearer headers
+  /Bearer\s+[A-Za-z0-9._~:/+-]{20,}/gi,
+  // JWT-like tokens (3 base64url segments)
+  /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
   // env-style secret assignments for gateway tokens
   /DISCORD_BOT_TOKEN\s*=\s*[^\s]+/gi,
   /TELEGRAM_BOT_TOKEN\s*=\s*[^\s]+/gi,
@@ -37,9 +49,6 @@ const SECRET_PATTERNS = [
   /discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+/gi,
 ];
 
-/** Replace known secret shapes with `[secret-redacted]`. Idempotent and cheap.
- *  Tries the native Rust core first (zero-copy, ~3-5x faster on 100KB+ output);
- *  falls back to the in-process regex pass when the addon is absent. */
 export function redact(input: string): string {
   if (!input) return input;
   const nat = nativeRedactSecrets(input);
