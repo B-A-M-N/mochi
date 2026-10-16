@@ -48,6 +48,9 @@ export class Runtime {
   private abortController: AbortController;
   private abortSignal: AbortSignal;
   activeSessionId?: string;
+  /** True once this instance has already auto-spawned a harness repair pass —
+   *  one per process, so a defect can't launch an infinite repair chain. */
+  private autoRepairSpawned = false;
   /** UI-driven permission-policy override (`yolo` | `strict` | `workspace-safe`).
    *  Written by the CLI (`--yolo`/uncensored flags) and the TUI (`/yolo`);
    *  read by the TUI to render the auto-approve state. The tool-permission
@@ -715,8 +718,30 @@ export class Runtime {
       } else if (outputs && !outputs.includes(result.summary)) {
         summary = `${outputs}\n\n${result.summary}`;
       }
+      // Harness self-repair loop: a run that failed because of the harness
+      // (recorded at its finish()) gets one automatic repair pass. On by
+      // default inside Mochi's own source repo (dogfooding — this is the loop
+      // that makes Mochi repair itself), off elsewhere unless selfRepair is
+      // explicitly set. One pass per process, 24h cooldown per signature.
+      let finalSummary = summary;
+      if (!this.autoRepairSpawned) {
+        try {
+          const { listHarnessIssues, shouldAutoRepair, buildRepairPrompt, isHarnessRepo, markRepairAttempt } = await import('./core/harness-issues.js');
+          const projectRoot = this.workspace.dir.replace(/[\\/]\\.mochi$/, '');
+          const open = listHarnessIssues(this.workspace.dir, { status: 'open' }).sort((a, b) => b.count - a.count);
+          const issue = open[0];
+          if (issue && shouldAutoRepair({ issue, isHarnessRepo: isHarnessRepo(projectRoot), configEnabled: this.config.selfRepair, now: Date.now() })) {
+            this.autoRepairSpawned = true;
+            markRepairAttempt(this.workspace.dir, issue.signature, Date.now());
+            const repairSummary = await this.runPrompt(buildRepairPrompt(issue), { sessionId });
+            finalSummary = `${summary}\n\n---\n[self-repair pass ran for harness issue ${issue.signature} (${issue.kind}, seen ${issue.count}x)]\n${repairSummary.slice(0, 2000)}`;
+          }
+        } catch (err) {
+          this.events.emit({ type: 'agent:log', agentId: 'runtime', message: `[self-repair] skipped: ${String(err).slice(0, 200)}` });
+        }
+      }
       return {
-        summary,
+        summary: finalSummary,
         status: goal.status,
         stopReason: result.failedTasks[0]?.attempts?.at(-1)?.failureReason,
         success: result.success,

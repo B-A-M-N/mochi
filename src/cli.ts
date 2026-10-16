@@ -2405,6 +2405,27 @@ async function main() {
     return;
   }
 
+  // mochi selfheal — run one automatic repair pass against the highest-priority
+  // open harness issue (Mochi repairs itself). Works even when the run happened
+  // elsewhere because issues persist in `.mochi/reports/harness-issues.json`.
+  if (first === 'selfheal') {
+    const { listHarnessIssues, buildRepairPrompt } = await import('./core/harness-issues.js');
+    const open = listHarnessIssues(runtime.workspace.dir, { status: 'open' }).sort((a, b) => b.count - a.count);
+    if (flags.list || flags.status || flags.summary) {
+      if (open.length === 0) console.log('No open harness issues.');
+      else { console.log(`Open harness issues (${open.length}):`); for (const i of open) console.log(`  ${i.signature}  ${i.kind} x${i.count}  ${i.title}`); }
+      return;
+    }
+    if (open.length === 0) { console.log('No open harness issues. Nothing to do.'); return; }
+    const target = positional[1]
+      ? (open.find((i) => i.signature.startsWith(positional[1]!)) ?? open[0])
+      : open[0];
+    console.log(`Running self-repair for ${target!.signature} (${target!.kind}, seen ${target!.count}x)...`);
+    const summary = await runtime.runPrompt(buildRepairPrompt(target!), { sessionId: runtime.activeSessionId });
+    console.log(summary);
+    return;
+  }
+
   if (first === 'trace') {
     const { readTrace, formatTrace } = await import('./observability/trace.js');
     const id = positional[1] ?? '';

@@ -67,6 +67,10 @@ export interface MochiConfig {
   mcpServers?: Record<string, { command?: string; args?: string[]; url?: string; headers?: Record<string, string>; env?: Record<string, string> }>;
   /** Plan-then-act: in plan mode the agent produces a plan instead of editing. */
   planMode?: boolean;
+  /** Self-repair: when the agent detects a harness-attributable failure, run an
+   *  automatic repair pass after the main task. Defaults to on inside Mochi's
+   *  own source repo, off elsewhere ( repairs must not surprise users). */
+  selfRepair?: boolean;
   /** Active execution mode: normal | spec | security | codemod | chaos. */
   mode?: string;
   /** Active reasoning effort / compute level: low | medium | high | max. */

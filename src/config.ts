@@ -366,6 +366,9 @@ export function validateConfig(config: MochiConfig): string[] {
   if (config.reasoning && !['low', 'medium', 'high', 'max', 'off', 'auto'].includes(config.reasoning)) {
     problems.push(`reasoning "${config.reasoning}" is invalid — must be "off", "auto", "low", "medium", "high", or "max"`);
   }
+  if (config.selfRepair !== undefined && typeof config.selfRepair !== 'boolean') {
+    problems.push(`selfRepair must be a boolean (got ${typeof config.selfRepair})`);
+  }
 
   // Safety config ranges
   const s = config.safety;

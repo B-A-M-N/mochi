@@ -71,6 +71,7 @@ import { planTargetedTests } from '../core/test-select.js';
 import { classifyOneShot } from '../core/one-shot.js';
 import { classifyContentOnly } from '../core/one-shot.js';
 import { workspaceListMessage } from '../core/workspace-list.js';
+import { issuesContextBlock, classifyHarnessFailure, recordHarnessIssue } from '../core/harness-issues.js';
 import { buildMcpTools } from '../mcp/tools.js';
 import { preEditSnapshot as gitPreEditSnapshot, rollbackToSnapshot as gitRollback, type CheckpointResult } from '../repo/git.js';
 import { applyToolOutputPolicy } from '../core/tool-output.js';
@@ -676,6 +677,10 @@ export class Agent {
   private trustNudges = 0;
   /** Stale-ledger caution sent this run (once). */
   private staleTodoNoteInjected = false;
+  /** Last 20 tool errors this run (harness self-repair input). */
+  private toolErrorLog: Array<{ tool: string; error: string }> = [];
+  /** Last 20 vetoes this run (harness self-repair input). */
+  private vetoLog: Array<{ tool: string; reason: string }> = [];
   private toolSigRepeat = 0;
   /** Task currently being run — needed by runMoolCall to finish the run when
    *  the budget is truly exhausted (bounded early-finish vs veto-looping). */
@@ -811,6 +816,33 @@ export class Agent {
    *  looking on other tasks"). State plainly what the ledger is and isn't.
    *  Skipped for subagents (they legitimately inherit the parent's plan) and
    *  when the request itself says continue/resume (the ledger is wanted). */
+  private async maybeRecordHarnessIssue(task: Task, _success: boolean, _summary: string, stopReason: AgentStopReason): Promise<void> {
+    if (['completed', 'aborted'].includes(stopReason)) return; // only failed/struggling runs
+    const classification = classifyHarnessFailure({
+      stopReason,
+      fileChanged: this.fileChanged,
+      toolCallsTotal: this.toolCallsTotal,
+      consecutiveToolErrors: this.consecutiveToolErrorsCount,
+      toolErrors: this.toolErrorLog,
+      vetoes: this.vetoLog,
+      chatMutationVetoes: this.chatMutationVetoes,
+      taskText: `${task.title} ${task.description}`,
+    });
+    if (!classification) return;
+    try {
+      const issue = recordHarnessIssue(this.workspace.dir, classification, `${task.title} ${task.description}`, Date.now());
+      this.events.emit({
+        type: 'agent:log',
+        agentId: this.id,
+        message: `[self-repair] harness issue recorded: ${issue.title} (sig ${issue.signature}, count ${issue.count}). Run \`mochi selfheal\` or enable selfRepair to auto-patch.`,
+      });
+    } catch { /* recording must never affect task completion */ }
+  }
+
+  /** Anti-manic guard: the todo ledger is per-WORKSPACE and persists across
+   *  runs, so a fresh task can open onto a pile of unfinished items from
+   *  earlier, unrelated sessions. State plainly what the ledger is and isn't.
+   *  Skipped for subagents and when the request itself says continue/resume. */
   private maybeInjectStaleTodoNote(): void {
     if (this.staleTodoNoteInjected || this.subagentDepth > 0) return;
     let open: string[] = [];
@@ -1229,9 +1261,10 @@ Continue from 'Next:', do not redo completed progress.`,
         } catch {}
       }
       const wsList = workspaceListMessage(this.cwd);
+      const issueCtx = issuesContextBlock(this.workspace.dir);
       this.context.addMessage({
         role: 'system',
-        content: `Preflight: repo=${repo.language ?? 'unknown'}${gitStatus ? ', git status:\n' + gitStatus : ''}${langHint ? '\n\n' + langHint : ''}${scopeOutline}${wsList ? '\n\n' + wsList : ''}`,
+        content: `Preflight: repo=${repo.language ?? 'unknown'}${gitStatus ? ', git status:\n' + gitStatus : ''}${langHint ? '\n\n' + langHint : ''}${scopeOutline}${wsList ? '\n\n' + wsList : ''}${issueCtx ? '\n\n' + issueCtx : ''}`,
       });
     }
 
@@ -3264,6 +3297,8 @@ Continue from 'Next:', do not redo completed progress.`,
    *  provider never sees a dangling reference. */
   private vetoToolCall(c: ToolCall, reason: string) {
     this.context.addMessage({ role: 'tool', tool_call_id: c.id, content: `Blocked: ${reason}`, name: c.function.name });
+    this.vetoLog.push({ tool: c.function.name, reason });
+    if (this.vetoLog.length > 20) this.vetoLog.shift();
   }
 
   /** Mark a tool result as "file changed" and track the affected paths.
@@ -3837,6 +3872,8 @@ Continue from 'Next:', do not redo completed progress.`,
     // permanent block.
     if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'notebook', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
       this.chatMutationVetoes++;
+      this.vetoLog.push({ tool: tc.function.name, reason: `chat-lane mutation veto (chatMutationVetoes=${this.chatMutationVetoes})` });
+      if (this.vetoLog.length > 20) this.vetoLog.shift();
       if (this.chatMutationVetoes < 2) {
         this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead. If the task explicitly REQUIRES this mutation as its deliverable (it names a file to produce, e.g. "write X into answer.txt"), repeat the call once — a repeated mutation request is honored as a correction.');
         return;
@@ -4046,6 +4083,8 @@ Continue from 'Next:', do not redo completed progress.`,
               `Your objective is: ${this.activeTask.title}. Do not create or modify files unrelated to it.` +
               focus,
           });
+          this.vetoLog.push({ tool: tc.function.name, reason: 'out-of-scope write (drift guard)' });
+          if (this.vetoLog.length > 20) this.vetoLog.shift();
           this.events.emit({
             type: 'tool:completed',
             tool: tc.function.name,
@@ -4220,6 +4259,8 @@ Continue from 'Next:', do not redo completed progress.`,
               `Your objective is: ${this.activeTask?.title || this.context.initialUserPrompt}. Do not create or modify files unrelated to it.` +
               focus,
           });
+          this.vetoLog.push({ tool: tc.function.name, reason: 'out-of-scope shell write (drift guard)' });
+          if (this.vetoLog.length > 20) this.vetoLog.shift();
           this.events.emit({ type: 'tool:completed', tool: tc.function.name, result: { toolCallId: tc.id, name: tc.function.name, output: 'Vetoed: out-of-scope shell write (drift guard).', durationMs: 0 }, agentId: this.id });
           return;
         }
@@ -4390,6 +4431,8 @@ Continue from 'Next:', do not redo completed progress.`,
     const foldedOutput = pol.content;
     if (err) {
       this.consecutiveToolErrorsCount++;
+      this.toolErrorLog.push({ tool: TOOL_ALIASES[toolName] || toolName, error: String(err) });
+      if (this.toolErrorLog.length > 20) this.toolErrorLog.shift();
       this.executionRegistry.markFailed(execRecord.executionId, err);
       // Codex-style completion gate input: remember the LAST tool outcome so
       // finish() can tell "ended on a failure" from "recovered from one".
@@ -5889,6 +5932,8 @@ Continue from 'Next:', do not redo completed progress.`,
       summary,
       doc,
     });
+    try { await this.maybeRecordHarnessIssue(task, success, summary, stopReason); } catch { /* recording must never affect completion */ }
+
     return {
       success,
       summary,
