@@ -145,9 +145,22 @@ function configFromFlags(flags: Record<string, string | boolean>): FlagOverrides
   const overrides: FlagOverrides = {};
   const model: Partial<MochiConfig['model']> = {};
   if (flags.provider) model.provider = String(flags.provider);
-  if (flags.model) model.model = String(flags.model);
+  if (flags.model) {
+    const m = String(flags.model);
+    model.model = m;
+    // The effective per-tier model comes from `model.profiles`, not
+    // `model.model` (resolveModel/profile override in createRawProvider). The
+    // default config fills every profile, so setting only `model.model` left
+    // the tier profiles in place and silently discarded the user's --model.
+    // Mirror `model-manager.setModel`, which sets every profile.
+    model.profiles = { fast: m, coding: m, reasoning: m, review: m };
+  }
   if (flags['api-key']) model.apiKey = String(flags['api-key']);
-  if (flags.baseUrl) model.baseUrl = String(flags.baseUrl);
+  // The arg parser stores `--base-url` under the literal key "base-url"; the
+  // old `flags.baseUrl` read never matched, so the documented --base-url flag
+  // was silently ignored (custom/proxy endpoints could not be selected).
+  const baseUrlFlag = flags['base-url'] ?? flags.baseUrl;
+  if (baseUrlFlag) model.baseUrl = String(baseUrlFlag);
   if (Object.keys(model).length) overrides.model = model as MochiConfig['model'];
   if (flags.safety) overrides.safety = { ...({} as MochiConfig['safety']), mode: String(flags.safety) as MochiConfig['safety']['mode'] };
   if (flags.auto) overrides.safety = { ...({} as MochiConfig['safety']), mode: 'auto' as const };
