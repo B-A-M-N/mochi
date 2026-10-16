@@ -4,7 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { runArgv } from '../exec.js';
 import { mochiStateDir } from '../core/mochi-dir.js';
 
 export interface NamedCheckpoint {
@@ -22,16 +22,22 @@ function getCheckpointsDir(cwd: string): string {
   return dir;
 }
 
-function runGit(cwd: string, args: string[]): string {
-  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
+/** Git calls run through the central exec policy (argv-only, timeout, output
+ *  cap). The raw diff gets a generous 32MB cap: a truncated patch is a
+ *  CORRUPT patch — silent truncation is exactly the bug class that once made
+ *  every saved checkpoint un-restorable. */
+const GIT_DIFF_MAX_OUTPUT = 32 * 1024 * 1024;
+
+async function runGit(cwd: string, args: string[]): Promise<string> {
+  const res = await runArgv('git', args, { cwd });
   return (res.stdout || '').trim();
 }
 
 /** Capture git stdout verbatim (no trim). Patches are whitespace-significant:
  *  trimming the trailing newline produces a patch `git apply` rejects with
  *  "corrupt patch", which silently made every saved checkpoint un-restorable. */
-function runGitRaw(cwd: string, args: string[]): string {
-  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
+async function runGitRaw(cwd: string, args: string[]): Promise<string> {
+  const res = await runArgv('git', args, { cwd, maxOutput: GIT_DIFF_MAX_OUTPUT });
   return res.stdout || '';
 }
 
@@ -44,11 +50,10 @@ function normalizePatch(patch: string): string {
 /** Like runGit, but surfaces failures — runGit drops status/stderr, which is
  *  why restore could report success after a `reset --hard` or `apply` that
  *  git had rejected (non-repo, bad sha, patch conflict). */
-function runGitChecked(cwd: string, args: string[]): { ok: boolean; out: string; err: string } {
-  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  if (res.error) return { ok: false, out: (res.stdout || '').trim(), err: String(res.error.message) };
-  const ok = res.status === 0;
-  return { ok, out: (res.stdout || '').trim(), err: ok ? '' : (res.stderr || `git ${args.join(' ')} exited ${res.status}`).trim() };
+async function runGitChecked(cwd: string, args: string[]): Promise<{ ok: boolean; out: string; err: string }> {
+  const res = await runArgv('git', args, { cwd });
+  const ok = res.code === 0 && !res.timedOut && !res.cancelled;
+  return { ok, out: (res.stdout || '').trim(), err: ok ? '' : (res.stderr || `git ${args.join(' ')} exited ${res.code}${res.timedOut ? ' (timed out)' : ''}`).trim() };
 }
 
 /** Save a named snapshot of current working tree and git state */
@@ -60,9 +65,9 @@ export async function saveNamedCheckpoint(
   const cleanName = name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
   const dir = getCheckpointsDir(cwd);
 
-  const headSha = runGit(cwd, ['rev-parse', 'HEAD']) || 'uncommitted';
-  const patch = normalizePatch(runGitRaw(cwd, ['diff', 'HEAD']));
-  const status = runGit(cwd, ['status', '--short']) || '';
+  const headSha = (await runGit(cwd, ['rev-parse', 'HEAD'])) || 'uncommitted';
+  const patch = normalizePatch(await runGitRaw(cwd, ['diff', 'HEAD']));
+  const status = (await runGit(cwd, ['status', '--short'])) || '';
 
   const affectedFiles = status
     .split('\n')
@@ -129,7 +134,7 @@ export async function restoreNamedCheckpoint(
   try {
     // 1. Reset tracked files to the recorded commit
     if (checkpoint.gitCommitSha && checkpoint.gitCommitSha !== 'uncommitted') {
-      const r = runGitChecked(cwd, ['reset', '--hard', checkpoint.gitCommitSha]);
+      const r = await runGitChecked(cwd, ['reset', '--hard', checkpoint.gitCommitSha]);
       if (!r.ok) {
         return {
           success: false,
@@ -142,7 +147,7 @@ export async function restoreNamedCheckpoint(
     if (checkpoint.patch) {
       const tempPatchPath = resolve(dir, `_temp_${Date.now()}.patch`);
       writeFileSync(tempPatchPath, normalizePatch(checkpoint.patch), 'utf8');
-      const r = runGitChecked(cwd, ['apply', tempPatchPath]);
+      const r = await runGitChecked(cwd, ['apply', tempPatchPath]);
       try { unlinkSync(tempPatchPath); } catch {}
       if (!r.ok) {
         return {
