@@ -47,6 +47,28 @@ describe('ContextEngine project-rule + memory caching', () => {
     expect(p3.systemPrompt).toContain('# v2 rules after edit');
   });
 
+  it('invalidates the memory cache when a memory/*.md file changes (not only project.md)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-mem-'));
+    mkdirSync(join(dir, '.mochi', 'memory'), { recursive: true });
+    const decisions = join(dir, '.mochi', 'memory', 'decisions.md');
+    writeFileSync(decisions, '## decision: widget-cache\nalpha marker rule.\nUpdated: 2026-01-01T00:00:00.000Z\n');
+
+    const engine = makeEngine(dir);
+    const task = {
+      id: 't', title: 'widget-cache tuning', description: 'tune the widget-cache',
+      role: 'coder' as const, status: 'pending' as const, priority: 1,
+      dependencies: [], fileScope: [], acceptanceCriteria: [], attempts: [],
+    };
+    const stateText = (p: ReturnType<typeof engine.buildPacket>): string =>
+      p.messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    expect(stateText(engine.buildPacket(NO_TOOLS, task))).toContain('alpha marker rule');
+
+    // Rewrite decisions.md; project.md is never touched. The old fingerprint
+    // only watched project.md, so this change was invisible to the cache.
+    writeFileSync(decisions, '## decision: widget-cache\nbeta marker rule.\nUpdated: 2026-01-02T00:00:00.000Z\n');
+    expect(stateText(engine.buildPacket(NO_TOOLS, task))).toContain('beta marker rule');
+  });
+
   it('returns empty rules when no candidate file exists', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-'));
     const engine = makeEngine(dir);

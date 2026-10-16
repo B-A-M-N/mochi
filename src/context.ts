@@ -427,9 +427,25 @@ export class ContextEngine {
     return this.estimateTokens();
   }
 
+  /** Fingerprint every file the memory packet is built from — project.md AND
+   *  memory/{decisions,architecture,conventions,failures}.md. Fingerprinting
+   *  only project.md (the old behaviour) meant a write to any of the memory
+   *  files never invalidated the cache, so a long-lived engine replayed stale
+   *  memory. */
+  private memoryFilesFingerprint(): string {
+    const base = resolve(this.projectRoot, '.mochi');
+    return [
+      resolve(base, 'project.md'),
+      resolve(base, 'memory', 'decisions.md'),
+      resolve(base, 'memory', 'architecture.md'),
+      resolve(base, 'memory', 'conventions.md'),
+      resolve(base, 'memory', 'failures.md'),
+    ].map(fingerprint).join('|');
+  }
+
   private loadMemory(query = ''): string {
-    const fp = fingerprint(resolve(this.projectRoot, '.mochi', 'project.md'));
-    // Re-select only when the underlying memory file or the query changes; a
+    const fp = this.memoryFilesFingerprint();
+    // Re-select only when the underlying memory files or the query change; a
     // stable task keeps the same relevant subset without re-reading the disk.
     if (fp !== this.memoryFingerprint || query !== this.memoryQuery) {
       this.memoryFingerprint = fp;
