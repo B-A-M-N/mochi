@@ -173,6 +173,7 @@ export const COMPLETION_COMMANDS: CompletionCommand[] = [
   { name: 'inspect', description: 'Inspect a target' },
   { name: 'check', description: 'Run checks' },
   { name: 'known-good', description: 'Mark a known-good state' },
+  { name: 'gc', description: 'Prune old session/trace files (retention)', aliases: ['prune', 'retention'] },
   { name: 'selfheal', description: 'Run an automatic repair pass on an open harness issue' },
   { name: 'use', description: 'Use a profile or preset' },
   { name: 'enhance', description: 'Removed standalone — use goal/team --enhance' },

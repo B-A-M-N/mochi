@@ -10,7 +10,7 @@ export interface RetentionResult {
   remainingFiles: number;
 }
 
-const DEFAULT_AGE_DAYS = 14;
+const DEFAULT_AGE_DAYS = 60;
 
 function pruneDir(dirPath: string, maxAgeMs: number): RetentionResult {
   const res: RetentionResult = { deletedFiles: 0, freedBytes: 0, remainingFiles: 0 };

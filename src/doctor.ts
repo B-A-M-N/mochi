@@ -453,7 +453,7 @@ export async function repairDoctor(opts: {
   }
 
   // 4. Disk retention / GC: prune stale session state and traces (>14 days)
-  const retentionResult = runRetention({ workspaceDir: stateDir, maxAgeDays: 14 });
+  const retentionResult = runRetention({ workspaceDir: stateDir, maxAgeDays: 60 });
   const retentionFixed = (retentionResult.state.deletedFiles + retentionResult.traces.deletedFiles) > 0;
   const freedMB = (retentionResult.state.freedBytes + retentionResult.traces.freedBytes) / (1024 * 1024);
   items.push({

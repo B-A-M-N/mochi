@@ -2117,6 +2117,22 @@ async function main() {
     console.log(formatDoctor(report));
     return;
   }
+  if (first === 'gc' || first === 'prune' || first === 'retention') {
+    const { runRetention } = await import('./memory/retention.js');
+    const { findProjectRoot } = await loadRepoModule();
+    const wsDir = resolve(findProjectRoot(runtime.cwd), '.mochi');
+    const maxAgeDays = Number(flags.maxAgeDays ?? positional[1] ?? 14);
+    const apply = flags.apply === true || flags.yes === true || positional.includes('--apply') || positional.includes('--yes');
+    if (!apply) {
+      console.log(`[dry-run] retention scan for ${wsDir} (maxAgeDays=${maxAgeDays})`);
+      console.log('  no files removed; pass --apply to actually prune');
+      return;
+    }
+    const r = runRetention({ workspaceDir: wsDir, maxAgeDays });
+    console.log(`GC complete — state: ${r.state.deletedFiles} deleted (${r.state.freedBytes} bytes), ${r.state.remainingFiles} kept; traces: ${r.traces.deletedFiles} deleted (${r.traces.freedBytes} bytes), ${r.traces.remainingFiles} kept. Log: ${r.logPath}`);
+    return;
+  }
+
   if (first === 'bundle' || first === 'export-bundle') {
     const { SessionStore } = await import('./state/session-store.js');
     const { safe } = await (async () => ({ safe: (s: string) => s })) as never;
