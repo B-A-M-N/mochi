@@ -93,7 +93,7 @@ export interface SpeculativeResult {
   verifierNotes: string;
 }
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 // MCH-43: predictive file pre-fetch. Given recently-touched files, predict
@@ -118,7 +118,7 @@ export function predictNextFiles(workspaceDir: string, recentlyTouched: string[]
   try {
     if (!existsSync(join(workspaceDir, '.git'))) return [];
     // Sample recent commits, list co-changed file groups.
-    const log = execSync('git log --oneline -40 --name-only', { cwd: workspaceDir, encoding: 'utf8', timeout: 5000 });
+    const log = execFileSync('git', ['log', '--oneline', '-40', '--name-only'], { cwd: workspaceDir, encoding: 'utf8', timeout: 5000 });
     const commits: string[][] = [];
     for (const line of log.split('\n')) {
       if (/^[0-9a-f]{7,} /.test(line)) commits.push([]);
