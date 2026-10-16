@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MochiConfig } from '../types.js';
 
@@ -102,5 +102,7 @@ export function saveConfigFile(cfg: MochiConfig): void {
   const path = configFilePath();
   const dir = resolve(path, '..');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(path, JSON.stringify(cfg, null, 2));
+  const tmp = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+  renameSync(tmp, path);
 }
