@@ -31,6 +31,7 @@ import {
   defaultUserSkillsDir,
   additionalUserSkillDirs,
   loadAllSkills,
+  lintSkillSource,
   type Skill,
 } from './skills.js';
 
@@ -80,6 +81,34 @@ describe('parseFrontmatter', () => {
   it('skips unparseable lines (no colon, empty key)', () => {
     const r = parseFrontmatter('---\njust a comment line\n: orphan\nname: ok\n---\nb\n');
     expect(r.frontmatter).toEqual({ name: 'ok' });
+  });
+
+  it('parses YAML block scalars (folded >- and literal |)', () => {
+    const folded = parseFrontmatter('---\nname: x\ndescription: >-\n  line one\n  line two\n  line three\n---\nB\n');
+    expect(folded.frontmatter.description).toBe('line one line two line three');
+    const literal = parseFrontmatter('---\ndescription: |\n  a\n  b\n---\nB\n');
+    expect(literal.frontmatter.description).toBe('a\nb');
+    // A block scalar must stop at the next unindented key.
+    const multi = parseFrontmatter('---\ndescription: >-\n  hello\n  world\nallowed-tools: read,write\n---\nB\n');
+    expect(multi.frontmatter.description).toBe('hello world');
+    expect(multi.frontmatter['allowed-tools']).toBe('read,write');
+  });
+});
+
+describe('lintSkillSource', () => {
+  it('does not treat quoted frontmatter values as invalid slugs', () => {
+    // Regression: skills lint re-parsed frontmatter with a raw regex that kept
+    // the YAML quotes, so `name: "imagegen"` was wrongly reported as an invalid
+    // slug (as discovered name `"imagegen"`).
+    const raw = '---\nname: "imagegen"\ndescription: Generate images.\n---\n1. step one\n2. step two\n3. step three\n';
+    const r = lintSkillSource(raw);
+    expect(r.name).toBe('imagegen');
+    expect(r.result.issues.some((i) => i.rule === 'slug-format')).toBe(false);
+  });
+
+  it('falls back to the provided name when frontmatter omits one', () => {
+    const raw = '---\ndescription: no name here\n---\nbody\n';
+    expect(lintSkillSource(raw, 'folder-name').name).toBe('folder-name');
   });
 });
 

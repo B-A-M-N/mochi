@@ -13,6 +13,7 @@ import { loadSkillFile, staleSkills, skillConflicts } from './skills/skills.js';
 import { SessionStore } from './state/session-store.js';
 import { runRetention } from './memory/retention.js';
 import { loadSavedTheme, getTheme, getCurrentTheme } from './tui/themes.js';
+import { mochiStateDir } from './core/mochi-dir.js';
 
 export interface SkillHealthEntry {
   name: string;
@@ -120,12 +121,15 @@ export async function doctorReport(opts: {
     }
   } catch { /* driver missing/broken: report unavailable */ }
 
-  // Real subsystem counts from the workspace's `.mochi/` state.
-  const cronJobs = listJobs(opts.workspaceDir).length;
+  // Real subsystem counts from the workspace's `.mochi/` state. `workspaceDir`
+  // is a project root from the CLI, but accept either form so the report can
+  // never read from the wrong (or a nested) location.
+  const stateDir = mochiStateDir(opts.workspaceDir);
+  const cronJobs = listJobs(stateDir).length;
   let sessionCount = 0;
   if (sqlite) {
     try {
-      const store = new SessionStore(opts.workspaceDir);
+      const store = new SessionStore(stateDir);
       try { sessionCount = store.list().length; } finally { store.close(); }
     } catch { /* store not initialised yet */ }
   }
@@ -134,7 +138,7 @@ export async function doctorReport(opts: {
   // entries — empty files, missing frontmatter, or stale orphans.
   const candidateDirs = [
     resolve(opts.workspaceDir, 'skills'),
-    resolve(opts.workspaceDir, '.mochi', 'skills'),
+    resolve(stateDir, 'skills'),
   ];
   const degradedSkills: SkillHealthEntry[] = [];
   const visitedPaths = new Set<string>();
@@ -385,15 +389,17 @@ export async function repairDoctor(opts: {
 }): Promise<{ items: RepairItem[]; summary: string }> {
   const { mkdirSync, existsSync, writeFileSync } = await import('node:fs');
   const items: RepairItem[] = [];
+  // Normalize so callers may pass either the project root or the state dir.
+  const stateDir = mochiStateDir(opts.workspaceDir);
 
   // 1. Workspace directories
   const requiredDirs = [
-    opts.workspaceDir,
-    resolve(opts.workspaceDir, 'rules'),
-    resolve(opts.workspaceDir, 'plugins'),
-    resolve(opts.workspaceDir, 'ambient'),
-    resolve(opts.workspaceDir, 'checkpoints'),
-    resolve(opts.workspaceDir, 'sessions'),
+    stateDir,
+    resolve(stateDir, 'rules'),
+    resolve(stateDir, 'plugins'),
+    resolve(stateDir, 'ambient'),
+    resolve(stateDir, 'checkpoints'),
+    resolve(stateDir, 'sessions'),
   ];
 
   let createdDirs = 0;
@@ -410,7 +416,7 @@ export async function repairDoctor(opts: {
   }
 
   // 2. Env configuration template
-  const envPath = resolve(opts.workspaceDir, '.env');
+  const envPath = resolve(stateDir, '.env');
   if (!existsSync(envPath) && !existsSync(resolve(opts.cwd, '.env'))) {
     const template = [
       '# Mochi Agent Configuration',
@@ -447,7 +453,7 @@ export async function repairDoctor(opts: {
   }
 
   // 4. Disk retention / GC: prune stale session state and traces (>14 days)
-  const retentionResult = runRetention({ workspaceDir: opts.workspaceDir, maxAgeDays: 14 });
+  const retentionResult = runRetention({ workspaceDir: stateDir, maxAgeDays: 14 });
   const retentionFixed = (retentionResult.state.deletedFiles + retentionResult.traces.deletedFiles) > 0;
   const freedMB = (retentionResult.state.freedBytes + retentionResult.traces.freedBytes) / (1024 * 1024);
   items.push({

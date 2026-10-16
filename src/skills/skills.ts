@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, dirname, join } from 'node:path';
 import { mochiStateDir } from '../core/mochi-dir.js';
 import { fileURLToPath } from 'node:url';
+import { lintSkillDoc, type SkillLintResult } from './skill-lint.js';
 
 // Agent Skills support (agentskills.io spec), modeled on pi's loader. Skills are
 // markdown files (typically `SKILL.md` or `my-skill.md`) whose YAML frontmatter
@@ -39,6 +40,18 @@ export function validateSkillName(name: string): string[] {
 /** Parse a small YAML-ish frontmatter block. Handles scalar strings, flags, and
  *  `- item` arrays (projecting both inline and multiline lists). Not a full YAML
  *  parser (enough for the agentskills spec). */
+/** Fold a YAML folded-scalar (`>`) block: adjacent non-empty lines join with a
+ *  space, blank lines become paragraph breaks. */
+function foldBlockLines(lines: string[]): string {
+  let out = '';
+  for (const l of lines) {
+    if (l === '') { out += '\n'; continue; }
+    if (out && !out.endsWith('\n')) out += ' ';
+    out += l;
+  }
+  return out;
+}
+
 export function parseFrontmatter(raw: string): { frontmatter: Record<string, string | boolean | string[]>; body: string } {
   const m = /^\ufeff?---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/.exec(raw);
   if (!m) return { frontmatter: {}, body: raw };
@@ -47,7 +60,8 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
   const out: Record<string, string | boolean | string[]> = {};
   const lines = yaml.split(/\r?\n/);
   let lastArrayKey: string | undefined;
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (/^\s*-\s+/.test(line) && lastArrayKey) {
       const item = line.replace(/^\s*-\s*/, '').trim().replace(/^["']|["']$/g, '');
       if (item) (out[lastArrayKey] as string[]).push(item);
@@ -57,8 +71,28 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
     const idx = line.search(/:\s*/);
     if (idx < 0) continue;
     const key = line.slice(0, idx).trim();
-    let value = line.slice(idx + 1).trim();
+    const value = line.slice(idx + 1).trim();
     if (!key) continue;
+    // YAML block scalars (`key: |`, `key: >-`, `key: |+`, `key: |2-` …): consume
+    // the indented continuation lines. Imported Cursor/Antigravity/Hermes skills
+    // write long descriptions this way, and dropping the continuation left the
+    // description as a bare `>-`, which broke skill retrieval + the prompt.
+    const block = /^([|>])[\d+-]*$/.exec(value);
+    if (block) {
+      const collected: string[] = [];
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1];
+        if (next.trim() === '') { collected.push(''); i++; continue; }
+        if (!/^\s/.test(next)) break;
+        collected.push(next.replace(/^\s+/, ''));
+        i++;
+      }
+      while (collected.length && collected[collected.length - 1] === '') collected.pop();
+      let text = block[1] === '|' ? collected.join('\n') : foldBlockLines(collected);
+      if (!value.endsWith('+')) text = text.replace(/\n+$/, '');
+      out[key] = text.trim();
+      continue;
+    }
     if (value === 'true' || value === 'false') {
       out[key] = value === 'true';
     } else if (value.startsWith('- ')) {
@@ -74,6 +108,21 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
     }
   }
   return { frontmatter: out, body };
+}
+
+/** Lint a raw SKILL.md source. Parses frontmatter with the canonical parser so
+ *  quoted YAML scalars (`name: "foo"`) are not mistaken for an invalid slug — a
+ *  hand-rolled regex that kept the quotes produced false `slug-format` failures
+ *  for imported Codex/Claude skills whose frontmatter quotes its values. */
+export function lintSkillSource(
+  raw: string,
+  fallbackName = '',
+): { name: string; description: string; body: string; result: SkillLintResult } {
+  const { frontmatter, body } = parseFrontmatter(raw);
+  const rawName = typeof frontmatter.name === 'string' ? frontmatter.name.trim() : '';
+  const name = rawName || fallbackName;
+  const description = typeof frontmatter.description === 'string' ? frontmatter.description.replace(/\s+/g, ' ').trim() : '';
+  return { name, description, body, result: lintSkillDoc(name, description, body) };
 }
 
 /** Load a single skill from a markdown file. Returns null (with diagnostics)

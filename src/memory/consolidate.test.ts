@@ -85,4 +85,23 @@ describe('consolidate (auto persistent memory)', () => {
     const t = failedTask();
     expect(consolidateReason(t)).toContain('missing add.js');
   });
+
+  it('collapses a multi-line failure dump into a compact single line', () => {
+    const t = failedTask({
+      attempts: [
+        {
+          id: 'a1', strategy: 'x', actions: [], result: 'failure',
+          failureReason: '> vitest run\n\n====\nFAIL src/x.test.ts\n  expected 1 to be 2\n  at line 10',
+          timestamp: 1,
+        },
+      ],
+    });
+    consolidate(dir, failedResult([t]));
+    const body = readFileSync(resolve(dir, 'memory/failures.md'), 'utf8');
+    // Newlines/separators from the raw dump must not survive into memory.
+    const stored = body.split('\n').find((l) => l.includes('vitest run')) ?? '';
+    expect(stored).toContain('vitest run');
+    expect(stored).toContain('expected 1 to be 2');
+    expect((body.match(/^## /gm) || []).length).toBe(1);
+  });
 });

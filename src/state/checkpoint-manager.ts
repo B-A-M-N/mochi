@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { mochiStateDir } from '../core/mochi-dir.js';
 
 export interface NamedCheckpoint {
   name: string;
@@ -16,7 +17,7 @@ export interface NamedCheckpoint {
 }
 
 function getCheckpointsDir(cwd: string): string {
-  const dir = resolve(cwd, '.mochi', 'checkpoints');
+  const dir = resolve(mochiStateDir(cwd), 'checkpoints');
   mkdirSync(dir, { recursive: true });
   return dir;
 }

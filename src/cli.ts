@@ -1242,12 +1242,11 @@ async function main() {
       return;
     }
     if (sub === 'lint') {
-      const { lintSkillDoc, formatSkillLint } = await import('./skills/skill-lint.js');
+      const { formatSkillLint } = await import('./skills/skill-lint.js');
       const { assessSkillQuality } = await import('./skills/skill-manager.js');
       const { readFileSync } = await import('node:fs');
       const target = positional[2];
-      const { discoverSkills } = await import('./skills/skills.js');
-      const { bundledSkillsDir } = await import('./skills/skills.js');
+      const { discoverSkills, bundledSkillsDir, lintSkillSource } = await import('./skills/skills.js');
       const { resolve } = await import('node:path');
       const { homedir } = await import('node:os');
       const dirs = target
@@ -1266,13 +1265,10 @@ async function main() {
           let pass = true;
           try {
             const raw = readFileSync(sk.path, 'utf8');
-            const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-            if (!m) { console.error(`FAIL  ${sk.name}: bad frontmatter (no --- block)`); failing++; continue; }
-            const name = (/name:\s*(.+)/.exec(m[1]) ?? [])[1]?.trim() ?? sk.name;
-            const desc = (/description:\s*([\s\S]*?)(?=\n\w+:|$)/.exec(m[1]) ?? [])[1]?.replace(/\n/g, ' ').trim() ?? '';
-            const r = lintSkillDoc(name, desc, m[2]);
+            if (!/^\ufeff?---/.test(raw)) { console.error(`FAIL  ${sk.name}: bad frontmatter (no --- block)`); failing++; continue; }
+            const { description, body, result: r } = lintSkillSource(raw, sk.name);
             if (!r.ok) { console.error(`FAIL  ${sk.name}: ${formatSkillLint(r)}`); pass = false; failing++; }
-            const dq: any = assessSkillQuality(desc, m[2]);
+            const dq: any = assessSkillQuality(description, body);
             if (!dq.passed) { console.log(`WARN  ${sk.name}: quality bar missing — ${dq.missing.join('; ')}`); }
           } catch (e) {
             console.error(`FAIL  ${sk.name}: ${(e as Error).message}`);

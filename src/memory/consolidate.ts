@@ -34,6 +34,18 @@ function failureReason(task: Task): string {
   return out ?? '';
 }
 
+/** Collapse a raw failure dump into a compact, single-line signal. Failure
+ *  reasons are usually a full command's stdout/stderr; persisting that verbatim
+ *  bloats the memory file that is re-injected into later contexts. Keep the
+ *  first few meaningful lines and drop blank/separator noise. */
+function summarizeFailure(raw: string): string {
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !/^[-=_*~#]{3,}$/.test(l));
+  return lines.slice(0, 4).join(' | ');
+}
+
 export interface ConsolidationResult {
   added: number;
   failures: string[];
@@ -47,7 +59,7 @@ export function consolidate(workspaceDir: string, result: GoalResult, model = 'm
   const store = new MemoryStore(workspaceDir);
   const seenTitles = new Set(store.entries('failure').map((e) => e.title));
   for (const task of result.failedTasks) {
-    const reason = failureReason(task).slice(0, MAX_BODY);
+    const reason = summarizeFailure(failureReason(task)).slice(0, MAX_BODY);
     if (!reason) continue;
     const title = `Failed: ${task.title}`;
     if (seenTitles.has(title)) continue; // already remembered
