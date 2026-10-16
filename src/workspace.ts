@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Goal, Task, AgentState } from './types.js';
 
@@ -71,7 +71,12 @@ export class Workspace {
   }
 
   writeJson(path: string, value: unknown) {
-    writeFileSync(this.path(path), JSON.stringify(value, null, 2));
+    const full = this.path(path);
+    const dir = resolve(full, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const tmp = `${full}.tmp-${process.pid}`;
+    writeFileSync(tmp, JSON.stringify(value, null, 2));
+    renameSync(tmp, full);
   }
 
   loadGoal(goalId: string): Goal | undefined {
