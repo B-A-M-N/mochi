@@ -270,7 +270,9 @@ Fully functional end to end (agent loop, tools, config, workspaces); drop it ont
 | `mochi docgen [--write]` | Architecture diagram + API reference generation |
 | `mochi daemon start/status/jobs/send/approve/resume/rotate/cron/restart/stop` | Persistent HTTP agent service |
 | `mochi acp` | Agent Client Protocol server for editors |
-| `mochi discord run` | Discord bot gateway |
+| `mochi connectors [status]` | List messaging gateways (aliases: `gateways`/`channels`/`platforms`) |
+| `mochi discord run` / `mochi telegram run` / `mochi slack run` / `mochi bluebubbles run` | Messaging gateways (Discord, Telegram, Slack, iMessage via BlueBubbles) |
+| `mochi interop claude [--dry-run]` | Import Claude Code hooks, agents, and commands |
 | `mochi dashboard` / `mochi web` | Web dashboard |
 | `mochi plugin add/remove/list` | Plugin registry |
 | `mochi goal "<objective>" --enhance [--mode <mode>]` | Inject Chameleon reasoning enhancement into a goal/team run |
@@ -655,9 +657,19 @@ mochi team "ship the auth flow" --enhance --mode auto          # same engine for
 
 Modes map to how many reasoning strategies run: `flash < turbo < easy < medium < hard < deep < extreme/genius`. Opt in without flags via config: `{ "enhance": { "enabled": true, "mode": "auto" } }`.
 
-### Discord gateway
+### Messaging gateways
 
-`mochi discord run` exposes the agent as a Discord bot — send goals from chat, get results back.
+Expose the agent in the chat apps you already live in — send goals from a message, get results back:
+
+```bash
+mochi connectors            # which gateways are configured (env/token state)
+mochi discord run           # Discord bot
+mochi telegram run          # Telegram bot
+mochi slack run             # Slack (polling) — or: mochi slack webhook (Events API)
+mochi bluebubbles run       # iMessage via a BlueBubbles server (aliases: imessage, bb)
+```
+
+`mochi doctor` prints the exact env vars each gateway needs (`DISCORD_BOT_TOKEN`, `TELEGRAM_BOT_TOKEN`, `SLACK_*`, `BLUEBUBBLES_*`), and gateway tokens are redacted from logs/transcripts by the same native secret-redaction path as API keys.
 
 ### Web dashboard
 

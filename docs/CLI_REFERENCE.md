@@ -35,6 +35,14 @@ mochi termix --sessions 3            # Launch with 3 concurrent agent panes
 # ACP Editor Server
 mochi acp                            # Launch Agent Client Protocol v1 stdio server
 
+# Messaging Gateways (send goals from chat, get results back)
+mochi connectors [status]            # List gateways + config state (aliases: gateways/channels/platforms)
+mochi discord run | status           # Discord bot gateway
+mochi telegram run | status          # Telegram bot gateway
+mochi slack run | webhook | status   # Slack (polling bot or Events API webhook)
+mochi bluebubbles run | status       # iMessage via BlueBubbles (aliases: bluebubble/imessage/bb)
+mochi interop claude [--dry-run]     # Import Claude Code hooks, agents, and commands
+
 # Diagnostics & Skills
 mochi doctor                         # Run health check on workspace, tools, and compilers
 mochi skills                         # List all bundled and project skills
