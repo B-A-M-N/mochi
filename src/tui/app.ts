@@ -1682,15 +1682,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       scheduleRender();
       return;
     }
-    if (line === '/status' || line === '/changes') { await run(async () => (await import('../repo/git.js')).status(projectRoot)); return; }
-    if (line === '/diff') { await run(async () => (await import('../repo/git.js')).diff(projectRoot)); return; }
+    if (line === '/status' || line === '/changes') { await view(async () => (await import('../repo/git.js')).status(projectRoot)); return; }
+    if (line === '/diff') { await view(async () => (await import('../repo/git.js')).diff(projectRoot)); return; }
     if (line === '/mode' || line.startsWith('/mode ')) {
       const specific = line.startsWith('/mode ') ? line.slice(6).trim() : '';
       if (!specific) {
         push('system', `${formatModes(isMode(runtime.config.mode ?? '') ? (runtime.config.mode as AgentMode) : 'normal')}\n\nUsage: /mode <name>`);
         return;
       }
-      await run(async () => {
+      await view(async () => {
         const res = runtime.setMode(specific);
         return res.startsWith('Unknown')
           ? res
@@ -1754,11 +1754,11 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       });
       return;
     }
-    if (line === '/profiles') { await run(async () => runtime.profiles().map(p => `${p.name} (${p.role}) model=${p.defaultModel ?? 'coding'} verification=${p.verification ?? 'optional'}`).join('\n')); return; }
-    if (line === '/memory') { await run(async () => runtime.memory() || 'No project memory yet.'); return; }
-    if (line.startsWith('/rules add ')) { await run(async () => { const { appendRule } = await import('../contract.js'); const rule = line.slice('/rules add '.length).trim(); if (!rule) return 'empty rule'; const r = appendRule(runtime.cwd, rule); return `appended → ${r.file}`; }); return; }
-    if (line === '/facts') { await run(async () => { const { memoryDigest } = await import('../memory/memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
-    if (line.startsWith('/fact ')) { await run(async () => { const { addFact } = await import('../memory/memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
+    if (line === '/profiles') { await view(async () => runtime.profiles().map(p => `${p.name} (${p.role}) model=${p.defaultModel ?? 'coding'} verification=${p.verification ?? 'optional'}`).join('\n')); return; }
+    if (line === '/memory') { await view(async () => runtime.memory() || 'No project memory yet.'); return; }
+    if (line.startsWith('/rules add ')) { await view(async () => { const { appendRule } = await import('../contract.js'); const rule = line.slice('/rules add '.length).trim(); if (!rule) return 'empty rule'; const r = appendRule(runtime.cwd, rule); return `appended → ${r.file}`; }); return; }
+    if (line === '/facts') { await view(async () => { const { memoryDigest } = await import('../memory/memory-store.js'); const d = memoryDigest(); return d || 'No durable facts yet.'; }); return; }
+    if (line.startsWith('/fact ')) { await view(async () => { const { addFact } = await import('../memory/memory-store.js'); const stmt = line.slice(6).trim(); if (!stmt) return 'usage: /fact <statement>'; addFact(stmt, 'fact', 'user'); return `remembered: ${stmt}`; }); return; }
     if (line === '/good' || line === '/bad' || line.startsWith('/good ') || line.startsWith('/bad ') || line.startsWith('/feedback ')) {
       const rest = line.startsWith('/feedback ') ? line.slice(10).trim() : '';
       const isGood = line === '/good' || line.startsWith('/good ') || rest.startsWith('good') || rest.startsWith('+1');
@@ -1784,8 +1784,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         return;
       }
     }
-    if (line === '/feedback') { await run(async () => { const { recentFeedback } = await import('../observability/feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Use /good or /bad to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
-    if (line === '/circle') { await run(async () => {
+    if (line === '/feedback') { await view(async () => { const { recentFeedback } = await import('../observability/feedback.js'); const r = recentFeedback(15); if (r.length === 0) return 'No feedback recorded yet. Use /good or /bad to rate.'; return r.map((e) => `${new Date(e.ts).toISOString().slice(11,16)} ${e.verdict === 'good' ? '👍' : '👎'} turn#${e.turn} "${e.snippet.slice(0,80)}"`).join('\n'); }); return; }
+    if (line === '/circle') { await view(async () => {
       const { detectCircle } = await import('../circle.js');
       const { SessionStore } = await import('../state/session-store.js');
       const store = new SessionStore(projectRoot);
@@ -1794,15 +1794,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       const v = detectCircle(messages, 4);
       return v.circling ? `CIRCLE: ${v.signals.join(' · ')}` : `ok (signals=${v.signals.length})`;
     }); return; }
-    if (line === '/tasks') { await run(async () => listTasks()); return; }
-    if (line === '/checkpoint') { await run(async () => { const cp = await runtime.checkpoint(); return `${cp.type} ${cp.ref}`; }); return; }
-    if (line === '/rollback') { await run(async () => runtime.rollback()); return; }
+    if (line === '/tasks') { await view(async () => listTasks()); return; }
+    if (line === '/checkpoint') { await view(async () => { const cp = await runtime.checkpoint(); return `${cp.type} ${cp.ref}`; }); return; }
+    if (line === '/rollback') { await view(async () => runtime.rollback()); return; }
     if (line.startsWith('/inspect ') || line === '/inspect') {
       const target = line.startsWith('/inspect ') ? line.slice(9).trim() : await ask('Symbol or file to inspect:');
       if (target) {
         push('user', `/inspect ${target}`);
         scheduleRender();
-        await run(async () => (await runtime.inspect(target)).summary);
+        await view(async () => (await runtime.inspect(target)).summary);
       }
       return;
     }
@@ -1884,14 +1884,14 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       return;
     }
     if (line === '/doctor' || line === '/settings') {
-      await run(async () => {
+      await view(async () => {
         const { describeConfig } = await import('../model/model-manager.js');
         return `${describeConfig(runtime.config)}\n\nmodel: ${runtime.config.model.model}\ncat: config`;
       });
       return;
     }
     if (line === '/usage' || line === '/cost' || line === '/tokens' || line === '/stats') {
-      await run(async () => {
+      await view(async () => {
         const summary = runtime.usage.summary();
         const recent = runtime.usage.recent();
         const cachePct = state.totalTokens > 0 ? Math.round((state.cacheTokens / state.totalTokens) * 100) : 0;
@@ -1917,8 +1917,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       });
       return;
     }
-    if (line === '/known-good') { await run(async () => runtime.recordGood()); return; }
-    if (line === '/check') { await run(async () => runtime.knownGood()); return; }
+    if (line === '/known-good') { await view(async () => runtime.recordGood()); return; }
+    if (line === '/check') { await view(async () => runtime.knownGood()); return; }
     if (line === '/providers' || line.startsWith('/providers ')) { await providerMenu(line); return; }
     if (line === '/login' || line === '/provider') { await loginFlow(); return; }
     if (line === '/onboard' || line === '/setup' || line === '/welcome') {
@@ -2026,7 +2026,7 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
         // /skills audit — health view: counts, agent-created vs bundled,
         // usage counters, last curator report. Proves the skill tree is
         // ALIVE instead of just listing it.
-        await run(async () => {
+        await view(async () => {
           const { loadAllSkills } = await import('../skills/skills.js');
           const { skills } = loadAllSkills(projectRoot);
           const { scanSkills, defaultCuratorConfig, loadCuratorState } = await import('../skills/skill-curator.js');
@@ -2719,6 +2719,24 @@ if (line === '/branch' || line.startsWith('/branch ')) {
       push('system', `[MODEL] ${desc}`);
     } catch (e) {
       push('error', `Model switch failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    scheduleRender();
+  }
+
+  /** Render the result of a READ-ONLY / informational command (git status,
+   *  /usage, /doctor, /memory, …). These are not tasks: the old path ran them
+   *  through `run()`, which flipped the composer into "busy", marked the tab
+   *  "done" (✓), and fired a "Task Complete" desktop notification for what is
+   *  just a text dump. `view()` only appends a SYSTEM line and never touches
+   *  busy/done/notifications, so info commands stop reading as task completions.
+   *  (The output is deliberately a system line, not an assistant turn — a git
+   *  diff is not something the model said.) */
+  async function view(fn: () => Promise<string>): Promise<void> {
+    try {
+      const out = await fn();
+      if (out && out.trim()) push('system', out);
+    } catch (e) {
+      push('error', e instanceof Error ? e.message : String(e));
     }
     scheduleRender();
   }
