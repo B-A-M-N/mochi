@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rename
 import { dirname, join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { lintSkillDoc } from './skill-lint.js';
-import { BLOCK_SCALAR_RE, readBlockScalar } from './frontmatter.js';
+import { parseFrontmatter as parseSkillFrontmatter } from './skills.js';
 import { mochiStateDir } from '../core/mochi-dir.js';
 import type { Tool } from '../tools/types.js';
 
@@ -97,40 +97,16 @@ export function forget(projectDir: string, name: string): void {
   saveUsage(projectDir, db);
 }
 
-// ─── Frontmatter parse / validate (YAML-ish, matches mochi skills.ts load) ─
+// ─── Frontmatter parse / validate (YAML-ish) ────────────────────────────
 
-const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
-
+/** Parse a SKILL.md's frontmatter. Delegates to the single canonical parser in
+ *  skills.ts so BOM handling, quoted scalars, inline + list arrays, and YAML
+ *  block scalars behave identically wherever skills are read (the loader, the
+ *  importer, Claude interop, and the curator). */
 export function parseFrontmatter(text: string): { meta: Record<string, unknown>; body: string } | null {
-  const m = FM_RE.exec(text);
-  if (!m) return null;
-  const meta: Record<string, unknown> = {};
-  const lines = m[1].split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const idx = line.indexOf(':');
-    if (idx <= 0) continue;
-    const key = line.slice(0, idx).trim();
-    let val = line.slice(idx + 1).trim();
-    // YAML block scalars (`|`, `>-`, `|+`, `|2-` …): consume the indented
-    // continuation lines so multi-line descriptions survive (imported
-    // Cursor/Antigravity/Hermes skills write them this way).
-    if (BLOCK_SCALAR_RE.test(val)) {
-      const { text: blockText, next } = readBlockScalar(lines, i, val);
-      meta[key] = blockText;
-      i = next;
-      continue;
-    }
-    if (val.length >= 2 && ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))) {
-      val = val.slice(1, -1);
-    }
-    if (val.startsWith('[') && val.endsWith(']')) {
-      meta[key] = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
-    } else {
-      meta[key] = val;
-    }
-  }
-  return { meta, body: m[2]?.replace(/^\n/, '') ?? '' };
+  if (!/^\ufeff?---/.test(text)) return null;
+  const { frontmatter, body } = parseSkillFrontmatter(text);
+  return { meta: frontmatter as Record<string, unknown>, body };
 }
 
 export function renderSkill(p: { name: string; description: string; category?: string; tags?: string[]; body: string }): string {
