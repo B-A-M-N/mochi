@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rename
 import { dirname, join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { lintSkillDoc } from './skill-lint.js';
+import { BLOCK_SCALAR_RE, readBlockScalar } from './frontmatter.js';
 import { mochiStateDir } from '../core/mochi-dir.js';
 import type { Tool } from '../tools/types.js';
 
@@ -104,11 +105,22 @@ export function parseFrontmatter(text: string): { meta: Record<string, unknown>;
   const m = FM_RE.exec(text);
   if (!m) return null;
   const meta: Record<string, unknown> = {};
-  for (const line of m[1].split(/\r?\n/)) {
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const idx = line.indexOf(':');
     if (idx <= 0) continue;
     const key = line.slice(0, idx).trim();
     let val = line.slice(idx + 1).trim();
+    // YAML block scalars (`|`, `>-`, `|+`, `|2-` …): consume the indented
+    // continuation lines so multi-line descriptions survive (imported
+    // Cursor/Antigravity/Hermes skills write them this way).
+    if (BLOCK_SCALAR_RE.test(val)) {
+      const { text: blockText, next } = readBlockScalar(lines, i, val);
+      meta[key] = blockText;
+      i = next;
+      continue;
+    }
     if (val.length >= 2 && ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))) {
       val = val.slice(1, -1);
     }

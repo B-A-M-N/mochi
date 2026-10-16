@@ -168,6 +168,14 @@ describe('skill-manager', () => {
     expect(pf?.body).toContain('hello');
   });
 
+  it('parses YAML block scalars for multi-line descriptions', () => {
+    const folded = parseFrontmatter('---\nname: x\ndescription: >-\n  do a thing\n  and another\nversion: 2\n---\nbody\n');
+    expect(folded?.meta.description).toBe('do a thing and another');
+    expect(folded?.meta.version).toBe('2');
+    const literal = parseFrontmatter('---\ndescription: |\n  line a\n  line b\n---\nbody\n');
+    expect(literal?.meta.description).toBe('line a\nline b');
+  });
+
   it('patches an existing substring and bumps patch count', () => {
     const r = writeSkill(proj, { name: 'Dep', description: 'steps', body: procedureFixture('1. build\n2. ship') });
     const pr = patchSkill(proj, 'Dep', { name: 'Dep', path: r.path! }, '2. ship', '2. ship + changelog');

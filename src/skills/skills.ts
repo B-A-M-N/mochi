@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { mochiStateDir } from '../core/mochi-dir.js';
 import { fileURLToPath } from 'node:url';
 import { lintSkillDoc, type SkillLintResult } from './skill-lint.js';
+import { BLOCK_SCALAR_RE, readBlockScalar } from './frontmatter.js';
 
 // Agent Skills support (agentskills.io spec), modeled on pi's loader. Skills are
 // markdown files (typically `SKILL.md` or `my-skill.md`) whose YAML frontmatter
@@ -42,16 +43,6 @@ export function validateSkillName(name: string): string[] {
  *  parser (enough for the agentskills spec). */
 /** Fold a YAML folded-scalar (`>`) block: adjacent non-empty lines join with a
  *  space, blank lines become paragraph breaks. */
-function foldBlockLines(lines: string[]): string {
-  let out = '';
-  for (const l of lines) {
-    if (l === '') { out += '\n'; continue; }
-    if (out && !out.endsWith('\n')) out += ' ';
-    out += l;
-  }
-  return out;
-}
-
 export function parseFrontmatter(raw: string): { frontmatter: Record<string, string | boolean | string[]>; body: string } {
   const m = /^\ufeff?---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/.exec(raw);
   if (!m) return { frontmatter: {}, body: raw };
@@ -77,20 +68,11 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
     // the indented continuation lines. Imported Cursor/Antigravity/Hermes skills
     // write long descriptions this way, and dropping the continuation left the
     // description as a bare `>-`, which broke skill retrieval + the prompt.
-    const block = /^([|>])[\d+-]*$/.exec(value);
+    const block = BLOCK_SCALAR_RE.exec(value);
     if (block) {
-      const collected: string[] = [];
-      while (i + 1 < lines.length) {
-        const next = lines[i + 1];
-        if (next.trim() === '') { collected.push(''); i++; continue; }
-        if (!/^\s/.test(next)) break;
-        collected.push(next.replace(/^\s+/, ''));
-        i++;
-      }
-      while (collected.length && collected[collected.length - 1] === '') collected.pop();
-      let text = block[1] === '|' ? collected.join('\n') : foldBlockLines(collected);
-      if (!value.endsWith('+')) text = text.replace(/\n+$/, '');
-      out[key] = text.trim();
+      const { text, next } = readBlockScalar(lines, i, value);
+      out[key] = text;
+      i = next;
       continue;
     }
     if (value === 'true' || value === 'false') {
