@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { Runtime } from './runtime.js';
+import { PROVIDERS } from './model/providers.js';
 
 export interface DiscordConfig {
   token: string;
@@ -14,6 +15,68 @@ export interface DiscordConfig {
   allowedUserIds?: string[];
   prefix?: string;
 }
+
+/** Canonical Discord Application Slash Commands */
+export const DISCORD_SLASH_COMMANDS = [
+  {
+    name: 'ask',
+    description: 'Execute a coding goal or task with Mochi',
+    options: [
+      {
+        name: 'prompt',
+        description: 'The task or question for Mochi',
+        type: 3, // STRING
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'model',
+    description: 'Show or change the active AI model',
+    options: [
+      {
+        name: 'name',
+        description: 'Model name (e.g. gemini-3.8-flash, claude-sonnet-4-6, deepseek-ai/DeepSeek-V4.1-Flash)',
+        type: 3, // STRING
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'reasoning',
+    description: 'Show or change reasoning depth',
+    options: [
+      {
+        name: 'effort',
+        description: 'Reasoning level (low, medium, high, max)',
+        type: 3, // STRING
+        required: false,
+        choices: [
+          { name: 'low', value: 'low' },
+          { name: 'medium', value: 'medium' },
+          { name: 'high', value: 'high' },
+          { name: 'max', value: 'max' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'status',
+    description: 'Show Mochi status, active model, tokens, and cost',
+  },
+  {
+    name: 'doctor',
+    description: 'Run workspace configuration and health diagnosis',
+  },
+  {
+    name: 'reset',
+    description: 'Reset active conversation and goal state',
+  },
+  {
+    name: 'help',
+    description: 'Show available Mochi commands and usage',
+  },
+];
 
 /** Load Discord bot configuration from environment or .env files */
 export function loadDiscordConfig(cwd: string): DiscordConfig | null {
@@ -163,6 +226,67 @@ export async function triggerDiscordTyping(
   }
 }
 
+/** Format active model status and fallbacks for Discord display */
+export function handleModelStatus(runtime: Runtime): string {
+  const current = runtime.config.model;
+  const fallbacks = runtime.getFallbacks();
+  const fbText = fallbacks.length > 0
+    ? fallbacks.map((f, i) => `  ${i + 1}. \`${f.provider}/${f.model}\``).join('\n')
+    : '  (none)';
+
+  return [
+    `🍡 **Active Model Configuration**`,
+    `- **Provider**: \`${current.provider}\``,
+    `- **Model**: \`${current.model}\``,
+    `- **Reasoning**: \`${runtime.config.reasoning || 'medium'}\``,
+    `- **Context Budget**: \`${runtime.config.safety?.contextBudgetTokens ?? 128000}\` tokens`,
+    `\n**Configured Fallbacks**:`,
+    fbText,
+    `\n*Switch model with \`/model <name>\` (e.g. \`/model claude-sonnet-4-6\` or \`/model gemini-3.8-flash\`)*`,
+  ].join('\n');
+}
+
+/** Switch active model in runtime */
+export async function handleModelSwitch(runtime: Runtime, modelQuery: string): Promise<string> {
+  const q = modelQuery.trim();
+  if (!q) return handleModelStatus(runtime);
+
+  let targetProvider = '';
+  let targetModel = '';
+
+  if (q.includes('/')) {
+    const slashIdx = q.indexOf('/');
+    targetProvider = q.slice(0, slashIdx);
+    targetModel = q.slice(slashIdx + 1);
+  } else {
+    for (const prov of PROVIDERS) {
+      if (prov.id.toLowerCase() === q.toLowerCase()) {
+        targetProvider = prov.id;
+        targetModel = prov.defaultModel;
+        break;
+      }
+      const match = prov.models.find((m) => m.toLowerCase().includes(q.toLowerCase()));
+      if (match) {
+        targetProvider = prov.id;
+        targetModel = match;
+        break;
+      }
+    }
+  }
+
+  if (!targetProvider) {
+    targetProvider = runtime.config.model.provider;
+    targetModel = q;
+  }
+
+  try {
+    await runtime.useProvider(targetProvider, targetModel);
+    return `🍡 **Model Switched Successfully**\n- **Provider**: \`${runtime.config.model.provider}\`\n- **Model**: \`${runtime.config.model.model}\`\n- **Reasoning**: \`${runtime.config.reasoning || 'medium'}\``;
+  } catch (err) {
+    return `❌ Failed to switch model: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 /** Process a message event received from Discord webhook or gateway */
 export async function handleDiscordMessage(
   msg: { authorId: string; content: string; channelId: string },
@@ -175,24 +299,48 @@ export async function handleDiscordMessage(
 
   const cleanText = msg.content.trim();
   const prefix = config.prefix || '!mochi';
-  const prompt = cleanText.startsWith(prefix) ? cleanText.slice(prefix.length).trim() : cleanText;
+  let prompt = cleanText.startsWith(prefix) ? cleanText.slice(prefix.length).trim() : cleanText;
+  if (prompt.startsWith('/')) prompt = prompt.slice(1).trim();
 
   if (!prompt || prompt === 'help') {
-    return `🍡 **Mochi Discord Gateway**
-- \`${prefix} <goal>\` — Execute a coding goal or task.
-- \`${prefix} status\` — Show active model, token usage, and daemon health.
-- \`${prefix} doctor\` — Run workspace configuration diagnosis.
-`;
+    return [
+      `🍡 **Mochi Discord Gateway** (Parity with Hermes/OMP)`,
+      `- \`/ask <goal>\` or \`${prefix} <goal>\` — Execute a coding goal or task.`,
+      `- \`/model [name]\` or \`${prefix} model [name]\` — View active model or switch models.`,
+      `- \`/reasoning [effort]\` or \`${prefix} reasoning [effort]\` — View or set reasoning depth (low/medium/high/max).`,
+      `- \`/status\` or \`${prefix} status\` — Show active model, token usage, and daemon health.`,
+      `- \`/doctor\` or \`${prefix} doctor\` — Run workspace configuration diagnosis.`,
+      `- \`/reset\` or \`${prefix} reset\` — Reset conversation/goal state.`,
+      `\n💡 *Tip: In DMs, you can message Mochi directly without any prefix! In channels, Mochi automatically spins up a thread for your task.*`,
+    ].join('\n');
   }
 
   if (prompt === 'status') {
     const usage = runtime.usage?.total?.();
-    return `📊 **Mochi Status**
-- **Model**: \`${runtime.config.model.model}\`
-- **Workspace**: \`${runtime.cwd}\`
-- **Tokens Used**: ${usage?.tokensIn ?? 0} in / ${usage?.tokensOut ?? 0} out
-- **Estimated Cost**: $${(usage?.costUsd ?? 0).toFixed(4)} USD
-`;
+    return `📊 **Mochi Status**\n- **Model**: \`${runtime.config.model.model}\` (\`${runtime.config.model.provider}\`)\n- **Reasoning**: \`${runtime.config.reasoning || 'medium'}\`\n- **Workspace**: \`${runtime.cwd}\`\n- **Tokens Used**: ${usage?.tokensIn ?? 0} in / ${usage?.tokensOut ?? 0} out\n- **Estimated Cost**: $${(usage?.costUsd ?? 0).toFixed(4)} USD\n`;
+  }
+
+  if (prompt === 'model' || prompt.startsWith('model ')) {
+    const query = prompt.startsWith('model ') ? prompt.slice(6).trim() : '';
+    if (!query) return handleModelStatus(runtime);
+    return await handleModelSwitch(runtime, query);
+  }
+
+  if (prompt === 'reasoning' || prompt.startsWith('reasoning ')) {
+    const effort = prompt.startsWith('reasoning ') ? prompt.slice(10).trim().toLowerCase() : '';
+    if (effort) {
+      try {
+        const res = runtime.setReasoning(effort);
+        return `🍡 ${res}`;
+      } catch (err) {
+        return `❌ ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    return `🍡 Current reasoning depth: \`${runtime.config.reasoning || 'medium'}\`.`;
+  }
+
+  if (prompt === 'reset') {
+    return '🔄 Session state reset. Ready for a new task!';
   }
 
   if (prompt === 'doctor') {
@@ -384,6 +532,95 @@ export async function runDiscordGateway(
         } else if (frame.op === 0 && frame.t === 'READY') {
           botId = String(frame.d?.user?.id ?? '');
           log(`discord: ready as ${String(frame.d?.user?.username ?? 'bot')}.`);
+          void (async () => {
+            try {
+              await fetchJson(`https://discord.com/api/v10/applications/${botId}/commands`, {
+                method: 'PUT',
+                headers: {
+                  Authorization: `Bot ${cfg.token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(DISCORD_SLASH_COMMANDS),
+              });
+              log('discord: slash commands synchronized.');
+            } catch (err) {
+              log(`discord: slash commands sync error (${err instanceof Error ? err.message : String(err)})`);
+            }
+          })();
+        } else if (frame.op === 0 && frame.t === 'INTERACTION_CREATE') {
+          const d = frame.d ?? {};
+          const interactionId = String(d.id ?? '');
+          const interactionToken = String(d.token ?? '');
+          const commandName = String(d.data?.name ?? '');
+          const optionsList = Array.isArray(d.data?.options) ? d.data.options : [];
+          const optionsRecord: Record<string, unknown> = Object.fromEntries(
+            optionsList.map((o: { name: string; value: unknown }) => [o.name, o.value]),
+          );
+          const authorId = String(d.member?.user?.id ?? d.user?.id ?? '');
+          const channelId = String(d.channel_id ?? '');
+
+          messages++;
+          void (async () => {
+            try {
+              await fetchJson(`https://discord.com/api/v10/interactions/${interactionId}/${interactionToken}/callback`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bot ${cfg.token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ type: 5 }),
+              });
+
+              let reply = '';
+              if (commandName === 'model') {
+                const requestedModel = String(optionsRecord.name ?? '').trim();
+                reply = requestedModel ? await handleModelSwitch(runtime, requestedModel) : handleModelStatus(runtime);
+              } else if (commandName === 'reasoning') {
+                const effort = String(optionsRecord.effort ?? '').trim().toLowerCase();
+                if (effort) {
+                  try {
+                    const res = runtime.setReasoning(effort);
+                    reply = `🍡 ${res}`;
+                  } catch (err) {
+                    reply = `❌ ${err instanceof Error ? err.message : String(err)}`;
+                  }
+                } else {
+                  reply = `🍡 Current reasoning depth: \`${runtime.config.reasoning || 'medium'}\`.`;
+                }
+              } else if (commandName === 'ask') {
+                const prompt = String(optionsRecord.prompt ?? '').trim();
+                reply = await handleDiscordMessage({ authorId, content: prompt, channelId }, cfg, runtime);
+              } else if (commandName === 'status' || commandName === 'doctor' || commandName === 'reset' || commandName === 'help') {
+                reply = await handleDiscordMessage({ authorId, content: commandName, channelId }, cfg, runtime);
+              } else {
+                reply = `Unknown slash command: /${commandName}`;
+              }
+
+              const chunks = chunkMessage(reply);
+              const appId = botId || cfg.token.split('.')[0];
+              await fetchJson(`https://discord.com/api/v10/webhooks/${appId}/${interactionToken}/messages/@original`, {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bot ${cfg.token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: chunks[0] ?? 'Done.' }),
+              });
+
+              for (let i = 1; i < chunks.length; i++) {
+                await fetchJson(`https://discord.com/api/v10/webhooks/${appId}/${interactionToken}`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bot ${cfg.token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ content: chunks[i] }),
+                });
+              }
+            } catch (err) {
+              log(`discord: interaction error (${err instanceof Error ? err.message : String(err)})`);
+            }
+          })();
         } else if (frame.op === 0 && frame.t === 'MESSAGE_CREATE') {
           const d = frame.d ?? {};
           const author = d.author ?? {};
@@ -393,11 +630,14 @@ export async function runDiscordGateway(
           const messageId = String(d.id ?? '');
           const guildId = d.guild_id ? String(d.guild_id) : undefined;
           if (!channelId) return;
+
+          const isDm = d.channel_type === 1 || Boolean(d.is_dm) || (!guildId && !channelId.startsWith('c'));
           const mentioned = botId !== '' && (content.includes(`<@${botId}>`) || content.includes(`<@!${botId}>`));
-          if (!content.startsWith(prefix) && !mentioned) return; // stay quiet otherwise
+          if (!isDm && !content.startsWith(prefix) && !mentioned) return;
           const prompt = mentioned && !content.startsWith(prefix)
             ? content.replace(new RegExp(`<@!?${botId}>`, 'g'), '').trim()
-            : content;
+            : (content.startsWith(prefix) ? content.slice(prefix.length).trim() : content.trim());
+
           messages++;
           void (async () => {
             try {
