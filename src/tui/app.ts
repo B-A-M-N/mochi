@@ -2616,9 +2616,22 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     tabs.setStatus(tabId, 'running');
     tabs.setBusy(tabId, true);
     rs.busy = true;
+    let busyWatchdog: ReturnType<typeof setTimeout> | null = null;
     if (!wasBusy) {
       rs.busyStartedAt = Date.now();
       startSpinner();
+      // Visible liveness watchdog: a run can legitimately take a long time, but a
+      // stuck run (no streaming, no tool progress) used to leave the composer in
+      // "Working…" forever with no recourse beyond Ctrl-C. After 45s with still
+      // no completion we loudly surface an escape hint so the user sees mochi
+      // has not frozen silently ("says done and I can't type" family bug).
+      busyWatchdog = setTimeout(() => {
+        if (rs.busy) {
+          try { push('system', '⚠ still working (45s). Press Esc to cancel if it seems stuck.'); }
+          catch { /* transcript full / disposed */ }
+          scheduleRender();
+        }
+      }, 45_000);
     }
     scheduleRender();
     let out = '';
@@ -2668,6 +2681,7 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         sendSystemNotification('Task Failed', (pf.headline || raw).slice(0, 100), 'critical');
       }
     } finally {
+      if (busyWatchdog) { clearTimeout(busyWatchdog); busyWatchdog = null; }
       if (wasBusy) {
         // A nested/reentrant command finished — the outer run still owns the
         // tab's busy state and its completion side-effects.
