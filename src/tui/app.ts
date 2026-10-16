@@ -1979,7 +1979,8 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
       return;
     }
     if (line === '/fallback' || line.startsWith('/fallback ') || line === '/fallbacks' || line.startsWith('/fallbacks ')) {
-      await fallbackMenu();
+      const rest = (line.startsWith('/fallback ') ? line.slice(10) : line.startsWith('/fallbacks ') ? line.slice(11) : '').trim();
+      await fallbackMenu(rest || undefined);
       return;
     }
     if (line === '/theme' || line.startsWith('/theme ') || line === '/themes') {
@@ -3153,7 +3154,53 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     scheduleRender();
   }
 
-  async function fallbackMenu() {
+  async function fallbackMenu(arg?: string) {
+    if (arg) {
+      const parts = arg.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase();
+      if (sub === 'clear') {
+        const msg = runtime.clearFallbacks();
+        push('system', `✓ ${msg}`);
+        scheduleRender();
+        return;
+      }
+      if (sub === 'rm' || sub === 'remove' || sub === 'delete') {
+        const targetProv = parts[1];
+        if (!targetProv) {
+          push('error', 'Usage: /fallback rm <provider>');
+          scheduleRender();
+          return;
+        }
+        const msg = runtime.removeFallback(targetProv);
+        push('system', `✓ ${msg}`);
+        scheduleRender();
+        return;
+      }
+      if (sub === 'add') {
+        const targetProv = parts[1];
+        const targetModel = parts[2];
+        if (!targetProv) {
+          push('error', 'Usage: /fallback add <provider> [model]');
+          scheduleRender();
+          return;
+        }
+        const msg = runtime.addFallback(targetProv, targetModel);
+        push('system', `✓ ${msg}`);
+        scheduleRender();
+        return;
+      }
+      if (sub === 'list' || sub === 'show') {
+        const fb = runtime.getFallbacks();
+        const primary = runtime.config.model;
+        if (fb.length === 0) {
+          push('system', `Primary model: ${primary.provider}/${primary.model} · No fallbacks configured.`);
+        } else {
+          push('system', `Primary: ${primary.provider}/${primary.model}\nFallbacks:\n` + fb.map((f, i) => `  ${i + 1}. ${f.provider} (${f.model})`).join('\n'));
+        }
+        scheduleRender();
+        return;
+      }
+    }
     const primary = runtime.config.model;
     const fallbacks = runtime.getFallbacks();
     const actions: Array<{ label: string; run: () => Promise<void> }> = [

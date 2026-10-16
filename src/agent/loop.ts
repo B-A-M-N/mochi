@@ -9,7 +9,7 @@ import { ContextEngine, approxTokens } from '../context.js';
 import { MemoryStore } from '../memory/memory.js';
 import { projectMemoryPrefix, recordProjectMemory } from '../memory/project-memory.js';
 import { loadReadCache, saveReadCache } from '../state/read-cache-store.js';
-import { createProvider, normalizeModelName } from '../model/router.js';
+import { createProvider, normalizeModelName, type RawProvider } from '../model/router.js';
 import { PROVIDERS } from '../model/providers.js';
 import { isMode, modeInstruction } from '../modes.js';
 
@@ -403,8 +403,8 @@ export class Agent {
   private permMgr?: { policy: PermissionPolicy; mgr: PermissionManager };
   private tools: Map<string, import('../tools/types.js').Tool>;
   private toolDefs: ToolDefinition[];
-  private provider: ReturnType<typeof createProvider>;
-  private providers = new Map<ModelProfile, ReturnType<typeof createProvider>>();
+  private provider: RawProvider;
+  private providers = new Map<ModelProfile, RawProvider>();
   private tokensUsed = 0;
   /** Real provider in/out split (prompt vs completion) — feeds honest usage
    *  reporting; tokensUsed stays the total. */
@@ -2722,7 +2722,7 @@ Continue from 'Next:', do not redo completed progress.`,
    * profile while trimming spend on later, lower-risk iterations. Providers are
    * cached per profile so we don't rebuild them on every iteration.
    */
-  private pickProvider(): ReturnType<typeof createProvider> {
+  private pickProvider(): RawProvider {
     const base = this.profile.defaultModel ?? 'coding';
     let profile: ModelProfile = base;
     // MCH-111: route hard tasks (architecture/audit/multi-file) to the
@@ -2735,6 +2735,11 @@ Continue from 'Next:', do not redo completed progress.`,
     if (this.budget && this.budget.shouldUseCheaperModel()) {
       profile = 'fast';
     }
+    return this.getProviderForProfile(profile);
+  }
+
+  private getProviderForProfile(profile: ModelProfile): RawProvider {
+    const base = this.profile.defaultModel ?? 'coding';
     if (profile === base) return this.provider;
     let p = this.providers.get(profile);
     if (!p) {
@@ -2778,7 +2783,8 @@ Continue from 'Next:', do not redo completed progress.`,
       .slice(0, 12_000);
     const sys = 'Summarize this agent-work transcript into a compact digest (max 300 words). Keep: goal, files touched and their state, commands run and outcomes, errors hit and fixes, open threads. Omit prose fluff. Output ONLY the digest.';
     try {
-      const resp = await this.provider.chat(
+      const fast = this.getProviderForProfile('fast');
+      const resp = await fast.chat(
         [
           { role: 'system' as const, content: sys },
           { role: 'user' as const, content: transcript },
@@ -2875,7 +2881,7 @@ Continue from 'Next:', do not redo completed progress.`,
           { role: 'system', content: 'You maintain a session checkpoint for a coding agent. Summarize the conversation excerpt below in at most 150 words using exactly this format:\nGoal: <what the user ultimately wants>\nProgress: <what has been done, files touched>\nDecisions: <key choices made, max 3>\nNext: <immediate next step>\nBe specific (file paths, commands). No preamble.' },
           { role: 'user', content: input },
         ];
-        const fast = this.providers.get('fast') ?? this.provider;
+        const fast = this.getProviderForProfile('fast');
         const parts: string[] = [];
         const timer = new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), 20_000));
         const gen = (async () => {
