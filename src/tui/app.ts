@@ -1934,12 +1934,15 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/model' || line.startsWith('/model ')) {
       const specific = line.startsWith('/model ') ? line.slice(7).trim() : '';
       if (specific) {
-        await run(async () => {
-          const { normalizeModelName } = await import('../model/router.js');
-          const p = providerById(runtime.config.model.provider);
-          const normModel = normalizeModelName(specific, p?.baseUrl ?? runtime.config.model.baseUrl);
-          return p ? (await runtime.useProvider(p.id, normModel)) : 'Current provider unknown';
-        });
+        const { normalizeModelName } = await import('../model/router.js');
+        const p = providerById(runtime.config.model.provider);
+        if (!p) {
+          push('error', 'Model switch failed: current provider unknown.');
+          scheduleRender();
+        } else {
+          const normModel = normalizeModelName(specific, p.baseUrl ?? runtime.config.model.baseUrl);
+          await switchModel(p.id, normModel);
+        }
       } else {
         await modelMenu();
       }
@@ -2604,24 +2607,34 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     // continue; their events badge the tab unread via onRuntimeEventFor).
     const rs = state;
     const tabId = activeTabId;
+    // Reentrancy: a status/config command (/diff, /status, …) can run while a
+    // TASK is already in flight on this tab. Tracking whether WE own the busy
+    // flag stops a nested command's completion from clearing the outer task's
+    // busy state — which let a second overlapping run start and made the
+    // composer report "done" while the real task was still running.
+    const wasBusy = rs.busy;
     tabs.setStatus(tabId, 'running');
     tabs.setBusy(tabId, true);
     rs.busy = true;
-    rs.busyStartedAt = Date.now();
-    startSpinner();
+    if (!wasBusy) {
+      rs.busyStartedAt = Date.now();
+      startSpinner();
+    }
     scheduleRender();
     let out = '';
     try {
       const result = await fn();
       out = result;
-      tabs.setStatus(tabId, 'done');
+      if (!wasBusy) {
+        tabs.setStatus(tabId, 'done');
+        const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
+        sendSystemNotification('Task Complete', `Completed in ${elapsed}`, 'normal');
+      }
       if (echo || !rs.lines.some((l) => l.kind === 'assistant')) {
         if (result && result.trim()) {
           pushTo(rs, 'assistant', result);
         }
       }
-      const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
-      sendSystemNotification('Task Complete', `Completed in ${elapsed}`, 'normal');
     } catch (e) {
       // Provider failures get a clean one-liner instead of a raw error dump,
       // and transient ones (cooldown/network/rate-limit) auto-retry ONCE after
@@ -2635,11 +2648,13 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         try {
           const result = await fn();
           out = result;
-          tabs.setStatus(tabId, 'done');
+          if (!wasBusy) {
+            tabs.setStatus(tabId, 'done');
+            const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
+            sendSystemNotification('Task Complete', `Completed in ${elapsed}`, 'normal');
+          }
           if (echo) pushTo(rs, 'assistant', result);
           pushTo(rs, 'system', '✓ recovered');
-          const elapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
-          sendSystemNotification('Task Complete', `Completed in ${elapsed}`, 'normal');
         } catch (e2) {
           tabs.setStatus(tabId, 'error');
           const raw2 = e2 instanceof Error ? e2.message : String(e2);
@@ -2653,36 +2668,59 @@ if (line === '/branch' || line.startsWith('/branch ')) {
         sendSystemNotification('Task Failed', (pf.headline || raw).slice(0, 100), 'critical');
       }
     } finally {
-      rs.busy = false;
-      rs.doneAt = Date.now();
-      rs.lastDoneElapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
-      tabs.setBusy(tabId, false);
-      // A run that finished while its tab was in the background badges once
-      // (per-event badging would pin the counter at 99 mid-stream).
-      if (tabId !== activeTabId) tabs.markUnread(tabId);
-      stopSpinner();
-      scheduleRender();
-      setTimeout(() => {
-        if (rs.doneAt && Date.now() - rs.doneAt >= 2500) {
-          rs.doneAt = 0;
-          scheduleRender();
-        }
-      }, 2600);
-      // Drain the message queue: messages typed mid-run send now, in order.
-      // Sequential (not parallel) so each queued message gets a full run.
-      // Per-item try/catch: one throwing drain item must not strand the rest
-      // with busy already false and no future drain trigger.
-      while (messageQueue.length > 0 && !exited) {
-        const next = messageQueue.shift()!;
-        push('system', `◇ sending queued message (${messageQueue.length + 1} total were queued)`);
-        try {
-          await handleCommand(next);
-        } catch (e) {
-          push('error', `queued message failed: ${e instanceof Error ? e.message : String(e)}`);
+      if (wasBusy) {
+        // A nested/reentrant command finished — the outer run still owns the
+        // tab's busy state and its completion side-effects.
+        scheduleRender();
+      } else {
+        rs.busy = false;
+        rs.doneAt = Date.now();
+        rs.lastDoneElapsed = ((Date.now() - (rs.busyStartedAt || rs.startedAt)) / 1000).toFixed(1) + 's';
+        tabs.setBusy(tabId, false);
+        // A run that finished while its tab was in the background badges once
+        // (per-event badging would pin the counter at 99 mid-stream).
+        if (tabId !== activeTabId) tabs.markUnread(tabId);
+        stopSpinner();
+        scheduleRender();
+        setTimeout(() => {
+          if (rs.doneAt && Date.now() - rs.doneAt >= 2500) {
+            rs.doneAt = 0;
+            scheduleRender();
+          }
+        }, 2600);
+        // Drain the message queue: messages typed mid-run send now, in order.
+        // Sequential (not parallel) so each queued message gets a full run.
+        // Per-item try/catch: one throwing drain item must not strand the rest
+        // with busy already false and no future drain trigger.
+        while (messageQueue.length > 0 && !exited) {
+          const next = messageQueue.shift()!;
+          push('system', `◇ sending queued message (${messageQueue.length + 1} total were queued)`);
+          try {
+            await handleCommand(next);
+          } catch (e) {
+            push('error', `queued message failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
         }
       }
     }
     return out;
+  }
+
+  /** Apply a provider/model switch WITHOUT routing it through the task runner
+   *  `run()`. Switching models is a configuration change, not a task: it must
+   *  not mark the tab "done", fire a "Task Complete" notification, or push the
+   *  config description as an ASSISTANT transcript turn — the old path did all
+   *  three, so a model switch read as "it finished and the session broke". It
+   *  only updates the status-bar label and reports on a SYSTEM line. */
+  async function switchModel(providerId: string, model: string) {
+    try {
+      const desc = await runtime.useProvider(providerId, model);
+      modelShort = model.split('/').pop() ?? model;
+      push('system', `[MODEL] ${desc}`);
+    } catch (e) {
+      push('error', `Model switch failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    scheduleRender();
   }
 
   /** MCH-65: plan review UX. After /plan renders, show a diff vs the prior
@@ -3069,12 +3107,8 @@ if (line === '/branch' || line.startsWith('/branch ')) {
     const { normalizeModelName } = await import('../model/router.js');
     const normModel = normalizeModelName(model, prov.baseUrl);
 
-    // Apply the selection
-    await run(async () => {
-      const desc = await runtime.useProvider(prov.id, normModel);
-      modelShort = normModel.split('/').pop() ?? normModel;
-      return desc;
-    });
+    // Apply the selection — a config change, not a task run (see switchModel).
+    await switchModel(prov.id, normModel);
   }
 
   async function reasoningMenu() {
