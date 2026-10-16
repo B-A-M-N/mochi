@@ -720,6 +720,47 @@ describe('Agent', () => {
     }
   });
 
+  it('injects the compiled blueprint in proportion to task complexity, not just reasoning tier', async () => {
+    const prevCompiler = process.env.MOCHI_PROMPT_COMPILER;
+    process.env.MOCHI_PROMPT_COMPILER = '1'; // force the compiler on inside vitest
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-blueprint-'));
+    const fake = await startFakeOpenAI([
+      { content: 'Done.', finishReason: 'stop' },
+      { content: 'Done.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(dir, fake.url);
+      config.reasoning = 'max'; // user asked for max reasoning globally
+      config.model.profiles = { fast: 'fake-fast', coding: 'fake-coding', reasoning: 'fake-reasoning' };
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      const hasBlueprint = async (title: string, description: string, fileScope: string[]) => {
+        const bus = new EventBus();
+        const task = Object.assign(createTask(title, description), { fileScope });
+        const agent = new Agent({ id: 'blueprint-agent', role: 'coder', config, workspace, events: bus, cwd: dir, context });
+        await agent.run(task);
+        const body = fake.requests[fake.requests.length - 1]?.body;
+        const all = (body?.messages ?? []).map((m: any) => String(m.content ?? '')).join('\n');
+        return /COMPILED EXECUTION BLUEPRINT/.test(all);
+      };
+      // A trivial read at reasoning=max must NOT open with the ~12K architectural
+      // blueprint — that static block crowded real context out of small tasks.
+      expect(await hasBlueprint('Read package.json', 'Please read package.json', ['package.json'])).toBe(false);
+      // Genuinely complex work still gets the full max-tier spec.
+      expect(await hasBlueprint(
+        'Refactor module boundaries',
+        'Move the state handling across all callers so the API contract is preserved, extend the tests in every affected module and make the whole suite green',
+        ['a.ts', 'b.ts', 'c.ts'],
+      )).toBe(true);
+    } finally {
+      await fake.close();
+      rmSync(dir, { recursive: true, force: true });
+      if (prevCompiler === undefined) delete process.env.MOCHI_PROMPT_COMPILER;
+      else process.env.MOCHI_PROMPT_COMPILER = prevCompiler;
+    }
+  });
+
   it('escalates a struggling standard task to complex mid-run (full toolset + preservation)', async () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-escalate-'));
     try {
@@ -1655,6 +1696,17 @@ describe('isComplexRewritingTask (large-rewrite protocol gate)', () => {
     expect(isComplexRewritingTask('Say hello')).toBe(false);
     expect(isComplexRewritingTask('What is in this repo?')).toBe(false);
     expect(isComplexRewritingTask('Summarize the last 10 commits')).toBe(false);
+  });
+
+  it('does not flag a task that merely MENTIONS a file/package (regression: "read package.json")', () => {
+    // The old keyword sweep matched any \b(files?|modules?|packages?|...)\b, so a
+    // trivial read/peek was treated as a substantial multi-file rewrite and got
+    // the whole senior-engineer protocol injected. These must stay lean.
+    expect(isComplexRewritingTask('Please read package.json')).toBe(false);
+    expect(isComplexRewritingTask('Read the file src/index.ts')).toBe(false);
+    expect(isComplexRewritingTask('What does this module do?')).toBe(false);
+    expect(isComplexRewritingTask('Show me the components folder')).toBe(false);
+    expect(isComplexRewritingTask('Fix the login bug')).toBe(false);
   });
 });
 

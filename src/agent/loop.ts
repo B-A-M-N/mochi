@@ -245,18 +245,36 @@ const LARGE_REWRITE_PROTOCOL = [
   '',
 ].join('\n');
 
+/** Intent-level vocabulary that only makes sense for multi-file / intent work.
+ *  Kept separate from the generic scope words below: these are unambiguous on
+ *  their own ("refactor", "migrate", "architecture"). */
+const REWRITE_INTENT_RE = /\b(refactor\w*|rewrite|reimplement\w*|migrat\w*|overhaul\w*|restructure|rearchitect\w*|modulariz\w*|multi-(?:file|module|package)|monorepo|architecture|scaffold\w*)\b/;
+
+/** A concrete change verb — needed alongside a scope word so a bare mention of
+ *  "file"/"package" (e.g. "read package.json") is NOT treated as a rewrite. */
+const REWRITE_ACTION_RE = /\b(build|make|create|write|code|implement\w*|add|remove|delete|update|change|modify|convert|split|extract|consolidate|integrate|reorganiz\w*|design|generate|develop|program|fix)\b/;
+
+/** Broad structural scope: multiple modules/services/packages, or the whole
+ *  codebase. Deliberately does NOT include a bare "file" — "read the file" is
+ *  a one-file operation, not a multi-file rewrite. */
+const REWRITE_SCOPE_RE = /\b(modules?|services?|packages?|components?|plugins?|subsystems?|codebase|multi-file|multiple files|several files|all files|every file|across (?:the )?(?:entire |whole |all )?(?:files|modules|packages|services|components|codebase))\b/;
+
 /** Pure heuristic: does a task look like substantive multi-file work that
  *  merits the large-rewrite protocol (vs a one-answer chat)? Extracted so it's
- *  unit-testable. Chat scans and one-liners stay lean and skip it. */
+ *  unit-testable. Chat scans and one-liners stay lean and skip it.
+ *
+ *  Requires STRONG evidence: intent-level vocabulary (refactor/migrate/…),
+ *  a greenfield build, OR an action verb CO-OCCURRING with a broad scope word.
+ *  A lone "file"/"package"/"module" mention no longer qualifies — that keyword
+ *  sweep made "read package.json" a "substantial multi-file coding task". */
 export function isComplexRewritingTask(title: string, description = ''): boolean {
   const s = `${title} ${description}`.toLowerCase();
-  if (/(?:refactor|rewrite|reimplement|migrat(?:e|ion|ing|es|ed)?|port|overhaul|restructure|abstract|extract|split|modulariz(?:e|ation|ing|ed)?|large|broad|multi-(?:file|module)|new (?:feature|module)|scaffold|architecture|design|rearchitect|replace .* across|convert .* to)\b/.test(s)) return true;
-  if (/\b(?:files?|modules?|components?|packages?|services?|plugins?|drivers?)\b/.test(s)) return true;
+  if (REWRITE_INTENT_RE.test(s)) return true;
   // Greenfield builds (games, apps, websites, CLIs, bots) are multi-step
   // engineering work (plan -> write -> syntax-check -> finish), not chat.
   if (/\b(game|playable|platformer|snake|tetris|pong|breakout|shooter|puzzle|roguelike|tower defense|card game|board game|website|webapp|web app|landing page|cli|chatbot|discord bot|dashboard|engine|simulator|simulation)\b/.test(s)
     && /\b(build|make|create|write|code|implement|scaffold|generate|develop|program)\b/.test(s)) return true;
-  return false;
+  return REWRITE_ACTION_RE.test(s) && REWRITE_SCOPE_RE.test(s);
 }
 
 /** File-output + greenfield heuristics live in core/greenfield.ts so the
@@ -772,9 +790,16 @@ export class Agent {
    * a read "cache-hit, reuse it from context" stub would strand it with no
    * content. Clearing the repeat-read marker forces the next read of that
    * path/range to return real text again.
+   *
+   * The fuzzy-spam read veto (readTargetCounts) is cleared here for the same
+   * reason: its whole premise is "you already have this — repeating it will
+   * not change anything", but compaction just DROPPED what the model had.
+   * Leaving the counters armed after compaction turned the 5th re-read of a
+   * needed file into a permanent blocked no-op ("read tools don't work").
    */
   private clearReadStub(): void {
     delete (this.readCache as { __lastRead?: string }).__lastRead;
+    this.readTargetCounts.clear();
   }
 
   /** Effective working context budget for this run: the configured budget
@@ -1239,12 +1264,23 @@ Continue from 'Next:', do not redo completed progress.`,
         this.config.mode === 'spec' ||
         !process.env.VITEST
       );
-      if (allowCompiler && (resolvedTier === 'high' || resolvedTier === 'max' || resolvedTier === 'medium')) {
+      // Complexity-proportional blueprint (2026-10-16): the max-tier spec is
+      // ~12K chars of static architecture and was injected for EVERY non-chat
+      // task whenever reasoning was high/max — so "read package.json" opened
+      // with a full architectural blueprint, drowning the actual repo context
+      // and making the agent wander. Now: skip it entirely for a verified-simple
+      // task (the one-line reasoning blurb above is enough), cap a `standard`
+      // task at the compact 'high' spec, and reserve the full max-tier spec for
+      // tasks that are structurally `complex`.
+      const tier: 'off' | 'low' | 'medium' | 'high' | 'max' | null =
+        this.taskComplexity === 'complex' ? resolvedTier
+          : this.taskComplexity === 'standard' ? (resolvedTier === 'max' ? 'high' : resolvedTier)
+            : null;
+      if (allowCompiler && tier !== null && (tier === 'high' || tier === 'max' || tier === 'medium')) {
         try {
           const { promptCompiler } = await import('../prompt/prompt-compiler.js');
           const { detectRepo: detectRepoForCompiler } = await import('../repo/repo.js');
           const cRepo = detectRepoForCompiler(this.cwd);
-          const tier = resolvedTier;
           const spec = promptCompiler.compile(
             [task.title, task.description].filter(Boolean).join('\n\n'),
             {

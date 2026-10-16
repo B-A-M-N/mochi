@@ -265,6 +265,15 @@ Return ONLY the JSON array, no markdown.`;
     }
     this.goalStats = { tokens: 0, tokensIn: 0, tokensOut: 0, tokensCached: 0, contextUsed: 0, duration: 0 };
     this.goalFiles = [];
+    // MCH-86 fix (2026-10-16): the failover rotation index is scoped to ONE goal
+    // run. It exists so PARALLEL siblings land on distinct endpoints; leaving it
+    // monotonic across runs meant every sequential turn of a session promoted
+    // the next auto-populated failover provider to PRIMARY — turn 1 ran on the
+    // user's configured model, turn 2 on a different provider, turn 3 on another.
+    // The user experiences that as "it forgot the previous turn / tools behave
+    // differently / it's manic". Reset per run so the first (and, for the common
+    // single-task turn, only) task always uses the configured primary.
+    this.failoverCursor = 0;
     const budget = new BudgetEngine(this.config.safety);
     budget.start();
     // MCH-79: expose the run's budget ledger so the TUI /usage card can show
@@ -514,7 +523,12 @@ Return ONLY the JSON array, no markdown.`;
     // task toward "perfect" before moving on to the next one. Bounded so a
     // genuinely broken task still fails and the goal progresses.
     const maxSelfReviews = Math.max(0, Number(process.env.MOCHI_GOAL_SELF_REVIEW_ATTEMPTS ?? 2) || 0);
-    let result = await this.runTask(goal, task, abortSignal, budget, extraContext, readCache, sessionId, this.failoverCursor++);
+    // Rotation is only meaningful when tasks actually run CONCURRENTLY (its
+    // purpose is to keep parallel siblings off one free-tier endpoint). With a
+    // single worker it would silently swap the primary model between tasks of
+    // a multi-task goal for no benefit, so pin it to the primary.
+    const failoverIndex = this.config.safety.maxConcurrentAgents > 1 ? this.failoverCursor++ : 0;
+    let result = await this.runTask(goal, task, abortSignal, budget, extraContext, readCache, sessionId, failoverIndex);
     this.goalStats.tokens += result.tokensUsed;
     this.goalStats.tokensIn += result.tokensIn ?? 0;
     this.goalStats.tokensOut += result.tokensOut ?? 0;

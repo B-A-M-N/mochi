@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import type { Tool, ReadCache } from './types.js';
@@ -54,6 +54,34 @@ export const readTool: Tool = {
     const rawPath = String(args.path ?? '');
     const fullPath = rawPath === '~' ? homedir() : rawPath.startsWith('~/') ? resolve(homedir(), rawPath.slice(2)) : resolve(ctx.cwd, rawPath);
     if (!existsSync(fullPath)) throw new Error(`File not found: ${rawPath}`);
+
+    // Reading a directory is THE most common natural model move ("read the
+    // src/ directory"). It used to die with a raw `EISDIR: illegal operation
+    // on a directory, read` crash that models interpret as "the read tool is
+    // broken" and then either give up or retry in a loop. Return the listing
+    // the model actually wanted instead.
+    if (statSync(fullPath).isDirectory()) {
+      const entries = readdirSync(fullPath, { withFileTypes: true })
+        .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      const cap = 200;
+      const shown = entries.slice(0, cap);
+      const more = entries.length - shown.length;
+      return [
+        `${rawPath} is a directory (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}). Listing:`,
+        ...shown,
+        ...(more > 0 ? [`… and ${more} more entries (use glob or tree for deeper exploration)`] : []),
+        '',
+        'To read a file, call read again with one of the FILE paths listed above.',
+      ].join('\n');
+    }
+    // A directory (or an empty path, which resolves to cwd) previously fell
+    // through to readFileSync and surfaced a bare `EISDIR: illegal operation on
+    // a directory, read` — a confusing error that made the model re-try the same
+    // bad read or flail. Fail with an actionable message instead.
+    if (statSync(fullPath).isDirectory()) {
+      throw new Error(`Path is a directory, not a file: ${rawPath || '.'} — read expects a file. Use glob/list_dir to browse a directory, or pass a path to a specific file.`);
+    }
 
     // MCH-109: image files are unreadable as text — return a data URI the
     // model can attach to its next user message (multimodal vision input).

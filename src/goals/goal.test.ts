@@ -88,6 +88,53 @@ describe('GoalEngine', () => {
     // It must not be routed to the heavyweight generate/verify path.
     expect(tasks[0].title).toContain('Say hello');
   });
+
+  it('keeps the configured primary model across sequential turns (no failover rotation)', async () => {
+    // Regression: failoverCursor was monotonic across runs, so the 2nd turn of a
+    // session promoted the auto-populated failover provider to PRIMARY — turn 1
+    // ran on the user's model, turn 2 on a different one. That is the "it forgot
+    // the previous turn / tools behave differently / it's manic" bug.
+    const primary = await startFakeOpenAI([
+      { content: 'first answer', finishReason: 'stop' },
+      { content: 'second answer', finishReason: 'stop' },
+    ]);
+    const secondary = await startFakeOpenAI([{ content: 'secondary answer', finishReason: 'stop' }]);
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-rotate-'));
+    try {
+      const cfg = {
+        model: {
+          provider: 'openai',
+          baseUrl: primary.url,
+          model: 'primary-model',
+          failover: [{ provider: 'openai', baseUrl: secondary.url, model: 'secondary-model' }],
+        },
+        safety: { mode: 'auto', commandTimeoutSeconds: 10, maxIterations: 5, maxRuntimeMinutes: 5, maxConcurrentAgents: 2, contextBudgetTokens: 200000 },
+        permissions: { read: true, write: true, shell: true, network: true, gitDestructive: false },
+        telemetry: false,
+        projectDir: '.mochi',
+        configDir: '/tmp',
+        quiet: true,
+        verbose: false,
+        debug: false,
+      } as unknown as MochiConfig;
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const engine = new GoalEngine(cfg, workspace, new EventBus(), dir);
+      const run = async (title: string, desc: string) => {
+        const goal = await engine.createGoal(desc);
+        await engine.runGoal(goal, [createTask(title, desc)], [], undefined, 'rotate-session');
+      };
+      await run('Turn 1', 'Say the first answer.');
+      const afterTurn1 = primary.requests.length;
+      expect(afterTurn1).toBeGreaterThan(0);
+      await run('Turn 2', 'Say the second answer.');
+      expect(primary.requests.length).toBeGreaterThan(afterTurn1); // turn 2 used the configured primary
+      expect(secondary.requests.length).toBe(0); // failover was never promoted to primary
+    } finally {
+      await primary.close();
+      await secondary.close();
+    }
+  });
 });
 
 describe('GoalEngine auto-resume', () => {
