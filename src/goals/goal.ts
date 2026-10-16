@@ -388,7 +388,8 @@ Return ONLY the JSON array, no markdown.`;
 
     const completed = scheduler.all().filter((t) => t.status === 'done');
     const failed = scheduler.all().filter((t) => t.status === 'failed');
-    goal.status = failed.length === 0 ? 'completed' : 'failed';
+    const aborted = abortController.signal.aborted;
+    goal.status = aborted ? 'cancelled' : failed.length === 0 ? 'completed' : 'failed';
     goal.progress = scheduler.progress();
     goal.blockers = scheduler.blockedTasks().map((t) => t.title);
     this.workspace.saveGoal(goal);
@@ -399,7 +400,7 @@ Return ONLY the JSON array, no markdown.`;
       ? `Cost: $${snap.usedCostUsd.toFixed(4)} (provider-reported). `
       : `Cost: not reported by this provider. `;
     const result: GoalResult = {
-      success: failed.length === 0,
+      success: !aborted && failed.length === 0,
       goal,
       completedTasks: completed,
       failedTasks: failed,
