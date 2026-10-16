@@ -2,7 +2,7 @@
 // with the agent, so every fresh session re-reads the same hot files from disk.
 // This persists the cache (bounded) to .mochi/read-cache.json on agent finish
 // and rehydrates (mtime-validated) on agent start — a warm start for file reads.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ReadCache, ReadCacheEntry } from '../tools/types.js';
@@ -16,11 +16,13 @@ function storePath(projectDir: string): string {
 /** Persist the current read cache (largest-content first, bounded). Best-effort. */
 export function saveReadCache(projectDir: string, cache: ReadCache): void {
   try {
-    const entries = Array.from(cache.entries())
+const entries = Array.from(cache.entries())
       .filter(([, e]) => e.content.length > 0)
       .sort((a, b) => b[1].content.length - a[1].content.length)
       .slice(0, MAX_ENTRIES);
-    writeFileSync(storePath(projectDir), JSON.stringify(Object.fromEntries(entries)));
+    const tmp = `${storePath(projectDir)}.tmp-${process.pid}`;
+    writeFileSync(tmp, JSON.stringify(Object.fromEntries(entries)));
+    renameSync(tmp, storePath(projectDir));
   } catch { /* persistence must never affect the run */ }
 }
 
