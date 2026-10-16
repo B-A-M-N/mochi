@@ -334,11 +334,20 @@ export function createAntigravityProvider(config: ProviderConfig) {
   };
 
   const toContents = (msgs: ChatMessage[]) => {
-    const contents: Array<{ role: string; parts: unknown[] }> = [];
-    for (const m of msgs) {
-      if (m.role === 'assistant') {
+    const rawContents: Array<{ role: 'user' | 'model'; parts: unknown[] }> = [];
+    const firstSysIdx = msgs.findIndex((m) => m.role === 'system');
+
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      if (m.role === 'system') {
+        if (i === firstSysIdx) continue;
+        const text = contentText(m).trim();
+        if (text) {
+          rawContents.push({ role: 'user', parts: [{ text: `[System]: ${text}` }] });
+        }
+      } else if (m.role === 'assistant') {
         const parts: unknown[] = [];
-        const text = contentText(m);
+        const text = contentText(m).trim();
         if (text) parts.push({ text });
         if (m.tool_calls) {
           for (const tc of m.tool_calls) {
@@ -355,7 +364,9 @@ export function createAntigravityProvider(config: ProviderConfig) {
             });
           }
         }
-        contents.push({ role: 'model', parts: parts.length ? parts : [{ text: '' }] });
+        if (parts.length > 0) {
+          rawContents.push({ role: 'model', parts });
+        }
       } else if (m.role === 'tool') {
         const part = {
           functionResponse: {
@@ -363,32 +374,55 @@ export function createAntigravityProvider(config: ProviderConfig) {
             response: { output: contentText(m) },
           },
         };
-        const last = contents[contents.length - 1];
-        if (last && last.role === 'user' && Array.isArray(last.parts) && last.parts.some((p) => p && typeof p === 'object' && 'functionResponse' in p)) {
-          last.parts.push(part);
-        } else {
-          contents.push({ role: 'user', parts: [part] });
-        }
+        rawContents.push({ role: 'user', parts: [part] });
       } else if (m.role === 'user') {
         const { text: gtext, images: gimages } = splitContent(m.content);
         const inline = gimages.filter((g): g is { mime: string; data: string } => 'data' in g);
-        if (inline.length > 0) {
-          const parts: unknown[] = [];
-          if (gtext) parts.push({ text: gtext });
-          for (const img of inline) parts.push({ inlineData: { mimeType: img.mime, data: img.data } });
-          contents.push({ role: 'user', parts });
-        } else {
-          const remote = gimages.filter((g): g is { url: string } => 'url' in g).map((g) => g.url);
-          contents.push({ role: 'user', parts: [{ text: [gtext, ...remote].filter(Boolean).join('\n') }] });
+        const parts: unknown[] = [];
+        if (gtext?.trim()) parts.push({ text: gtext.trim() });
+        for (const img of inline) parts.push({ inlineData: { mimeType: img.mime, data: img.data } });
+        const remote = gimages.filter((g): g is { url: string } => 'url' in g).map((g) => g.url);
+        for (const url of remote) parts.push({ text: url });
+        if (parts.length > 0) {
+          rawContents.push({ role: 'user', parts });
         }
       }
     }
+
+    // Strict alternation: merge adjacent turns of the same role
+    const contents: Array<{ role: 'user' | 'model'; parts: unknown[] }> = [];
+    for (const item of rawContents) {
+      if (item.parts.length === 0) continue;
+      const last = contents[contents.length - 1];
+      if (last && last.role === item.role) {
+        last.parts.push(...item.parts);
+      } else {
+        contents.push({ role: item.role, parts: [...item.parts] });
+      }
+    }
+
+    // Ensure contents starts with user
+    if (contents.length > 0 && contents[0].role === 'model') {
+      contents.unshift({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
+
+    // Ensure contents is non-empty
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
+
+    // Crucial for Cloud Code Assist: generation request MUST end with user turn
+    if (contents[contents.length - 1].role === 'model') {
+      contents.push({ role: 'user', parts: [{ text: 'Please continue.' }] });
+    }
+
     return contents;
   };
 
-  const system = (msgs: ChatMessage[]) =>
-    msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
-
+  const system = (msgs: ChatMessage[]) => {
+    const firstSys = msgs.find((m) => m.role === 'system');
+    return firstSys ? contentText(firstSys).trim() : '';
+  };
   function resolveWireModel(rawModel: string, reasoningEffort?: string): string {
     const effort = (reasoningEffort || process.env.MOCHI_REASONING || '').toLowerCase().trim();
     const revMatch = /^gemini-(3\.[6-9])-flash$/i.exec(rawModel);

@@ -121,6 +121,90 @@ describe('antigravity provider', () => {
     expect((req.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(64000);
   });
 
+  it('enforces strict role alternation and user-turn termination in Cloud Code Assist requests', async () => {
+    const captured: { body?: unknown } = {};
+
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      captured.body = JSON.parse(String(init?.body ?? '{}'));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: {
+            candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+          },
+        }),
+      } as unknown as Response;
+    }) as typeof fetch;
+
+    const provider = createAntigravityProvider({
+      baseUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      model: 'gemini-3.8-flash',
+      apiKey: 'ya29.test-bearer',
+    });
+
+    // Simulate sequence that previously caused 400: user prompt -> assistant loop -> system nudge
+    const msgs: ChatMessage[] = [
+      { role: 'system', content: 'Base system instruction' },
+      { role: 'user', content: 'Do something' },
+      { role: 'assistant', content: 'Truncated looping output' },
+      { role: 'system', content: 'Focus directly on answering the user’s request concisely.' },
+    ];
+
+    await provider.chat(msgs, []);
+
+    const body = captured.body as Record<string, unknown>;
+    const req = body.request as Record<string, unknown>;
+    const contents = req.contents as Array<{ role: string; parts: unknown[] }>;
+
+    // Must have alternating user -> model -> user
+    expect(contents.length).toBe(3);
+    expect(contents[0].role).toBe('user');
+    expect(contents[1].role).toBe('model');
+    expect(contents[2].role).toBe('user');
+    const lastTurnPart = contents[2].parts[0];
+    expect(lastTurnPart).toMatchObject({ text: expect.stringContaining('[System]: Focus directly') });
+  });
+
+  it('terminates trailing assistant turns with a continuation prompt for Cloud Code Assist', async () => {
+    const captured: { body?: unknown } = {};
+
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      captured.body = JSON.parse(String(init?.body ?? '{}'));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: {
+            candidates: [{ content: { parts: [{ text: 'Continued' }] } }],
+          },
+        }),
+      } as unknown as Response;
+    }) as typeof fetch;
+
+    const provider = createAntigravityProvider({
+      baseUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      model: 'gemini-3.8-flash',
+      apiKey: 'ya29.test-bearer',
+    });
+
+    // Simulate ending directly with an assistant message
+    const msgs: ChatMessage[] = [
+      { role: 'user', content: 'Start task' },
+      { role: 'assistant', content: 'Partial answer' },
+    ];
+
+    await provider.chat(msgs, []);
+
+    const body = captured.body as Record<string, unknown>;
+    const req = body.request as Record<string, unknown>;
+    const contents = req.contents as Array<{ role: string; parts: unknown[] }>;
+
+    const lastTurn = contents[contents.length - 1];
+    expect(lastTurn.role).toBe('user');
+    expect(lastTurn.parts[0]).toMatchObject({ text: 'Please continue.' });
+  });
+
   it('streams SSE frames and yields content, thoughts, and usage', async () => {
     const sseText = sseBody([
       {

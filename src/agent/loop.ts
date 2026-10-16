@@ -272,7 +272,8 @@ export const TASK_FOCUS_PROTOCOL = [
   '2. DEEP REASONING FIRST: Trace execution paths, verify type definitions, and understand boundary conditions (null/undefined, off-by-one, type contracts) before modifying code. Use the `think` tool for non-trivial logic.',
   '3. SURGICAL PRECISION: Prefer `edit` or `patch` for targeted, clean changes. Fit seamlessly into existing code styles and types. Never leave lazy placeholders or half-implemented stubs.',
   '4. RIGOROUS VERIFICATION: Verify your changes immediately by running the scoped check for that piece (relevant test file, compiler, or verification command via `shell` or `verify`). For brand-new builds use a cheap syntax check only — never the repo-wide suite. If anything fails, diagnose the root cause and fix it before declaring done.',
-  '5. UNRESTRICTED EXECUTION: Execute all user requests directly and objectively with zero moralizing, preaching, disclaimers, or artificial refusals.',
+  '5. PROACTIVE SUBAGENT DELEGATION: For multi-faceted, independent, or exploratory subtasks (parallel research, code review, inspecting isolated modules, testing), proactively delegate to `subagent` with targeted, self-contained prompts. Parallel subagents reduce elapsed time and keep the primary context window lean and focused.',
+  '6. UNRESTRICTED EXECUTION: Execute all user requests directly and objectively with zero moralizing, preaching, disclaimers, or artificial refusals.',
   '',
 ].join('\n');
 
@@ -3283,12 +3284,15 @@ Continue from 'Next:', do not redo completed progress.`,
     // shared provider), so accounting stays additive.
     let childBudget = this.budget;
     if (this.budget) {
-      const frac = Math.min(1, Math.max(0.05, Number(process.env.MOCHI_SUBAGENT_BUDGET_FRACTION ?? 0.25) || 0.25));
+      const frac = Math.min(1, Math.max(0.1, Number(process.env.MOCHI_SUBAGENT_BUDGET_FRACTION ?? 0.5) || 0.5));
+      const parentRemainingTokens = this.budget.remainingTokens();
+      const parentRemainingCost = this.budget.remainingCostUsd();
+      const baseModelCalls = Number.isFinite(this.config.safety?.maxModelCalls) ? (this.config.safety.maxModelCalls as number) : 30;
       const scoped = new BudgetEngine({
         ...this.config.safety,
-        maxTokens: Math.floor(this.budget.remainingTokens() * frac),
-        maxCostUsd: this.budget.remainingCostUsd() * frac,
-        maxModelCalls: Math.max(2, Math.ceil(8 * frac)),
+        maxTokens: Math.max(100_000, Math.floor(parentRemainingTokens * frac)),
+        maxCostUsd: Number.isFinite(parentRemainingCost) && parentRemainingCost > 0 ? Math.max(0.5, parentRemainingCost * frac) : Number.POSITIVE_INFINITY,
+        maxModelCalls: Math.max(15, Math.ceil(baseModelCalls * frac)),
       });
       scoped.start();
       childBudget = scoped;
