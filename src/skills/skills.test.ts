@@ -83,6 +83,13 @@ describe('parseFrontmatter', () => {
     expect(r.frontmatter).toEqual({ name: 'ok' });
   });
 
+  it('strips only a matching pair of surrounding quotes', () => {
+    const r = parseFrontmatter('---\nname: "my-skill"\nverification: echo "hello world"\n---\nB\n');
+    expect(r.frontmatter.name).toBe('my-skill');
+    // The old asymmetric strip removed this trailing quote.
+    expect(r.frontmatter.verification).toBe('echo "hello world"');
+  });
+
   it('parses YAML block scalars (folded >- and literal |)', () => {
     const folded = parseFrontmatter('---\nname: x\ndescription: >-\n  line one\n  line two\n  line three\n---\nB\n');
     expect(folded.frontmatter.description).toBe('line one line two line three');

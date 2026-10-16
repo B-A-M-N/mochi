@@ -7,6 +7,17 @@
  *  (`|`, `>-`, `|+`, `|2-`, `>2` …) */
 export const BLOCK_SCALAR_RE = /^([|>])[\d+-]*$/;
 
+/** Strip a SINGLE pair of matching surrounding quotes only. The old
+ *  `replace(/^["']|["']$/g, '')` stripped from each end independently, so a
+ *  value like `echo "hello world"` lost its trailing quote (and `"foo` its
+ *  leading one). */
+export function stripMatchingQuotes(v: string): string {
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
 /** Fold a YAML folded-scalar (`>`) block: adjacent non-empty lines join with a
  *  space, blank lines become paragraph breaks. */
 export function foldBlockLines(lines: string[]): string {

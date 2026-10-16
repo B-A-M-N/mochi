@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { mochiStateDir } from '../core/mochi-dir.js';
 import { fileURLToPath } from 'node:url';
 import { lintSkillDoc, type SkillLintResult } from './skill-lint.js';
-import { BLOCK_SCALAR_RE, readBlockScalar } from './frontmatter.js';
+import { BLOCK_SCALAR_RE, readBlockScalar, stripMatchingQuotes } from './frontmatter.js';
 
 // Agent Skills support (agentskills.io spec), modeled on pi's loader. Skills are
 // markdown files (typically `SKILL.md` or `my-skill.md`) whose YAML frontmatter
@@ -54,7 +54,7 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/^\s*-\s+/.test(line) && lastArrayKey) {
-      const item = line.replace(/^\s*-\s*/, '').trim().replace(/^["']|["']$/g, '');
+      const item = stripMatchingQuotes(line.replace(/^\s*-\s*/, '').trim());
       if (item) (out[lastArrayKey] as string[]).push(item);
       continue;
     }
@@ -78,7 +78,7 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
     if (value === 'true' || value === 'false') {
       out[key] = value === 'true';
     } else if (value.startsWith('- ')) {
-      const arr = [value.slice(2).trim().replace(/^["']|["']$/g, '')];
+      const arr = [stripMatchingQuotes(value.slice(2).trim())];
       out[key] = arr;
       lastArrayKey = key;
     } else if (value === '') {
@@ -86,7 +86,7 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
       out[key] = [];
       lastArrayKey = key;
     } else {
-      out[key] = value.replace(/^["']|["']$/g, '').trim();
+      out[key] = stripMatchingQuotes(value).trim();
     }
   }
   return { frontmatter: out, body };
