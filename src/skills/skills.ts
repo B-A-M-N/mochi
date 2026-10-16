@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { mochiStateDir } from '../core/mochi-dir.js';
 import { fileURLToPath } from 'node:url';
 
 // Agent Skills support (agentskills.io spec), modeled on pi's loader. Skills are
@@ -298,7 +299,7 @@ export function searchSkills(
 
 /** Where per-project skill usage stats live. JSON: { [skillName]: { loads, wins } } */
 export function skillUsagePath(projectDir: string): string {
-  return join(projectDir, '.mochi', 'skill-usage.json');
+  return join(mochiStateDir(projectDir), 'skill-usage.json');
 }
 
 export interface SkillUsage { loads: number; wins: number }
@@ -326,7 +327,7 @@ export function recordSkillUsage(projectDir: string, name: string, won?: boolean
     cur.loads += 1;
     if (won === true) cur.wins += 1;
     all[name] = cur;
-    mkdirSync(join(projectDir, '.mochi'), { recursive: true });
+    mkdirSync(mochiStateDir(projectDir), { recursive: true });
     writeFileSync(p, JSON.stringify(all, null, 2));
   } catch { /* stats are best-effort */ }
 }

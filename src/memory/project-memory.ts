@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { mochiStateDir } from '../core/mochi-dir.js';
 
 /** MCH-76/MCH-80: cross-session project memory. A tiny, human-editable markdown
  *  file at .mochi/project-memory.md that acts as a STABLE context prefix for
@@ -11,11 +12,10 @@ import { resolve } from 'node:path';
  *  always sits last in the prefix. */
 
 const FILE = 'project-memory.md';
-const DIR = '.mochi';
 const MAX_BYTES = 16_000; // ~16KB hard cap; oldest leading lines get truncated
 
 export function projectMemoryPath(projectDir: string): string {
-  return resolve(projectDir, DIR, FILE);
+  return resolve(mochiStateDir(projectDir), FILE);
 }
 
 interface MemEntry { date: string; text: string; raw: string }
@@ -70,7 +70,7 @@ export function recordProjectMemory(projectDir: string, fact: string): void {
   if (line.length < 4 || line.length > 200) return;
   try {
     const p = projectMemoryPath(projectDir);
-    if (!existsSync(p)) mkdirSync(resolve(projectDir, DIR), { recursive: true });
+    if (!existsSync(p)) mkdirSync(mochiStateDir(projectDir), { recursive: true });
     const norm = normalizeFact(line);
     const entries = parseEntries(projectDir);
     // Near-dup check: if an existing fact is ≥threshold similar, replace it

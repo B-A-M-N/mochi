@@ -25,4 +25,27 @@ describe('MemoryStore', () => {
     expect(summary).toContain('architectures');
     expect(summary).toContain('conventions');
   });
+
+  it('preserves the stored timestamp (no phantom 1970 dates)', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-memory-'));
+    const store = new MemoryStore(dir);
+    const when = Date.parse('2026-08-20T05:08:05.444Z');
+    store.add({ kind: 'architecture', title: 'Layered', body: 'runtime owns goals', updatedAt: when });
+    const [entry] = store.entries('architecture');
+    expect(entry.updatedAt).toBe(when);
+    expect(store.load()).not.toContain('1970-01-01');
+    expect(store.load()).toContain('2026-08-20');
+  });
+
+  it('caps failure memory so it cannot grow without bound', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'mochi-memory-'));
+    const store = new MemoryStore(dir);
+    const cap = MemoryStore.MAX_FAILURE_ENTRIES;
+    for (let i = 0; i < cap + 5; i++) store.addFailure(`Failed: task-${i}`, `reason ${i}`);
+    const kept = store.entries('failure');
+    expect(kept).toHaveLength(cap);
+    // Newest retained, oldest dropped.
+    expect(kept[kept.length - 1].title).toContain(`task-${cap + 4}`);
+    expect(kept.some((e) => e.title.includes('task-0'))).toBe(false);
+  });
 });

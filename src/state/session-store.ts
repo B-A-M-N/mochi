@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { openDb, hasSqlite as driverAvailable, type SqliteDb } from '../sqlite.js';
+import { mochiStateDir } from '../core/mochi-dir.js';
 
 export interface SessionMessage {
   role: string;
@@ -73,8 +74,9 @@ export class SessionStore {
       return;
     }
     this.available = true;
-    mkdirSync(resolve(dir, '.mochi'), { recursive: true });
-    this.db = openDb(resolve(dir, '.mochi', 'sessions.sqlite'));
+    const stateDir = mochiStateDir(dir);
+    mkdirSync(stateDir, { recursive: true });
+    this.db = openDb(resolve(stateDir, 'sessions.sqlite'));
     this.db.exec(DDL);
   }
 

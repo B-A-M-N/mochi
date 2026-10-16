@@ -5,6 +5,7 @@
 // that recovered. Pure observation: never gates any tool call.
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { mochiStateDir } from './mochi-dir.js';
 
 export interface ToolSeqStore {
   /** Most recent sequences, newest last. Capped. */
@@ -15,7 +16,7 @@ const MAX_SEQS = 120;
 const MAX_LEN = 40;
 
 function storePath(workspaceDir: string): string {
-  return resolve(workspaceDir, '.mochi', 'tool-seqs.json');
+  return resolve(mochiStateDir(workspaceDir), 'tool-seqs.json');
 }
 
 export function loadToolSeqs(workspaceDir: string): ToolSeqStore {

@@ -9,6 +9,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { mochiStateDir } from '../core/mochi-dir.js';
 
 export interface CronJob {
   id: string;
@@ -102,7 +103,7 @@ export function bumpJob(job: CronJob): CronJob {
 
 function loadJobs(dir: string): CronJob[] {
   try {
-    const f = resolve(dir, '.mochi', 'cron.json');
+    const f = resolve(mochiStateDir(dir), 'cron.json');
     if (!existsSync(f)) return [];
     const raw = JSON.parse(readFileSync(f, 'utf8'));
     if (!Array.isArray(raw)) return [];
@@ -134,8 +135,8 @@ function loadJobs(dir: string): CronJob[] {
 }
 
 function saveJobs(dir: string, jobs: CronJob[]): void {
-  mkdirSync(resolve(dir, '.mochi'), { recursive: true });
-  writeFileSync(resolve(dir, '.mochi', 'cron.json'), JSON.stringify(jobs, null, 2));
+  mkdirSync(mochiStateDir(dir), { recursive: true });
+  writeFileSync(resolve(mochiStateDir(dir), 'cron.json'), JSON.stringify(jobs, null, 2));
 }
 
 /** Validate a notify target: https? webhook URL or a bounded shell command.

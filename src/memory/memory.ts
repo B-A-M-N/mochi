@@ -23,6 +23,10 @@ export class MemoryStore {
   private dir: string;
   private files: Record<MemoryEntry['kind'], string>;
 
+  /** Failures are unbounded input to the model's context, so keep only the
+   *  most recent slice — otherwise every past failure is replayed every run. */
+  static readonly MAX_FAILURE_ENTRIES = 50;
+
   constructor(workspaceDir: string) {
     this.dir = resolve(workspaceDir, 'memory');
     this.files = {
@@ -51,7 +55,16 @@ export class MemoryStore {
     const header = `## ${entry.kind}: ${entry.title}`;
     if (existing.includes(header)) return false;
     writeFileSync(file, existing + entryToMarkdown(normalized));
+    if (entry.kind === 'failure') this.prune('failure', MemoryStore.MAX_FAILURE_ENTRIES);
     return true;
+  }
+
+  /** Keep only the newest `limit` entries of a kind (oldest dropped). */
+  private prune(kind: MemoryEntry['kind'], limit: number): void {
+    const entries = this.entries(kind);
+    if (entries.length <= limit) return;
+    const keep = entries.slice(-limit);
+    writeFileSync(this.files[kind], keep.map((e) => entryToMarkdown(e)).join('\n'));
   }
 
   addDecision(title: string, body: string, source?: string) {
@@ -101,9 +114,15 @@ export class MemoryStore {
       for (const block of content.split(/^## /m).slice(1)) {
         const lines = block.split('\n');
         const header = lines[0].trim();
+        // Preserve the stored timestamp. Dropping it made every entry look
+        // like it was written in 1970 (load() re-renders `Updated:`), which
+        // broke any recency ordering/decay that reads updatedAt.
+        const updatedLine = lines.find((l) => l.startsWith('Updated:'));
+        const parsed = updatedLine ? Date.parse(updatedLine.slice('Updated:'.length).trim()) : NaN;
+        const updatedAt = Number.isFinite(parsed) ? parsed : 0;
         const body = lines.slice(1).filter((l) => !l.startsWith('Updated:')).join('\n').trim();
         if (!header) continue;
-        result.push({ kind: k, title: header, body, updatedAt: 0 });
+        result.push({ kind: k, title: header, body, updatedAt });
       }
     }
     // project.md is not a kind-category entry; emit it as a single "project"

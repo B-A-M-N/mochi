@@ -14,17 +14,18 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rename
 import { dirname, join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { lintSkillDoc } from './skill-lint.js';
+import { mochiStateDir } from '../core/mochi-dir.js';
 import type { Tool } from '../tools/types.js';
 
 /** Where agent-created + returned skills live, relative to the project dir. */
 export function skillsRoot(projectDir: string): string {
-  return join(projectDir, '.mochi', 'skills');
+  return join(mochiStateDir(projectDir), 'skills');
 }
 export function archiveRoot(projectDir: string): string {
-  return join(projectDir, '.mochi', 'skills', '.archive');
+  return join(mochiStateDir(projectDir), 'skills', '.archive');
 }
 export function usagePath(projectDir: string): string {
-  return join(projectDir, '.mochi', 'skill-meta.json');
+  return join(mochiStateDir(projectDir), 'skill-meta.json');
 }
 
 // ─── Usage registry (mirrors Hermes' tools/skill_usage.py) ───────────────

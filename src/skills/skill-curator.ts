@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {skillsRoot, archiveRoot, loadUsage, safeSlug, parseFrontmatter, renderSkill} from './skill-manager.js';
 import { writeSkill, markUsed } from './skill-manager.js';
+import { mochiStateDir } from '../core/mochi-dir.js';
 import { loadLessons } from '../lessons.js';
 import { lintSkillDoc, formatSkillLint } from './skill-lint.js';
 import { maybeRedact } from '../security/security.js';
@@ -342,7 +343,7 @@ export function runCurator(projectDir: string, cfg: CuratorConfig): CuratorOutpu
     'Agent-created skills (maintainable):',
     ...agentCreated.map((s) => `- ${s.name}${s.category ? ` [${s.category}]` : ''} — ${s.patches} patches, active`),
   ].join('\n');
-  const reportDir = join(projectDir, '.mochi', 'reports');
+  const reportDir = join(mochiStateDir(projectDir), 'reports');
   mkdirSync(reportDir, { recursive: true });
   const reportPath = join(reportDir, `skill-curator-${now}.md`);
   writeFileSync(reportPath, report, 'utf8');
@@ -360,7 +361,7 @@ export interface CuratorState {
 }
 
 function statePath(projectDir: string): string {
-  return join(projectDir, '.mochi', 'curator-state.json');
+  return join(mochiStateDir(projectDir), 'curator-state.json');
 }
 export function loadCuratorState(projectDir: string): CuratorState {
   try { return { paused: false, runCount: 0, pinned: [], ...JSON.parse(readFileSync(statePath(projectDir), 'utf8')) }; }
@@ -760,7 +761,7 @@ export function runSkillDoctor(
     reportLines.push('All evaluated skills are healthy.');
   }
 
-  const reportDir = join(projectDir, '.mochi', 'reports');
+  const reportDir = join(mochiStateDir(projectDir), 'reports');
   mkdirSync(reportDir, { recursive: true });
   const reportPath = join(reportDir, `skill-doctor-${now}.md`);
   writeFileSync(reportPath, reportLines.join('\n'), 'utf8');

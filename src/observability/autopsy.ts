@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { FailureKind, Hypothesis } from './diagnosis.js';
 import { redact } from '../security/security.js';
+import { mochiStateDir } from '../core/mochi-dir.js';
 
 export interface DebugAttempt {
   attempt: number;          // 1..n, in order of evaluation
@@ -40,17 +41,25 @@ export interface Autopsy {
 }
 
 function autopsyDir(workspaceDir: string): string {
-  if (existsSync(resolve(workspaceDir, '.mochi'))) {
-    return resolve(workspaceDir, '.mochi', 'autopsies');
-  }
+  // Prefer the canonical `<root>/.mochi/autopsies`. Callers are inconsistent
+  // about handing us the project root vs the state dir, so normalize; but keep
+  // the historical bare `<workspace>/autopsies` fallback for workspaces that
+  // never created a `.mochi` dir (e.g. plain directories, tests).
+  const state = mochiStateDir(workspaceDir);
+  if (existsSync(state) || existsSync(resolve(workspaceDir, '.mochi'))) return resolve(state, 'autopsies');
   return resolve(workspaceDir, 'autopsies');
 }
 
 function autopsyPath(workspaceDir: string, taskId: string): string {
-  const p1 = resolve(workspaceDir, '.mochi', 'autopsies', `${taskId}.json`);
+  const state = mochiStateDir(workspaceDir);
+  const p1 = resolve(state, 'autopsies', `${taskId}.json`);
   if (existsSync(p1)) return p1;
+  // Legacy layouts written before state dirs were normalized: a bare
+  // `<workspace>/autopsies` or a double-nested `<workspace>/.mochi/.mochi`.
   const p2 = resolve(workspaceDir, 'autopsies', `${taskId}.json`);
   if (existsSync(p2)) return p2;
+  const p3 = resolve(workspaceDir, '.mochi', '.mochi', 'autopsies', `${taskId}.json`);
+  if (existsSync(p3)) return p3;
   return resolve(autopsyDir(workspaceDir), `${taskId}.json`);
 }
 

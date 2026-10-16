@@ -5235,7 +5235,7 @@ Continue from 'Next:', do not redo completed progress.`,
     const changed = this.context['state'].filesModified ?? [];
     if (!changed.length) return;
     try {
-      const store = new MemoryStore(resolve(this.workspace.dir, '.mochi'));
+      const store = new MemoryStore(this.workspace.dir);
       const body = `Completed "${task.title}". Files changed: ${changed.slice(0, 6).join(', ')}${changed.length > 6 ? ` (+${changed.length - 6} more)` : ''}.`;
       store.add({ kind: 'decision', title: `Completed: ${task.title}`.slice(0, 80), body, source: 'mochi-session' });
     } catch { /* durable-state write is best-effort */ }
