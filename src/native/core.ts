@@ -671,7 +671,15 @@ export function nativeClassifyCommand(cmd: string): CommandRiskNative | null {
   if (napiModule && typeof napiModule.classifyCommand === 'function') {
     try {
       const code = napiModule.classifyCommand(cmd);
-      if (typeof code === 'number') {
+      if (typeof code === 'string') {
+        const v = code.trim().toLowerCase();
+        if (v === 'low' || v === 'network' || v === 'destructive') {
+          return v as CommandRiskNative;
+        }
+        if (v === '0') return 'low';
+        if (v === '1') return 'network';
+        if (v === '2') return 'destructive';
+      } else if (typeof code === 'number') {
         if (code === 0) return 'low';
         if (code === 1) return 'network';
         if (code === 2) return 'destructive';
