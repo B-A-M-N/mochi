@@ -27,6 +27,20 @@ function runGit(cwd: string, args: string[]): string {
   return (res.stdout || '').trim();
 }
 
+/** Capture git stdout verbatim (no trim). Patches are whitespace-significant:
+ *  trimming the trailing newline produces a patch `git apply` rejects with
+ *  "corrupt patch", which silently made every saved checkpoint un-restorable. */
+function runGitRaw(cwd: string, args: string[]): string {
+  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  return res.stdout || '';
+}
+
+/** A git patch must end with a newline to be applyable. */
+function normalizePatch(patch: string): string {
+  if (!patch) return '';
+  return patch.endsWith('\n') ? patch : `${patch}\n`;
+}
+
 /** Like runGit, but surfaces failures — runGit drops status/stderr, which is
  *  why restore could report success after a `reset --hard` or `apply` that
  *  git had rejected (non-repo, bad sha, patch conflict). */
@@ -47,7 +61,7 @@ export async function saveNamedCheckpoint(
   const dir = getCheckpointsDir(cwd);
 
   const headSha = runGit(cwd, ['rev-parse', 'HEAD']) || 'uncommitted';
-  const patch = runGit(cwd, ['diff', 'HEAD']) || '';
+  const patch = normalizePatch(runGitRaw(cwd, ['diff', 'HEAD']));
   const status = runGit(cwd, ['status', '--short']) || '';
 
   const affectedFiles = status
@@ -127,7 +141,7 @@ export async function restoreNamedCheckpoint(
     // 2. If there was a dirty working tree patch, re-apply it cleanly
     if (checkpoint.patch) {
       const tempPatchPath = resolve(dir, `_temp_${Date.now()}.patch`);
-      writeFileSync(tempPatchPath, checkpoint.patch, 'utf8');
+      writeFileSync(tempPatchPath, normalizePatch(checkpoint.patch), 'utf8');
       const r = runGitChecked(cwd, ['apply', tempPatchPath]);
       try { unlinkSync(tempPatchPath); } catch {}
       if (!r.ok) {
