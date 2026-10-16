@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { handleDiscordMessage, loadDiscordConfig, runDiscordGateway, chunkMessage, GATEWAY_INTENTS, type DiscordConfig, type GatewaySocket } from './discord.js';
+import type { Runtime } from './runtime.js';
 
 /** Scripted in-memory socket: the test drives inbound frames, captures outbound. */
 function fakeSocketBox() {
@@ -214,6 +215,77 @@ describe('Discord live gateway (scripted socket, no network)', () => {
     });
     expect(sockets).toBe(0);
     expect(summary.messages).toBe(0);
+  });
+
+  it('spins up a thread for goals, shows typing, and adds reactions', async () => {
+    const box = fakeSocketBox();
+    const runtime = { goal: vi.fn().mockResolvedValue('Done building feature') } as unknown as Runtime;
+    const sentChunks: Array<{ channelId: string; text: string }> = [];
+    const threadsCreated: Array<{ channelId: string; messageId: string; name: string }> = [];
+    const reactionsAdded: Array<{ channelId: string; messageId: string; emoji: string }> = [];
+    const typingChannels: string[] = [];
+    const ctl = new AbortController();
+    const { promise: socketCreated, resolve: resolveSocket } = Promise.withResolvers<void>();
+    const { promise: replySent, resolve: resolveReply } = Promise.withResolvers<void>();
+
+    const run = runDiscordGateway(cfg, runtime, {
+      createSocket: () => {
+        resolveSocket();
+        return box.sock;
+      },
+      fetchJson: fakeFetch(),
+      send: async (channelId, text) => {
+        sentChunks.push({ channelId, text });
+        resolveReply();
+        return true;
+      },
+      createThread: async (channelId, messageId, name) => {
+        threadsCreated.push({ channelId, messageId, name });
+        return 'thread-999';
+      },
+      addReaction: async (channelId, messageId, emoji) => {
+        reactionsAdded.push({ channelId, messageId, emoji });
+        return true;
+      },
+      triggerTyping: async (channelId) => {
+        typingChannels.push(channelId);
+        return true;
+      },
+      sleepMs: async () => {},
+      signal: ctl.signal,
+    });
+
+    await socketCreated;
+    box.sock.onopen?.();
+    box.inbound({ op: 10, d: { heartbeat_interval: 60000 } });
+    box.inbound({ op: 0, t: 'READY', d: { user: { id: 'bot-1', username: 'mochi-bot' } } });
+
+    box.inbound({
+      op: 0,
+      t: 'MESSAGE_CREATE',
+      d: {
+        id: 'msg-123',
+        channel_id: 'chan-456',
+        guild_id: 'guild-789',
+        content: '!mochi build a rate limiter',
+        author: { id: 'u1', username: 'alice' },
+      },
+    });
+
+    await replySent;
+    ctl.abort();
+    await run;
+
+    expect(threadsCreated).toHaveLength(1);
+    expect(threadsCreated[0]).toEqual({
+      channelId: 'chan-456',
+      messageId: 'msg-123',
+      name: '🍡 build a rate limiter',
+    });
+    expect(reactionsAdded).toContainEqual({ channelId: 'chan-456', messageId: 'msg-123', emoji: '👀' });
+    expect(reactionsAdded).toContainEqual({ channelId: 'chan-456', messageId: 'msg-123', emoji: '✅' });
+    expect(typingChannels).toContain('thread-999');
+    expect(sentChunks.some((c) => c.channelId === 'thread-999' && c.text.includes('Done building feature'))).toBe(true);
   });
 });
 

@@ -85,6 +85,84 @@ export async function sendDiscordMessage(
   }
 }
 
+/** Spin up a dedicated Discord thread from a message (parity with OMP bot) */
+export async function createDiscordThread(
+  token: string,
+  channelId: string,
+  messageId: string,
+  name: string,
+  fetchJson?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>,
+): Promise<string | undefined> {
+  try {
+    const threadName = (name || 'Mochi Session').trim().slice(0, 95);
+    const doFetch = fetchJson ?? (async (u: string, init?: RequestInit) => {
+      const r = await fetch(u, init);
+      return { ok: r.ok, status: r.status, json: () => r.json() as Promise<unknown> };
+    });
+    const res = await doFetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}/threads`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: threadName,
+        auto_archive_duration: 1440,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { id?: string };
+      return data?.id;
+    }
+  } catch {}
+  return undefined;
+}
+
+/** Add a reaction emoji to a message (parity with OMP/Hermes bot) */
+export async function addDiscordReaction(
+  token: string,
+  channelId: string,
+  messageId: string,
+  emoji: string,
+  fetchJson?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>,
+): Promise<boolean> {
+  try {
+    const doFetch = fetchJson ?? (async (u: string, init?: RequestInit) => {
+      const r = await fetch(u, init);
+      return { ok: r.ok, status: r.status };
+    });
+    const encoded = encodeURIComponent(emoji);
+    const res = await doFetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}/reactions/${encoded}/@me`, {
+      method: 'PUT',
+      headers: { Authorization: `Bot ${token}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Trigger typing indicator in a channel or thread */
+export async function triggerDiscordTyping(
+  token: string,
+  channelId: string,
+  fetchJson?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>,
+): Promise<boolean> {
+  try {
+    const doFetch = fetchJson ?? (async (u: string, init?: RequestInit) => {
+      const r = await fetch(u, init);
+      return { ok: r.ok, status: r.status };
+    });
+    const res = await doFetch(`https://discord.com/api/v10/channels/${channelId}/typing`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${token}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Process a message event received from Discord webhook or gateway */
 export async function handleDiscordMessage(
   msg: { authorId: string; content: string; channelId: string },
@@ -158,6 +236,9 @@ export interface GatewayRunOpts {
   fetchJson?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
   /** Send one reply chunk (production: sendDiscordMessage with the token). */
   send?: (channelId: string, text: string) => Promise<boolean>;
+  createThread?: (channelId: string, messageId: string, name: string) => Promise<string | undefined>;
+  addReaction?: (channelId: string, messageId: string, emoji: string) => Promise<boolean>;
+  triggerTyping?: (channelId: string) => Promise<boolean>;
   onLog?: (line: string) => void;
   /** Abort reconnection (production: SIGINT hook in cli.ts). */
   signal?: AbortSignal;
@@ -209,11 +290,13 @@ export async function runDiscordGateway(
     return { ok: res.ok, status: res.status, json: () => res.json() as Promise<unknown> };
   });
   const send = opts.send ?? ((channelId: string, text: string) => sendDiscordMessage(cfg.token, channelId, text));
+  const createThread = opts.createThread ?? ((chId: string, msgId: string, name: string) => createDiscordThread(cfg.token, chId, msgId, name, fetchJson));
+  const addReaction = opts.addReaction ?? ((chId: string, msgId: string, emoji: string) => addDiscordReaction(cfg.token, chId, msgId, emoji, fetchJson));
+  const triggerTyping = opts.triggerTyping ?? ((chId: string) => triggerDiscordTyping(cfg.token, chId, fetchJson));
   const log = opts.onLog ?? (() => {});
   const sleepMs = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const maxReconnects = opts.maxReconnects ?? Number.MAX_SAFE_INTEGER;
   const prefix = cfg.prefix || '!mochi';
-
   let reconnects = 0;
   let messages = 0;
 
@@ -307,6 +390,8 @@ export async function runDiscordGateway(
           if (author.bot) return;
           const content = String(d.content ?? '');
           const channelId = String(d.channel_id ?? '');
+          const messageId = String(d.id ?? '');
+          const guildId = d.guild_id ? String(d.guild_id) : undefined;
           if (!channelId) return;
           const mentioned = botId !== '' && (content.includes(`<@${botId}>`) || content.includes(`<@!${botId}>`));
           if (!content.startsWith(prefix) && !mentioned) return; // stay quiet otherwise
@@ -316,9 +401,43 @@ export async function runDiscordGateway(
           messages++;
           void (async () => {
             try {
-              const reply = await handleDiscordMessage({ authorId: String(author.id ?? ''), content: prompt, channelId }, cfg, runtime);
+              if (messageId) {
+                void addReaction(channelId, messageId, '👀');
+              }
+              let targetChannelId = channelId;
+              const isCommandOnly = prompt === prefix || prompt.startsWith(prefix + ' help') || prompt.startsWith(prefix + ' status') || prompt.startsWith(prefix + ' doctor');
+              if (guildId && messageId && !isCommandOnly) {
+                const threadTitle = prompt.replace(new RegExp(`^${prefix}\\s*`, 'i'), '').trim().slice(0, 80) || 'Task';
+                const threadId = await createThread(channelId, messageId, `🍡 ${threadTitle}`);
+                if (threadId) {
+                  targetChannelId = threadId;
+                }
+              }
+
+              let typing = true;
+              const typingTimer = setInterval(() => {
+                if (typing) void triggerTyping(targetChannelId);
+              }, 8000);
+              void triggerTyping(targetChannelId);
+
+              let reply = '';
+              let success = true;
+              try {
+                reply = await handleDiscordMessage({ authorId: String(author.id ?? ''), content: prompt, channelId: targetChannelId }, cfg, runtime);
+              } catch (err) {
+                success = false;
+                reply = `❌ **Error**: ${err instanceof Error ? err.message : String(err)}`;
+              } finally {
+                typing = false;
+                clearInterval(typingTimer);
+              }
+
+              if (messageId) {
+                void addReaction(channelId, messageId, success && !reply.startsWith('❌') ? '✅' : '❌');
+              }
+
               for (const chunk of chunkMessage(reply)) {
-                const ok = await send(channelId, chunk);
+                const ok = await send(targetChannelId, chunk);
                 if (!ok) { log('discord: reply chunk failed to send.'); break; }
               }
             } catch (e) {
