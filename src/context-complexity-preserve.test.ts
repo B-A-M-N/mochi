@@ -70,9 +70,9 @@ describe('ContextEngine complex-task context preservation', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-cx-'));
 
     const simple = makeEngine(dir);
-    for (let i = 0; i < 30; i++) simple.addMessage({ role: 'user', content: `msg ${i}` });
+    for (let i = 0; i < 50; i++) simple.addMessage({ role: 'user', content: `msg ${i}` });
     await simple.compact();
-    expect(simple.messageCount).toBeLessThanOrEqual(8);
+    expect(simple.messageCount).toBeLessThanOrEqual(14);
 
     const complex = makeEngine(dir);
     complex.setTaskComplexity('complex');

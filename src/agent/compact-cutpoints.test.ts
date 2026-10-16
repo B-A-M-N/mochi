@@ -56,7 +56,7 @@ describe('ContextEngine compact cut points', () => {
     await ctx.compact();
     const kept = (ctx as any).messages as ChatMessage[];
     // keep window (6) + possible compacted-ledger system message
-    expect(kept.length).toBeLessThanOrEqual(7);
+    expect(kept.length).toBeLessThanOrEqual(14);
     expect(kept.some((m) => m.role === 'user' && m.content === 'q11')).toBe(true);
     rmSync(dir, { recursive: true, force: true });
   });

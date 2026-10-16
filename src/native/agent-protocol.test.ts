@@ -60,8 +60,8 @@ describe('Rust runtime compaction planner (stdio protocol)', () => {
       tool_calls: m.role === 'assistant' && (m as any).tool_calls ? (m as any).tool_calls.length : 0,
       tool_call_id: (m as any).tool_call_id,
     }));
-    const rust = await nativePlanCompaction(req, 6);
-    const ts = await tsPlanCut(messages, 6);
+    const rust = await nativePlanCompaction(req, 12);
+    const ts = await tsPlanCut(messages, 12);
     expect(ts).not.toBeNull();
     if (rust !== null) {
       // PARITY: same cut index. Both must drop the c1 pair together.
@@ -78,7 +78,7 @@ describe('Rust runtime compaction planner (stdio protocol)', () => {
 
   it('returns null when nothing should drop (short transcript)', async () => {
     const req = [mk('user', 'hi'), mk('assistant', 'yo')].map((m) => ({ role: m.role, content: String(m.content) }));
-    const rust = await nativePlanCompaction(req, 6);
+    const rust = await nativePlanCompaction(req, 12);
     if (rust !== null) {
       expect(rust.cut).toBeNull();
     }
@@ -106,8 +106,8 @@ describe('Rust runtime compaction planner (stdio protocol)', () => {
       tool_calls: m.role === 'assistant' && (m as any).tool_calls ? (m as any).tool_calls.length : 0,
       tool_call_id: (m as any).tool_call_id,
     }));
-    const rust = await nativePlanCompaction(req, 6);
-    const ts = await tsPlanCut(messages, 6);
+    const rust = await nativePlanCompaction(req, 12);
+    const ts = await tsPlanCut(messages, 12);
     if (rust !== null && rust.cut !== null) {
       expect(rust.cut).toBe(ts);
       expect(messages[rust.cut].role).toBe('user');
