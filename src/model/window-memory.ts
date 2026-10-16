@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
@@ -76,7 +77,7 @@ export function recordContextRejection(
   store[key] = next;
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, JSON.stringify(store, null, 2));
+    atomicWriteFileSync(path, JSON.stringify(store, null, 2));
   } catch {
     /* best effort — learning is an optimization, never a hard dependency */
   }

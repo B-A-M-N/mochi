@@ -9,9 +9,10 @@
 // empty ring); writes set 600 explicitly (config.json inherits umask, but a
 // key file must not).
 
-import { readFileSync, writeFileSync, mkdirSync, chmodSync, statSync } from 'node:fs';
+import { readFileSync, mkdirSync, chmodSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { configFilePath } from './providers.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export type KeyringType = 'api-key' | 'oauth';
 
@@ -86,7 +87,7 @@ export function loadKeyring(): Keyring {
 export function saveKeyring(ring: Keyring): void {
   const path = keyringPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(ring, null, 2));
+  atomicWriteFileSync(path, JSON.stringify(ring, null, 2));
   try {
     chmodSync(path, 0o600);
   } catch { /* best-effort (win32 ACLs differ) */ }

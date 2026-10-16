@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 import { resolve } from 'node:path';
 
 // Capability registry: the model's answer to "which endpoints can I actually
@@ -77,7 +78,7 @@ export class CapabilityRegistry {
     this.memory.set(key, rec);
     if (!this.persist) return;
     if (!existsSync(this.registryDir)) mkdirSync(this.registryDir, { recursive: true });
-    writeFileSync(this.path(key), JSON.stringify(rec, null, 2));
+    atomicWriteFileSync(this.path(key), JSON.stringify(rec, null, 2));
   }
 
   /** Current status of a provider: dead (known-broken/never worked),
