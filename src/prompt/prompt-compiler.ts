@@ -978,6 +978,14 @@ export class MochiPromptCompiler {
     lines.push('');
     lines.push('> Use tables/grids when they improve comprehension. Use code blocks for code.');
     lines.push('> **Do not fabricate any metric, test count, or file change that did not actually happen.**');
+    lines.push('');
+    lines.push('Compact form: when the task touches ONE file or involves no code change (e.g. producing a single answer/data file), use this instead — do not pad a one-file task with the full report:');
+    lines.push('');
+    lines.push('```');
+    lines.push('STATUS: OK | FAIL');
+    lines.push('CHANGED: <path> — <one line>');
+    lines.push('EVIDENCE: <command + result, or the successful write/edit tool result>');
+    lines.push('```');
 
     return lines.join('\n');
   }

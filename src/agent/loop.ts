@@ -70,6 +70,7 @@ import { autoTestCommand, isWeakVerification, cwdForScope, withCwd } from '../co
 import { planTargetedTests } from '../core/test-select.js';
 import { classifyOneShot } from '../core/one-shot.js';
 import { classifyContentOnly } from '../core/one-shot.js';
+import { workspaceListMessage } from '../core/workspace-list.js';
 import { buildMcpTools } from '../mcp/tools.js';
 import { preEditSnapshot as gitPreEditSnapshot, rollbackToSnapshot as gitRollback, type CheckpointResult } from '../repo/git.js';
 import { applyToolOutputPolicy } from '../core/tool-output.js';
@@ -653,6 +654,8 @@ export class Agent {
    *  overruled (see runMoolCall): a repeated mutation proves the task was
    *  misread as Q&A and must escape into the implement lane. */
   private chatMutationVetoes = 0;
+  /** Post-mutation "trust the tool result" nudges sent this run (capped). */
+  private trustNudges = 0;
   private toolSigRepeat = 0;
   /** Task currently being run — needed by runMoolCall to finish the run when
    *  the budget is truly exhausted (bounded early-finish vs veto-looping). */
@@ -1175,9 +1178,10 @@ Continue from 'Next:', do not redo completed progress.`,
           }
         } catch {}
       }
+      const wsList = workspaceListMessage(this.cwd);
       this.context.addMessage({
         role: 'system',
-        content: `Preflight: repo=${repo.language ?? 'unknown'}${gitStatus ? ', git status:\n' + gitStatus : ''}${langHint ? '\n\n' + langHint : ''}${scopeOutline}`,
+        content: `Preflight: repo=${repo.language ?? 'unknown'}${gitStatus ? ', git status:\n' + gitStatus : ''}${langHint ? '\n\n' + langHint : ''}${scopeOutline}${wsList ? '\n\n' + wsList : ''}`,
       });
     }
 
@@ -3232,6 +3236,19 @@ Continue from 'Next:', do not redo completed progress.`,
       this.readTargetCounts.clear();
       const path = String(args.path ?? '');
       if (path) this.context.addModifiedFile(resolve(this.cwd, path));
+      // Just-in-time trust nudge (latency): models waste a full round-trip
+      // re-reading a file they just wrote to "verify" it — the write result
+      // is already authoritative (system directive 6), and in arena timings
+      // that confirmation turn cost ~2-3s per task. Bounded to the first two
+      // mutations so multi-file runs aren't nudged to death; legitimate
+      // re-reads (diagnosing later behavior) stay allowed by design.
+      if (canonical !== 'delete' && this.trustNudges < 2) {
+        this.trustNudges++;
+        this.context.addMessage({
+          role: 'system',
+          content: `Result trust: your ${canonical} to ${path || 'the target file'} succeeded — the file on disk is exactly what you sent. Do NOT spend a turn re-reading or re-checking it to confirm; proceed to the next step or your final summary (a later, differently-motivated read is still fine).`,
+        });
+      }
     }
     if (canonical === 'patch' && toolResult?.output) {
       for (const line of toolResult.output.split('\n')) {
