@@ -674,6 +674,8 @@ export class Agent {
   private chatMutationVetoes = 0;
   /** Post-mutation "trust the tool result" nudges sent this run (capped). */
   private trustNudges = 0;
+  /** Stale-ledger caution sent this run (once). */
+  private staleTodoNoteInjected = false;
   private toolSigRepeat = 0;
   /** Task currently being run — needed by runMoolCall to finish the run when
    *  the budget is truly exhausted (bounded early-finish vs veto-looping). */
@@ -800,6 +802,29 @@ export class Agent {
   private clearReadStub(): void {
     delete (this.readCache as { __lastRead?: string }).__lastRead;
     this.readTargetCounts.clear();
+  }
+
+  /** Anti-manic guard: the todo ledger is per-WORKSPACE and persists across
+   *  runs, so a fresh task can open onto a pile of unfinished items from
+   *  earlier, unrelated sessions. Models that call `todo list` then dutifully
+   *  wander off finishing THOSE instead of the current request ("goes off
+   *  looking on other tasks"). State plainly what the ledger is and isn't.
+   *  Skipped for subagents (they legitimately inherit the parent's plan) and
+   *  when the request itself says continue/resume (the ledger is wanted). */
+  private maybeInjectStaleTodoNote(): void {
+    if (this.staleTodoNoteInjected || this.subagentDepth > 0) return;
+    let open: string[] = [];
+    try {
+      open = this.workspace.loadTodos().filter((t) => t.status !== 'done').map((t) => t.title).slice(0, 20);
+    } catch { return; }
+    if (open.length === 0) return;
+    const req = `${this.activeTask?.title ?? ''} ${this.activeTask?.description ?? ''}`;
+    if (/\b(continue|resume|next step|todo|left off|pick up)\b/i.test(req)) return;
+    this.staleTodoNoteInjected = true;
+    this.context.addMessage({
+      role: 'system',
+      content: `Ledger caution: this workspace has ${open.length} open todo item(s) left over from EARLIER, unrelated runs (${open.join('; ')}). They are NOT part of the current request — do not start working on them. Work only on the task you were just given; you may clear the stale items if they get in the way.`,
+    });
   }
 
   /** Effective working context budget for this run: the configured budget
@@ -1226,6 +1251,7 @@ Continue from 'Next:', do not redo completed progress.`,
           if (memPrefix) this.context.addMessage({ role: 'system', content: memPrefix });
         }
         this.context.addMessage({ role: 'system', content: TASK_FOCUS_PROTOCOL });
+        this.maybeInjectStaleTodoNote();
       }
     }
 
@@ -1503,6 +1529,7 @@ Continue from 'Next:', do not redo completed progress.`,
         const memPrefix = projectMemoryPrefix(this.workspace.dir);
         if (memPrefix) this.context.addMessage({ role: 'system', content: memPrefix });
         this.context.addMessage({ role: 'system', content: TASK_FOCUS_PROTOCOL });
+        this.maybeInjectStaleTodoNote();
       }
       // Anti-loop: if gathering context extensively without editing, nudge the appropriate action.
       if (!this.contextCutoffNudged && !this.fileChanged && !this.planMode) {

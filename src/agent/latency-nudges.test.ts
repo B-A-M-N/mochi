@@ -88,3 +88,55 @@ describe('latency: trust-the-result nudge after successful mutations', () => {
     }
   }, 60_000);
 });
+
+describe('anti-manic: stale todo ledger caution', () => {
+  it('tells the model that leftover todos from earlier runs are NOT the task', async () => {
+    const ws = new Workspace(dir, '.mochi');
+    ws.ensure();
+    ws.saveTodos([
+      { title: 'Refactor the ancient billing module', status: 'pending', order: 0 },
+      { title: 'Migrate legacy database', status: 'in_progress', order: 1 },
+      { title: 'Done thing', status: 'done', order: 2 },
+    ]);
+    const fake = await startFakeOpenAI([
+      { content: 'Fixed the bug in add.js only.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(fake.url);
+      const context = new ContextEngine(config, dir);
+      const agent = new Agent({ role: 'coder', config, workspace: ws, events: new EventBus(), cwd: dir, context });
+      await agent.run(createTask('fix the bug in src/add.js', 'fix the bug in src/add.js'));
+
+      const msgs = context.getMessages().map((m) => String(m.content ?? '')).join('\n');
+      expect(msgs).toContain('Ledger caution');
+      expect(msgs).toContain('Refactor the ancient billing module');
+      expect(msgs).toContain('NOT part of the current request');
+      // Done items are not listed as stale.
+      expect(msgs).not.toContain('Done thing');
+    } finally {
+      await fake.close();
+      ws.saveTodos([]);
+    }
+  }, 60_000);
+
+  it('stays quiet when the request itself says continue/resume', async () => {
+    const ws = new Workspace(dir, '.mochi');
+    ws.ensure();
+    ws.saveTodos([{ title: 'Finish the parser', status: 'pending', order: 0 }]);
+    const fake = await startFakeOpenAI([
+      { content: 'Continuing.', finishReason: 'stop' },
+    ]);
+    try {
+      const config = makeConfig(fake.url);
+      const context = new ContextEngine(config, dir);
+      const agent = new Agent({ role: 'coder', config, workspace: ws, events: new EventBus(), cwd: dir, context });
+      await agent.run(createTask('continue the parser work', 'continue the parser work where I left off'));
+
+      const msgs = context.getMessages().map((m) => String(m.content ?? '')).join('\n');
+      expect(msgs).not.toContain('Ledger caution');
+    } finally {
+      await fake.close();
+      ws.saveTodos([]);
+    }
+  }, 60_000);
+});

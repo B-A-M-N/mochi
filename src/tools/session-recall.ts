@@ -1,4 +1,4 @@
-import { SessionStore, hasSqlite } from '../state/session-store.js';
+import { SessionStore } from '../state/session-store.js';
 import type { Tool } from './types.js';
 
 export const sessionRecallTool: Tool = {
@@ -14,9 +14,6 @@ export const sessionRecallTool: Tool = {
     permission: 'read',
   },
   async execute(args, ctx) {
-    if (!hasSqlite()) {
-      return 'Session store is not available in this environment (SQLite required).';
-    }
     const store = new SessionStore(ctx.workspace.dir);
     const action = String(args.action ?? 'search').toLowerCase();
     const limit = typeof args.limit === 'number' ? Math.max(1, Math.min(50, args.limit)) : 10;

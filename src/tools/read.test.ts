@@ -38,6 +38,17 @@ describe('read tool', () => {
     await expect(readTool.execute({ path: 'nope.ts' }, ctx)).rejects.toThrow(/not found/);
   });
 
+  it('lists a directory instead of crashing with EISDIR', async () => {
+    // "read the src/ directory" is the most natural model move — it used to
+    // throw a raw EISDIR crash that models read as "the read tool is broken".
+    const out = String(await readTool.execute({ path: 'src' }, ctx));
+    expect(out).toContain('is a directory');
+    expect(out).toContain('data.txt');
+    expect(out).toContain('read again with one of the FILE paths');
+    // No Node error noise leaked to the model.
+    expect(out).not.toContain('EISDIR');
+  });
+
   it('caches reads by mtime+size and invalidates on change', async () => {
     const cache = new Map<string, { mtimeMs: number; size: number; content: string }>();
     const cctx = { ...ctx, readCache: cache };

@@ -2371,8 +2371,7 @@ async function main() {
 
 
   if (first === 'session') {
-    const { SessionStore, hasSqlite } = await import('./state/session-store.js');
-    if (!hasSqlite()) { console.log('Session store needs a SQLite driver (Node >= 22.5 or the bun binary).'); return; }
+    const { SessionStore } = await import('./state/session-store.js');
     // GoalEngine persists sessions under the PROJECT ROOT (.mochi/sessions.sqlite);
     // workspace.dir is already that root's .mochi subdir. Use the same key the
     // engine does or the CLI reads an empty sibling DB and sessions never list.

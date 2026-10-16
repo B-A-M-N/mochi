@@ -10,7 +10,7 @@ import { Agent } from '../agent/loop.js';
 import { AgentProfileService } from '../agents/profile.js';
 import { BudgetEngine } from '../budget.js';
 import { VerifierEngine, captureBaseline, type VerificationBaseline } from '../verification.js';
-import { SessionStore, hasSqlite } from '../state/session-store.js';
+import { SessionStore } from '../state/session-store.js';
 import { HookManager } from '../hooks.js';
 import { classifyOneShot } from '../core/one-shot.js';
 import { consolidate } from '../memory/consolidate.js';
@@ -541,7 +541,7 @@ Return ONLY the JSON array, no markdown.`;
     // Files touched on disk (success or partial failure alike) accumulate at
     // the goal level so SDK/daemon/TUI get a true file list.
     this.noteGoalFiles(result.filesModified);
-    if (hasSqlite() && (sessionId || goal.id)) {
+    if (sessionId || goal.id) {
       try {
         const sid = sessionId ?? this.store.begin({ goalId: goal.id });
         this.store.append(sid, 'user', task.description || task.title);
@@ -730,20 +730,21 @@ Return ONLY the JSON array, no markdown.`;
     });
     // Resumed-goal / ongoing session context: if this session or goal has prior history,
     // load the recent conversational turns (user + assistant) into context so multi-turn dialogue works seamlessly.
-    if (hasSqlite()) {
-      try {
-        const sid = sessionId ?? this.store.begin({ goalId: goal.id });
-        const prior = this.store.messages(sid);
-        if (prior.length > 0) {
-          const keep = prior.slice(-20);
-          for (const m of keep) {
-            if (m.role === 'user' || m.role === 'assistant' || m.role === 'system') {
-              context.addMessage({ role: m.role as 'user' | 'assistant' | 'system', content: m.content });
-            }
+    // Runs unconditionally now: with no sqlite driver the store transparently
+    // uses its JSON fallback — continuity must never silently degrade (every
+    // prompt ran blind when this was gated on hasSqlite()).
+    try {
+      const sid = sessionId ?? this.store.begin({ goalId: goal.id });
+      const prior = this.store.messages(sid);
+      if (prior.length > 0) {
+        const keep = prior.slice(-20);
+        for (const m of keep) {
+          if (m.role === 'user' || m.role === 'assistant' || m.role === 'system') {
+            context.addMessage({ role: m.role as 'user' | 'assistant' | 'system', content: m.content });
           }
         }
-      } catch { /* best-effort */ }
-    }
+      }
+    } catch { /* best-effort */ }
     const modeStamp = this.config.planMode
       ? '[MODE: plan — research and produce a written plan only; do NOT edit files or run mutating commands]\n'
       : '[MODE: act — execute changes and verify them]\n';
@@ -835,7 +836,7 @@ Return ONLY the JSON array, no markdown.`;
     // Persist the conversation to the searchable session store so
     // `mochi session search` finds past work and a resume can reconstruct
     // the exact prior conversation (Hermes insight).
-    if (hasSqlite()) { this.recordSave(goal, task, result, context, sessionId); }
+    this.recordSave(goal, task, result, context, sessionId);
     await this.hooks.runAfter('after_agent', { agent: this.agentId(task), task: task.id, success: String(result.success) });
 
     // Record the task as completed on shared state. This must be atomic: under

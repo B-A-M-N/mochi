@@ -75,13 +75,6 @@ export const readTool: Tool = {
         'To read a file, call read again with one of the FILE paths listed above.',
       ].join('\n');
     }
-    // A directory (or an empty path, which resolves to cwd) previously fell
-    // through to readFileSync and surfaced a bare `EISDIR: illegal operation on
-    // a directory, read` — a confusing error that made the model re-try the same
-    // bad read or flail. Fail with an actionable message instead.
-    if (statSync(fullPath).isDirectory()) {
-      throw new Error(`Path is a directory, not a file: ${rawPath || '.'} — read expects a file. Use glob/list_dir to browse a directory, or pass a path to a specific file.`);
-    }
 
     // MCH-109: image files are unreadable as text — return a data URI the
     // model can attach to its next user message (multimodal vision input).
