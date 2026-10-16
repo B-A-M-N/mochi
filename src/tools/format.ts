@@ -2,7 +2,7 @@
 // Auto-detects and runs code formatters (prettier, biome, black, gofmt, rustfmt).
 
 import type { Tool } from './types.js';
-import { execSync } from 'node:child_process';
+import { runArgv } from '../exec.js';
 import { existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
@@ -10,37 +10,37 @@ interface FormatterDef {
   label: string;
   configFiles: string[];
   extensions?: string[];
-  buildCmd: (path: string, check: boolean) => string;
+  buildArgv: (path: string, check: boolean) => string[];
 }
 
 const FORMATTERS: FormatterDef[] = [
   {
     label: 'biome',
     configFiles: ['biome.json', 'biome.jsonc'],
-    buildCmd: (p, check) => check ? `npx biome format ${p}` : `npx biome format --write ${p}`,
+    buildArgv: (p, check) => ['npx', 'biome', 'format', check ? '--check' : '--write', p],
   },
   {
     label: 'prettier',
     configFiles: ['.prettierrc', '.prettierrc.js', '.prettierrc.json', 'prettier.config.js'],
-    buildCmd: (p, check) => check ? `npx prettier --check ${p}` : `npx prettier --write ${p}`,
+    buildArgv: (p, check) => ['npx', 'prettier', check ? '--check' : '--write', p],
   },
   {
     label: 'black',
     configFiles: ['pyproject.toml', '.black'],
     extensions: ['.py'],
-    buildCmd: (p, check) => check ? `black --check ${p}` : `black ${p}`,
+    buildArgv: (p, check) => (check ? ['black', '--check', p] : ['black', p]),
   },
   {
     label: 'gofmt',
     configFiles: ['go.mod'],
     extensions: ['.go'],
-    buildCmd: (p, check) => check ? `gofmt -l ${p}` : `gofmt -w ${p}`,
+    buildArgv: (p, check) => ['gofmt', check ? '-l' : '-w', p],
   },
   {
     label: 'rustfmt',
     configFiles: ['Cargo.toml'],
     extensions: ['.rs'],
-    buildCmd: (p, check) => check ? `rustfmt --check ${p}` : `rustfmt ${p}`,
+    buildArgv: (p, check) => ['rustfmt', ...(check ? ['--check'] : []), p],
   },
 ];
 
@@ -70,11 +70,12 @@ export const formatTool: Tool = {
     }
 
     const results: string[] = [];
-    for (const fmt of detected.slice(0, 1)) { // use first matching (most specific)
-      const cmd = fmt.buildCmd(path, check);
+    for (const fmt of detected.slice(0, 1)) {
+      const argv = fmt.buildArgv(path, check);
       try {
-        const out = execSync(cmd, { cwd: ctx.cwd, encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] });
-        results.push(`[${fmt.label}] ${check ? 'Check' : 'Formatted'}: ${path}\n${out.slice(0, 1000)}`);
+        const r = await runArgv(argv[0], argv.slice(1), { cwd: ctx.cwd, timeoutMs: 30000, maxOutput: 1_000_000 });
+        if (r.code === 0) results.push(`[${fmt.label}] ${check ? 'Check' : 'Formatted'}: ${path}\n${(r.stdout || '').slice(0, 1000)}`);
+        else results.push(`[${fmt.label}] ${check ? 'Not formatted' : 'Error'}:\n${((r.stdout || '') + (r.stderr || '')).trim().slice(0, 1000)}`);
       } catch (e: unknown) {
         const err = e as { stdout?: string; stderr?: string; message?: string };
         const output = ((err.stdout || '') + (err.stderr || '')).trim().slice(0, 1000);
