@@ -549,6 +549,10 @@ Return ONLY the JSON array, no markdown.`;
         if (result.summary) {
           this.store.append(sid, 'assistant', result.summary);
         }
+        const _digest = (result as { runDigest?: string }).runDigest;
+        if (_digest) {
+          this.store.append(sid, 'system', _digest);
+        }
       } catch { /* best-effort */ }
     }
     if (!result.success) {

@@ -397,8 +397,8 @@ export interface AgentResult {
   durationMs: number;
   /** MCH-82: real per-run cost attribution (from budget ledger estimate). */
   costUsd: number;
-  /** Why the run ended, mirroring modern agent SDKs (LangChain/LangGraph). */
   stopReason: AgentStopReason;
+  runDigest?: string;
 }
 
 /**
@@ -3311,6 +3311,17 @@ Continue from 'Next:', do not redo completed progress.`,
    *  (the model recreating the file via shell). */
   private trackFileChange(name: string, args: Record<string, unknown>, toolResult?: { output?: string; error?: unknown }) {
     const canonical = TOOL_ALIASES[name] || name;
+    // Carryover bookkeeping: a successful READ is part of the working context
+    // for THIS run and later turns — if compaction drops its content, or a
+    // follow-up references "the file you read", the digest/re-seed paths need
+    // to know WHICH file without re-globbing. Tracked regardless of run kind.
+    if (canonical === 'read' && !toolResult?.error && typeof args.path === 'string' && args.path.trim()) {
+      const p = args.path.trim();
+      const current = this.context.state.filesRead ?? [];
+      if (!current.includes(p)) {
+        this.context.updateState({ filesRead: [...current, p].slice(-50) });
+      }
+    }
     // Any non-read-only tool MIGHT have moved the workspace (shell, MCP, …) —
     // arm the git probe so shellMovedWorkspace() re-checks on the next gate.
     // Failed calls count too: partial shell mutations are exactly the case
@@ -5932,7 +5943,15 @@ Continue from 'Next:', do not redo completed progress.`,
       summary,
       doc,
     });
-    try { await this.maybeRecordHarnessIssue(task, success, summary, stopReason); } catch { /* recording must never affect completion */ }
+    const _runDigestParts: string[] = [];
+    const _read = (this.context.state.filesRead ?? []).slice(0, 25);
+    const _changed = [...new Set(this.context.state.filesModified ?? [])].map((p) => (p.startsWith(this.cwd) ? p.slice(this.cwd.length + 1) : p)).slice(0, 25);
+    const _errs = (this.context.state.knownErrors ?? []).slice(0, 6);
+    if (_changed.length) _runDigestParts.push(`changed=[${_changed.join(', ')}]`);
+    if (_read.length) _runDigestParts.push(`read=[${_read.join(', ')}]`);
+    if (_errs.length) _runDigestParts.push(`errors=[${_errs.join('; ').slice(0, 300)}]`);
+    const _runDigest = _runDigestParts.length ? `[run-digest] ${_runDigestParts.join(' | ')}`.slice(0, 800) : undefined;
+    await this.maybeRecordHarnessIssue(task, success, summary, stopReason);
 
     return {
       success,
@@ -5947,6 +5966,7 @@ Continue from 'Next:', do not redo completed progress.`,
       costUsd: this.costUsd,
       durationMs,
       stopReason,
+      runDigest: _runDigest,
     };
   }
 }
