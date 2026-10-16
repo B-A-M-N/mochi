@@ -39,6 +39,22 @@ const WORK_MARKERS = [
   'commit', 'refactor into', 'restructure', 'rename', 'delete', 'remove',
 ];
 
+// Explicit FILE DELIVERABLE: a write verb aimed at a concrete destination —
+// "Write the answer … into answer.txt", "save the results to results.json".
+// WORK_MARKERS above misses these ("write the answer" has no "write a" and no
+// code verb), and the consequences of missing them are severe: 'answer' routes
+// the task into the chat lane, where EVERY mutating tool call is vetoed — the
+// model fights the block and the run exits green with no deliverable (arena q1
+// failed exactly this way: 5/6 vs jcode's 6/6).
+//
+// Two strengths:
+//  - A filename with an extension (answer.txt, out/report.md) is always a
+//    deliverable — no question form mentions a concrete file that way.
+//  - The softer "into/to a file" words only count when the request is NOT an
+//    open question ("How do I write to a file?" must stay a chat answer).
+const FILE_EXT_DEST_RE = /\b(?:write|save|output|store|dump|append|record|place|put)\b[^.!?\n]{0,160}?\b[\w./-]{1,80}\.[a-z0-9]{1,6}\b/;
+const FILE_WORDS_DEST_RE = /\b(?:write|save|output|store|dump|append)\b[^.!?\n]{0,120}?\b(?:into|to|in|as)\s+(?:a\s+)?files?\b/;
+
 /**
  * Classify whether a task can likely be resolved in a single, direct turn.
  * Returns a tentative short-answer prompt only for high-confidence cases where
@@ -54,6 +70,16 @@ export function classifyOneShot(input: ClassifyInput): { kind: OneShotKind; sugg
   // "create") and forced chat into a full coding loop.
   if (WORK_MARKERS.some((m) => new RegExp(`\\b${m.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text))) {
     return { kind: 'not_one_shot' as const, suggests: null };
+  }
+  // File deliverable overrides answer phrasing (see FILE_EXT_DEST_RE above).
+  if (FILE_EXT_DEST_RE.test(text)) {
+    return { kind: 'not_one_shot' as const, suggests: null };
+  }
+  if (FILE_WORDS_DEST_RE.test(text)) {
+    const titleTrimmed = input.title.trim();
+    const isOpenQuestion = /^(?:how|what|why|who|which|where|when|can|could|would|should|is|are|do|does|did|has|have)\b/i.test(titleTrimmed)
+      && /\?\s*$/.test(titleTrimmed);
+    if (!isOpenQuestion) return { kind: 'not_one_shot' as const, suggests: null };
   }
   if (input.verificationCommand) {
     return { kind: 'not_one_shot' as const, suggests: null };

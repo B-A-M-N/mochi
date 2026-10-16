@@ -83,4 +83,46 @@ describe('one-shot fast-path classifier', () => {
     });
     expect(r.kind).toBe('not_one_shot');
   });
+
+  // Regression: arena q1 (codebase-question). "…what is the fallback value?
+  // Write the answer … into answer.txt." carried answer phrasing AND a real
+  // file deliverable. The answer lane vetoes every mutating tool, so this
+  // misroute failed the task outright (write blocked → exit green → no file).
+  it('routes an explicit file deliverable OUT of the answer lane (arena q1)', () => {
+    const r = classifyOneShot({
+      title: 'Read the src/ directory. Which exact environment variable name does the auth salt come from, and what is the fallback value? Write the answer as two lines "VAR=<name>" and "FALLBACK=<value>" into answer.txt.',
+      description: '',
+      acceptanceCriteria: [],
+    });
+    expect(r.kind).toBe('not_one_shot');
+    expect(r.suggests).toBeNull();
+  });
+
+  it('routes other write-to-file deliverables out of the answer lane', () => {
+    const save = classifyOneShot({
+      title: 'Run the benchmark and save the numbers to bench/results.json',
+      description: '',
+      acceptanceCriteria: [],
+    });
+    expect(save.kind).toBe('not_one_shot');
+
+    const words = classifyOneShot({
+      title: 'Collect the current settings and write them into a file',
+      description: '',
+      acceptanceCriteria: [],
+    });
+    expect(words.kind).toBe('not_one_shot');
+  });
+
+  it('keeps open how-questions about files in the answer lane', () => {
+    // "How do I write logs to a file?" mentions writing to a file but is a
+    // knowledge question — routing it to the implement lane would spawn a
+    // pointless coding loop for an explanation.
+    const r = classifyOneShot({
+      title: 'How do I write logs to a file in Node?',
+      description: '',
+      acceptanceCriteria: [],
+    });
+    expect(r.kind).toBe('answer');
+  });
 });

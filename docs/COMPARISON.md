@@ -95,7 +95,7 @@ The capability matrix is maintained with a strict rule: **every "ahead" row cite
 
 | Gap | Evidence | Severity |
 |-----|----------|----------|
-| **No quality benchmark vs rivals** | Arena harness exists (`bench/arena.mjs`, 6 tasks × mechanical checks) but only 1 run executed (3 harnesses, 1 round). Different models per harness → not a pure harness comparison. | Highest credibility gap |
+| **Quality benchmark vs rivals** | Arena harness (`bench/arena.mjs`, 6 tasks × mechanical checks) run 2026-10-16: **mochi 6/6** (median 20.1s), jcode 6/6 (10.5s), opencode 0/6; codex/claude/crush/gemini 0/6 (auth-gated on this box). Mochi's prior 5/6 failure (q1: chat-lane classifier vetoed a file deliverable) was fixed and pinned. Different models per harness → still not a pure harness comparison. | Real (models differ per harness) |
 | **Startup behind leaders** | Mochi bin 76 ms / node 69 ms vs claude/codex/jcode 21–32 ms (CPU-time measured). Node floor = 45 ms; bun binary floor = 22 ms. | Mid-field |
 | **Test coverage thin in places** | `retention.ts` 2.77%, `permission.ts` 16%, `src/security/` 32.69% | Real |
 | **17 conditional self-skips** | Daemon/camera/native-binary absent paths never exercised in CI | Real |

@@ -649,6 +649,10 @@ export class Agent {
   private sameAnswerStreak = 0;
   /** Consecutive-identical tool-call spam guard state (runMoolCall). */
   private lastToolSig = '';
+  /** Chat-lane mutation vetoes this run. On the 2nd the classifier is
+   *  overruled (see runMoolCall): a repeated mutation proves the task was
+   *  misread as Q&A and must escape into the implement lane. */
+  private chatMutationVetoes = 0;
   private toolSigRepeat = 0;
   /** Task currently being run — needed by runMoolCall to finish the run when
    *  the budget is truly exhausted (bounded early-finish vs veto-looping). */
@@ -3742,9 +3746,27 @@ Continue from 'Next:', do not redo completed progress.`,
     // cards" class — veto the mutation outright. Genuine clarification needs
     // go through ask_question (interactive user menu), reads through
     // read/glob/search.
+    // SELF-CORRECTION ESCAPE (precedent: complexity escalation, plan escape):
+    // the FIRST mutation on a chat lane is vetoed as designed — but if the
+    // model comes back and insists, the classifier is wrong for this task: a
+    // file deliverable was misread as Q&A (arena q1: "Write the answer … into
+    // answer.txt" was answer-classed, every write vetoed, and the run exited
+    // green with NO file). On the 2nd mutation veto the run is reclassified to
+    // 'implement' and the call falls through to the normal approval gate, so
+    // the harness corrects itself instead of stranding the model against a
+    // permanent block.
     if (this.taskKind === 'chat' && ['write', 'edit', 'patch', 'delete', 'notebook', 'shell', 'verify', 'subagent', 'spawn_subagent', 'create_pr', 'repl', 'bg_task'].includes(toolName)) {
-      this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead.');
-      return;
+      this.chatMutationVetoes++;
+      if (this.chatMutationVetoes < 2) {
+        this.vetoToolCall(tc, 'This is a conversational question, not an engineering task: answer directly in text and call no mutating tools. If you genuinely need the user to decide something first, call ask_question (it opens an interactive menu) instead. If the task explicitly REQUIRES this mutation as its deliverable (it names a file to produce, e.g. "write X into answer.txt"), repeat the call once — a repeated mutation request is honored as a correction.');
+        return;
+      }
+      this.taskKind = 'implement';
+      // Re-advertise the full toolset: the chat tier had narrowed toolDefs to
+      // read-only essentials (mch111), and the implement lane needs the real
+      // arsenal back — exactly what load_tools does after a mid-run restore.
+      this.toolDefs = [...this.tools.values()].map((t) => t.def);
+      this.events.emit({ type: 'agent:log', agentId: this.id, message: `[chat-escape] ${this.chatMutationVetoes} chat-lane mutation vetoes but the model insists — task reclassified to implement so the deliverable can proceed.` });
     }
     // APPROVAL GATE (the tiers in security/permission.ts finally enforced):
     // anything the policy does not auto-allow needs a human decision when a
