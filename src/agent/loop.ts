@@ -5944,7 +5944,9 @@ Continue from 'Next:', do not redo completed progress.`,
       doc,
     });
     const _runDigestParts: string[] = [];
-    const _read = (this.context.state.filesRead ?? []).slice(0, 25);
+    const _read = Array.from(this.readCache.keys())
+      .map((k) => (k.startsWith(this.cwd) ? k.slice(this.cwd.length + 1) : k))
+      .slice(-25);
     const _changed = [...new Set(this.context.state.filesModified ?? [])].map((p) => (p.startsWith(this.cwd) ? p.slice(this.cwd.length + 1) : p)).slice(0, 25);
     const _errs = (this.context.state.knownErrors ?? []).slice(0, 6);
     if (_changed.length) _runDigestParts.push(`changed=[${_changed.join(', ')}]`);
