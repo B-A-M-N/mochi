@@ -1087,7 +1087,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   private async planCutIndex(): Promise<number | null> {
     // Complex tasks retain more recency through compaction (16 vs 6 messages):
     // dropping to a 6-message window mid-refactor strands the code under change.
-    const keep = this.complexPreserve ? 16 : 6;
+    const keep = this.complexPreserve ? 24 : 12;
     if (this.messages.length <= keep) return null;
     const native = await nativePlanCompaction(this.messages as PlanRequestMessage[], keep);
     if (typeof native?.cut === 'number' && native.cut > 0 && native.cut < this.messages.length) {
@@ -1121,7 +1121,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
 
   async compact(checkpoint?: string) {
     // Tier 1 (micro): drop everything but the recency window and distill small facts.
-    if (this.messages.length <= (this.complexPreserve ? 16 : 6)) return;
+    if (this.messages.length <= (this.complexPreserve ? 24 : 12)) return;
 
     // VALID CUT POINTS (Pi insight): a tool result must stay attached to the
     // assistant message that requested it. planCutIndex() enforces that
