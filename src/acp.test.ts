@@ -222,7 +222,7 @@ describe('ACP permission gate', () => {
             const goalLine = texts.split('\n').find((l) => l.startsWith('Goal:'))?.slice(5).trim() || 'Do the prompted work';
             return { content: JSON.stringify([{ title: goalLine.slice(0, 80), description: goalLine, role: 'coder', dependencies: [], acceptanceCriteria: [] }]), finishReason: 'stop' as const };
           }
-          if (/concise summary/i.test(texts)) return { content: 'Run summarized.', finishReason: 'stop' as const };
+          if (/Write a concise summary/i.test(texts)) return { content: 'Run summarized.', finishReason: 'stop' as const };
           return turns.length ? turns.shift()! : { content: 'done', finishReason: 'stop' as const };
         },
       },
@@ -403,7 +403,7 @@ describe('ACP prompt text extraction + tool kinds', () => {
             const goalLine = texts.split('\n').find((l) => l.startsWith('Goal:'))?.slice(5).trim() || 'Do the prompted work';
             return { content: JSON.stringify([{ title: goalLine.slice(0, 80), description: goalLine, role: 'coder', dependencies: [], acceptanceCriteria: [] }]), finishReason: 'stop' as const };
           }
-          if (/concise summary/i.test(texts)) {
+          if (/Write a concise summary/i.test(texts)) {
             return { content: 'Run summarized.', finishReason: 'stop' as const };
           }
           return agentTurns.length ? agentTurns.shift()! : { content: 'done', finishReason: 'stop' as const };
