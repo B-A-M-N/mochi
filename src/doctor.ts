@@ -36,6 +36,7 @@ export interface DoctorReport {
   daemon: { running: boolean; port?: number; jobs: number };
   cron: { jobs: number };
   sessions: { sqlite: boolean; count: number };
+  harness: { openIssues: number };
   theme: { id: string; name: string; stuck: boolean };
   diagnostics: { typescript: boolean; python: boolean };
   sandbox: { bubblewrap: boolean };
@@ -133,6 +134,11 @@ export async function doctorReport(opts: {
       try { sessionCount = store.list().length; } finally { store.close(); }
     } catch { /* store not initialised yet */ }
   }
+  let harnessOpenIssues = 0;
+  try {
+    const { listHarnessIssues } = await import('./core/harness-issues.js');
+    harnessOpenIssues = listHarnessIssues(stateDir, { status: 'open' }).length;
+  } catch { /* best-effort */ }
 
   // Skill regression doctor (MCH-20): scan the skills directories for degraded
   // entries — empty files, missing frontmatter, or stale orphans.
@@ -232,6 +238,7 @@ export async function doctorReport(opts: {
     daemon: { running: opts.daemon?.running ?? false, port: opts.daemon?.port, jobs: cronJobs },
     cron: { jobs: cronJobs },
     sessions: { sqlite, count: sessionCount },
+    harness: { openIssues: harnessOpenIssues },
   theme: currentThemeInfo(),
     diagnostics: { typescript: tsAvailable, python: pyAvailable },
     sandbox: { bubblewrap },
@@ -361,6 +368,7 @@ export function formatDoctor(r: DoctorReport): string {
     `  sqlite        ${ok(r.runtime.sqlite)} ${r.runtime.sqlite ? `${sqliteSource() || 'driver'} available` : 'no driver — code index/search off, sessions on JSON fallback'}`,
     `  codegraph     ${ok(r.index.codegraph === 'ready')} ${r.index.codegraph}`,
     `  sessions      ${ok(true)} ${r.sessions.sqlite ? `FTS5 enabled (${r.sessions.count})` : `JSON fallback (${r.sessions.count})`}`,
+    `  harness       ${ok(r.harness.openIssues === 0)} ${r.harness.openIssues === 0 ? 'no open issues' : `${r.harness.openIssues} open issue(s) — run mochi selfheal`}`,
     `  daemon        ${ok(r.daemon.running)} ${r.daemon.running ? `running on :${r.daemon.port}` : 'not running'}`,
     `  diagnostics   TS:${r.diagnostics.typescript ? 'yes' : 'no'} Python:${r.diagnostics.python ? 'yes' : 'no'}`,
     `  sandbox       ${r.sandbox.bubblewrap ? 'ok    bubblewrap available (safety.sandbox / shell sandbox:true)' : 'MISS  no bwrap (sandbox unavailable)'}`,
