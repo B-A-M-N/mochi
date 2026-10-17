@@ -852,10 +852,12 @@ export class Agent {
    *  deferred or when escalation already restored everything. */
   private injectDeferredToolsNote(tier: 'lean' | 'read' | 'chat'): void {
     if (this.deferredToolsNoteInjected || this.subagentDepth > 0) return;
-    const advertised = this.toolDefs.map((d) => d.name);
+    const advertised = new Set(this.toolDefs.map((d) => d.name));
     const deferred: string[] = [];
-    for (const [name, tool] of this.tools) {
-      if (!advertised.includes(name) && name !== 'load_tools') deferred.push(`${name} (${tool.def.description.slice(0, 90)})`);
+    // trimToLeanTier/trimToReadTier DELETE from this.tools, so the full arsenal
+    // must be diffed against ALL_TOOLS_MAP, not the live map.
+    for (const [name, tool] of ALL_TOOLS_MAP) {
+      if (!advertised.has(name) && name !== 'load_tools') deferred.push(`${name} (${tool.def.description.slice(0, 90)})`);
     }
     if (deferred.length === 0) return;
     this.deferredToolsNoteInjected = true;
@@ -866,7 +868,7 @@ export class Agent {
         : 'This is a focused coding task, so a lean core toolset is listed.';
     this.context.addMessage({
       role: 'system',
-      content: `TOOLSET NOTE: ${shape} Currently advertised: ${advertised.join(', ')}.`
+      content: `TOOLSET NOTE: ${shape} Currently advertised: ${[...advertised].join(', ')}.`
         + `\nDeferred (NOT currently advertised but instantly available): ${deferred.join('; ')}.`
         + `\nIf your next step needs any of them, call load_tools with names=[...] ONCE and they will be available on your following turn. Do not approximate a missing tool with shell; load the real one.`,
     });
