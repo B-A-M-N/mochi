@@ -677,6 +677,7 @@ export class Agent {
   private trustNudges = 0;
   /** Stale-ledger caution sent this run (once). */
   private staleTodoNoteInjected = false;
+  private deferredToolsNoteInjected = false;
   /** Last 20 tool errors this run (harness self-repair input). */
   private toolErrorLog: Array<{ tool: string; error: string }> = [];
   /** Last 20 vetoes this run (harness self-repair input). */
@@ -839,6 +840,38 @@ export class Agent {
     } catch { /* recording must never affect task completion */ }
   }
 
+  /** MCH-134 deferred-tools visibility: the lean/read/chat tiers silently strip
+   *  most of the arsenal — the trim event goes only to the TUI log, never to
+   *  the model. toolGuidelines() filters on advertised defs, so the system
+   *  prompt ALSO drops the guidance lines for subagent/blast_radius/
+   *  find_references/memory/web_search — the model literally doesn't know
+   *  those tools exist, which surfaced live as "goes off task / doesn't see
+   *  all tools" on hard work. Inject a one-time ledger of what was deferred
+   *  and the one-call restore path so a struggling model can recover its own
+   *  arsenal instead of approximating with shell. No-op when nothing was
+   *  deferred or when escalation already restored everything. */
+  private injectDeferredToolsNote(tier: 'lean' | 'read' | 'chat'): void {
+    if (this.deferredToolsNoteInjected || this.subagentDepth > 0) return;
+    const advertised = this.toolDefs.map((d) => d.name);
+    const deferred: string[] = [];
+    for (const [name, tool] of this.tools) {
+      if (!advertised.includes(name) && name !== 'load_tools') deferred.push(`${name} (${tool.def.description.slice(0, 90)})`);
+    }
+    if (deferred.length === 0) return;
+    this.deferredToolsNoteInjected = true;
+    const shape = tier === 'chat'
+      ? 'This is a conversational turn, so only conversational tools are listed.'
+      : tier === 'read'
+        ? 'This is a research/reading task, so only read-only tools are listed.'
+        : 'This is a focused coding task, so a lean core toolset is listed.';
+    this.context.addMessage({
+      role: 'system',
+      content: `TOOLSET NOTE: ${shape} Currently advertised: ${advertised.join(', ')}.`
+        + `\nDeferred (NOT currently advertised but instantly available): ${deferred.join('; ')}.`
+        + `\nIf your next step needs any of them, call load_tools with names=[...] ONCE and they will be available on your following turn. Do not approximate a missing tool with shell; load the real one.`,
+    });
+  }
+
   /** Anti-manic guard: the todo ledger is per-WORKSPACE and persists across
    *  runs, so a fresh task can open onto a pile of unfinished items from
    *  earlier, unrelated sessions. State plainly what the ledger is and isn't.
@@ -903,6 +936,17 @@ export class Agent {
       agentId: this.id,
       message: `[complexity] escalated to complex mid-run (iter ${iteration}, toolErrors ${toolErrors}, verifyFails ${this.consecutiveVerifyFailures}) — full toolset + context preservation restored`,
     });
+    // Tell the MODEL (not just the TUI log): the tiers earlier injected a
+    // "deferred tools" note, and toolGuidelines dropped the guidance lines for
+    // the deep-analysis tools. Without this the model keeps approximating with
+    // shell after escalation — it doesn't know the arsenal came back.
+    if (!this.subagentDepth) {
+      const restored = ['subagent', 'blast_radius', 'find_references', 'find_definitions', 'get_diagnostics', 'analyze_code', 'memory', 'web_search', 'web_crawl', 'codebase_map', 'security_audit'].filter((n) => this.tools.has(n));
+      this.context.addMessage({
+        role: 'system',
+        content: `TASK COMPLEXITY ESCALATED: this run shows sustained struggle, so the FULL toolset is now advertised — including ${restored.join(', ')}. The earlier "deferred tools" note is obsolete; you no longer need load_tools for these. For the remaining work: re-ground in the actual code (read the current implementation, check blast_radius before risky edits) instead of repeating the failing approach.`,
+      });
+    }
   }
 
   /** Effective reasoning tier for a task. Distilled from Claude Code's
@@ -1150,6 +1194,7 @@ Continue from 'Next:', do not redo completed progress.`,
           this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
         }
         }
+        this.injectDeferredToolsNote('lean');
       } else if (taskKind === 'chat') {
             // MCH-111: chat tasks tell the model "do not call any tools", yet were
             // still advertised ~62 tool schemas (~5K tokens) on every call — the
@@ -1168,6 +1213,7 @@ Continue from 'Next:', do not redo completed progress.`,
               this.toolDefs = [...kept].map((n) => this.tools.get(n)!.def);
               this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch111] chat tier: advertised ${kept.size} tools, deferred ${this.tools.size - kept.size} (load_tools restores them)` });
             }
+            this.injectDeferredToolsNote('chat');
           } else if (taskKind === 'research' || taskKind === 'document' || taskKind === 'plan' || taskKind === 'unknown') {
             // READ tier: read-only task shapes advertised the full ~65-tool schema
             // (~10K tokens/call) despite never legitimately mutating (plan mode
@@ -1176,17 +1222,18 @@ Continue from 'Next:', do not redo completed progress.`,
             const taskText = `${task.title} ${task.description ?? ''}`;
             const readTrimmed = trimToReadTier(this.tools, taskText);
             if (readTrimmed > 0) {
-              this.toolDefs = [...this.tools.values()].map((t) => t.def);
-              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[read-tier] advertised ${this.tools.size} read-only tools for ${taskKind} task (load_tools restores them)` });
+            this.toolDefs = [...this.tools.values()].map((t) => t.def);
+            this.events.emit({ type: 'agent:log', agentId: this.id, message: `[read-tier] advertised ${this.tools.size} read-only tools for ${taskKind} task (load_tools restores them)` });
             } else {
-              const trimmed = trimHeavyTools(this.tools, taskText);
-              if (trimmed > 0) {
-                this.toolDefs = [...this.tools.values()].map((t) => t.def);
-                this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
-              }
+            const trimmed = trimHeavyTools(this.tools, taskText);
+            if (trimmed > 0) {
+              this.toolDefs = [...this.tools.values()].map((t) => t.def);
+              this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mch91] trimmed ${trimmed} heavy tools for ${taskKind} task (load_tools restores them)` });
             }
-          }
-        }
+            }
+            this.injectDeferredToolsNote('read');
+      }
+    } // end complexity-gate else
     const repo = detectRepo(this.cwd);
     // Harness-v2 perf (FREEZE FIX 2026-08-22): warm codegraph grammars and the
     // Chameleon scaffold strictly in the BACKGROUND - fire-and-forget, never
