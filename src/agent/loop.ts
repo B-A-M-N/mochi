@@ -3333,12 +3333,18 @@ Continue from 'Next:', do not redo completed progress.`,
     const canonical = TOOL_ALIASES[name] || name;
     // Allowlist of non-mutating tools. Note: MCP resource tools registered as
     // <server>__resources_list/read are read-only by construction.
+    // 'verify' is deliberately ABSENT: it executes an arbitrary shell command
+    // (tools/verify.ts runs the command verbatim, builds/tests write dist/,
+    // coverage, and test side effects) with permission:'shell', dangerous:true.
+    // Listing it here let mid-stream speculative execution fire it with NO
+    // approval gate, ran it inside read-only parallel batches, and never
+    // armed the workspace-moved probe after it.
     return [
       'read', 'search', 'glob', 'outline', 'code_similarity', 'security_audit', 'inspect', 'get_function', 'find_callers', 'type_hierarchy',
       'todo', 'skill', 'memory', 'session_recall', 'blast_radius', 'chameleon', 'analyze_code', 'perf', 'perf_audit',
       'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
       'find_references', 'find_definitions', 'db_inspect', 'diff', 'tree', 'deepwiki',
-      'fetch', 'verify', 'sql_codebase', 'sql_codebase_query', 'think', 'accept_plan', 'ask_question',
+      'fetch', 'sql_codebase', 'sql_codebase_query', 'think', 'accept_plan', 'ask_question',
     ].includes(canonical) || /__resources_(list|read)$/.test(canonical);
   }
 
