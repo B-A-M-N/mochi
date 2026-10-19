@@ -72,5 +72,8 @@ describe('CapabilityRegistry', () => {
     expect(reg.get('view_file')?.name).toBe('read');
     expect(reg.get('view_file')?.isReadOnly).toBe(true);
     expect(reg.get('write_to_file')?.isReadOnly).toBe(false);
+    // Dangerous tools are never classified read-only: verify executes an
+    // arbitrary shell command (permission:'shell', dangerous:true).
+    expect(reg.get('verify')?.isReadOnly).toBe(false);
   });
 });

@@ -119,11 +119,15 @@ import { ALL_TOOLS, validateArgs } from '../tools/index.js';
 
 const READ_ONLY_TOOLS = new Set([
   'read', 'search', 'glob', 'inspect', 'git', 'fetch', 'diff', 'tree',
-  'get_function', 'find_callers', 'type_hierarchy', 'verify', 'perf_audit',
+  'get_function', 'find_callers', 'type_hierarchy', 'perf_audit',
   'deepwiki', 'clipboard', 'sql_codebase', 'analyze_code', 'memory',
   'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
   'find_references', 'find_definitions', 'db_inspect', 'think',
 ]);
+// 'verify' is deliberately ABSENT: it has permission:'shell', dangerous:true,
+// and executes its command argument verbatim (tools/verify.ts). Classifying
+// it read-only let ToolDispatcher run it in the concurrent read-only
+// Promise.allSettled batch while builds/tests mutate the tree.
 
 export function toolToCapability(tool: Tool): Capability {
   const isReadOnly = READ_ONLY_TOOLS.has(tool.def.name);
