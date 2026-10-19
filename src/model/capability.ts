@@ -86,7 +86,19 @@ export class CapabilityRegistry {
   status(key: string, now = Date.now()): { status: ProviderStatus; record?: CapabilityRecord } {
     const rec = this.read(key);
     if (!rec) return { status: 'unknown' };
-    if (rec.status === 'dead') return { status: 'dead', record: rec };
+    if (rec.status === 'dead') {
+      // markDead() stamps a 30-minute re-probe cooldown ("re-probe after 30
+      // min"). Once that window lapses the provider is eligible again — the
+      // gate lets the next request through and another terminal failure
+      // re-marks dead with a fresh window. Without this expiry a single
+      // transient blip (ECONNREFUSED while a laptop wakes) skips the provider
+      // for the rest of the process, and with MOCHI_CAPABILITY_DIR for every
+      // future run, no matter how healed the network is.
+      if (rec.cooldownUntil !== undefined && now >= rec.cooldownUntil) {
+        return { status: 'unknown', record: rec };
+      }
+      return { status: 'dead', record: rec };
+    }
     if (rec.cooldownUntil && now < rec.cooldownUntil) {
       return { status: 'cooldown', record: rec };
     }

@@ -60,6 +60,19 @@ describe('CapabilityRegistry', () => {
     expect(st.status).toBe('dead');
     expect(st.record!.lastError).toContain('ECONNREFUSED');
   });
+
+  it('lets a dead provider become eligible again once its re-probe cooldown lapses', () => {
+    const key = 'flaky';
+    const t0 = 2_000_000;
+    reg.markDead(key, 'ECONNREFUSED connect 127.0.0.1:1', t0);
+    // Still dead inside the 30-minute re-probe window.
+    expect(reg.status(key, t0 + 29 * 60_000).status).toBe('dead');
+    // After the window it is eligible again (unknown), and a success heals it.
+    const later = t0 + 31 * 60_000;
+    expect(reg.status(key, later).status).toBe('unknown');
+    reg.record(key, { ok: true, check: 'chat' }, later + 1);
+    expect(reg.status(key, later + 2).status).toBe('ok');
+  });
 });
 
 describe('probeAndRecord', () => {
