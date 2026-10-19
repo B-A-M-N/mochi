@@ -402,11 +402,12 @@ export function validateConfig(config: MochiConfig): string[] {
     problems.push(`safety.maxCostUsd (${s.maxCostUsd}) must be >= 0`);
   }
 
-  // MCP server config
+  // MCP server config: a server is launchable with either a stdio command or
+  // an HTTP url (McpClient routes on `url` first, then falls back to stdio).
   if (config.mcpServers) {
     for (const [name, server] of Object.entries(config.mcpServers)) {
-      if (!server.command) {
-        problems.push(`MCP server "${name}" has no "command" field`);
+      if (!server.command && !server.url) {
+        problems.push(`MCP server "${name}" needs a "command" or "url" field`);
       }
     }
   }

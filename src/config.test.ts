@@ -536,6 +536,11 @@ describe('validateConfig full surface', () => {
     expect(problems.some((p) => p.includes('MCP server "bad"'))).toBe(true);
     expect(problems.some((p) => p.includes('reasoning "turbo"'))).toBe(true);
 
+    // url-only MCP servers are valid: McpClient routes on `url` for HTTP
+    // transports (built-ins like mcp-exa ship this shape).
+    cfg.mcpServers = { 'mcp-exa': { url: 'https://mcp.exa.ai/mcp' } as never };
+    expect(validateConfig(cfg).some((p) => p.includes('MCP server'))).toBe(false);
+
     // Empty provider + openrouter waiver are their own arms.
     const empty = loadConfig({}, '/nonexistent/nowhere.json');
     empty.model.provider = '';
