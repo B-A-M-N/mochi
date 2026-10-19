@@ -117,7 +117,16 @@ function stdioConnect(name: string, command: string, args: string[], env?: Recor
       protocolVersion: '2024-11-05',
       capabilities: {},
       clientInfo: { name: 'mochi', version: '1.0.0' },
-    }).then(() => channel.call('notifications/initialized', {}));
+    }).then(() => {
+      // notifications/initialized is a JSON-RPC NOTIFICATION: spec-compliant
+      // servers never reply to it. Sending it through call() registered a
+      // pending response and stalled the handshake for the full 5s timeout on
+      // every server before failing the connect ("timed out after 5000ms" →
+      // server skipped). Fire it id-less and move on.
+      try {
+        proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n');
+      } catch { /* connection may already be closing */ }
+    });
     Promise.race([init, exited]).then(() => resolveConn(channel), (err) => { try { proc.kill(); } catch { /* noop */ } rejectConn(err); });
   });
 }
