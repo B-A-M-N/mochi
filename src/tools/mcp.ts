@@ -124,6 +124,9 @@ function stdioConnect(name: string, command: string, args: string[], env?: Recor
       // every server before failing the connect ("timed out after 5000ms" →
       // server skipped). Fire it id-less and move on.
       try {
+        // Write errors are mostly async (pipe already closed): without an
+        // 'error' listener on stdin the emitted event would crash the host.
+        proc.stdin!.once('error', () => {});
         proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n');
       } catch { /* connection may already be closing */ }
     });
