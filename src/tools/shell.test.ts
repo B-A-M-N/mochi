@@ -34,3 +34,26 @@ describe('shellTool GUI guard', () => {
     expect((err as Error).message).toMatch(/BUILD\/IMPLEMENT\/CODE/i);
   });
 });
+
+describe('shellTool timeout sanitization', () => {
+  it('runs the command normally when the model sends a junk timeout (was: NaN → instant kill)', async () => {
+    // Old math: Number("30s") = NaN → setTimeout(NaN) fires in ~1ms → SIGTERM
+    // before any output, "[command timed out after NaNs]". The sanitized
+    // value falls back to the configured default instead.
+    const out = await shellTool.execute(
+      { command: 'echo hello', timeout: '30s' },
+      { cwd: '/tmp', config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
+    );
+    expect(out).toContain('hello');
+    expect(out).not.toContain('timed out');
+  }, 20_000);
+
+  it('accepts a numeric timeout and still enforces it', async () => {
+    const out = await shellTool.execute(
+      { command: 'echo n', timeout: 30 },
+      { cwd: '/tmp', config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
+    );
+    expect(out).toContain('n');
+    expect(out).not.toContain('timed out');
+  }, 20_000);
+});

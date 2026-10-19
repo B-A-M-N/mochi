@@ -113,7 +113,14 @@ export const shellTool: Tool = {
       const { homedir } = await import('node:os');
       targetCwd = homedir();
     }
-    const timeoutMs = ((args.timeout ? Number(args.timeout) : ctx.config.safety.commandTimeoutSeconds) ?? 120) * 1000;
+    // A model-sent timeout like "30s" or "abc" becomes NaN in the old
+    // `Number(args.timeout) * 1000`; setTimeout(NaN) fires in ~1ms and killed
+    // every command instantly. Sanitize to a finite, positive number of
+    // seconds, falling back to the configured default when the arg is junk.
+    const requestedSec = args.timeout ? Number(args.timeout) : ctx.config.safety.commandTimeoutSeconds;
+    const fallbackSec = ctx.config.safety.commandTimeoutSeconds > 0 ? ctx.config.safety.commandTimeoutSeconds : 120;
+    const timeoutSec = Number.isFinite(requestedSec) && requestedSec > 0 ? requestedSec : fallbackSec;
+    const timeoutMs = timeoutSec * 1000;
 
     const env: NodeJS.ProcessEnv = { ...process.env };
     env.AI_AGENT = 'mochi';
