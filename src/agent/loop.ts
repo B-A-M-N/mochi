@@ -1463,6 +1463,12 @@ Continue from 'Next:', do not redo completed progress.`,
         this.toolDefs = [...this.tools.values()].map((t) => t.def);
       }
       this.mcpClose = connected.close;
+      // Claim the lazy loader's guard: loadMcpInRun (iteration 0) would
+      // otherwise connect EVERY server a second time through the older
+      // tools/mcp.ts stack and advertise each tool under a second name
+      // (mcp_srv_tool vs srv__tool) — duplicate subprocesses, duplicated
+      // tool schemas on every model call. One connect per run (I2).
+      this.mcpLoaded = true;
     }
 
     // Delivered background results: task ids already surfaced to the model,
