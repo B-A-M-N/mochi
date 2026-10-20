@@ -547,18 +547,15 @@ export class ContextEngine {
       } else {
         relevant = [];
       }
-      // B15: the system prompt is part of the working budget. A no-tool
-      // packet advertises ALL bundled skills (142 here ≈ 9.8K tokens), which
-      // alone exceeds a small clamped window, leaving nothing for history.
-      // Cap the skills block to a fraction of the budget — relevance-ranked,
-      // so the most useful ones survive the cap.
-      let block = formatSkillsForPrompt(relevant);
-      const blockBudget = Math.max(200, Math.floor(this.budget * 0.2));
-      while (block && approxTokens(block) > blockBudget && relevant.length > 0) {
-        relevant = relevant.slice(0, Math.max(0, relevant.length - 1));
-        block = formatSkillsForPrompt(relevant);
-      }
-      this.skillsCache = block;
+      // NOTE (B15 revert): capping the skills block to a fraction of the
+      // budget truncated the bundled catalog and silently dropped skills
+      // (cognitive-anchor vanished on small budgets), breaking the pinned
+      // "advertise every bundled skill" contract and degrading mode/skill
+      // guidance exactly when budgets are tight. The catalog is the prompt's
+      // smallest instruction payload relative to its value; over-budget
+      // packets in the small-budget regime are handled by the packet walk /
+      // compaction, not by hiding skills from the model.
+      this.skillsCache = formatSkillsForPrompt(relevant);
     } catch {
       this.skillsCache = '';
     }
@@ -641,7 +638,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     add(['replace_symbol'], 'replace_symbol: use when REWRITING a whole function/class/method. Give the symbol name and the complete new source — boundaries come from the symbol index, so no anchor matching and no mismatch retries.');
     add(['patch'], 'patch: use for multi-file changes or several edits in one call (*** Begin Patch / Add File / Update File / Delete File / *** End Patch). Cheaper than several full writes.');
     add(['write'], 'write: use only for new files or full rewrites. Appending existing files wastes tokens.');
-    add(['subagent'], 'subagent: delegate a self-contained, well-scoped subtask to a fresh child agent when it would take you many steps. Give it complete instructions; it cannot ask you questions.');
+    add(['subagent'], 'subagent: PROACTIVELY DELEGATE independent tasks, parallel research, reviews, architecture analysis, or isolated fixes to fresh child agents. Pass a single "prompt" or a "tasks" array for concurrent multi-agent fanout.');
     add(['todo'], 'todo: for multi-step work, record the plan as todo items and mark them done as you go. Cheap, shared, and keeps parallel work honest.');
     add(['shell'], 'shell: for builds, tests, greps. Not for file mutation when edit/patch will do.');
     add(['blast_radius'], 'blast_radius: analyze the downstream impact and caller call sites of a symbol before modifying or refactoring it.');
@@ -819,26 +816,19 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // the prefix (identity + prior conversation) stays byte-stable and cached.
     const statePrompt = this.buildStatePrompt(task);
 
-    // B15 (review follow-up): the system prompt itself can exceed the working
-    // budget on a small clamped window — the identity sections alone are
-    // ~1.5K tokens and the machine-access block another ~0.5K. When that
-    // happens the packet starts hopelessly over budget (remaining deeply
-    // negative, nothing but the newest turn fits) for EVERY turn. Degrade
-    // gracefully instead: a compact identity header + workspace containment
-    // + the host capabilities line, dropping the boilerplate sections. The
-    // full prompt returns as soon as the budget allows it.
+    // B15 (review follow-up): the system prompt can exceed the working budget
+    // on a tiny clamped window. An earlier attempt swapped in a 2-line
+    // "compact identity" prompt whenever sysTokens > budget * 0.8 — but that
+    // silently stripped mode instructions (ACTIVE MODE: SECURITY), bundled
+    // skill ads, cognitive directives, and goal/summary anchors, breaking
+    // product behavior on any small-budget config (7 loop tests + prompt
+    // quality + cognitive integration + session-digest all regressed). The
+    // budget is an internal eviction heuristic, not a provider hard limit:
+    // shrinking HISTORY (below) is always preferable to amputating the
+    // directives. If a real provider window ever rejects the prompt, the
+    // provider error surfaces and the loop's retry handles it. Reverted.
     let sysTokens = approxTokens(baseSystemPrompt);
-    let effectiveSystem = baseSystemPrompt;
-    if (sysTokens > this.budget * 0.8) {
-      const compact = [
-        'You are Mochi, an agentic software engineering assistant. Work with precision, explain briefly what you do and why, verify changes with real builds/tests before claiming success, and never emit placeholder comments when rewriting code.',
-        machineAccessBlock(this.projectRoot),
-      ].join('\n\n');
-      if (approxTokens(compact) < sysTokens) {
-        effectiveSystem = compact;
-        sysTokens = approxTokens(effectiveSystem);
-      }
-    }
+    const effectiveSystem = baseSystemPrompt;
 
     // Reserve the trailing state message's tokens up front: it is appended
     // AFTER the history walk but is part of the wire size, so the walk must
@@ -889,6 +879,16 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
       const fitsBudget = remaining - tokens >= 0;
       const overFloor = recent.length >= MIN_RECENT;
       if (!fitsBudget && recent.length > 0) {
+        // System-role history messages (mode blurbs, one-shot nudges, chat
+        // synthesis directives) are INSTRUCTIONS, not payload: dropping them
+        // silently changes agent behavior (mode enforcement vanished on
+        // small budgets). They always ride along; they are tiny relative to
+        // tool outputs, and shrinkOldToolOutputs handles any residual size.
+        if (m.role === 'system') {
+          remaining -= tokens;
+          recent.unshift(m);
+          continue;
+        }
         if (overFloor) {
           // Candidate rescue: dense content-bearing tool result being evicted.
           // Keep scanning older (collect up to RESCUE_MAX) after the budget
@@ -905,10 +905,40 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
           if (evictedDense.length < RESCUE_MAX) continue; // still hunting rescues
           break; // rescue full and window satisfied — stop
         }
-        // Below the floor AND the next message would not fit — the old code
-        // fell through and added unconditionally, overshooting the window.
-        // Stop here; the orphan cleanup below keeps API validity at the cut.
-        break;
+        // Below the floor AND the next message would not fit: restore the
+        // PRE-MERGE contract — add unconditionally (overFloor required
+        // recent.length >= MIN_RECENT, so below the floor nothing consulted
+        // the budget). With the full system prompt + a small budget,
+        // `remaining` starts deeply negative; a hard break here dropped the
+        // ENTIRE working set (assistant tool_calls + vetoed tool replies),
+        // so the model never saw its own vetoes and looped to
+        // max-iterations (7 loop tests + CI failures).
+        // Budget discipline is preserved by TRUNCATING dense tool payloads
+        // (not dropping messages): a dropped veto reply breaks API pairing
+        // semantics and hides the outcome from the model; a truncated read
+        // result is still visibly a read result. Below-floor dense tool
+        // results are old payload — the newest turn's tool replies are short
+        // and pass through untouched.
+        if (m.role === 'tool' && typeof m.content === 'string' && m.content.length > 300) {
+          // HEAD+TAIL, not head-only: injected guidance (the scope-fence veto
+          // protocol, directives) is appended at the END of tool messages —
+          // head-only truncation silently amputated it, so the model never
+          // saw the veto protocol and the fence tests failed. KEEP_HEAD=400
+          // covers the veto preamble + the protocol header line so guidance
+          // stays recognizable; KEEP_TAIL keeps the directive tail.
+          const KEEP_HEAD = 400;
+          const KEEP_TAIL = 220;
+          const truncated = m.content.length <= KEEP_HEAD + KEEP_TAIL
+            ? m.content
+            : m.content.slice(0, KEEP_HEAD) + '\n[...truncated to fit context budget...]\n' + m.content.slice(-KEEP_TAIL);
+          const tTokens = approxTokens(JSON.stringify({ role: 'tool', content: truncated }));
+          recent.unshift({ ...m, content: truncated });
+          remaining -= tTokens;
+          continue;
+        }
+        recent.unshift(m);
+        remaining -= tokens;
+        continue;
       }
       remaining -= tokens;
       recent.unshift(m);
@@ -997,7 +1027,52 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     }
     if (statePrompt) messages.push({ role: 'system', content: statePrompt });
 
-    const used = this.budget - remaining;
+    // FINAL BUDGET BACKSTOP (B15 contract): the walk adds the below-floor
+    // region unconditionally, so a small budget can still ship an
+    // over-budget packet (e.g. the newest turn's dense tool result fit the
+    // remaining credit, then pushed later adds into the truncation path).
+    // The pinned contract is: real wire size <= budget. Enforce it here by
+    // truncating the LARGEST dense tool payloads (never system/assistant
+    // structure, never dropping a message — keeps tool_call pairing valid)
+    // until the packet fits or only tiny messages remain.
+    const realSize = () => messages.reduce((a, m) => a + approxTokens(JSON.stringify(m)), 0);
+    let guard = 0;
+    while (realSize() > this.budget && guard++ < 64) {
+      let biggest = -1;
+      let biggestTokens = 0;
+      for (let mi = 0; mi < messages.length; mi++) {
+        const mm = messages[mi];
+        if (mm.role !== 'tool' || typeof mm.content !== 'string') continue;
+        const t = approxTokens(JSON.stringify(mm));
+        if (t > biggestTokens) { biggestTokens = t; biggest = mi; }
+      }
+      if (biggest < 0 || biggestTokens <= 100) break; // nothing dense left to cut
+      const target = messages[biggest];
+      if (typeof target.content !== 'string') break;
+      const over = realSize() - this.budget;
+      const cutChars = Math.min(
+        Math.max(64, Math.floor(over * 3.8)),
+        Math.max(0, target.content.length - 64),
+      );
+      if (cutChars <= 0) break;
+      // HEAD+TAIL cut, PROPORTIONAL floors: when overage is small, keptLen
+      // stays large (the injected-protocol header after a veto preamble
+      // survives); when overage is large, floors drop to 200 head + 120 tail
+      // so repeated passes converge below budget instead of growing the
+      // message (the old max(480,…) floor could turn a 620-char message into
+      // a 775-char one and loop until the guard ran out). The 200-char floor
+      // is calibrated to clear the full '# TASK EXECUTION & OPERATIONAL
+      // AUTONOMY PROTOCOL' header line (~120-168) after the veto preamble.
+      const keptLen = Math.max(200, target.content.length - cutChars - 120);
+      target.content = target.content.slice(0, keptLen) + '\n[...truncated to fit context budget...]\n' + target.content.slice(-120);
+      invalidateMessageTokens(target);
+    }
+
+    // usedTokens MUST reflect the REAL wire size. `budget - remaining` reads
+    // high when the backstop truncated payload the walk had already charged
+    // for at full size — inflating usedTokens above budget on a packet that
+    // actually fits, which trips the pressure loop into compacting forever.
+    const used = realSize();
     this.lastSentTokens = used;
     return { messages, systemPrompt: effectiveSystem, usedTokens: used, budgetTokens: this.budget };
   }

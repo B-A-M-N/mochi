@@ -401,8 +401,8 @@ export function validateConfig(config: MochiConfig): string[] {
   if (s.maxRuntimeMinutes < 0.5 || s.maxRuntimeMinutes > 720) {
     problems.push(`safety.maxRuntimeMinutes (${s.maxRuntimeMinutes}) is out of range 0.5–720`);
   }
-  if (s.contextBudgetTokens < 1000 || s.contextBudgetTokens > 1_000_000) {
-    problems.push(`safety.contextBudgetTokens (${s.contextBudgetTokens}) is out of range 1000–1M`);
+  if (s.contextBudgetTokens < 1000 || s.contextBudgetTokens > 2_097_152) {
+    problems.push(`safety.contextBudgetTokens (${s.contextBudgetTokens}) is out of range 1000–2M`);
   }
   if (s.commandTimeoutSeconds < 5 || s.commandTimeoutSeconds > 600) {
     problems.push(`safety.commandTimeoutSeconds (${s.commandTimeoutSeconds}) is out of range 5–600`);
