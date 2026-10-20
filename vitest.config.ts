@@ -19,6 +19,7 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 120_000,
     hookTimeout: 120_000,
+    teardownTimeout: 30_000,
     // MCH-001: persist transform results between runs so `vitest run` stops
     // re-transforming the whole module graph from scratch (suite previously
     // exceeded the 120 s wall clock; transform step alone was ~11 s / 86%).

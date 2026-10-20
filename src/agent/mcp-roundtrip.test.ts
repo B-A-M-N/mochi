@@ -63,7 +63,7 @@ describe('MCP round-trip (MCH-17)', () => {
       // Turn 1: model picks the MCP tool.
       {
         finishReason: 'tool_calls',
-        toolCalls: [{ id: 'call_rt_1', function: { name: 'mcp_rt_echo', arguments: '{"text":"hello-rt"}' } }],
+        toolCalls: [{ id: 'call_rt_1', function: { name: 'rt__echo', arguments: '{"text":"hello-rt"}' } }],
       },
       // Turn 2: model sees the tool result and finishes.
       { content: 'Round trip complete.', finishReason: 'stop' },
@@ -96,9 +96,12 @@ describe('MCP round-trip (MCH-17)', () => {
       const result = await agent.run(createTask('use the rt echo tool', 'use the rt echo tool'));
 
       // 1. Discovery: the MCP tool was offered to the model on turn 1.
+      // Name note: single-connect per run (I2) means the tool registers ONLY
+      // under the newer srv__tool namespace (mcp/tools.ts) — the old
+      // mcp_<server>_<tool> duplicate from tools/mcp.ts no longer exists.
       expect(fake.requests.length).toBeGreaterThanOrEqual(2);
       const firstTools = (fake.requests[0].body.tools ?? []) as Array<{ function?: { name?: string } }>;
-      expect(firstTools.some((t) => t.function?.name === 'mcp_rt_echo')).toBe(true);
+      expect(firstTools.some((t) => t.function?.name === 'rt__echo')).toBe(true);
 
       // 2. Transcription: the SERVER's echoed marker came back in the model
       //    context on turn 2 (tool role message), proving list→call→result.
@@ -108,7 +111,7 @@ describe('MCP round-trip (MCH-17)', () => {
 
       // 3. The run itself completed against the real provider/MCP path.
       expect(result.success).toBe(true);
-      expect(toolEvents).toContain('completed:mcp_rt_echo');
+      expect(toolEvents).toContain('completed:rt__echo');
     } finally {
       await fake.close();
     }

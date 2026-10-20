@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { ContextEngine } from '../context.js';
@@ -14,7 +15,7 @@ beforeAll(() => {
   dir = mkdtempSync(resolve(tmpdir(), 'selfrepair-'));
   writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'fixture', version: '0.0.0' }));
 });
-afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+afterAll(() => { rmTmp(dir); });
 
 function makeConfig(url: string, selfRepair?: boolean): MochiConfig {
   return {
