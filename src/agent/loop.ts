@@ -2528,14 +2528,35 @@ Continue from 'Next:', do not redo completed progress.`,
         // write/edit/delete/patch, git, MCP tools, ...) is vetoed.
         if (this.planMode) {
           const isMutating = (c: ToolCall) => !this.isReadOnly(c.function.name, this.parseArgs(c.function.arguments));
-          if (response.toolCalls.some(isMutating)) {
+          // B27 restructure: a fetch call to a host the OPERATOR declared
+          // read-only (safety.planModeNetworkReads) is exempt from the veto —
+          // POST-based read APIs (GraphQL queries, search APIs) are legitimate
+          // plan-mode research. Exact hostname match; misdeclared hosts are
+          // the operator's authority, same trust level as permissions.network.
+          const planNetworkReads = (this.config.safety?.planModeNetworkReads ?? []).map((h) => h.toLowerCase());
+          const isPlanNetworkRead = (c: ToolCall) => {
+            const canonical = TOOL_ALIASES[c.function.name] || c.function.name;
+            if (canonical !== 'fetch' || planNetworkReads.length === 0) return false;
+            if (!isFetchMutationRequest(canonical, this.parseArgs(c.function.arguments))) return false; // GET/HEAD already read-only
+            try {
+              const host = new URL(String(this.parseArgs(c.function.arguments).url ?? '')).hostname.toLowerCase();
+              return planNetworkReads.includes(host);
+            } catch {
+              return false; // unparseable URL → not exempt
+            }
+          };
+          const notExempt = response.toolCalls.filter((c) => isMutating(c) && !isPlanNetworkRead(c));
+          if (notExempt.length > 0) {
+            // Only REFUSALS feed the escalation counter: one per batch (the
+            // original semantics). A batch whose only "mutating" calls are
+            // exempted read-host fetches is successful research, not the
+            // model fighting plan mode.
             this.planVetoes++;
-            // Mixed batches: run the read-only calls so their ids are answered,
-            // and only veto the mutating ones.
-            const readOnlies = response.toolCalls.filter((c) => !isMutating(c));
-            if (readOnlies.length > 0) await this.executeToolCalls(readOnlies);
-            for (const c of response.toolCalls) {
-              if (!isMutating(c)) continue;
+            // Mixed batches: run the read-only calls (and exempt read-host
+            // fetches) so their ids are answered, veto only the refusals.
+            const runFirst = response.toolCalls.filter((c) => !isMutating(c) || isPlanNetworkRead(c));
+            if (runFirst.length > 0) await this.executeToolCalls(runFirst);
+            for (const c of notExempt) {
               this.vetoToolCall(c, 'plan mode is active. No file or command changes are permitted while planning.');
             }
             if (this.planVetoes > 2) {
