@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, isAbsolute } from 'node:path';
 import type { Tool } from './types.js';
 import { atomicWriteFileSync } from '../core/atomic-fs.js';
+import { markMutation } from './fs-signal.js';
 
 export interface ConflictBlock {
   index: number;
@@ -182,6 +183,9 @@ export const mergeConflictTool: Tool = {
     }
 
     atomicWriteFileSync(filePath, resolvedContent);
+    // Bump the mutation fence: generation-keyed caches (search/inspect) must
+    // not serve stale results after this write.
+    markMutation();
     return `Resolved ${blocks.length} conflict(s) in ${rawPath} using strategy "${strategy}".`;
   },
 };

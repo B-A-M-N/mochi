@@ -3,6 +3,7 @@ import { resolve, relative } from 'node:path';
 import type { Tool } from './types.js';
 import { SKIP_DIRS } from './glob.js';
 import { atomicWriteFileSync } from '../core/atomic-fs.js';
+import { markMutation } from './fs-signal.js';
 
 // Cap the recursive sync walk so a huge tree can't block the main-thread event
 // loop (the search-tool freeze class, 4a19bd1). Env-tunable.
@@ -110,6 +111,9 @@ export const searchReplaceMultiTool: Tool = {
     if (preview) {
       return `Preview: ${totalMatches} replacement(s) across ${files.length} file(s):\n${changes.join('\n')}`;
     }
+    // Bump the mutation fence: generation-keyed caches (search/inspect) must
+    // not serve stale results after these writes.
+    markMutation();
     return `Replaced ${totalMatches} occurrence(s) across ${files.length} file(s)`;
   },
 };
