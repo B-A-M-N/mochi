@@ -52,7 +52,7 @@ function assertPublicUrl(rawUrl: string, allowPrivate: boolean): URL {
 export const fetchTool: Tool = {
   def: {
     name: 'fetch',
-    description: 'Fetch a URL and return the response body (text). Supports GET and POST. Output is truncated at 64 KB. Requests to private/loopback hosts are blocked by default.',
+    description: 'Fetch a URL and return the response body (text). Supports GET, POST, PUT and DELETE. Output is truncated at 64 KB. Requests to private/loopback hosts are blocked by default.',
     parameters: [
       { name: 'url', type: 'string', description: 'URL to fetch', required: true },
       { name: 'method', type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE). Defaults to GET.', required: false },

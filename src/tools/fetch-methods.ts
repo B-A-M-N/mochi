@@ -11,9 +11,15 @@
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** True when a tool call mutates remote state via the fetch tool's method
- *  argument. An absent/non-string method defaults to GET (read-only). */
+ *  argument. Coerces non-string values with String() exactly like fetch.ts
+ *  does when building the request (`String(args.method ?? 'GET')`), so the
+ *  predicate and the wire can never diverge: an array like ['POST'] coerces
+ *  to 'POST' on the wire, so it must classify as mutating here too. An absent
+ *  /nullish method is the GET default. */
 export function isFetchMutationRequest(tool: string, args: Record<string, unknown> | undefined): boolean {
   if (tool !== 'fetch') return false;
-  const method = typeof args?.method === 'string' ? args.method.trim().toUpperCase() : '';
+  const raw = args?.method;
+  if (raw == null) return false;
+  const method = String(raw).trim().toUpperCase();
   return MUTATING_METHODS.has(method);
 }

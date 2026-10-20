@@ -77,7 +77,7 @@ export class PermissionManager {
 
     const readTools = new Set(['read', 'glob', 'search', 'inspect', 'memory', 'git', 'diff', 'tree', 'deepwiki', 'fetch', 'skill', 'todo']);
     if (readTools.has(req.tool)) {
-      // B27: fetch is a read only for GET/HEAD — POST/PUT/PATCH/DELETE mutate
+      // B27: fetch is read-only for GET/HEAD — POST/PUT/PATCH/DELETE mutate
       // remote state and fall through to the policy gate like other non-read
       // tools instead of being silently auto-approved.
       if (!isFetchMutationRequest(req.tool, req.args)) return true;

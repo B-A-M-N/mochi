@@ -61,6 +61,17 @@ describe('fetch mutating methods are not read-only (B27)', () => {
       // yolo still allows everything (policy decision, not a read-only claim).
       const yolo = new PermissionManager('yolo', dir);
       expect(yolo.autoAllow({ tool: 'fetch', args: { url: 'https://example.com', method: 'POST' }, cwd: dir, workspaceDir: dir })).toBe(true);
+      // Coercion-divergence bypass (reviewer P1): fetch.ts builds the request
+      // with String(args.method ?? 'GET'), so ['POST'] coerces to 'POST' on
+      // the wire. The predicate must coerce identically — a non-string
+      // method that stringifies to a mutating verb is a mutation.
+      const strict = new PermissionManager('strict', dir);
+      expect(strict.autoAllow({ tool: 'fetch', args: { url: 'https://example.com', method: ['POST'] }, cwd: dir, workspaceDir: dir })).toBe(false);
+      // An opaque method token like 123 coerces to '123' on both sides —
+      // unknown methods draw a 501 per RFC, so they are not classified as
+      // mutations; the point is predicate/wire agreement, not a verdict on
+      // custom verbs.
+      expect(strict.autoAllow({ tool: 'fetch', args: { url: 'https://example.com', method: 123 }, cwd: dir, workspaceDir: dir })).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
