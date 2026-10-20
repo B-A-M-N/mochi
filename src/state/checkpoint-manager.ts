@@ -132,6 +132,28 @@ export async function restoreNamedCheckpoint(
   }
 
   try {
+    // 0. Snapshot the CURRENT dirty state before touching anything. Restore is
+    //    transactional: if the checkpoint patch fails to re-apply after the
+    //    reset, we can put the user's newer work back exactly as it was. The
+    //    old ordering ran `reset --hard` FIRST and attempted the patch second,
+    //    so a corrupt/torn patch (a real bug class: silent diff truncation)
+    //    destroyed the newer work AND failed the restore.
+    let undoPatch = '';
+    let oldHead = '';
+    if (checkpoint.patch) {
+      const snap = await runGitRaw(cwd, ['diff', 'HEAD']);
+      if (snap.trim()) {
+        undoPatch = normalizePatch(snap);
+        // Rollback base: the pre-restore HEAD. A bare `reset --hard` after
+        // step 1 would land on the CHECKPOINT sha, and a diff captured
+        // against the pre-restore HEAD would then fail to apply.
+        // Untracked files need no snapshot: reset --hard and git apply leave
+        // them untouched. Staged-but-uncommitted content comes back as
+        // worktree content (index staging state is not preserved).
+        oldHead = await runGit(cwd, ['rev-parse', 'HEAD']);
+      }
+    }
+
     // 1. Reset tracked files to the recorded commit
     if (checkpoint.gitCommitSha && checkpoint.gitCommitSha !== 'uncommitted') {
       const r = await runGitChecked(cwd, ['reset', '--hard', checkpoint.gitCommitSha]);
@@ -150,9 +172,26 @@ export async function restoreNamedCheckpoint(
       const r = await runGitChecked(cwd, ['apply', tempPatchPath]);
       try { unlinkSync(tempPatchPath); } catch {}
       if (!r.ok) {
+        // Roll back to the exact pre-restore state instead of leaving the
+        // workspace destroyed at the checkpoint commit.
+        const undoTemp = resolve(dir, `_undo_${Date.now()}.patch`);
+        let restored = false;
+        try {
+          if (undoPatch && oldHead) {
+            writeFileSync(undoTemp, normalizePatch(undoPatch), 'utf8');
+            await runGitChecked(cwd, ['reset', '--hard', oldHead]);
+            const ur = await runGitChecked(cwd, ['apply', undoTemp]);
+            restored = ur.ok;
+          }
+        } catch { /* fall through to restored=false */ }
+        try { unlinkSync(undoTemp); } catch {}
         return {
           success: false,
-          message: `Checkpoint "${name}": commit restored, but the working-tree patch could NOT be re-applied — ${r.err}`,
+          message: restored
+            ? `Checkpoint "${name}": the stored patch could NOT be re-applied — ${r.err}. The workspace was rolled back to its pre-restore state; nothing was lost.`
+            : undoPatch
+              ? `Checkpoint "${name}": the stored patch could NOT be re-applied — ${r.err}. Automatic rollback also failed; run \`git reset --hard\` and \`git reflog\` to inspect.`
+              : `Checkpoint "${name}": the stored patch could NOT be re-applied — ${r.err}. The tracked tree was reset to the checkpoint commit; the working tree had no uncommitted changes to roll back.`,
         };
       }
     }
