@@ -1480,6 +1480,14 @@ Continue from 'Next:', do not redo completed progress.`,
     // Delivered background results: task ids already surfaced to the model,
     // so each completion is injected exactly once.
     const bgDelivered = new Set<string>();
+    // B16: acquire the budget agent slot HERE, before any guard that can
+    // reach finish(). The old `if (i === 0) recordAgentStart()` sat AFTER
+    // the abort and runtime-limit guards at the loop top, so a run aborted
+    // during the first preflight reached finish() and released a slot it
+    // never acquired — stealing a usedAgents slot from a sibling agent on
+    // the shared budget. finish() unconditionally releases, so acquisition
+    // must be unconditional too.
+    this.budget?.recordAgentStart();
     // Shell-mutation baseline: as late as possible (all harness setup writes
     // to .mochi/ already happened) but before the model can touch anything.
     await this.captureGitBaseline();
@@ -1538,7 +1546,10 @@ Continue from 'Next:', do not redo completed progress.`,
         return this.finish(task, false, 'Runtime limit exceeded', 'runtime_limit');
       }
       if (this.budget) {
-        if (i === 0) this.budget.recordAgentStart();
+        // B16: recordAgentStart moved to before the iteration loop (see the
+        // call site above captureGitBaseline) — this first-iteration call was
+        // AFTER the abort/runtime guards, so preflight aborts released a slot
+        // never acquired.
         if (!this.budget.canMakeModelCall()) {
           // If in uncensored mode and real work has been done, allow a final completion turn
           // rather than abruptly aborting in the middle of active progress.
