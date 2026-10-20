@@ -8,10 +8,10 @@
 // the bug, rewrite paths never call atomicWriteFileSync; with the fix, every
 // full-file rewrite goes through it. The mock wraps the REAL implementation so
 // file behavior stays authentic.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 
 const tmpFile = join(mkdtempSync(join(tmpdir(), 'mochi-mem-atomic-')), 'memory.jsonl');
 process.env['MOCHI_MEMORY_FILE'] = tmpFile;
@@ -31,6 +31,7 @@ beforeEach(() => {
   atomicSpy.mockClear();
 });
 afterEach(() => { try { rmSync(tmpFile, { force: true }); } catch { /* tmp */ } });
+afterAll(() => { try { rmSync(dirname(tmpFile), { recursive: true, force: true }); } catch { /* tmp */ } });
 
 function tmpDebris(): string[] {
   return readdirSync(join(tmpFile, '..')).filter((f) => f.endsWith('.tmp'));
@@ -84,7 +85,5 @@ describe('memory.jsonl atomic rewrites (B7)', () => {
     expect(pruned).toBe(1);
     expect(atomicSpy).toHaveBeenCalled();
     expect(tmpDebris()).toEqual([]);
-    // Restore the pass-through mock for other tests.
-    atomicSpy.mockImplementation((p, c) => realAtomic(p, c));
   });
 });
