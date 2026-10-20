@@ -31,11 +31,11 @@ export interface BackgroundTask {
 }
 
 const tasks = new Map<string, BackgroundTask>();
+/** Owning cwd per task id — each task's ledger record lives in the directory
+ *  it was started in (B22). */
+const taskDirs = new Map<string, string>();
 const processes = new Map<string, import('node:child_process').ChildProcess>();
 const MAX_COMPLETED = 20;
-/** Last dir whose ledger we wrote — status transitions land here even when a
- *  callback doesn't carry cwd (exit/error handlers). */
-let lastStateDir: string | undefined;
 /** Output cap per task IN THE LEDGER (in-memory buffer stays at 200KB). */
 const PERSIST_OUTPUT_CAP = 100_000;
 
@@ -61,9 +61,23 @@ function writeLedger(dir: string | undefined, list: BackgroundTask[]): void {
   }
 }
 
-/** Persist the current registry (throttled callers guard their own cadence). */
+/** Persist each task's record into the ledger of the directory it was started
+ *  in. B22: the old single `lastStateDir` dumped the ENTIRE registry into the
+ *  cwd of the most recently started task — a task started in workspace A had
+ *  its completion written into workspace B's ledger while A kept a stale
+ *  'running' record that listPersistedTasks then falsified to 'failed (owner
+ *  exited)'. Tasks with no known dir (never possible via startBackgroundTask)
+ *  are skipped. */
 function persist(): void {
-  writeLedger(lastStateDir, [...tasks.values()]);
+  const byDir = new Map<string, BackgroundTask[]>();
+  for (const t of tasks.values()) {
+    const dir = taskDirs.get(t.id);
+    if (!dir) continue;
+    const list = byDir.get(dir);
+    if (list) list.push(t);
+    else byDir.set(dir, [t]);
+  }
+  for (const [dir, list] of byDir) writeLedger(dir, list);
 }
 
 function prune() {
@@ -72,6 +86,7 @@ function prune() {
     for (const t of done.slice(0, done.length - MAX_COMPLETED)) {
       tasks.delete(t.id);
       processes.delete(t.id);
+      taskDirs.delete(t.id);
     }
   }
 }
@@ -108,7 +123,7 @@ export function startBackgroundTask(
   });
   task.pid = child.pid;
   processes.set(id, child);
-  lastStateDir = cwd;
+  taskDirs.set(id, cwd);
   let buffer = '';
   const cap = 200_000;
   let lastFlushAt = 0;
