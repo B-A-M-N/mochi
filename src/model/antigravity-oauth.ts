@@ -8,7 +8,7 @@
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { runArgv, runShellString } from '../exec.js';
 
 // Antigravity OAuth client registered application identity
 export const ANTIGRAVITY_CLIENT_ID = process.env.ANTIGRAVITY_CLIENT_ID ||
@@ -493,7 +493,11 @@ export async function runAntigravityOAuth(
       await opts.openUrl(authUrl);
     } else {
       const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-      execFile(opener, [authUrl], { timeout: 5000 }, () => {});
+      // Route through the shared exec boundary (proc-sites ratchet). Windows
+      // 'start' is a cmd builtin, so it must go through the shell.
+      void (process.platform === 'win32'
+        ? runShellString(`start "" "${authUrl.replace(/"/g, '')}"`, { timeoutMs: 5000 }).catch(() => {})
+        : runArgv(opener, [authUrl], { timeoutMs: 5000 }).catch(() => {}));
     }
 
     onProgress('Waiting for Google authorization in browser...');
