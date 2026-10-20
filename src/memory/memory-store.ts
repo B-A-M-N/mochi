@@ -34,8 +34,14 @@ function memoryFile(): string {
 const MAX_FAILS = 3;
 
 function ensure(): void {
-  if (!existsSync(MEMORY_DIR)) mkdirSync(MEMORY_DIR, { recursive: true });
-  if (!existsSync(memoryFile())) writeFileSync(memoryFile(), '');
+  // B23: create the parent of the ACTIVE memory file, not the default
+  // ~/.mochi — when MOCHI_MEMORY_FILE relocates the file (tests, multi-profile
+  // setups), the relocated parent may not exist and every write path crashed
+  // with ENOENT here.
+  const file = memoryFile();
+  const dir = resolve(file, '..');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(file)) writeFileSync(file, '');
 }
 
 function randomId(): string {
