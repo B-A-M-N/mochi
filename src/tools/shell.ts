@@ -86,23 +86,26 @@ export const shellTool: Tool = {
       );
     }
 
-    if (args.background === true) {
-      const { startBackgroundTask, describeTask } = await import('../daemon/background-tasks.js');
-      const t = startBackgroundTask(command, ctx.cwd, {
-        description: typeof args.description === 'string' ? args.description : undefined,
-      });
-      return `${describeTask(t)}\nStarted in background. Continue working; check later with: bg status ${t.id}`;
-    }
-
     // Horus-derived command risk gate: in safe mode, destructive or network-
     // touching commands are blocked outright; in auto/ask they run but the
     // classification is visible (agents shouldn't silently rm -rf or push).
+    // B10: this gate MUST run before the background early-return — the old
+    // branch order let `background: true` bypass safe-mode blocking, the
+    // risk log event, and sandbox resolution entirely (raw `sh -c` spawn).
     const risk = classifyCommand(command);
     if (ctx.config.safety.mode === 'safe' && risk !== 'low') {
       throw new Error(`Blocked by safety: command classified as ${risk} (safe mode). Command: ${command.slice(0, 200)}`);
     }
     if (risk !== 'low' && ctx.events) {
       ctx.events.emit({ type: 'agent:log', agentId: ctx.agentId, message: `[shell:${risk}] ${command.slice(0, 160)}` });
+    }
+
+    if (args.background === true) {
+      const { startBackgroundTask, describeTask } = await import('../daemon/background-tasks.js');
+      const t = startBackgroundTask(command, ctx.cwd, {
+        description: typeof args.description === 'string' ? args.description : undefined,
+      });
+      return `${describeTask(t)}\nStarted in background. Continue working; check later with: bg status ${t.id}`;
     }
 
     let targetCwd = args.cwd ? String(args.cwd) : ctx.cwd;
