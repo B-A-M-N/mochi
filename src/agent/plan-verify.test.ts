@@ -15,7 +15,7 @@
 // tiny and .revtmp is cleared manually. This keeps destructive-fs patterns
 // out of the test source.
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -43,13 +43,30 @@ function gitRepo(): string {
 }
 
 describe('resolveVerifyCommand', () => {
-  it('resolves aliases from package.json scripts (mirroring the tool)', () => {
+  it('appends target exactly like tools/verify.ts — the classifier sees the FULL string', () => {
     const dir = scratchDir('b9pv-pkg-');
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run', build: 'tsc -p .' } }));
-    expect(resolveVerifyCommand({ command: 'test' }, dir)).toBe('npm test');
-    expect(resolveVerifyCommand({ command: 'build' }, dir)).toBe('npm run build');
-    // Verbatim commands pass through unchanged (classified as-is downstream).
-    expect(resolveVerifyCommand({ command: 'echo hi && uname' }, dir)).toBe('echo hi && uname');
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run' } }));
+    // Same append shape as verify.ts:52 (`-- ` added unless target has it).
+    expect(resolveVerifyCommand({ command: 'test', target: 'src/foo.test.ts' }, dir))
+      .toBe('npm test -- src/foo.test.ts');
+    expect(resolveVerifyCommand({ command: 'test', target: '-- --grep x' }, dir))
+      .toBe('npm test -- --grep x');
+    // Verbatim command containing 'test' gets the target appended, same as
+    // the tool (its condition: cmdType === 'test' || cmd.includes('test'));
+    // a command like 'mocha' contains no 'test' so the tool ignores its
+    // target — ignored here too.
+    expect(resolveVerifyCommand({ command: 'run tests all', target: 'a.test.ts' }, dir))
+      .toBe('run tests all -- a.test.ts');
+    expect(resolveVerifyCommand({ command: 'mocha', target: 'a.test.ts' }, dir))
+      .toBe('mocha');
+    // A target on a NON-test command is ignored by the tool — ignored here
+    // too (classification matches execution).
+    expect(resolveVerifyCommand({ command: 'npx tsc --noEmit', target: 'x; wget evil' }, dir))
+      .toBe('npx tsc --noEmit');
+    // The injected-metachar target must SURVIVE into the classified string —
+    // the gate (not the tool) is what refuses it in plan mode.
+    expect(resolveVerifyCommand({ command: 'test', target: 'x; wget evil' }, dir))
+      .toBe('npm test -- x; wget evil');
   });
 
   it('fails closed (null) when package.json is unreadable for an alias', () => {
@@ -82,10 +99,59 @@ describe('snapshotTree / rollbackTracked', () => {
     expect(r.rolledBack.sort()).toEqual(['a.txt', 'b.txt']);
     expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('original\n');
     expect(readFileSync(join(dir, 'b.txt'), 'utf8')).toBe('user edit\n');
-    // Untracked leftover reporting.
+    // Untracked artifacts: under the tightened contract, a file CREATED after
+    // the snapshot is a command artifact and is DELETED on rollback (not
+    // merely reported).
     writeFileSync(join(dir, 'out.js'), 'artifact');
     const r2 = await rollbackTracked(dir, snap!);
-    expect(r2.untrackedLeftover).toContain('out.js');
+    expect(existsSync(join(dir, 'out.js'))).toBe(false);
+    expect(r2.untrackedLeftover).not.toContain('out.js');
+  });
+
+  it('rollback preserves the user index state (staged stays staged, unstaged stays unstaged)', async () => {
+    const dir = gitRepo();
+    // User edits a.txt and stages it; edits b.txt unstaged.
+    writeFileSync(join(dir, 'a.txt'), 'user staged edit\n');
+    writeFileSync(join(dir, 'b.txt'), 'user unstaged edit\n');
+    execFileSync('git', ['-C', dir, 'add', 'a.txt'], { env: GITENV, stdio: 'pipe' });
+    const snap = await snapshotTree(dir);
+    expect(snap).not.toBeNull();
+    // Verify dirties BOTH files further.
+    writeFileSync(join(dir, 'a.txt'), 'verify noise\n');
+    writeFileSync(join(dir, 'b.txt'), 'verify noise\n');
+    const r = await rollbackTracked(dir, snap!);
+    expect(r.rolledBack.sort()).toEqual(['a.txt', 'b.txt']);
+    // Content restored to pre-verify in both cases.
+    expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('user staged edit\n');
+    expect(readFileSync(join(dir, 'b.txt'), 'utf8')).toBe('user unstaged edit\n');
+    // INDEX state preserved: a.txt still staged (X='M'), b.txt still only
+    // unstaged (X=' '). Before the fix, checkout -- staged BOTH.
+    const status = execFileSync('git', ['-C', dir, 'status', '--porcelain'], { env: GITENV, stdio: 'pipe' }).toString();
+    const aRow = status.split('\n').find((l) => l.endsWith(' a.txt'));
+    const bRow = status.split('\n').find((l) => l.endsWith(' b.txt'));
+    expect(aRow?.[0]).toBe('M'); // staged modification preserved
+    expect(bRow?.[0]).toBe(' '); // NOT staged by the rollback
+  });
+
+  it('deletes untracked artifacts the command CREATED, keeps pre-existing untracked paths', async () => {
+    const dir = gitRepo();
+    // Pre-existing untracked file BEFORE verify.
+    writeFileSync(join(dir, 'preexisting.txt'), 'user file\n');
+    const snap = await snapshotTree(dir);
+    expect(snap).not.toBeNull();
+    expect([...snap!.baselineUntracked]).toEqual(['preexisting.txt']);
+    // Verify creates an artifact and dirties a tracked file.
+    writeFileSync(join(dir, 'dist.out'), 'verify artifact\n');
+    writeFileSync(join(dir, 'a.txt'), 'verify wrote here\n');
+    const r = await rollbackTracked(dir, snap!);
+    // Created artifact GONE; pre-existing file UNTOUCHED.
+    expect(existsSync(join(dir, 'dist.out'))).toBe(false);
+    expect(existsSync(join(dir, 'preexisting.txt'))).toBe(true);
+    expect(readFileSync(join(dir, 'preexisting.txt'), 'utf8')).toBe('user file\n');
+    // The created artifact is not reported as a leftover; the pre-existing
+    // one is (the caller surfaces it honestly).
+    expect(r.untrackedLeftover).toContain('preexisting.txt');
+    expect(r.untrackedLeftover).not.toContain('dist.out');
   });
 
   it('fails closed outside a git repo', async () => {

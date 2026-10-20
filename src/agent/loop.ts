@@ -2536,7 +2536,11 @@ Continue from 'Next:', do not redo completed progress.`,
         // commands and non-git workspaces still veto (fail closed). The gate
         // classifies the command the TOOL WILL ACTUALLY RUN: verify's
         // `command` arg can be a repo-derived alias (test/build/typecheck/
-        // lint), so gate on resolveVerifyCommand, not on the raw arg.
+        // lint), and a `target` arg is appended before execution — the gate
+        // classifies the full post-append string via resolveVerifyCommand,
+        // never the raw arg. Both `destructive` AND `network` classifications
+        // veto (fail closed): plan-mode research means "the project's own
+        // checks", and check commands don't need to reach the network.
         if (this.planMode) {
           const isMutating = (c: ToolCall) => !this.isReadOnly(c.function.name, this.parseArgs(c.function.arguments));
           const isPlanVerify = (c: ToolCall) => {
@@ -2544,7 +2548,10 @@ Continue from 'Next:', do not redo completed progress.`,
             if (canonical !== 'verify') return false;
             const args = this.parseArgs(c.function.arguments);
             const resolved = resolveVerifyCommand(args, this.cwd);
-            return resolved !== null && classifyCommand(resolved) !== 'destructive';
+            // Fail closed: null (unresolvable), 'destructive' AND 'network'
+            // all veto — only genuinely low-risk check commands run.
+            const risk = resolved !== null ? classifyCommand(resolved) : null;
+            return risk === 'low';
           };
           const planVerifyCalls = response.toolCalls.filter(isPlanVerify);
           if (planVerifyCalls.length > 0) {
