@@ -72,7 +72,8 @@ describe('Named Checkpoint Manager', () => {
 
     it('returns a clean failure (not a throw) when the stored checkpoint JSON is torn/corrupt (B20)', async () => {
       // Simulate a checkpoint file torn by a crash mid-save: invalid JSON.
-      const { writeFileSync: wf } = await import('node:fs');
+      const { writeFileSync: wf, mkdirSync: mk } = await import('node:fs');
+      mk(join(dir, '.mochi', 'checkpoints'), { recursive: true });
       wf(join(dir, '.mochi', 'checkpoints', 'torn.json'), '{"name":"torn","patch":"TRUNCATED', 'utf8');
 
       // The old code called JSON.parse outside its try block: the raw
