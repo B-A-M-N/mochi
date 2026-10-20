@@ -119,11 +119,16 @@ import { ALL_TOOLS, validateArgs } from '../tools/index.js';
 
 const READ_ONLY_TOOLS = new Set([
   'read', 'search', 'glob', 'inspect', 'git', 'diff', 'tree',
-  'get_function', 'find_callers', 'type_hierarchy', 'verify', 'perf_audit',
+  'get_function', 'find_callers', 'type_hierarchy', 'perf_audit',
   'deepwiki', 'clipboard', 'sql_codebase', 'analyze_code', 'memory',
   'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
   'find_references', 'find_definitions', 'db_inspect', 'think',
 ]);
+// 'verify' is deliberately ABSENT: it has permission:'shell', dangerous:true,
+// and executes its command argument verbatim (tools/verify.ts). Classifying
+// it read-only let ToolDispatcher run it in the concurrent read-only
+// Promise.allSettled batch while builds/tests mutate the tree. (Re-removed
+// after the fetch-methods PR accidentally restored it from its base.)
 // 'fetch' is deliberately ABSENT: its method arg selects POST/PUT/PATCH/
 // DELETE, which mutate REMOTE state (tools/fetch.ts), and this static flag is
 // arg-blind — mutating requests must not ride the concurrent read-only

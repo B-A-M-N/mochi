@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { handleDiscordMessage, loadDiscordConfig, runDiscordGateway, chunkMessage, GATEWAY_INTENTS, type DiscordConfig, type GatewaySocket } from './discord.js';
+import type { Runtime } from './runtime.js';
 
 /** Scripted in-memory socket: the test drives inbound frames, captures outbound. */
 function fakeSocketBox() {
@@ -214,6 +215,198 @@ describe('Discord live gateway (scripted socket, no network)', () => {
     });
     expect(sockets).toBe(0);
     expect(summary.messages).toBe(0);
+  });
+
+  it('spins up a thread for goals, shows typing, and adds reactions', async () => {
+    const box = fakeSocketBox();
+    const runtime = { goal: vi.fn().mockResolvedValue('Done building feature') } as unknown as Runtime;
+    const sentChunks: Array<{ channelId: string; text: string }> = [];
+    const threadsCreated: Array<{ channelId: string; messageId: string; name: string }> = [];
+    const reactionsAdded: Array<{ channelId: string; messageId: string; emoji: string }> = [];
+    const typingChannels: string[] = [];
+    const ctl = new AbortController();
+    const { promise: socketCreated, resolve: resolveSocket } = Promise.withResolvers<void>();
+    const { promise: replySent, resolve: resolveReply } = Promise.withResolvers<void>();
+
+    const run = runDiscordGateway(cfg, runtime, {
+      createSocket: () => {
+        resolveSocket();
+        return box.sock;
+      },
+      fetchJson: fakeFetch(),
+      send: async (channelId, text) => {
+        sentChunks.push({ channelId, text });
+        resolveReply();
+        return true;
+      },
+      createThread: async (channelId, messageId, name) => {
+        threadsCreated.push({ channelId, messageId, name });
+        return 'thread-999';
+      },
+      addReaction: async (channelId, messageId, emoji) => {
+        reactionsAdded.push({ channelId, messageId, emoji });
+        return true;
+      },
+      triggerTyping: async (channelId) => {
+        typingChannels.push(channelId);
+        return true;
+      },
+      sleepMs: async () => {},
+      signal: ctl.signal,
+    });
+
+    await socketCreated;
+    box.sock.onopen?.();
+    box.inbound({ op: 10, d: { heartbeat_interval: 60000 } });
+    box.inbound({ op: 0, t: 'READY', d: { user: { id: 'bot-1', username: 'mochi-bot' } } });
+
+    box.inbound({
+      op: 0,
+      t: 'MESSAGE_CREATE',
+      d: {
+        id: 'msg-123',
+        channel_id: 'chan-456',
+        guild_id: 'guild-789',
+        content: '!mochi build a rate limiter',
+        author: { id: 'u1', username: 'alice' },
+      },
+    });
+
+    await replySent;
+    ctl.abort();
+    await run;
+
+    expect(threadsCreated).toHaveLength(1);
+    expect(threadsCreated[0]).toEqual({
+      channelId: 'chan-456',
+      messageId: 'msg-123',
+      name: '🍡 build a rate limiter',
+    });
+    expect(reactionsAdded).toContainEqual({ channelId: 'chan-456', messageId: 'msg-123', emoji: '👀' });
+    expect(reactionsAdded).toContainEqual({ channelId: 'chan-456', messageId: 'msg-123', emoji: '✅' });
+    expect(typingChannels).toContain('thread-999');
+    expect(sentChunks.some((c) => c.channelId === 'thread-999' && c.text.includes('Done building feature'))).toBe(true);
+  });
+
+  it('answers direct messages (DMs) without requiring a prefix or mention', async () => {
+    const box = fakeSocketBox();
+    const runtime = { goal: vi.fn().mockResolvedValue('Hello back from DM') } as unknown as Runtime;
+    const sentChunks: Array<{ channelId: string; text: string }> = [];
+    const ctl = new AbortController();
+    const { promise: socketCreated, resolve: resolveSocket } = Promise.withResolvers<void>();
+    const { promise: replySent, resolve: resolveReply } = Promise.withResolvers<void>();
+
+    const run = runDiscordGateway(cfg, runtime, {
+      createSocket: () => {
+        resolveSocket();
+        return box.sock;
+      },
+      fetchJson: fakeFetch(),
+      send: async (channelId, text) => {
+        sentChunks.push({ channelId, text });
+        resolveReply();
+        return true;
+      },
+      addReaction: async () => true,
+      triggerTyping: async () => true,
+      sleepMs: async () => {},
+      signal: ctl.signal,
+    });
+
+    await socketCreated;
+    box.sock.onopen?.();
+    box.inbound({ op: 10, d: { heartbeat_interval: 60000 } });
+    box.inbound({ op: 0, t: 'READY', d: { user: { id: 'bot-1', username: 'mochi-bot' } } });
+
+    // Inbound DM (no guild_id, no prefix)
+    box.inbound({
+      op: 0,
+      t: 'MESSAGE_CREATE',
+      d: {
+        id: 'dm-msg-1',
+        channel_id: 'dm-chan-99',
+        content: 'hey mochi can you help me',
+        author: { id: 'u1', username: 'alice' },
+      },
+    });
+
+    await replySent;
+    ctl.abort();
+    await run;
+
+    expect(sentChunks.some((c) => c.channelId === 'dm-chan-99' && c.text.includes('Hello back from DM'))).toBe(true);
+  });
+
+  it('handles slash commands via INTERACTION_CREATE', async () => {
+    const box = fakeSocketBox();
+    const runtime = {
+      config: { model: { provider: 'antigravity', model: 'gemini-3.8-flash' }, safety: {} },
+      getFallbacks: () => [],
+    } as unknown as Runtime;
+    const apiCalls: Array<{ url: string; body: unknown }> = [];
+    const ctl = new AbortController();
+    const { promise: socketCreated, resolve: resolveSocket } = Promise.withResolvers<void>();
+    const { promise: patchSent, resolve: resolvePatch } = Promise.withResolvers<void>();
+
+    const run = runDiscordGateway(cfg, runtime, {
+      createSocket: () => {
+        resolveSocket();
+        return box.sock;
+      },
+      fetchJson: async (url, init) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        apiCalls.push({ url, body });
+        if (init?.method === 'PATCH') {
+          resolvePatch();
+        }
+        if (url.includes('/gateway/bot')) {
+          return { ok: true, status: 200, json: async () => ({ url: 'wss://fake.discord' }) };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      },
+      send: async () => true,
+      sleepMs: async () => {},
+      signal: ctl.signal,
+    });
+
+    await socketCreated;
+    box.sock.onopen?.();
+    box.inbound({ op: 10, d: { heartbeat_interval: 60000 } });
+    box.inbound({ op: 0, t: 'READY', d: { user: { id: 'bot-1', username: 'mochi-bot' } } });
+
+    // Interaction for /model
+    box.inbound({
+      op: 0,
+      t: 'INTERACTION_CREATE',
+      d: {
+        id: 'int-123',
+        token: 'token-abc',
+        data: {
+          name: 'model',
+          options: [],
+        },
+        channel_id: 'chan-1',
+        user: { id: 'u1' },
+      },
+    });
+
+    await patchSent;
+    ctl.abort();
+    await run;
+
+    // Verify deferred acknowledgment (type: 5)
+    const hasType5 = apiCalls.some((c) => {
+      const b = c.body;
+      return c.url.includes('/callback') && b !== null && typeof b === 'object' && 'type' in b && b.type === 5;
+    });
+    expect(hasType5).toBe(true);
+
+    // Verify patch message with model status
+    const hasOriginalModel = apiCalls.some((c) => {
+      const b = c.body;
+      return c.url.includes('/messages/@original') && b !== null && typeof b === 'object' && 'content' in b && typeof b.content === 'string' && b.content.includes('gemini-3.8-flash');
+    });
+    expect(hasOriginalModel).toBe(true);
   });
 });
 
