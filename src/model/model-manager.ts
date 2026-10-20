@@ -1,4 +1,4 @@
-import type { MochiConfig, ModelProfile } from '../types.js';
+import type { MochiConfig, ModelProfile, ModelConfig } from '../types.js';
 import {PROVIDERS, providerById, loadConfigFile, saveConfigFile} from './providers.js';
 import { setKeyringKey, setAccount } from './keyring.js';
 import { normalizeModelName } from './router.js';
@@ -26,13 +26,26 @@ export function modelContextBudget(model: string, provider?: string): number {
   if (Number.isFinite(override) && override >= 1000) return override;
   const m = (model || '').toLowerCase();
   const p = (provider || '').toLowerCase();
+  // Provider-specific long-context classes first (Antigravity gateway:
+  // claude-on-AGY 250k, gpt-oss 131k, AGY-native models 1M).
+  if (p === 'antigravity' || p === 'google-antigravity') {
+    if (m.includes('claude')) return 250_000;
+    if (m.includes('gpt-oss')) return 131_072;
+    return 1_048_576;
+  }
+  if (p === 'openai-codex' || m.includes('codex')) {
+    if (m.includes('5.6') || m.includes('sol') || m.includes('astra')) return 1_000_000;
+    return 272_000;
+  }
+  if (p === 'tokenjuice') return 262_144;
   // 1M-class long-context models.
-  if (m.includes('gemini')) return 1_000_000;
-  // 200k-class.
-  if (m.includes('claude') || p.includes('anthropic')) return 200_000;
+  if (m.includes('gemini') || p.includes('gemini') || p.includes('google')) return 1_048_576;
+  if (p.includes('freeinference') || m.includes('glm-5') || m.includes('deepseek-v4')) return 500_000;
   // 256k-class.
   if (m.includes('kimi') || m.includes('moonshot')) return 256_000;
-  // 128k-class (DeepSeek v3/v4, GLM, Qwen, Mistral, Llama-3 long, Grok).
+  // 200k-class.
+  if (m.includes('claude') || p.includes('anthropic')) return 200_000;
+  // 128k-class (DeepSeek v3, GLM<5, Qwen, Mistral, Llama-3 long, Grok).
   if (
     m.includes('deepseek') || m.includes('glm') || m.includes('qwen') ||
     m.includes('minimax') || m.includes('mistral') || m.includes('codestral') ||
@@ -140,4 +153,46 @@ export function describeConfig(config: MochiConfig): string {
 export function maskApiKey(key: string): string {
   if (key.length <= 4) return '****';
   return key.slice(0, 4) + '…' + key.slice(-4);
+}
+
+export function addFallbackModel(config: MochiConfig, providerId: string, modelId?: string, apiKey?: string): MochiConfig {
+  const p = providerById(providerId);
+  if (!p) throw new Error(`Unknown provider: ${providerId}`);
+  const m = modelId || p.defaultModel;
+  const k = apiKey || (p.envKey ? process.env[p.envKey] : undefined);
+  const cfg = { ...config };
+  if (!cfg.model) cfg.model = {} as ModelConfig;
+  const current = cfg.model.failover ? [...cfg.model.failover] : [];
+  const existingIdx = current.findIndex((f) => f.provider.toLowerCase() === p.id.toLowerCase());
+  const entry = {
+    provider: p.id,
+    baseUrl: p.baseUrl,
+    model: m,
+    apiKey: k,
+  };
+  if (existingIdx >= 0) {
+    current[existingIdx] = entry;
+  } else {
+    current.push(entry);
+  }
+  cfg.model.failover = current;
+  saveConfigFile(cfg);
+  return cfg;
+}
+
+export function removeFallbackModel(config: MochiConfig, providerId: string): MochiConfig {
+  const cfg = { ...config };
+  if (!cfg.model?.failover) return cfg;
+  cfg.model.failover = cfg.model.failover.filter((f) => f.provider.toLowerCase() !== providerId.toLowerCase());
+  saveConfigFile(cfg);
+  return cfg;
+}
+
+export function clearFallbackModels(config: MochiConfig): MochiConfig {
+  const cfg = { ...config };
+  if (cfg.model) {
+    cfg.model.failover = [];
+  }
+  saveConfigFile(cfg);
+  return cfg;
 }

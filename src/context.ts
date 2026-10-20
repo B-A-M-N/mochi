@@ -638,7 +638,7 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     add(['replace_symbol'], 'replace_symbol: use when REWRITING a whole function/class/method. Give the symbol name and the complete new source — boundaries come from the symbol index, so no anchor matching and no mismatch retries.');
     add(['patch'], 'patch: use for multi-file changes or several edits in one call (*** Begin Patch / Add File / Update File / Delete File / *** End Patch). Cheaper than several full writes.');
     add(['write'], 'write: use only for new files or full rewrites. Appending existing files wastes tokens.');
-    add(['subagent'], 'subagent: delegate a self-contained, well-scoped subtask to a fresh child agent when it would take you many steps. Give it complete instructions; it cannot ask you questions.');
+    add(['subagent'], 'subagent: PROACTIVELY DELEGATE independent tasks, parallel research, reviews, architecture analysis, or isolated fixes to fresh child agents. Pass a single "prompt" or a "tasks" array for concurrent multi-agent fanout.');
     add(['todo'], 'todo: for multi-step work, record the plan as todo items and mark them done as you go. Cheap, shared, and keeps parallel work honest.');
     add(['shell'], 'shell: for builds, tests, greps. Not for file mutation when edit/patch will do.');
     add(['blast_radius'], 'blast_radius: analyze the downstream impact and caller call sites of a symbol before modifying or refactoring it.');

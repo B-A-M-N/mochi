@@ -1,48 +1,71 @@
 ---
 name: frontend-design
-description: Design distinctive, high-craft frontend interfaces — visual identity, typography, motion, 3D, and polish that avoids generic AI aesthetics. Use when building any user-facing web UI, landing page, dashboard, or component library where the result should feel designed, not generated. Ported from Claude's frontend-design practice, deepened for Mochi.
+description: Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.
+license: Complete terms in LICENSE.txt
 ---
 
-# Frontend Design Procedure
+# Frontend Design
 
-Generic output is failure. If the result could be mistaken for a default Tailwind template, the design did not happen.
+Approach this as the design lead at a design studio known for giving every client a distinct visual identity that is not mistaken for anyone else's. This client has already rejected proposals that felt cliché or templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take aesthetic risk if justified.
 
-## 1. Establish the identity (before any markup)
-- Choose the ONE axis the design leads on: typography-led (editorial), motion-led (kinetic), space-led (minimal), color-led (expressive), or depth-led (layered/3D). Every later decision reinforces the chosen axis.
-- Write a 5-word design thesis ("dense technical brutalism", "soft editorial warmth"). Every visual decision either serves the thesis or is cut.
-- Reference triad: pick 3 real sites/products as the quality bar and articulate what they do that templates don't.
+## Ground your designs in the subject matter
 
-## 2. Typography (the biggest cheap win)
-- Pair a characterful display face with a workhorse text face. System-ui everywhere = identity failure.
-- Type scale: pick a ratio (1.25 / 1.333 / 1.5), commit, and never break it. Display sizes get tightened letter-spacing (-0.02em to -0.04em); body gets relaxed (0 to 0.01em).
-- Line-height: 1.1-1.2 for display, 1.5-1.7 for body. Measure: 45-75ch.
+If the brief does not identify what the product or subject matter is, identify it yourself before designing, and confirm with the client. You can come up with one concrete subject, the design's audience, and the design's primary job, as a proposal. If there's any information in your memory about the client's preferences or context about what they're building, use that as a hint. The subject's industry, subject matter, materials, and vernacular are where distinctive visual choices come from — a design for a toy for girls aged 8–11 will be very aesthetically different from a dashboard for financial analysts. Build with the brief's real content and subject matter throughout.
 
-## 3. Color with intent
-- One dominant + one accent + neutrals. The accent appears in <=10% of the viewport — scarcity is what makes it pop.
-- Dark modes are not inverted light modes: reduce saturation slightly, raise surface contrast incrementally (bg < surface < card), soften shadows.
-- Gradient rules: one direction, one hue family, on backgrounds not text — unless the thesis is color-led, then commit fully.
+## Design principles
 
-## 4. Motion (choreography, not decoration)
-- Stagger entrances 30-70ms apart, total sequence under 500ms. Everything enters with purpose: fade+rise 8-16px is the default; nothing spins for spin's sake.
-- One spring curve family (e.g. cubic-bezier(0.22, 1, 0.36, 1)); one duration family per state class (150ms micro, 300ms panel, 500ms page).
-- `prefers-reduced-motion` collapses ALL of this to opacity-only. Hover states transition 150ms; nothing transitions layout properties (width/top) — transform/opacity only.
+For web designs, the hero is the first thing viewers will see. Open with the most characteristic thing in the subject's world, in the form that is most appropriate: a headline, an image, an animation, a live demo, an interactive moment, or other treatments. Be deliberate with your choice: a big number with a small label, supporting stats, and a gradient accent is the default treatment, so only use it if that's truly the best option.
 
-## 5. Depth and detail (where craft lives)
-- Layer with real z-semantics: background texture, content, chrome, overlay. Shadows: one ambient + one key, not five stacked box-shadows.
-- Borders beat shadows on dark themes; inner 1px highlights (inset top rgba(255,255,255,0.06)) sell depth on cards.
-- The details pass: consistent icon set (one stroke width), aligned baselines, focus rings that match the brand accent, selection color, scrollbar styling, empty states with the same care as full states.
+Typography carries the personality of the page. You don't need a different typeface for display or headline text and body content: use one family or two, and if two, make them clearly distinct.
 
-## 6. 3D and canvas (when the thesis demands it)
-- Three.js/R3F only when depth IS the design. Budget: <200KB gzipped; degrade to a static poster frame on mobile/low-power.
-- Micro-interactions beat scenes: a card that tilts 4deg toward the cursor is worth more than a rotating hero mesh.
-- Canvas/WebGL backgrounds must pause when off-screen (IntersectionObserver) and respect battery (frame-cap 30fps on mobile).
+Choose your typefaces deliberately, not the default families you would reach for on any other project, and set a clear type scale following the default guidance of The Elements of Typographic Style with intentional weights, widths, and spacing. When type is used as a headline or visual element, use the type treatment itself as an active part of the design, not a neutral delivery vehicle for the content.
 
-## 7. Verification
-- Screenshot at 375/768/1440. The 375 must not be a squeezed 1440 — it is a different composition.
-- Contrast audit (4.5:1 body), keyboard pass, reduced-motion pass, and a 3-second blur test: squint and the hierarchy must still read.
-- The template test: name 3 things in this design a template could not produce. If you cannot, go back to step 1.
+Default to line lengths of less than 80 characters. Serif typefaces can have slightly longer line lengths; give serif body text slightly more line-height than a sans-serif.
 
-## Pitfalls
-- Purple-gradient-on-dark-glass default AI aesthetic: if your palette is violet-on-slate, you have already failed the thesis.
-- 14 fonts loaded for 2 used. Two families, four weights, max.
-- Motion that plays once and annoys forever: everything loops must be subtle or exit.
+Avoid these default typographic treatments; they are the commonest tells of a generated page:
+- Accenting just a single word or phrase in a headline, like putting one word in italic/bold or a different color.
+- Using all caps for labels.
+- Adding unnecessary typographic labels above content.
+
+Visual structure is information. Structural devices like outlines, borders, numbering, eyebrows, dividers, labels, etc., encode useful information about the content rather than decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence — like a stepped process or a timeline. Before adding numbered markers, check the content really is a sequence.
+
+Use non-user-triggered motion sparingly and deliberately, only to draw attention. A single orchestrated moment — one page-load sequence or one reveal — lands better than scattered effects; fade-and-slide-up entrances on each section and hover transitions on every card are the generic default and read as AI-generated. Motion that answers a person's action (opening, expanding, confirming) is welcome when it shows what changed.
+
+Consider written content carefully. Often a design brief may not contain real content, and it's up to you to come up with copy and placeholder content. Copy can make a design feel as templated as the design itself. See the below section on writing for more guidance.
+
+## Process: plan, review against the brief, build, critique
+
+For calibration, AI-generated design right now clusters around some traits:
+1. a warm cream background (near #F4F1EA) with a high-contrast serif display and a terracotta or warm-clay accent (often near #D97757 — Anthropic's own Claude-interaction accent, so on a user's brief it reads as a tell);
+2. a near-black background with a single bright acid-green or vermilion accent;
+3. a broadsheet-style layout with hairline rules, zero border-radius, and dense newspaper-like columns;
+4. the SaaS-card kit: content chopped into identical rounded cards, one border-radius on everything regardless of hierarchy, the same soft grey shadow (rgba(0,0,0,.1)) under each, and gradient washes as decoration;
+5. template chrome that appears whatever the subject: a tracked-out ALL-CAPS eyebrow label above every heading; meta strings joined with middle dots ('A · B · C'); labels built as 'WORD — fragment' with a spaced em dash; tinted near-black (#0B0B0B, #111) standing in for black; a monospace face for small data labels; a '→' appended to link and button text.
+
+All traits are legitimate for some briefs, but they are defaults rather than choices, and they appear regardless of subject. Where the brief pins down a visual direction, follow it exactly — the brief's own words always win, including when it asks for one of these looks. Where it leaves an axis free, don't spend that freedom on one of these defaults. As with a hired human designer, there's often a careful balance between doing what you're good at and taking each project as a chance to experiment and learn.
+
+Work in two passes. First, brainstorm a short design plan based on the client's design brief: create a compact token system with color, type, layout, and principles.
+- Color: describe the core base palette as 4–6 named hex values.
+- Type: the typefaces and their roles.
+- Layout: a layout concept, using one-sentence prose descriptions and ASCII wireframes to ideate and compare. Include alignment guidance; should the content be left aligned, center aligned, justified?
+- Principles: the high-level guidance for what makes this page unique.
+
+Then review that plan against the brief before building: if any part of it reads like the generic default you would produce for any similar page (work through a similar prompt to see if you arrive somewhere similar) rather than a choice made for this specific brief — revise that part, say what you changed and why. Only after you've confirmed the relative uniqueness of your design plan should you start to write the code, following the revised plan.
+
+When writing the code, be careful of structuring your CSS selector specificities. It's easy to generate CSS classes that cancel each other out (especially with a type-based selector like .section and an element-based selector like .cta). This can happen often with padding/margin between sections.
+
+## Restraint and self-critique
+
+Spend your boldness in one place. Let one element be the memorable thing, keep everything around it quiet and disciplined, and cut any decoration that does not serve the brief. Build to a quality floor without announcing it: responsive down to mobile, visible keyboard focus, reduced motion respected, visually accessible, harmonious color palettes. Critique your own work as you build, taking screenshots to review if your environment supports it — a picture is worth 1000 tokens. Consider Chanel's advice: before leaving the house, take a look in the mirror and remove one accessory. Human creatives have memory and always try to do something new, so if you have a space to quickly jot down notes about what you've tried, it can help you in future passes.
+
+## More on writing in design
+
+Words appear in a design for one reason: to make it easier to understand and use. They are design content, not decoration. Bring the same intentionality and minimalism to copywriting that you would bring to spacing and color. Before writing anything, ask what the design needs to say, and how it can best be said to help the person navigate the experience.
+
+Write from the end user's perspective. Name things by what users will understand in simple language, not by how the system is built. A user manages notifications, not webhook config. Describe what something is or does in plain terms rather than selling it. Being specific and legible to new users is always better than being clever.
+
+Use active voice as default. A CTA says exactly what happens when it is used: "Save changes," not "Submit." An action keeps the same name through the whole flow, so the button that says "Publish" produces a toast that says "Published." The vocabulary of an interface is the signposting for someone navigating the product. Cohesion and consistency are how people learn their way around.
+
+Treat failure and emptiness as moments for direction, not mood. Explain what went wrong and how to fix it, in the interface's voice rather than a person's. Errors don't apologize, and they are never vague about what happened. An empty screen is an invitation to act.
+
+Keep the tone conversational: plain verbs, sentence case, no filler, with tone matched to the brand and the audience. Let each written element do exactly one job.
