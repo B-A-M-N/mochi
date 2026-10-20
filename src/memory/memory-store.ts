@@ -6,9 +6,15 @@
  * automatically pruned so the memory doesn't replay the same dead ends.
  */
 
-import { existsSync, readFileSync, appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
+// B7: full-file rewrites of memory.jsonl (prune, attempt-marking, forget,
+// decay) previously used bare writeFileSync — a crash mid-rewrite tore the
+// ENTIRE durable-fact store. atomicWriteFileSync (tmp sibling + rename) is the
+// established repo pattern; rename is atomic so a reader/crash sees either the
+// whole old file or the whole new one, never a torn hybrid.
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface MemoryFact {
   id: string;             // short uuid-ish
@@ -35,7 +41,7 @@ const MAX_FAILS = 3;
 
 function ensure(): void {
   if (!existsSync(MEMORY_DIR)) mkdirSync(MEMORY_DIR, { recursive: true });
-  if (!existsSync(memoryFile())) writeFileSync(memoryFile(), '');
+  if (!existsSync(memoryFile())) atomicWriteFileSync(memoryFile(), '');
 }
 
 function randomId(): string {
@@ -74,7 +80,7 @@ export function loadFacts(): MemoryFact[] {
   // Auto-prune facts that failed too many times
   const live = out.filter((f) => (f.attempts - f.success_count) < MAX_FAILS);
   if (live.length !== out.length) {
-    writeFileSync(memoryFile(), live.map((f) => JSON.stringify(f)).join('\n') + '\n');
+    atomicWriteFileSync(memoryFile(), live.map((f) => JSON.stringify(f)).join('\n') + '\n');
   }
   return live;
 }
@@ -92,7 +98,7 @@ export function recordFactAttempt(id: string, success: boolean): void {
     else f.last_failed = Date.now();
     touched = true;
   }
-  if (touched) writeFileSync(memoryFile(), facts.map((f) => JSON.stringify(f)).join('\n') + '\n');
+  if (touched) atomicWriteFileSync(memoryFile(), facts.map((f) => JSON.stringify(f)).join('\n') + '\n');
 }
 
 // MCH-63: fact outcome attribution. recordFactAttempt existed but was NEVER
@@ -122,7 +128,7 @@ export function forgetFact(query: string): number {
   const facts = loadFacts();
   const remaining = facts.filter((f) => !f.id.startsWith(query) && !f.statement.includes(query));
   const removed = facts.length - remaining.length;
-  writeFileSync(memoryFile(), remaining.map((f) => JSON.stringify(f)).join('\n') + '\n');
+  atomicWriteFileSync(memoryFile(), remaining.map((f) => JSON.stringify(f)).join('\n') + '\n');
   return removed;
 }
 
@@ -184,7 +190,7 @@ export function decayFacts(maxAgeMs = 60 * 24 * 3600 * 1000): number {
   const cutoff = Date.now() - maxAgeMs;
   const live = facts.filter((f) => f.ts >= cutoff || f.success_count > 0 || f.attempts === 0);
   if (live.length !== facts.length) {
-    writeFileSync(memoryFile(), live.map((f) => JSON.stringify(f)).join('\n') + '\n');
+    atomicWriteFileSync(memoryFile(), live.map((f) => JSON.stringify(f)).join('\n') + '\n');
   }
   return facts.length - live.length;
 }
