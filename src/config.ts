@@ -113,6 +113,13 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
     loadEnvFiles();
   }
   const cfg = defaultConfig();
+  // B21: MOCHI_CONFIG_DIR must be in effect BEFORE the user config read
+  // below — the old assignment sat after the merge, so the env var relocated
+  // the reported configDir while the actual read still used the default
+  // ~/.config/mochi and configs written into MOCHI_CONFIG_DIR were silently
+  // ignored. The later assignment stays: it keeps the env var winning when
+  // the user config file itself carries a configDir key.
+  if (process.env.MOCHI_CONFIG_DIR) cfg.configDir = process.env.MOCHI_CONFIG_DIR;
   const user = readJsonFile(configPath ?? process.env.MOCHI_CONFIG_PATH ?? resolve(cfg.configDir, 'config.json'));
   if (user) merge(cfg as unknown as Record<string, unknown>, user);
 
