@@ -108,7 +108,7 @@ export function loadEnvFiles(): void {
   }
 }
 
-export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: string): MochiConfig {
+export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: string, projectCwd?: string): MochiConfig {
   if (!process.env.VITEST && !process.env.MOCHI_SKIP_DOTENV) {
     loadEnvFiles();
   }
@@ -123,8 +123,19 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
   const user = readJsonFile(configPath ?? process.env.MOCHI_CONFIG_PATH ?? resolve(cfg.configDir, 'config.json'));
   if (user) merge(cfg as unknown as Record<string, unknown>, user);
 
-  // Project-level configurations (mochi.json, .mochi/config.json, .mcp.json)
-  const cwd = process.cwd();
+  // Project-level configurations (mochi.json, .mochi/config.json, .mcp.json).
+  // B26: resolve against the RUNTIME'S directory, not blindly process.cwd() —
+  // SDK consumers (Mochi.create({cwd})), the daemon and embedded embeddings
+  // target a project whose mochi.json/.mcp.json was silently ignored when the
+  // process cwd differed. Priority: explicit projectCwd param (Runtime passes
+  // its resolved cwd), else MOCHI_PROJECT_DIR when absolute, else the process
+  // cwd (plain CLI/TUI behavior unchanged).
+  const cwd = projectCwd
+    ?? (process.env.MOCHI_PROJECT_DIR && resolve(process.env.MOCHI_PROJECT_DIR) === process.env.MOCHI_PROJECT_DIR
+        ? process.env.MOCHI_PROJECT_DIR
+        : process.cwd());
+  // B26: MOCHI_PROJECT_DIR is ALSO the workspace-dir override (line ~258), so
+  // it relocates the project-config reads too — not just cfg.projectDir.
   const projectMochi = readJsonFile(resolve(cwd, 'mochi.json')) ?? readJsonFile(resolve(cwd, '.mochi', 'config.json'));
   if (projectMochi) merge(cfg as unknown as Record<string, unknown>, projectMochi);
 
@@ -158,9 +169,14 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
     const prov = PROVIDERS.find((pr) => pr.id === cfg.model.provider.toLowerCase());
     const userModel = (user as { model?: { baseUrl?: string; model?: string; profiles?: Record<string, string> } } | undefined)?.model;
     const envMc = envModelConfig();
-    if (prov && cfg.model.baseUrl && !userModel?.baseUrl && !envMc.baseUrl) {
+    // B26: the project mochi.json's model counts as "explicitly set" here —
+    // without this, the derivation below overwrote a project-selected model
+    // (project file merges BEFORE this block, but userModel only inspects the
+    // USER config file).
+    const projectModel = (projectMochi as { model?: { baseUrl?: string; model?: string } } | undefined)?.model;
+    if (prov && cfg.model.baseUrl && !userModel?.baseUrl && !envMc.baseUrl && !projectModel?.baseUrl) {
       cfg.model.baseUrl = prov.baseUrl;
-      if (!userModel?.model) cfg.model.model = prov.defaultModel;
+      if (!userModel?.model && !projectModel?.model) cfg.model.model = prov.defaultModel;
       const ownedProfiles = userModel?.profiles ?? cfg.model.profiles;
       if (!ownedProfiles || Object.values(ownedProfiles).every((m) => typeof m === 'string' && m.includes('/'))) {
         cfg.model.profiles = {

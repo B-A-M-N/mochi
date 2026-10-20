@@ -71,8 +71,13 @@ export class Runtime {
   private extraTools = new Map<string, import('./tools/types.js').Tool>();
 
   constructor(opts: RuntimeOptions = {}) {
-    this.config = loadConfig(opts.config);
+    // B26: resolve the runtime cwd BEFORE loadConfig — project-level configs
+    // (mochi.json, .mcp.json) must be read from the directory the runtime
+    // targets, and the old order read them from process.cwd() because this.cwd
+    // was still unassigned (SDK/daemon consumers with a different cwd silently
+    // lost the target project's config).
     this.cwd = opts.cwd ?? process.cwd();
+    this.config = loadConfig(opts.config, undefined, this.cwd);
     this.events = new EventBus();
     const projectRoot = findProjectRoot(this.cwd);
     this.workspace = new Workspace(projectRoot, this.config.projectDir);
@@ -90,7 +95,7 @@ export class Runtime {
 
     const projectConfig = loadProjectConfig(this.workspace.dir);
     if (Object.keys(projectConfig).length) {
-      this.config = loadConfig({ ...projectConfig, ...opts.config });
+      this.config = loadConfig({ ...projectConfig, ...opts.config }, undefined, this.cwd);
     }
     // The goal engine captures the config object at construction. If project
     // configuration replaced Runtime.config above, refresh that reference so
@@ -818,7 +823,8 @@ export class Runtime {
   }
 
   reloadConfig() {
-    this.config = loadConfig({} as Partial<MochiConfig>);
+    // B26: keep the runtime-cwd project-config resolution across reloads.
+    this.config = loadConfig({} as Partial<MochiConfig>, undefined, this.cwd);
     this.syncEngines();
   }
 
