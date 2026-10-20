@@ -844,10 +844,16 @@ Return ONLY the JSON array, no markdown.`;
     this.recordSave(goal, task, result, context, sessionId);
     await this.hooks.runAfter('after_agent', { agent: this.agentId(task), task: task.id, success: String(result.success) });
 
-    // Record the task as completed on shared state. This must be atomic: under
-    // parallel agents a load()-push-save() race would drop siblings' entries.
-    // appendCompletedTask serializes the read-modify-write and dedups by title.
-    await this.workspace.appendCompletedTask(task.title);
+    // Record the task as completed on shared state — ONLY on success. B18:
+    // the old call was unconditional, so failed tasks (verification failed,
+    // model error, aborted) landed in a ledger whose only semantic is
+    // "completed"; context.ts then surfaced failed work to future sessions
+    // as "Completed tasks: X". This must still be atomic under parallel
+    // agents: appendCompletedTask serializes the read-modify-write and dedups
+    // by title.
+    if (result.success) {
+      await this.workspace.appendCompletedTask(task.title);
+    }
 
     return result;
   }
