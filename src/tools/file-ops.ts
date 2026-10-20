@@ -1,6 +1,7 @@
 import type { Tool } from './types.js';
 import { mkdirSync, renameSync, copyFileSync, cpSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
+import { markMutation } from './fs-signal.js';
 
 export const mkdirTool: Tool = {
   def: {
@@ -53,6 +54,9 @@ export const moveFileTool: Tool = {
     try {
       mkdirSync(dirname(fullDest), { recursive: true });
       renameSync(fullSrc, fullDest);
+      // Bump the mutation fence: a move changes which paths hold which
+      // content; generation-keyed caches (search/inspect) must invalidate.
+      markMutation();
       return `[OK] Moved "${src}" → "${dest}".`;
     } catch (err) {
       return `Error moving file: ${err instanceof Error ? err.message : String(err)}`;
@@ -90,6 +94,9 @@ export const copyFileTool: Tool = {
       } else {
         copyFileSync(fullSrc, fullDest);
       }
+      // Bump the mutation fence: the copy's content is now visible at a new
+      // path; generation-keyed caches (search/inspect) must invalidate.
+      markMutation();
       return `[OK] Copied "${src}" → "${dest}".`;
     } catch (err) {
       return `Error copying: ${err instanceof Error ? err.message : String(err)}`;

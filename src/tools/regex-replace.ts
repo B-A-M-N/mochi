@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Tool } from './types.js';
 import { atomicWriteFileSync } from '../core/atomic-fs.js';
+import { markMutation } from './fs-signal.js';
 
 export const regexReplaceTool: Tool = {
   def: {
@@ -67,6 +68,9 @@ export const regexReplaceTool: Tool = {
 
     atomicWriteFileSync(fullPath, modified);
     ctx.events?.emit({ type: 'file:changed', path: fullPath, operation: 'edit', agentId: ctx.agentId });
+    // Bump the mutation fence: generation-keyed caches (search/inspect) must
+    // not serve stale results after this write.
+    markMutation();
     return `Replaced ${matchCount} occurrence(s) of /${pattern}/${flags} in ${rawPath}.`;
   },
 };

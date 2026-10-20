@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { atomicWriteFileSync } from '../core/atomic-fs.js';
+import { markMutation } from './fs-signal.js';
 import type { Tool } from './types.js';
 
 interface NbCell {
@@ -74,6 +75,9 @@ function loadNotebook(fullPath: string, rawPath: string): { nb: Notebook; cells:
 
 function saveNotebook(fullPath: string, nb: Notebook): void {
   atomicWriteFileSync(fullPath, JSON.stringify(nb, null, 1) + '\n');
+  // Bump the mutation fence: generation-keyed caches (search/inspect) must
+  // not serve stale results after this write.
+  markMutation();
 }
 
 function checkIndex(cells: NbCell[], index: unknown): number {

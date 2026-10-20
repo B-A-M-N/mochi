@@ -1,5 +1,6 @@
 import type { Tool } from './types.js';
 import { classifyCommand } from '../security/security.js';
+import { markMutation } from './fs-signal.js';
 
 // Accumulation guard only (memory safety against firehose output). The final
 // RESULT the model sees is clipped to the shared tool-result budget by
@@ -168,6 +169,11 @@ export const shellTool: Tool = {
       `stdout:\n${r.stdout || '(empty)'}`,
       `stderr:\n${r.stderr || '(empty)'}`,
     ].join('\n'));
+    // Bump the mutation fence unconditionally: a shell command may write,
+    // move, or delete arbitrary files outside the tool layer's knowledge.
+    // Generation-keyed caches (search/inspect) must not serve stale results
+    // after any command execution.
+    markMutation();
     if (r.timedOut) return out + `\n[command timed out after ${timeoutMs / 1000}s]`;
     if (r.cancelled) return out + '\n[command was cancelled]';
     return out;
