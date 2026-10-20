@@ -20,6 +20,20 @@ import { resolve } from 'node:path';
 import { Runtime } from './runtime.js';
 import type { MochiConfig } from './types.js';
 
+// Hermeticity: the Runtime constructor reads the USER config via
+// MOCHI_CONFIG_PATH (config.ts:116) — on a machine with a real
+// ~/.config/mochi/config.json, validateConfig would fail on ambient settings
+// (e.g. a url-only MCP server) before our assertions run. Point it at a
+// nonexistent path so no user config merges, regardless of the host.
+function isolateUserConfig(): () => void {
+  const saved = process.env.MOCHI_CONFIG_PATH;
+  process.env.MOCHI_CONFIG_PATH = resolve(tmpdir(), 'b26-nonexistent-config.json');
+  return () => {
+    if (saved === undefined) delete process.env.MOCHI_CONFIG_PATH;
+    else process.env.MOCHI_CONFIG_PATH = saved;
+  };
+}
+
 function baseConfig(): MochiConfig {
   return {
     model: { provider: 'openai', baseUrl: 'http://localhost:1', model: 'fake-model' },
@@ -33,6 +47,7 @@ function baseConfig(): MochiConfig {
 
 describe('project config resolution follows the runtime cwd (B26)', () => {
   it('Runtime with opts.cwd loads that project mochi.json even when process.cwd differs', () => {
+    const restoreEnv = isolateUserConfig();
     const project = mkdtempSync(resolve(tmpdir(), 'mochi-b26-proj-'));
     const elsewhere = mkdtempSync(resolve(tmpdir(), 'mochi-b26-else-'));
     const savedCwd = process.cwd();
@@ -50,12 +65,14 @@ describe('project config resolution follows the runtime cwd (B26)', () => {
       try { rt.close(); } catch { /* best-effort */ }
     } finally {
       process.chdir(savedCwd);
+      restoreEnv();
       rmSync(project, { recursive: true, force: true });
       rmSync(elsewhere, { recursive: true, force: true });
     }
   });
 
   it('explicit overrides still beat the project file', () => {
+    const restoreEnv = isolateUserConfig();
     const project = mkdtempSync(resolve(tmpdir(), 'mochi-b26-proj2-'));
     try {
       writeFileSync(resolve(project, 'mochi.json'), JSON.stringify({ model: { model: 'b26-marker-model' } }));
@@ -66,6 +83,7 @@ describe('project config resolution follows the runtime cwd (B26)', () => {
       expect(rt.config.model.model).toBe('explicit-model');
       try { rt.close(); } catch { /* best-effort */ }
     } finally {
+      restoreEnv();
       rmSync(project, { recursive: true, force: true });
     }
   });

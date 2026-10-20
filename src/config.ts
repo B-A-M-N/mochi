@@ -127,7 +127,7 @@ export function loadConfig(overrides: Partial<MochiConfig> = {}, configPath?: st
     ?? (process.env.MOCHI_PROJECT_DIR && resolve(process.env.MOCHI_PROJECT_DIR) === process.env.MOCHI_PROJECT_DIR
         ? process.env.MOCHI_PROJECT_DIR
         : process.cwd());
-  // B26: MOCHI_PROJECT_DIR is ALSO the workspace-dir override (line ~251), so
+  // B26: MOCHI_PROJECT_DIR is ALSO the workspace-dir override (line ~258), so
   // it relocates the project-config reads too — not just cfg.projectDir.
   const projectMochi = readJsonFile(resolve(cwd, 'mochi.json')) ?? readJsonFile(resolve(cwd, '.mochi', 'config.json'));
   if (projectMochi) merge(cfg as unknown as Record<string, unknown>, projectMochi);
