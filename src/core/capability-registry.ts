@@ -120,16 +120,22 @@ import { isFetchMutationRequest } from '../tools/fetch-methods.js';
 
 const READ_ONLY_TOOLS = new Set([
   'read', 'search', 'glob', 'inspect', 'git', 'diff', 'tree',
-  'get_function', 'find_callers', 'type_hierarchy', 'verify', 'perf_audit',
+  'get_function', 'find_callers', 'type_hierarchy', 'perf_audit',
   'deepwiki', 'clipboard', 'sql_codebase', 'analyze_code', 'memory',
   'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
   'find_references', 'find_definitions', 'db_inspect', 'think',
 ]);
+// 'verify' is deliberately ABSENT: it has permission:'shell', dangerous:true,
+// and executes its command argument verbatim (tools/verify.ts runs the
+// command verbatim, builds/tests write dist/, coverage, and test side
+// effects). Restored here because the upstream merge of the fetch fix
+// (7e14a6e) was based on a pre-#22 parent and silently reverted the removal
+// — main's own capability.test.ts regression assertion fails on main.
 // 'fetch' is deliberately ABSENT: its method arg selects POST/PUT/PATCH/
 // DELETE, which mutate REMOTE state (tools/fetch.ts), and this static flag is
 // arg-blind — mutating requests must not ride the concurrent read-only
 // Promise.allSettled batch. B27 restructure: the arg-blind static flag keeps
-// fetch (and verify) OUT of the batch, but toolToCapability supplies an
+// fetch OUT of the batch, but toolToCapability supplies an
 // isReadOnlyForArgs predicate so the dispatcher can admit the READ-ONLY
 // calls (GET/HEAD fetch) into parallel execution while mutating ones still
 // run sequentially.
@@ -141,7 +147,8 @@ const READ_ONLY_FOR_ARGS: Record<string, (args: Record<string, unknown>) => bool
   // yet they write artifacts and execute arbitrary project scripts. A curated
   // read-only command allowlist would be the only sound predicate, and the
   // parallelism win for a tool that usually runs alone does not justify that
-  // surface. verify stays fully sequential (static flag).
+  // surface. verify stays fully mutating here (its plan-mode restrictions are
+  // loop-level).
 };
 
 export function toolToCapability(tool: Tool): Capability {
