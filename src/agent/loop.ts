@@ -15,6 +15,7 @@ import { isMode, modeInstruction } from '../modes.js';
 
 import { executeTool, buildTools, TOOL_ALIASES, normalizeToolArgs, trimHeavyTools, CHAT_TOOL_NAMES } from '../tools/index.js';
 import { refreshAuthoredTools, RESERVED_TOOL_NAMES } from '../tools/tool-factory.js';
+import { isFetchMutationRequest } from '../tools/fetch-methods.js';
 import type { ToolContext, ReadCache } from '../tools/types.js';
 import { detectRepo, languageHint } from '../repo/repo.js';
 import { classifyTaskKind, resolveAutoReasoning, isTrivialWriteTask, isSimpleScriptTask, isReviewTask, scoreTaskComplexity, shouldEscalateComplexity } from '../core/taskkind.js';
@@ -1677,9 +1678,10 @@ Continue from 'Next:', do not redo completed progress.`,
           if (!acc || !acc.name || !acc.id) return;
           if (this.midStreamExecutedIds.has(acc.id)) return;
           // Only fire when the args buffer is complete JSON.
-          try { JSON.parse(acc.args); } catch { return; }
+          let specArgs: Record<string, unknown> | undefined;
+          try { specArgs = JSON.parse(acc.args); } catch { return; }
           const canonical = TOOL_ALIASES[acc.name] || acc.name;
-          if (!this.isReadOnly(canonical)) return;
+          if (!this.isReadOnly(canonical, specArgs)) return;
           this.midStreamExecutedIds.add(acc.id);
           const call: ToolCall = { id: acc.id, type: 'function', function: { name: acc.name, arguments: acc.args } };
           midStreamPromises.push(this.specExecCall(call));
@@ -2488,7 +2490,7 @@ Continue from 'Next:', do not redo completed progress.`,
         // Read-only is an ALLOWLIST: anything not explicitly read-only (shell,
         // write/edit/delete/patch, git, MCP tools, ...) is vetoed.
         if (this.planMode) {
-          const isMutating = (c: ToolCall) => !this.isReadOnly(c.function.name);
+          const isMutating = (c: ToolCall) => !this.isReadOnly(c.function.name, this.parseArgs(c.function.arguments));
           if (response.toolCalls.some(isMutating)) {
             this.planVetoes++;
             // Mixed batches: run the read-only calls so their ids are answered,
@@ -2553,7 +2555,7 @@ Continue from 'Next:', do not redo completed progress.`,
                    this.recentToolSignatures[rLen - 3] === this.recentToolSignatures[rLen - 6]) {
           isCycle = true;
         }
-        const isAllReadOnly = response.toolCalls.every((c) => this.isReadOnly(c.function.name));
+        const isAllReadOnly = response.toolCalls.every((c) => this.isReadOnly(c.function.name, this.parseArgs(c.function.arguments)));
         // MCH-78: failure-cluster dedup — the same tool signature producing the
         // same error 2+ times is a failed cluster: don't let the model re-run it
         // verbatim again. Compares against prevSig (captured before lastSig
@@ -2630,7 +2632,7 @@ Continue from 'Next:', do not redo completed progress.`,
           let sameErrorRepeats = 0;
           for (const c of response.toolCalls) {
             const canonical = TOOL_ALIASES[c.function.name] || c.function.name;
-            if (this.isReadOnly(canonical)) continue; // never abort on read-only gathering
+            if (this.isReadOnly(canonical, this.parseArgs(c.function.arguments))) continue; // never abort on read-only gathering
             mutatingRepeats++;
             mutatingTool = canonical;
             const errInfo = this.consecutiveToolErrors.get(canonical);
@@ -3329,8 +3331,11 @@ Continue from 'Next:', do not redo completed progress.`,
     return false;
   }
 
-  private isReadOnly(name: string): boolean {
+  private isReadOnly(name: string, args?: Record<string, unknown>): boolean {
     const canonical = TOOL_ALIASES[name] || name;
+    // B27: fetch POST/PUT/PATCH/DELETE mutate REMOTE state — never treat them
+    // as read-only regardless of the allowlist below (GET/HEAD still are).
+    if (isFetchMutationRequest(canonical, args)) return false;
     // Allowlist of non-mutating tools. Note: MCP resource tools registered as
     // <server>__resources_list/read are read-only by construction.
     return [
@@ -3375,7 +3380,7 @@ Continue from 'Next:', do not redo completed progress.`,
     // arm the git probe so shellMovedWorkspace() re-checks on the next gate.
     // Failed calls count too: partial shell mutations are exactly the case
     // fileChanged misses.
-    if (!this.isReadOnly(canonical)) this.shellProbePending = true;
+    if (!this.isReadOnly(canonical, args)) this.shellProbePending = true;
     if (['write', 'edit', 'delete', 'patch'].includes(canonical)) {
       if (toolResult?.error) {
         this.failedMutation = true;
@@ -3472,9 +3477,9 @@ Continue from 'Next:', do not redo completed progress.`,
       const headName = TOOL_ALIASES[head.function.name] || head.function.name;
       // 1. Read-only group: run up to 16 in parallel. Bumped from 8 because
       // a real codebase-wide read often needs 10+ files in one turn.
-      if (this.isReadOnly(headName)) {
+      if (this.isReadOnly(headName, this.parseArgs(head.function.arguments))) {
         let n = 0;
-        while (n < batch.length && n < 16 && this.isReadOnly(batch[n].function.name)) n++;
+        while (n < batch.length && n < 16 && this.isReadOnly(batch[n].function.name, this.parseArgs(batch[n].function.arguments))) n++;
         const group = batch.splice(0, Math.max(n, 1));
         await Promise.all(group.map((tc) => this.runMoolCall(tc)));
         continue;

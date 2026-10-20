@@ -1,5 +1,7 @@
 import type { Tool } from './types.js';
 import { clipToolOutput } from './output-budget.js';
+import { isFetchMutationRequest } from './fetch-methods.js';
+import { markMutation } from './fs-signal.js';
 
 const MAX_BYTES = 64 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
@@ -66,6 +68,9 @@ export const fetchTool: Tool = {
     const allowPrivate = args.allow_private === true || args.allow_private === 'true';
     const safeUrl = assertPublicUrl(url, allowPrivate);
     const method = String(args.method ?? 'GET').toUpperCase();
+    // B27: POST/PUT/PATCH/DELETE mutate REMOTE state — remember it so the
+    // fence bumps after the request completes.
+    const mutatesRemote = isFetchMutationRequest('fetch', args);
     let headers: Record<string, string> = {};
     if (args.headers) {
       try {
@@ -79,6 +84,10 @@ export const fetchTool: Tool = {
     const res = await fetch(safeUrl, init);
     const status = `HTTP ${res.status} ${res.statusText}`;
     const rawText = await res.text();
+    // B27: the request just mutated remote state — bump the fence so
+    // generation-keyed local caches (search, inspect) can't serve pre-request
+    // results across it. Mirrors shell's unconditional post-command bump.
+    if (mutatesRemote) markMutation();
     // 64KB stream guard stays; below that the shared budget applies
     // (head+tail clip) so fetched pages don't eat the context budget either.
     const text = rawText.length > MAX_BYTES ? rawText.slice(0, MAX_BYTES) + '\n... [truncated]' : rawText;
