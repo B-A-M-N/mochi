@@ -2,10 +2,11 @@
 // Allows users and agents to save immutable snapshots of working code before risky changes
 // and roll back cleanly to named points in time without losing work outside the project.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runArgv } from '../exec.js';
 import { mochiStateDir } from '../core/mochi-dir.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface NamedCheckpoint {
   name: string;
@@ -84,7 +85,10 @@ export async function saveNamedCheckpoint(
   };
 
   const filePath = resolve(dir, `${cleanName}.json`);
-  writeFileSync(filePath, JSON.stringify(checkpoint, null, 2), 'utf8');
+  // B20: atomic tmp+rename write. A crash/SIGKILL mid-write used to tear the
+  // checkpoint JSON — every later restore of that name threw a raw
+  // SyntaxError instead of restoring.
+  atomicWriteFileSync(filePath, JSON.stringify(checkpoint, null, 2));
   return checkpoint;
 }
 
@@ -120,7 +124,20 @@ export async function restoreNamedCheckpoint(
     return { success: false, message: `Checkpoint "${name}" not found.` };
   }
 
-  const checkpoint = JSON.parse(readFileSync(filePath, 'utf8')) as NamedCheckpoint;
+  let checkpoint: NamedCheckpoint;
+  try {
+    checkpoint = JSON.parse(readFileSync(filePath, 'utf8')) as NamedCheckpoint;
+  } catch (err) {
+    // B20: a torn checkpoint file (crash mid-save) must produce a clean
+    // failure, not a raw SyntaxError that crashes `mochi checkpoint restore`.
+    return {
+      success: false,
+      message: `Checkpoint "${name}" is corrupt (unreadable JSON — likely a torn save). It cannot be restored; delete it with \`mochi checkpoint delete ${name}\`. (${err instanceof Error ? err.message : String(err)})`,
+    };
+  }
+  if (!checkpoint || typeof checkpoint !== 'object') {
+    return { success: false, message: `Checkpoint "${name}" is corrupt (not a checkpoint object).` };
+  }
 
   // Nothing to restore (e.g. saved outside a git repo: sha 'uncommitted' and
   // an empty patch) — reporting success here was a pure lie.
@@ -146,7 +163,7 @@ export async function restoreNamedCheckpoint(
     // 2. If there was a dirty working tree patch, re-apply it cleanly
     if (checkpoint.patch) {
       const tempPatchPath = resolve(dir, `_temp_${Date.now()}.patch`);
-      writeFileSync(tempPatchPath, normalizePatch(checkpoint.patch), 'utf8');
+      atomicWriteFileSync(tempPatchPath, normalizePatch(checkpoint.patch));
       const r = await runGitChecked(cwd, ['apply', tempPatchPath]);
       try { unlinkSync(tempPatchPath); } catch {}
       if (!r.ok) {

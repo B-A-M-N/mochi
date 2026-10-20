@@ -69,5 +69,34 @@ describe('Named Checkpoint Manager', () => {
       expect(res.success).toBe(true);
       expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v3\n');
     });
+
+    it('returns a clean failure (not a throw) when the stored checkpoint JSON is torn/corrupt (B20)', async () => {
+      // Simulate a checkpoint file torn by a crash mid-save: invalid JSON.
+      const { writeFileSync: wf } = await import('node:fs');
+      wf(join(dir, '.mochi', 'checkpoints', 'torn.json'), '{"name":"torn","patch":"TRUNCATED', 'utf8');
+
+      // The old code called JSON.parse outside its try block: the raw
+      // SyntaxError propagated and crashed `mochi checkpoint restore` with a
+      // stack trace instead of a clean failure message.
+      const res = await restoreNamedCheckpoint(dir, 'torn');
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('torn');
+      expect(res.message).toContain('corrupt');
+    });
+
+    it('leaves no torn file behind: save is atomic (temp+rename) (B20)', async () => {
+      const { readdirSync } = await import('node:fs');
+      const cpDir = join(dir, '.mochi', 'checkpoints');
+      writeFileSync(join(dir, 'a.txt'), 'v4\n');
+      await saveNamedCheckpoint(dir, 'atomic-save', 'atomicity check');
+      // After a completed save the directory holds ONLY checkpoint JSON files
+      // — no .tmp siblings (a torn .tmp next to the final file means a
+      // non-atomic direct write happened).
+      const entries = readdirSync(cpDir).filter((f) => !f.endsWith('.json'));
+      expect(entries).toEqual([]);
+      // And the stored file parses.
+      const parsed = JSON.parse(readFileSync(join(cpDir, 'atomic-save.json'), 'utf8'));
+      expect(parsed.name).toBe('atomic-save');
+    });
   });
 });
