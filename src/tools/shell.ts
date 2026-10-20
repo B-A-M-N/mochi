@@ -1,7 +1,7 @@
 import type { Tool } from './types.js';
 import { classifyCommand } from '../security/security.js';
 import { markMutation } from './fs-signal.js';
-import { detectBubblewrap, type SandboxOptions } from '../exec.js';
+import { detectBubblewrap } from '../exec.js';
 
 /** B31 restructure decision table for the safe-mode risk gate. Returns:
  *  - 'block'         : refuse the command (no sandbox for an elevated-risk
@@ -23,7 +23,6 @@ export function resolveBackgroundRiskAction(
   if (background && sandboxAvailable) return 'run-sandboxed';
   return 'block';
 }
-export type { SandboxOptions };
 
 // Accumulation guard only (memory safety against firehose output). The final
 // RESULT the model sees is clipped to the shared tool-result budget by
@@ -119,9 +118,13 @@ export const shellTool: Tool = {
     // B31 restructure: safe mode no longer blocks elevated-risk BACKGROUND
     // commands outright when an OS sandbox is available — long-lived
     // watchers/servers (the legitimate background workload) are often
-    // network-touching, and the sandbox contains exactly what safe mode
-    // fears. Sandboxed-with-log replaces the block; when no sandbox backend
-    // exists the block stands (fail closed), with the reason in the message.
+    // network-touching, and the bwrap sandbox contains the FILESYSTEM
+    // (read-only root, writable cwd/tmp), the axis safe mode's destructive
+    // classifications care about most. Note its limits: network stays open
+    // and the home tree is readable, so this is containment, not
+    // exfiltration-proofing. Sandboxed-with-log replaces the block; when no
+    // sandbox backend exists the block stands (fail closed), with the reason
+    // in the message.
     const risk = classifyCommand(command);
     const isSafeMode = ctx.config.safety.mode === 'safe';
     const isBackground = args.background === true;
