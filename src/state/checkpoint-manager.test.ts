@@ -69,5 +69,24 @@ describe('Named Checkpoint Manager', () => {
       expect(res.success).toBe(true);
       expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v3\n');
     });
+
+    it('rolls back the workspace when the stored patch cannot be re-applied (failed restore destroys nothing)', async () => {
+      // Newer uncommitted work on top of the checkpointed state. A failed
+      // restore must leave this intact.
+      writeFileSync(join(dir, 'a.txt'), 'v4\n');
+      const cp = await saveNamedCheckpoint(dir, 'snap-corrupt', 'before corrupting test');
+      // Simulate a corrupt/torn stored patch (a real bug class: silent diff
+      // truncation). git apply will reject it AFTER the reset --hard already
+      // destroyed the v4 work — the old ordering left the tree at the bare
+      // checkpoint commit with the newer work gone and success:false.
+      const { writeFileSync: wf, readFileSync: rf } = await import('node:fs');
+      wf(join(dir, '.mochi', 'checkpoints', 'snap-corrupt.json'), JSON.stringify({ ...cp, patch: 'corrupt garbage' }), 'utf8');
+
+      const res = await restoreNamedCheckpoint(dir, 'snap-corrupt');
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('rolled back');
+      // The pre-restore state must survive the failed restore.
+      expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v4\n');
+    });
   });
 });
