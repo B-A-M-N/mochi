@@ -148,7 +148,12 @@ describe('Mochi SDK programmatic tools + hooks + cancellation', () => {
   }, 30_000);
 
   it('prompt accepts an AbortSignal and stops before a slow provider responds', async () => {
-    const mochi = await setup([{ content: 'late reply', finishReason: 'stop', delayMs: 4000 }]);
+    // delayMs=8000 gives the <3500ms abort assertion a huge margin: if the
+    // signal were NOT honored, prompt() couldn't return before ~8s (the fake
+    // provider's delay), so passing the threshold proves the abort fired even
+    // under full-suite CPU load (the old 4000ms delay raced teardown and
+    // flaked at 3881ms vs the 3500ms bar).
+    const mochi = await setup([{ content: 'late reply', finishReason: 'stop', delayMs: 8000 }]);
     const ac = new AbortController();
     const t0 = Date.now();
     const p = mochi.prompt('Say hello to the user', { signal: ac.signal });

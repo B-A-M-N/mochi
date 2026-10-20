@@ -95,6 +95,8 @@ const COMMANDS = [
   { name: '/welcome', hint: 'Show welcome screen and setup wizard' },
   { name: '/expand', hint: 'Inspect uncompressed code, hidden reasoning & tool output (or press Ctrl+O)' },
   { name: '/clear', hint: 'Clear transcript' },
+  { name: '/update', hint: 'Check GitHub releases & upgrade Mochi (/update --check to only look)' },
+  { name: '/version', hint: 'Show version, install style & update status' },
   { name: '/copy', hint: 'Copy last assistant message to clipboard (works without mouse)' },
   { name: '/model', hint: 'Select AI model provider & model' },
   { name: '/reasoning', hint: 'Adjust reasoning effort & compute (low, medium, high, max)' },
@@ -168,6 +170,20 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     scheduleRender();
   });
   let modelShort = runtime.config.model.model.split('/').pop() ?? runtime.config.model.model;
+
+  // Background update check — never blocks or delays startup. When a new
+  // GitHub release exists, drop a notice into the transcript suggesting
+  // /update. Cached 24h; silent on any failure (offline, rate-limit).
+  {
+    const { checkForUpdate, updateNoticeText } = await import('../update-check.js');
+    void checkForUpdate(pkg.version).then((info) => {
+      const notice = updateNoticeText(info);
+      if (notice) {
+        push('system', notice + (info.url ? `\n${info.url}` : ''));
+        scheduleRender();
+      }
+    }).catch(() => { /* silent — update check must never disturb a session */ });
+  }
 
   // Paint the saved theme immediately on launch. NOTE: never persist here —
   // persisting a fallback-resolved theme would CLOBBER the user's files when
@@ -1920,6 +1936,47 @@ export async function launchTui(runtime: Runtime, initialPrompt?: string): Promi
     if (line === '/known-good') { await view(async () => runtime.recordGood()); return; }
     if (line === '/check') { await view(async () => runtime.knownGood()); return; }
     if (line === '/providers' || line.startsWith('/providers ')) { await providerMenu(line); return; }
+    if (line === '/update' || line.startsWith('/update ') || line === '/version' || line.startsWith('/version ')) {
+      // /update [--check] — query GitHub releases; without --check, also APPLY
+      // (git pull + npm ci + build, or install.sh). /version shows the same
+      // status without applying anything.
+      const { checkForUpdate, applyUpdate, detectInstallStyle } = await import('../update-check.js');
+      const isVersion = line.startsWith('/version');
+      const checkOnly = isVersion || line.includes('--check');
+      const info = await checkForUpdate(pkg.version, { force: !isVersion });
+      const style = detectInstallStyle(projectRoot);
+      if (isVersion) {
+        push('system', [
+          `Mochi v${pkg.version}  (${style === 'git' ? 'git checkout' : 'installer install'} at ${projectRoot})`,
+          info.source === 'none'
+            ? 'Latest release: unknown (check failed — offline or rate-limited).'
+            : info.available
+              ? `Latest release: v${info.latest} — UPDATE AVAILABLE${info.url ? ` ${info.url}` : ''}`
+              : `Latest release: v${info.latest} — up to date.`,
+        ].join('\n'));
+        scheduleRender();
+        return;
+      }
+      if (!info.available) {
+        push('system', info.source === 'none'
+          ? 'Could not reach GitHub to check for updates (offline or rate-limited).'
+          : `Already up to date (v${pkg.version}, latest release v${info.latest}).`);
+        scheduleRender();
+        return;
+      }
+      push('system', `New release available: v${info.latest} (you have v${pkg.version})${info.url ? `\n${info.url}` : ''}${info.notes ? `\n--- release notes (truncated) ---\n${info.notes.split('\n').slice(0, 12).join('\n')}` : ''}`);
+      if (checkOnly) {
+        push('system', 'This was a check-only look (no changes made). Run /update (no --check) to install it now.');
+        scheduleRender();
+        return;
+      }
+      push('system', 'Updating Mochi — this pulls, installs deps and rebuilds. It can take a few minutes...');
+      scheduleRender();
+      const result = await applyUpdate(projectRoot, (l) => { push('system', l); scheduleRender(); });
+      push(result.ok ? 'system' : 'error', result.detail);
+      scheduleRender();
+      return;
+    }
     if (line === '/login' || line === '/provider') { await loginFlow(); return; }
     if (line === '/onboard' || line === '/setup' || line === '/welcome') {
       const { runInteractiveOnboarding } = await import('./onboard-flow.js');
