@@ -16,7 +16,11 @@ import { randomBytes } from 'node:crypto';
  *   - preserves the existing file's permission bits,
  *   - `opts.mode` (B29) forces the mode for the NEW file too — the tmp sibling
  *     is created with it BEFORE the content lands, so secrets (e.g. the
- *     daemon auth token) are never briefly world-readable in flight,
+ *     daemon auth token) are never briefly world-readable in flight. With
+ *     opts.mode set, the symlink fallback is skipped entirely: a symlinked
+ *     target is REPLACED (rename over the link), not followed — no
+ *     symlink-follow write, no mode leak; replace-don't-follow is the safe
+ *     direction.
  *   - falls back to a direct write for symlinks (rename would replace the link
  *     itself, not its target),
  *   - falls back to a direct write if the rename fails for any reason.
