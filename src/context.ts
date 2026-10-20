@@ -831,6 +831,13 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     const RESCUE_TAIL = this.complexPreserve ? 800 : 160;
     const CONTENT_TOOLS = new Set(['read', 'search', 'grep', 'edit', 'patch', 'replace_symbol', 'regex-replace', 'search-replace-multi', 'get_function', 'find_definitions', 'find_references']);
     const evictedDense: { name: string; content: string; tokens: number }[] = [];
+    // B15: the floor is a TARGET, not an override. The old code kept adding
+    // "regardless of budget" below MIN_RECENT, so when the clamped window was
+    // too small to hold 24 dense messages the packet went out OVER budget —
+    // a guaranteed provider 400 that compaction (same floor) could not fix.
+    // Keep adding past the budget line only while the packet is still under
+    // budget; ALWAYS keep the newest turn (the active working set).
+    const floorTokens = approxTokens(baseSystemPrompt) + Math.floor(this.budget * 0.1);
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const m = this.messages[i];
       const tokens = cachedMessageTokens(m);
@@ -852,7 +859,12 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
         // Do NOT add to `recent` once over budget; only scan for rescue.
         if (recent.length >= MIN_RECENT && evictedDense.length < RESCUE_MAX) continue;
         if (recent.length >= MIN_RECENT) break;
-        // fall through (below MIN_RECENT): keep adding regardless of budget
+        // Below MIN_RECENT: keep adding while ANY budget remains, but never
+        // push the packet past the budget line (B15) — stop once `remaining`
+        // is exhausted, minus a small floor reserve for the trailing state
+        // message. The newest turn is still always kept (loop reaches i=0
+        // last, and the final message is added even when this guard fires).
+        if (remaining - tokens < -floorTokens && recent.length > 0) break;
       }
       remaining -= tokens;
       recent.unshift(m);
@@ -1019,10 +1031,14 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
    *  truth when present; otherwise fall back to the real packet size built by
    *  the last buildPacket() call (system prompt + tools + history — the naive
    *  estimate excludes those); last resort the chars/3.8 estimate. Used for the
-   *  compaction floor. */
+   *  compaction floor. B15: when the floor forced the packet over budget
+   *  (negative `remaining`), lastSentTokens UNDERSTATES what was actually
+   *  sent — clamp the fallback to the budget so the pressure loop still sees
+   *  an over-floor signal and can react (compact/shrink) instead of reading
+   *  a too-small number and doing nothing. */
   effectiveContextTokens(): number {
     if (this.lastReportedPromptTokens != null) return this.lastReportedPromptTokens;
-    if (this.lastSentTokens > 0) return this.lastSentTokens;
+    if (this.lastSentTokens > 0) return Math.max(this.lastSentTokens, this.budget);
     return this.estimateTokens() + 1500;
   }
 
@@ -1043,7 +1059,11 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // size to bother shrinking, and head/tail kept all scale up ~10x. Simple/
     // standard tasks use the original aggressive constants unchanged.
     const preserve = this.complexPreserve;
-    const RECENT_WINDOW = preserve ? 40 : 12;      // never touch the newest turns
+    // B15: the complex window was 40 — so wide that the packet's own recency
+    // floor (24) sat entirely inside the never-shrink zone, and the cheapest
+    // lever against an over-budget packet was locked out. 24 mirrors the
+    // floor: the newest 24 messages stay live, older dense output shrinks.
+    const RECENT_WINDOW = preserve ? 24 : 12;      // never touch the newest turns
     const SHRINK_THRESHOLD = preserve ? 4000 : 600; // chars: outputs below this are already cheap
     const KEEP_HEAD = preserve ? 2000 : 240;
     const KEEP_TAIL = preserve ? 1200 : 160;
@@ -1083,11 +1103,12 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   /** Compute the valid cut index for compaction: prefer the native Rust
    *  planner (identical invariant, computed off the JS hot path) and fall
    *  back to the inlined TS walk when the binary is unavailable (CI, cold
-   *  installs). Never orphans a tool result. */
-  private async planCutIndex(): Promise<number | null> {
-    // Complex tasks retain more recency through compaction (16 vs 6 messages):
-    // dropping to a 6-message window mid-refactor strands the code under change.
-    const keep = this.complexPreserve ? 24 : 12;
+   *  installs). Never orphans a tool result. B15: `keepFloor` lets a caller
+   *  compact BELOW the default recency floor (context-limit recovery with a
+   *  tightened budget) — the old hard-coded floor made compaction a no-op
+   *  exactly when the packet was over budget and needed to shrink most. */
+  private async planCutIndex(keepFloor = this.complexPreserve ? 24 : 12): Promise<number | null> {
+    const keep = keepFloor;
     if (this.messages.length <= keep) return null;
     const native = await nativePlanCompaction(this.messages as PlanRequestMessage[], keep);
     if (typeof native?.cut === 'number' && native.cut > 0 && native.cut < this.messages.length) {
@@ -1119,15 +1140,18 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     return this.messages.slice(0, cutIndex);
   }
 
-  async compact(checkpoint?: string) {
+  async compact(checkpoint?: string, keepFloor?: number) {
     // Tier 1 (micro): drop everything but the recency window and distill small facts.
-    if (this.messages.length <= (this.complexPreserve ? 24 : 12)) return;
+    // B15: an explicit keepFloor (context-limit recovery) may go below the
+    // default complex/simple floor.
+    const floor = keepFloor ?? (this.complexPreserve ? 24 : 12);
+    if (this.messages.length <= floor) return;
 
     // VALID CUT POINTS (Pi insight): a tool result must stay attached to the
     // assistant message that requested it. planCutIndex() enforces that
     // invariant (native Rust planner first, TS walk as fallback) and never
     // orphans a tool result.
-    const cutIndex = await this.planCutIndex();
+    const cutIndex = await this.planCutIndex(floor);
     if (cutIndex === null) return;
     const dropped = this.messages.slice(0, cutIndex);
     this.messages = this.messages.slice(cutIndex);
