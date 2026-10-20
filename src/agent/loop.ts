@@ -2354,6 +2354,12 @@ Continue from 'Next:', do not redo completed progress.`,
           totalTokens: u.totalTokens ?? 0,
           costUsd: this.budget?.snapshot(this.config.model.model).usedCostUsd ?? providerCost,
         });
+      } else {
+        // B25: a response with NO usage object must also reach the context
+        // engine — failover/degraded endpoints stop sending usage, and if
+        // only the zero/undefined reports cleared the sticky value, the last
+        // reported number would freeze the stage-2 compaction gates forever.
+        this.context.recordReportedUsage(undefined);
       }
       // Reset retry counters on any successful model output. stallRetries was
       // previously omitted: a couple early transient timeouts would leave it non-zero

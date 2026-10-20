@@ -1007,15 +1007,15 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   }
 
   /** Phase 4: record real provider usage so the compaction floor can trigger
-   *  on actuals. Callers pass the last response's promptTokens (0/undefined
-   *  ignored — some providers report no usage). B25: a MISSING report now
-   *  CLEARS the previous value instead of leaving it sticky — if the provider
-   *  stops sending usage mid-run (failover, degraded endpoint), the stale
-   *  number froze `effectiveContextTokens()` forever and the stage-2
-   *  compaction gates never fired while the real transcript kept growing.
-   *  The fallback signal (last packet size / chars estimate) is current, so
-   *  a cleared report simply hands control back to it until the provider
-   *  reports again. */
+   *  on actuals. A positive number stores ground truth; 0/undefined (a zeroed
+   *  or missing usage report — some providers send neither) CLEARS the stored
+   *  value. B25: a MISSING report used to leave the previous value sticky —
+   *  if the provider stopped sending usage mid-run (failover, degraded
+   *  endpoint), the stale number froze `effectiveContextTokens()` forever and
+   *  the stage-2 compaction gates never fired while the real transcript kept
+   *  growing. The fallback signal (last packet size / chars estimate) is
+   *  current, so a cleared report simply hands control back to it until the
+   *  provider reports again. */
   recordReportedUsage(promptTokens: number | undefined) {
     if (typeof promptTokens === 'number' && promptTokens > 0) {
       this.lastReportedPromptTokens = promptTokens;
