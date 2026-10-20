@@ -92,6 +92,10 @@ export const shellTool: Tool = {
       const t = startBackgroundTask(command, ctx.cwd, {
         description: typeof args.description === 'string' ? args.description : undefined,
       });
+      // Known fence limitation: the background task mutates files LATER,
+      // outside this synchronous bump's visibility. The bg-status polling
+      // path does not re-check the generation either. Acceptable for now:
+      // background tasks are long-lived watchers/servers, not edit bursts.
       return `${describeTask(t)}\nStarted in background. Continue working; check later with: bg status ${t.id}`;
     }
 

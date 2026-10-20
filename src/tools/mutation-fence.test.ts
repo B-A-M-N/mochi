@@ -87,4 +87,24 @@ describe('mutation fence coverage (B5)', () => {
     expect(out).toContain('exit_code: 0');
     expect(mutationGeneration()).toBeGreaterThan(before);
   });
+
+  it('merge_conflict resolve bumps the fence', async () => {
+    const { mergeConflictTool } = await import('./merge-conflict.js');
+    const p = resolve(dir, 'conflicted.txt');
+    writeFileSync(p, 'line one\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\nline end\n');
+    const before = mutationGeneration();
+    const out = String(await mergeConflictTool.execute({ path: 'conflicted.txt', strategy: 'ours' }, ctx()));
+    expect(out).toContain('Resolved 1');
+    expect(mutationGeneration()).toBeGreaterThan(before);
+  });
+
+  it('preview/dry-run does NOT bump the fence', async () => {
+    const { regexReplaceTool } = await import('./regex-replace.js');
+    const p = resolve(dir, 'rx.txt');
+    writeFileSync(p, 'hello world\n');
+    const before = mutationGeneration();
+    const out = String(await regexReplaceTool.execute({ path: 'rx.txt', pattern: 'world', replacement: 'nope', preview: true }, ctx()));
+    expect(out).toContain('Preview');
+    expect(mutationGeneration()).toBe(before);
+  });
 });

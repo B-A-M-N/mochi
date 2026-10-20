@@ -22,6 +22,10 @@ export const mkdirTool: Tool = {
         return `Directory already exists at "${rawPath}".`;
       }
       mkdirSync(fullPath, { recursive: true });
+      // Bump the mutation fence for strict contract compliance: cheap, and
+      // whether a directory changes search/inspect results is not this
+      // module's call to make.
+      markMutation();
       return `[OK] Created directory "${rawPath}".`;
     } catch (err) {
       return `Error creating directory: ${err instanceof Error ? err.message : String(err)}`;
