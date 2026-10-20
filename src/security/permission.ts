@@ -5,6 +5,7 @@
 import {appendFileSync, mkdirSync} from 'node:fs';
 import {resolve, sep} from 'node:path';
 import { classifyCommand, type CommandRisk } from './security.js';
+import { isFetchMutationRequest } from '../tools/fetch-methods.js';
 
 // ---------------------------------------------------------------------------
 // Policy tiers
@@ -75,7 +76,12 @@ export class PermissionManager {
     if (this.policy === 'yolo') return true;
 
     const readTools = new Set(['read', 'glob', 'search', 'inspect', 'memory', 'git', 'diff', 'tree', 'deepwiki', 'fetch', 'skill', 'todo']);
-    if (readTools.has(req.tool)) return true;
+    if (readTools.has(req.tool)) {
+      // B27: fetch is read-only for GET/HEAD — POST/PUT/PATCH/DELETE mutate
+      // remote state and fall through to the policy gate like other non-read
+      // tools instead of being silently auto-approved.
+      if (!isFetchMutationRequest(req.tool, req.args)) return true;
+    }
 
     if (this.policy === 'workspace-safe') {
       // Allow edits within the project workspace

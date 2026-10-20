@@ -12,6 +12,7 @@
 // trail. Subagents never prompt — they are vetoed on non-approved tools.
 
 import { classifyCommand } from './security.js';
+import { isFetchMutationRequest } from '../tools/fetch-methods.js';
 import type { PermissionPolicy } from './permission.js';
 
 export type ApprovalDecision = 'allow-once' | 'allow-always' | 'deny';
@@ -37,6 +38,14 @@ export function describeApproval(tool: string, args: Record<string, unknown>): {
     const risk = classifyCommand(cmd);
     const short = cmd.length > 120 ? cmd.slice(0, 117) + '…' : cmd;
     return { summary: `$ ${short}`, risk };
+  }
+  if (tool === 'fetch') {
+    // B27: mutating methods get a visible risk tag in the approval menu (the
+    // generic branch below would render just "fetch: <url>" with no risk).
+    const method = typeof args.method === 'string' && args.method.trim() ? args.method.trim().toUpperCase() : 'GET';
+    const url = typeof args.url === 'string' ? args.url : '';
+    const short = url.length > 100 ? url.slice(0, 97) + '…' : url;
+    return { summary: `${method} ${short}`, risk: isFetchMutationRequest('fetch', args) ? 'medium' : 'low' };
   }
   const path = typeof args.path === 'string' && args.path ? args.path
     : typeof args.file === 'string' && args.file ? args.file

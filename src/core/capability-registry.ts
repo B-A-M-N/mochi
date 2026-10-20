@@ -118,16 +118,18 @@ import type { ToolContext } from '../tools/types.js';
 import { ALL_TOOLS, validateArgs } from '../tools/index.js';
 
 const READ_ONLY_TOOLS = new Set([
-  'read', 'search', 'glob', 'inspect', 'git', 'fetch', 'diff', 'tree',
-  'get_function', 'find_callers', 'type_hierarchy', 'perf_audit',
+  'read', 'search', 'glob', 'inspect', 'git', 'diff', 'tree',
+  'get_function', 'find_callers', 'type_hierarchy', 'verify', 'perf_audit',
   'deepwiki', 'clipboard', 'sql_codebase', 'analyze_code', 'memory',
   'web_search', 'get_diagnostics', 'git_blame', 'git_history', 'system_info',
   'find_references', 'find_definitions', 'db_inspect', 'think',
 ]);
-// 'verify' is deliberately ABSENT: it has permission:'shell', dangerous:true,
-// and executes its command argument verbatim (tools/verify.ts). Classifying
-// it read-only let ToolDispatcher run it in the concurrent read-only
-// Promise.allSettled batch while builds/tests mutate the tree.
+// 'fetch' is deliberately ABSENT: its method arg selects POST/PUT/PATCH/
+// DELETE, which mutate REMOTE state (tools/fetch.ts), and this static flag is
+// arg-blind — mutating requests must not ride the concurrent read-only
+// Promise.allSettled batch. GET/HEAD stay read-only in the arg-aware gates
+// (security/permission.ts autoAllow, agent/loop.ts isReadOnly); here fetch
+// pays the sequential-batch fee for correctness.
 
 export function toolToCapability(tool: Tool): Capability {
   const isReadOnly = READ_ONLY_TOOLS.has(tool.def.name);
