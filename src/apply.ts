@@ -27,6 +27,12 @@ export function parseUnifiedDiff(diffText: string): FileOp[] {
   const lines = diffText.split('\n');
   let i = 0;
   const stripA = (p: string) => p.replace(/^[ab]\//, '');
+  // B14: plain `diff -u` output attaches a timestamp to each header path:
+  // "+++ b/new.ts\t2024-01-01 10:00:00.000000000 +0000". The timestamp must be
+  // stripped BEFORE the /dev/null comparison and path extraction, or create
+  // ops write junk files named "new.ts\t2024-01-01..." and update ops never
+  // match the real file.
+  const cleanHeaderPath = (p: string) => p.split('\t')[0].trim();
   while (i < lines.length) {
     // Standard git diff headers:
     const diffHeader = lines[i].startsWith('diff --git');
@@ -36,8 +42,8 @@ export function parseUnifiedDiff(diffText: string): FileOp[] {
     i++;
     // Collect ---/+++ headers
     while (i < lines.length && !lines[i].startsWith('@@')) {
-      if (lines[i].startsWith('--- ')) oldPath = lines[i].slice(4).trim();
-      else if (lines[i].startsWith('+++ ')) newPath = lines[i].slice(4).trim();
+      if (lines[i].startsWith('--- ')) oldPath = cleanHeaderPath(lines[i].slice(4));
+      else if (lines[i].startsWith('+++ ')) newPath = cleanHeaderPath(lines[i].slice(4));
       i++;
     }
     if (i >= lines.length || !lines[i].startsWith('@@')) {
@@ -56,7 +62,10 @@ export function parseUnifiedDiff(diffText: string): FileOp[] {
     else if (newPath === '/dev/null') op = 'delete';
     else op = 'update';
     const path = stripA(op === 'create' ? newPath : op === 'delete' ? oldPath : newPath);
-    if (!path || path.includes('..')) throw new Error(`Unsafe path in diff: ${path}`);
+    // B14: reject absolute paths too. The `..` check alone was bypassable —
+    // an absolute path like /etc/evil sailed through and applyDiffAtomically's
+    // abs() wrote OUTSIDE the workspace root verbatim.
+    if (!path || isAbsolute(path) || path.includes('..')) throw new Error(`Unsafe path in diff: ${path}`);
     ops.push({ path, op, hunks });
   }
   return ops;
@@ -104,7 +113,18 @@ export function applyDiffAtomically(root: string, diffText: string): ApplyResult
   if (ops.length === 0) throw new Error('No file operations found in diff.');
   const result: ApplyResult = { applied: [], created: [], deleted: [], skipped: [] };
   const rollback: Array<{ path: string; prev: string | null }> = [];
-  const abs = (p: string) => (isAbsolute(p) ? p : resolve(root, p));
+  // B14: containment enforced at the write boundary, not just at parse time —
+  // resolve() normalizes any remaining traversal, and the resolved target must
+  // stay inside `root`. (Parse-time checks are the first line; this is the
+  // backstop, so a hostile diff can never escape the workspace.)
+  const rootResolved = resolve(root);
+  const abs = (p: string) => {
+    const t = resolve(root, p);
+    if (t !== rootResolved && !t.startsWith(rootResolved + '/')) {
+      throw new Error(`Path escapes workspace root: ${p}`);
+    }
+    return t;
+  };
 
   try {
     for (const op of ops) {

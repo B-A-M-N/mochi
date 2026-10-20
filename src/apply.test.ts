@@ -44,6 +44,43 @@ describe('parseUnifiedDiff', () => {
     ].join('\n');
     expect(() => parseUnifiedDiff(diff)).toThrow(/Unsafe path/);
   });
+
+  it('strips tab-attached timestamps from ---/+++ headers (plain diff -u output, B14)', () => {
+    // GNU diff -u writes "+++ b/new.ts\t2024-01-01 10:00:00.000000000 +0000".
+    // The old parser kept the timestamp in the path: create ops wrote junk
+    // files literally named "new.ts\t2024-01-01..." and update ops never
+    // matched the real file.
+    const diff = [
+      'diff --git a/new.ts b/new.ts',
+      '--- /dev/null\t2024-01-01 10:00:00.000000000 +0000',
+      '+++ b/new.ts\t2024-01-01 10:00:00.000000000 +0000',
+      '@@ -0,0 +1,1 @@',
+      '+export const a = 1;',
+      'diff --git a/mod.ts b/mod.ts',
+      '--- a/mod.ts\t2024-01-01 09:00:00.000000000 +0000',
+      '+++ b/mod.ts\t2024-01-01 10:00:00.000000000 +0000',
+      '@@ -1,1 +1,1 @@',
+      '-old',
+      '+new',
+    ].join('\n');
+    const ops = parseUnifiedDiff(diff);
+    expect(ops.map((o) => [o.path, o.op])).toEqual([
+      ['new.ts', 'create'],
+      ['mod.ts', 'update'],
+    ]);
+  });
+
+  it('rejects absolute paths in the diff (B14)', () => {
+    const diff = [
+      'diff --git /etc/evil /etc/evil',
+      '--- /etc/evil',
+      '+++ /etc/evil',
+      '@@ -1,1 +1,1 @@',
+      '-x',
+      '+y',
+    ].join('\n');
+    expect(() => parseUnifiedDiff(diff)).toThrow(/Unsafe path/);
+  });
 });
 
 describe('applyHunks', () => {
