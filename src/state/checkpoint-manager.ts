@@ -2,7 +2,7 @@
 // Allows users and agents to save immutable snapshots of working code before risky changes
 // and roll back cleanly to named points in time without losing work outside the project.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runArgv } from '../exec.js';
 import { mochiStateDir } from '../core/mochi-dir.js';
