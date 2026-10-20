@@ -95,6 +95,27 @@ describe('Phase 4: real-usage context accounting', () => {
     expect(ctx.effectiveContextTokens()).toBe(before);
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it('does not stay sticky when the provider stops reporting usage (B25)', () => {
+    const { ctx, dir } = makeContext();
+    ctx.recordReportedUsage(5_000);
+    expect(ctx.effectiveContextTokens()).toBe(5_000);
+    // Provider stops reporting (failover, degraded endpoint): the last
+    // reported number must not freeze the compaction gates forever — the
+    // signal falls back to the CURRENT packet estimate instead of a stale
+    // snapshot of a long-grown transcript.
+    ctx.recordReportedUsage(undefined);
+    expect(ctx.effectiveContextTokens()).not.toBe(5_000);
+    const afterClear = ctx.effectiveContextTokens();
+    // The fallback is current, not another frozen number: it tracks the
+    // transcript as it grows.
+    ctx.addMessage({ role: 'user', content: 'x'.repeat(4000) });
+    expect(ctx.effectiveContextTokens()).toBeGreaterThan(afterClear);
+    // ... and a fresh report takes over again as ground truth.
+    ctx.recordReportedUsage(7_000);
+    expect(ctx.effectiveContextTokens()).toBe(7_000);
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe('Phase 6: skill result caching', () => {

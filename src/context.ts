@@ -1086,19 +1086,28 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   }
 
   /** Phase 4: record real provider usage so the compaction floor can trigger
-   *  on actuals. Callers pass the last response's promptTokens (0/undefined
-   *  ignored — some providers report no usage). */
+   *  on actuals. A positive number stores ground truth; 0/undefined (a zeroed
+   *  or missing usage report — some providers send neither) CLEARS the stored
+   *  value. B25: a MISSING report used to leave the previous value sticky —
+   *  if the provider stopped sending usage mid-run (failover, degraded
+   *  endpoint), the stale number froze `effectiveContextTokens()` forever and
+   *  the stage-2 compaction gates never fired while the real transcript kept
+   *  growing. The fallback signal (last packet size / chars estimate) is
+   *  current, so a cleared report simply hands control back to it until the
+   *  provider reports again. */
   recordReportedUsage(promptTokens: number | undefined) {
     if (typeof promptTokens === 'number' && promptTokens > 0) {
       this.lastReportedPromptTokens = promptTokens;
+    } else {
+      this.lastReportedPromptTokens = null;
     }
   }
 
   /** Best available transcript-size signal: provider-reported usage is ground
-   *  truth when present; otherwise fall back to the real packet size built by
-   *  the last buildPacket() call (system prompt + tools + history — the naive
-   *  estimate excludes those); last resort the chars/3.8 estimate. Used for the
-   *  compaction floor. */
+   *  truth when present (and CURRENT — see B25); otherwise fall back to the
+   *  real packet size built by the last buildPacket() call (system prompt +
+   *  tools + history — the naive estimate excludes those); last resort the
+   *  chars/3.8 estimate. Used for the compaction floor. */
   effectiveContextTokens(): number {
     if (this.lastReportedPromptTokens != null) return this.lastReportedPromptTokens;
     if (this.lastSentTokens > 0) return this.lastSentTokens;
