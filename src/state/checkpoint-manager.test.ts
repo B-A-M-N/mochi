@@ -79,7 +79,7 @@ describe('Named Checkpoint Manager', () => {
       // truncation). git apply will reject it AFTER the reset --hard already
       // destroyed the v4 work — the old ordering left the tree at the bare
       // checkpoint commit with the newer work gone and success:false.
-      const { writeFileSync: wf, readFileSync: rf } = await import('node:fs');
+      const { writeFileSync: wf } = await import('node:fs');
       wf(join(dir, '.mochi', 'checkpoints', 'snap-corrupt.json'), JSON.stringify({ ...cp, patch: 'corrupt garbage' }), 'utf8');
 
       const res = await restoreNamedCheckpoint(dir, 'snap-corrupt');
