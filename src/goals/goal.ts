@@ -287,6 +287,15 @@ Return ONLY the JSON array, no markdown.`;
     // Reuse a recent baseline (5-min TTL) so the 2nd+ prompt in a session
     // skips the expensive shell-command capture that freezes the TUI.
     const allTasks = tasks ?? this.workspace.loadTasks(goal.id);
+    // A crash/SIGKILL/abort mid-run persists in-flight tasks as 'running'. On
+    // resume nothing ever executes them again: the scheduler files them into
+    // its running set, readyTasks() sees nothing pending, and the run loop
+    // below spins forever on runningCount > 0 — "mochi goal resume" hangs.
+    // At runGoal entry no agent is alive, so any 'running' status is stale;
+    // reset it to 'pending' so the task re-runs.
+    for (const t of allTasks) {
+      if (t.status === 'running') t.status = 'pending';
+    }
     const { classifyTaskKind } = await import('../core/taskkind.js');
     const isOnlyChatOrResearch = allTasks.length > 0 && allTasks.every((t) => {
       const k = classifyTaskKind(t);
