@@ -3500,8 +3500,10 @@ Continue from 'Next:', do not redo completed progress.`,
             // missed './a.ts' vs 'a.ts' vs an absolute path — two writes to
             // the SAME file ran concurrently and the second clobbered the
             // first (the later call observed winning in the trace). An empty
-            // path (unparseable args) stays conservative: it is NOT deduped,
-            // so an opaque call runs alone.
+            // or unparseable path falls back to a `__raw__:` sentinel key:
+            // empty-path calls are serialized against each other (conservative,
+            // and unchanged from the old shared-'' behavior) and the sentinel
+            // can never collide with a resolved absolute path.
             const resolvedKey = path ? resolve(this.cwd, path) : `__raw__:${path}`;
             if (seen.has(resolvedKey)) { remaining.push(tc); continue; }
             seen.add(resolvedKey);
