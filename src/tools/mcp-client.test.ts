@@ -32,6 +32,7 @@ const TOOLS = {
   ],
   res: [ { name: 'noop', description: 'n', inputSchema: { type: 'object', properties: {} } } ],
   empty: [],
+  strict: [ { name: 'ping', description: 'p', inputSchema: { type: 'object', properties: {} } } ],
 };
 const RESOURCES = { res: [ { uri: 'file:///a', name: 'A', mimeType: 'text/plain' } ] };
 const rl = readline.createInterface({ input: process.stdin });
@@ -39,6 +40,12 @@ const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
 rl.on('line', (line) => {
   if (!line.trim()) return;
   let msg; try { msg = JSON.parse(line); } catch { return; }
+  // Profile 'strict' is SPEC-COMPLIANT: notifications/initialized is a
+  // notification and is never answered — not even when a misbehaving client
+  // sends it with an id (which is what this client used to do, stalling every
+  // stdio connect by 5s). Every other profile (incorrectly) replies to the
+  // notification too, which masked that client bug.
+  if (profile === 'strict' && msg.method === 'notifications/initialized') return;
   const ok = (result) => send({ jsonrpc: '2.0', id: msg.id, result });
   const err = (m) => send({ jsonrpc: '2.0', id: msg.id, error: { message: m } });
   switch (msg.method) {
@@ -130,6 +137,24 @@ describe('stdio transport', () => {
       closeMcpConnections(connections);
     }
   });
+
+  it('handshakes with a spec-compliant server that never answers notifications', async () => {
+    // notifications/initialized is a JSON-RPC notification: compliant servers
+    // never reply. Awaiting a response to it stalled every stdio connect for
+    // the full 5s timeout and then failed the connect ("timed out after
+    // 5000ms" → server skipped). The connect must complete promptly instead.
+    const logs: string[] = [];
+    const t0 = Date.now();
+    const { tools, connections } = await loadMcpTools([stdioCfg('strict', 'strict')], (m) => logs.push(m));
+    const elapsed = Date.now() - t0;
+    try {
+      expect(elapsed).toBeLessThan(4000); // old bug: >=5000ms then skip
+      expect(logs.join('\n')).toContain('[mcp] connected strict: 1 tool(s)');
+      expect(find(tools, 'mcp_strict_ping').def.name).toBe('mcp_strict_ping');
+    } finally {
+      closeMcpConnections(connections);
+    }
+  }, 20_000);
 
   it('merges server env into the child process environment', async () => {
     const { tools, connections } = await loadMcpTools([stdioCfg('envd', 'full', { env: { MCP_MARKER: 'zz' } })]);
