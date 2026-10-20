@@ -139,8 +139,55 @@ function mapAntigravityFinish(reason?: string): StreamChunk['finishReason'] {
   if (reason === 'MAX_TOKENS') return 'length';
   return 'stop';
 }
+export const ANTIGRAVITY_PRICING_TABLE: Record<string, { in: number; out: number; cache: number }> = {
+  // Gemini 3.8 / 3.7 / 3.6 Flash ($0.75 / $3.75 per 1M tokens, cache read $0.075)
+  'gemini-3.8-flash': { in: 0.75, out: 3.75, cache: 0.075 },
+  'gemini-3.7-flash': { in: 0.75, out: 3.75, cache: 0.075 },
+  // Gemini 3 Flash ($0.50 / $3.00 per 1M tokens, cache read $0.05)
+  'gemini-3-flash': { in: 0.50, out: 3.00, cache: 0.05 },
+  // Gemini 3.5 Flash ($1.50 / $9.00 per 1M tokens, cache read $0.15)
+  'gemini-3.5-flash': { in: 1.50, out: 9.00, cache: 0.15 },
+  'gemini-3.5-flash-lite': { in: 0.30, out: 2.50, cache: 0.03 },
+  'gemini-3.1-flash-lite': { in: 0.25, out: 1.50, cache: 0.025 },
+  // Gemini 2.5 Flash ($0.30 / $2.50 per 1M tokens, cache read $0.03)
+  'gemini-2.5-flash': { in: 0.30, out: 2.50, cache: 0.03 },
+  'gemini-2.5-flash-lite': { in: 0.10, out: 0.40, cache: 0.01 },
+  // Claude Sonnet 4.6 / 4.5 ($3.00 / $15.00 per 1M tokens, cache read $0.30)
+  'claude-sonnet-4-6': { in: 3.00, out: 15.00, cache: 0.30 },
+  'claude-sonnet-4-5': { in: 3.00, out: 15.00, cache: 0.30 },
+  // Claude Opus 4.6 / 4.5 ($5.00 / $25.00 per 1M tokens, cache read $0.50)
+  'claude-opus-4-6': { in: 5.00, out: 25.00, cache: 0.50 },
+  'claude-opus-4-5': { in: 5.00, out: 25.00, cache: 0.50 },
+  // Free / preview tiers ($0)
+  'gpt-oss-120b': { in: 0, out: 0, cache: 0 },
+  'gemini-4-argon-disabled': { in: 0, out: 0, cache: 0 },
+  'tab_flash_lite_preview': { in: 0, out: 0, cache: 0 },
+  'tab_jump_flash_lite_preview': { in: 0, out: 0, cache: 0 },
+};
 
-function extractAntigravity(data: AntigravityResponsePayload): ModelResponse {
+export function computeAntigravityCost(model: string, inTokens: number, outTokens: number, cachedTokens = 0): number {
+  const m = model.toLowerCase();
+  const direct = ANTIGRAVITY_PRICING_TABLE[m];
+  let rates = direct;
+  if (!rates) {
+    if (m.includes('opus')) rates = ANTIGRAVITY_PRICING_TABLE['claude-opus-4-6'];
+    else if (m.includes('sonnet') || m.includes('claude')) rates = ANTIGRAVITY_PRICING_TABLE['claude-sonnet-4-6'];
+    else if (m.includes('3.8') || m.includes('3.7') || m.includes('3.6')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.8-flash'];
+    else if (m.includes('3.5')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.5-flash'];
+    else if (m.includes('flash')) rates = ANTIGRAVITY_PRICING_TABLE['gemini-3-flash'];
+    else rates = ANTIGRAVITY_PRICING_TABLE['gemini-3.8-flash'];
+  }
+
+  const inRate = rates.in / 1_000_000;
+  const outRate = rates.out / 1_000_000;
+  const cacheRate = rates.cache / 1_000_000;
+
+  const billableIn = Math.max(0, inTokens - cachedTokens);
+  const cost = billableIn * inRate + cachedTokens * cacheRate + outTokens * outRate;
+  return Math.round(cost * 10_000_000) / 10_000_000;
+}
+
+function extractAntigravity(data: AntigravityResponsePayload, defaultModel = 'gemini-3.8-flash'): ModelResponse {
   const container = data.response ?? data;
   const candidates = container.candidates ?? [];
   const parts = candidates[0]?.content?.parts ?? [];
@@ -158,16 +205,23 @@ function extractAntigravity(data: AntigravityResponsePayload): ModelResponse {
     }));
 
   const u = container.usageMetadata ?? {};
+  const pTok = u.promptTokenCount ?? 0;
+  const cTok = u.candidatesTokenCount ?? 0;
+  const tTok = u.totalTokenCount ?? 0;
+  const caTok = u.cachedContentTokenCount ?? 0;
+  const costUsd = computeAntigravityCost(defaultModel, pTok, cTok, caTok);
+
   return {
     content: textParts.join(''),
     reasoningContent: thoughtParts.length ? thoughtParts.join('') : undefined,
     toolCalls: toolCalls.length ? toolCalls : undefined,
     finishReason: candidates[0]?.finishReason,
     usage: {
-      promptTokens: u.promptTokenCount ?? 0,
-      completionTokens: u.candidatesTokenCount ?? 0,
-      totalTokens: u.totalTokenCount ?? 0,
-      cachedTokens: u.cachedContentTokenCount ?? 0,
+      promptTokens: pTok,
+      completionTokens: cTok,
+      totalTokens: tTok,
+      cachedTokens: caTok,
+      costUsd,
     },
   };
 }
@@ -280,11 +334,20 @@ export function createAntigravityProvider(config: ProviderConfig) {
   };
 
   const toContents = (msgs: ChatMessage[]) => {
-    const contents: Array<{ role: string; parts: unknown[] }> = [];
-    for (const m of msgs) {
-      if (m.role === 'assistant') {
+    const rawContents: Array<{ role: 'user' | 'model'; parts: unknown[] }> = [];
+    const firstSysIdx = msgs.findIndex((m) => m.role === 'system');
+
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      if (m.role === 'system') {
+        if (i === firstSysIdx) continue;
+        const text = contentText(m).trim();
+        if (text) {
+          rawContents.push({ role: 'user', parts: [{ text: `[System]: ${text}` }] });
+        }
+      } else if (m.role === 'assistant') {
         const parts: unknown[] = [];
-        const text = contentText(m);
+        const text = contentText(m).trim();
         if (text) parts.push({ text });
         if (m.tool_calls) {
           for (const tc of m.tool_calls) {
@@ -301,7 +364,9 @@ export function createAntigravityProvider(config: ProviderConfig) {
             });
           }
         }
-        contents.push({ role: 'model', parts: parts.length ? parts : [{ text: '' }] });
+        if (parts.length > 0) {
+          rawContents.push({ role: 'model', parts });
+        }
       } else if (m.role === 'tool') {
         const part = {
           functionResponse: {
@@ -309,32 +374,55 @@ export function createAntigravityProvider(config: ProviderConfig) {
             response: { output: contentText(m) },
           },
         };
-        const last = contents[contents.length - 1];
-        if (last && last.role === 'user' && Array.isArray(last.parts) && last.parts.some((p) => p && typeof p === 'object' && 'functionResponse' in p)) {
-          last.parts.push(part);
-        } else {
-          contents.push({ role: 'user', parts: [part] });
-        }
+        rawContents.push({ role: 'user', parts: [part] });
       } else if (m.role === 'user') {
         const { text: gtext, images: gimages } = splitContent(m.content);
         const inline = gimages.filter((g): g is { mime: string; data: string } => 'data' in g);
-        if (inline.length > 0) {
-          const parts: unknown[] = [];
-          if (gtext) parts.push({ text: gtext });
-          for (const img of inline) parts.push({ inlineData: { mimeType: img.mime, data: img.data } });
-          contents.push({ role: 'user', parts });
-        } else {
-          const remote = gimages.filter((g): g is { url: string } => 'url' in g).map((g) => g.url);
-          contents.push({ role: 'user', parts: [{ text: [gtext, ...remote].filter(Boolean).join('\n') }] });
+        const parts: unknown[] = [];
+        if (gtext?.trim()) parts.push({ text: gtext.trim() });
+        for (const img of inline) parts.push({ inlineData: { mimeType: img.mime, data: img.data } });
+        const remote = gimages.filter((g): g is { url: string } => 'url' in g).map((g) => g.url);
+        for (const url of remote) parts.push({ text: url });
+        if (parts.length > 0) {
+          rawContents.push({ role: 'user', parts });
         }
       }
     }
+
+    // Strict alternation: merge adjacent turns of the same role
+    const contents: Array<{ role: 'user' | 'model'; parts: unknown[] }> = [];
+    for (const item of rawContents) {
+      if (item.parts.length === 0) continue;
+      const last = contents[contents.length - 1];
+      if (last && last.role === item.role) {
+        last.parts.push(...item.parts);
+      } else {
+        contents.push({ role: item.role, parts: [...item.parts] });
+      }
+    }
+
+    // Ensure contents starts with user
+    if (contents.length > 0 && contents[0].role === 'model') {
+      contents.unshift({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
+
+    // Ensure contents is non-empty
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
+
+    // Crucial for Cloud Code Assist: generation request MUST end with user turn
+    if (contents[contents.length - 1].role === 'model') {
+      contents.push({ role: 'user', parts: [{ text: 'Please continue.' }] });
+    }
+
     return contents;
   };
 
-  const system = (msgs: ChatMessage[]) =>
-    msgs.filter((m) => m.role === 'system').map((m) => contentText(m)).join('\n');
-
+  const system = (msgs: ChatMessage[]) => {
+    const firstSys = msgs.find((m) => m.role === 'system');
+    return firstSys ? contentText(firstSys).trim() : '';
+  };
   function resolveWireModel(rawModel: string, reasoningEffort?: string): string {
     const effort = (reasoningEffort || process.env.MOCHI_REASONING || '').toLowerCase().trim();
     // Antigravity does not accept gemini-3.7-flash in any wire tier; alias it
@@ -477,7 +565,7 @@ export function createAntigravityProvider(config: ProviderConfig) {
         }, { maxAttempts: 3, onBackoff: (attempt, delayMs, err) => logBackoff(attempt, delayMs, err) });
 
         const json = (await res.json()) as AntigravityResponsePayload;
-        return extractAntigravity(json);
+        return extractAntigravity(json, model);
       } catch (err) {
         lastError = err;
       }
@@ -503,8 +591,8 @@ export function createAntigravityProvider(config: ProviderConfig) {
       completionTokens,
       totalTokens: promptTokens + completionTokens,
       cachedTokens: cachedTokens > 0 ? cachedTokens : undefined,
+      costUsd: computeAntigravityCost(model, promptTokens, completionTokens, cachedTokens),
     });
-
     const primaryUrl = `${endpoints[0]}/v1internal:streamGenerateContent?alt=sse`;
 
     const frames = openSSEStream(
@@ -515,7 +603,7 @@ export function createAntigravityProvider(config: ProviderConfig) {
     for await (const frame of frames) {
       if (frame.kind === 'json') {
         const raw = frame.data as AntigravityResponsePayload;
-        const resp = extractAntigravity(raw);
+        const resp = extractAntigravity(raw, model);
         yield {
           content: resp.content,
           reasoningContent: resp.reasoningContent,

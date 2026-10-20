@@ -230,7 +230,7 @@ function kindOf(id: string): 'openai' | 'anthropic' | 'gemini' | undefined {
   return PROVIDERS.find((p) => p.id === id)?.kind;
 }
 
-interface RawProvider {
+export interface RawProvider {
   streamChat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal; reasoningEffort?: string }): AsyncGenerator<StreamChunk>;
   chat(messages: ChatMessage[], tools: ToolDefinition[], options?: { temperature?: number; maxTokens?: number; signal?: AbortSignal; reasoningEffort?: string }): Promise<ModelResponse>;
 }
