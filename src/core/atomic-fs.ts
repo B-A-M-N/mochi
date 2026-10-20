@@ -14,11 +14,18 @@ import { randomBytes } from 'node:crypto';
  *
  * Deliberately conservative so it is never WORSE than a plain write:
  *   - preserves the existing file's permission bits,
+ *   - `opts.mode` (B29) forces the mode for the NEW file too — the tmp sibling
+ *     is created with it BEFORE the content lands, so secrets (e.g. the
+ *     daemon auth token) are never briefly world-readable in flight. With
+ *     opts.mode set, the symlink fallback is skipped entirely: a symlinked
+ *     target is REPLACED (rename over the link), not followed — no
+ *     symlink-follow write, no mode leak; replace-don't-follow is the safe
+ *     direction.
  *   - falls back to a direct write for symlinks (rename would replace the link
  *     itself, not its target),
  *   - falls back to a direct write if the rename fails for any reason.
  */
-export function atomicWriteFileSync(filePath: string, content: string): void {
+export function atomicWriteFileSync(filePath: string, content: string, opts?: { mode?: number }): void {
   const dir = dirname(filePath);
   try {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -26,16 +33,18 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
     /* fall through to the direct write below, which reports the real error */
   }
 
-  let mode: number | undefined;
-  try {
-    const st = lstatSync(filePath);
-    if (st.isSymbolicLink()) {
-      writeFileSync(filePath, content);
-      return;
+  let mode = opts?.mode;
+  if (mode === undefined) {
+    try {
+      const st = lstatSync(filePath);
+      if (st.isSymbolicLink()) {
+        writeFileSync(filePath, content);
+        return;
+      }
+      mode = st.mode & 0o777;
+    } catch {
+      /* target does not exist yet — default mode applies */
     }
-    mode = st.mode & 0o777;
-  } catch {
-    /* target does not exist yet — default mode applies */
   }
 
   const tmp = join(dir, `.${basename(filePath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
@@ -44,6 +53,6 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
     renameSync(tmp, filePath);
   } catch {
     try { unlinkSync(tmp); } catch { /* best effort */ }
-    writeFileSync(filePath, content);
+    writeFileSync(filePath, content, mode !== undefined ? { mode } : undefined);
   }
 }
