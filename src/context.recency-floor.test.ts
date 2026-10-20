@@ -1,27 +1,28 @@
 // B15 regression: the complex-task recency floor fights the token window.
 //
 // Three faces, all in src/context.ts:
-// 1. buildPacket() adds MIN_RECENT messages (24 for complex) to `recent`
-//    EVEN WHEN the budget is already in the red (the "fall through below
-//    MIN_RECENT: keep adding regardless of budget" branch). The packet is
-//    then assembled over budget — the provider rejects it with a 400.
+// 1. buildPacket(): `overBudget` required recent.length >= MIN_RECENT, so the
+//    first 24 (complex) messages were added UNCONDITIONALLY — the implicit
+//    fall-through below the floor never consulted the budget. When the
+//    clamped window couldn't hold 24 dense messages, the packet went out
+//    over budget → provider 400.
 // 2. compact()/planCutIndex() refuse to shrink below the SAME 24-message
 //    floor (keep = 24), so once messages.length <= 24, compaction is a
 //    no-op and cannot repair the overshoot it is asked to fix.
-// 3. shrinkOldToolOutputs() exempts the newest 40 (complex) messages from
-//    in-place shrinking — the same oversized floor messages — so the
-//    cheapest lever is also locked out.
+// 3. shrinkOldToolOutputs() exempted the newest 40 (complex) messages from
+//    in-place shrinking — wider than the 24-message floor — so the
+//    cheapest lever was also locked out.
 // Result: provider 400s, compaction can't fix it, retries burn out.
 //
 // Contract pinned here: the recency floor is a TARGET, not an override —
-// when the window is too small to hold the floor, the packet builder must
-// stop adding at the budget line (keeping at least the newest turn), and
-// the oversized floor must not be exempt from in-place shrinking.
+// the packet builder stops adding at the budget line (keeping at least the
+// newest turn), compaction accepts an explicit smaller floor, and the floor
+// region is not exempt from in-place shrinking.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ContextEngine } from './context.js';
+import { ContextEngine, approxTokens } from './context.js';
 import type { MochiConfig, ChatMessage } from './types.js';
 
 let skillsDir: string;
@@ -56,6 +57,12 @@ describe('recency floor must not override the token window (B15)', () => {
       // The packet is what gets sent to the provider. It must fit the
       // working budget (approx 4000 tokens); with the bug the 24-message
       // floor alone carries ~12K+ tokens of dense tool results.
+      // REVIEW-STRENGTHENED: usedTokens = budget - remaining, and remaining
+      // is inflated by the rescue add-back (context.ts:933), so it can read
+      // NEGATIVE on a grossly over-budget packet. Pin the real wire size.
+      const real = packet.messages.reduce(
+        (a, m) => a + approxTokens(JSON.stringify(m)), 0);
+      expect(real).toBeLessThanOrEqual(4000);
       expect(packet.usedTokens).toBeLessThanOrEqual(4000);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -85,19 +92,15 @@ describe('recency floor must not override the token window (B15)', () => {
     try {
       const c = new ContextEngine(cfg(4000), dir, skillsDir);
       c.setTaskComplexity('complex');
-      pushTurns(c, 45); // 90 messages: 50 outside the 40-window, 40 inside
+      // REVIEW-STRENGTHENED: 18 turns = 36 messages — ALL inside main's
+      // 40-message complex window (so main's shrink is a no-op: saved 0),
+      // but 12 of them sit outside the fixed 24-message window (so the fix
+      // reaches them).
+      pushTurns(c, 18);
       const saved = c.shrinkOldToolOutputs();
       expect(saved).toBeGreaterThan(0);
-      // With the bug, the newest 40 messages are untouchable; the packet's
-      // recency floor (24) sits entirely inside that untouchable zone, so
-      // the dense floor can never be relieved in place: the over-budget
-      // signal is stuck (effectiveContextTokens clamps to budget but
-      // shrinking cannot relieve it). After the fix the pressure loop can
-      // actually shrink its way back under the floor mass.
-      expect(c.effectiveContextTokens()).toBeGreaterThan(0);
-      // And a second pass after the fix can reach the previously-protected
-      // region once messages age past the (smaller) protected window.
-      pushTurns(c, 25); // 140 messages total
+      // A later pass still finds new mass as messages age past the window.
+      pushTurns(c, 25);
       expect(c.shrinkOldToolOutputs()).toBeGreaterThan(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
