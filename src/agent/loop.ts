@@ -553,6 +553,9 @@ export class Agent {
   /** MCH-28: plan text captured from the accept_plan call (falls back to prose). */
   private planAcceptedText = '';
   private emptyResponseCount = 0;
+  /** B17: single close-on-abort backstop for MCP connections (replaced, never
+   *  stacked, on repeated MCP loads). */
+  private mcpAbortBackstop?: () => void;
   private selfReviewCount = 0;
   /** Progress-heartbeat state (no-progress wandering guard). */
   private lastHeartbeatIter = 0;
@@ -2889,9 +2892,17 @@ Continue from 'Next:', do not redo completed progress.`,
         }
         const backoffMs = [1500, 4000, 9000][this.emptyResponseCount - 1] ?? 9000;
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[empty-response] retry ${this.emptyResponseCount}/3 in ${backoffMs}ms (provider returned no content)` });
+        // B17: remove the abort listener when the sleep settles. {once:true}
+        // only auto-removes when abort FIRES; a backoff that completes
+        // normally (the common case) leaked its listener on the shared run
+        // signal, one per struggle cycle.
         await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, backoffMs);
-          this.abortSignal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+          const onAbort = () => { clearTimeout(timer); resolve(); };
+          const timer = setTimeout(() => {
+            this.abortSignal?.removeEventListener('abort', onAbort);
+            resolve();
+          }, backoffMs);
+          this.abortSignal?.addEventListener('abort', onAbort, { once: true });
         });
         if (this.abortSignal?.aborted) {
           return this.finish(task, false, 'Aborted during empty-response backoff.', 'aborted');
@@ -3164,7 +3175,18 @@ Continue from 'Next:', do not redo completed progress.`,
         this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mcp] ${tools.length} MCP tool(s) registered` });
       }
       // Close connections when the abort signal fires (run end/abort).
-      this.abortSignal?.addEventListener('abort', () => closeMcpConnections(this.mcpConnections), { once: true });
+      // B17: keep at most ONE such backstop listener — a repeated load (e.g.
+      // after a load_tools restore) used to stack a new listener per load,
+      // each capturing a stale connection array. finish() also closes
+      // connections on every path; this listener is only the hard-abort
+      // backstop, so replacing it is safe and bounded.
+      if (this.mcpAbortBackstop) {
+        try { this.abortSignal?.removeEventListener('abort', this.mcpAbortBackstop); } catch { /* best-effort */ }
+      }
+      if (this.abortSignal && !this.abortSignal.aborted) {
+        this.mcpAbortBackstop = () => closeMcpConnections(this.mcpConnections);
+        this.abortSignal.addEventListener('abort', this.mcpAbortBackstop, { once: true });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.events.emit({ type: 'agent:log', agentId: this.id, message: `[mcp] load failed (non-fatal): ${msg.slice(0, 160)}` });
