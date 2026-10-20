@@ -3,7 +3,8 @@
 // store tail -> seeded back on the next turn). Assert the second-turn model
 // request contains the prior turn's digest of the file path.
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { Workspace } from '../workspace.js';
@@ -48,7 +49,7 @@ describe('working-context digest survives turns', () => {
       expect(dumped, 'prior digest survives').toContain('run-digest');
       expect(dumped, 'digest carries the read path').toContain('src/data.txt');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   }, 60_000);
 });

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
   login, setProvider, selectProviderById, currentConfig, listProviderIds,
-  listModelsForProvider, describeConfig, maskApiKey, modelContextBudget,
+  listModelsForProvider, describeConfig, maskApiKey,
+  addFallbackModel, removeFallbackModel, clearFallbackModels, modelContextBudget,
 } from './model-manager.js';
 import { saveConfigFile, loadConfigFile } from './providers.js';
 import type { MochiConfig } from '../types.js';
@@ -129,10 +130,12 @@ describe('modelContextBudget (working budget prior)', () => {
   it('rounds DOWN to a conservative window per family, never an inflated one', () => {
     // DeepSeek/GLM/Qwen are 128k-class; the old table returned 500k/110k and
     // let the compaction floor sit past the provider's hard limit.
-    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(128_000);
-    expect(modelContextBudget('glm-5', 'zhipu')).toBe(128_000);
+    // (glm-5/deepseek-v4 are the newer 500k long-context classes; plain
+    // deepseek-v4-flash via opencode-zen stays at the conservative 128k.)
+    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(500_000);
+    expect(modelContextBudget('glm-5', 'zhipu')).toBe(500_000);
     expect(modelContextBudget('claude-sonnet-4-5', 'anthropic')).toBe(200_000);
-    expect(modelContextBudget('gemini-2.5-pro', 'google')).toBe(1_000_000);
+    expect(modelContextBudget('gemini-2.5-pro', 'google')).toBe(1_048_576);
     expect(modelContextBudget('gpt-5.4-nano', 'openai')).toBe(400_000);
     expect(modelContextBudget('some-local-8b', 'ollama')).toBe(32_000);
   });
@@ -141,6 +144,43 @@ describe('modelContextBudget (working budget prior)', () => {
     process.env.MOCHI_CONTEXT_WINDOW = '65536';
     expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(65_536);
     process.env.MOCHI_CONTEXT_WINDOW = 'nonsense';
-    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(128_000);
+    expect(modelContextBudget('deepseek-v4-flash-free', 'opencode-zen')).toBe(500_000);
+  });
+
+  it('calculates full context budget for antigravity models', () => {
+    expect(modelContextBudget('gemini-3.8-flash', 'antigravity')).toBe(1_048_576);
+    expect(modelContextBudget('claude-sonnet-4-6', 'antigravity')).toBe(250_000);
+    expect(modelContextBudget('gpt-oss-120b', 'antigravity')).toBe(131_072);
+  });
+});
+
+describe('fallback model management', () => {
+  it('adds and updates fallback models', () => {
+    let cfg = base();
+    cfg = addFallbackModel(cfg, 'anthropic', 'claude-sonnet-4-6');
+    expect(cfg.model.failover).toHaveLength(1);
+    expect(cfg.model.failover![0].provider).toBe('anthropic');
+    expect(cfg.model.failover![0].model).toBe('claude-sonnet-4-6');
+
+    cfg = addFallbackModel(cfg, 'anthropic', 'claude-opus-4-6');
+    expect(cfg.model.failover).toHaveLength(1);
+    expect(cfg.model.failover![0].model).toBe('claude-opus-4-6');
+
+    cfg = addFallbackModel(cfg, 'openai', 'gpt-4o');
+    expect(cfg.model.failover).toHaveLength(2);
+  });
+
+  it('removes and clears fallback models', () => {
+    let cfg = base();
+    cfg = addFallbackModel(cfg, 'anthropic', 'claude-sonnet-4-6');
+    cfg = addFallbackModel(cfg, 'openai', 'gpt-4o');
+    expect(cfg.model.failover).toHaveLength(2);
+
+    cfg = removeFallbackModel(cfg, 'anthropic');
+    expect(cfg.model.failover).toHaveLength(1);
+    expect(cfg.model.failover![0].provider).toBe('openai');
+
+    cfg = clearFallbackModels(cfg);
+    expect(cfg.model.failover).toHaveLength(0);
   });
 });

@@ -621,10 +621,30 @@ async function main() {
       goal = runtime.workspace.loadGoal(latest);
     }
     if (!goal) { console.log('Goal not found.'); return; }
-    const tasks = runtime.workspace.loadTasks(goal.id);
     console.log(`Resuming goal: ${goal.objective} (${goal.id.slice(0, 8)})`);
-    const result = await runtime.goals.runGoal(goal, tasks);
-    console.log(result.summary);
+    let streamedThinking = false;
+    const off = runtime.events.onAll((event: import('./types.js').MochiEvent) => {
+      if (event.type === 'agent:reasoning' && typeof event.content === 'string') {
+        if (!streamedThinking) {
+          process.stderr.write('\x1b[2m[thinking] ');
+          streamedThinking = true;
+        }
+        process.stderr.write(event.content);
+      } else if (event.type === 'message:chunk' && typeof event.content === 'string') {
+        if (streamedThinking) {
+          process.stderr.write('\x1b[0m\n\n');
+          streamedThinking = false;
+        }
+        process.stdout.write(event.content);
+      }
+    });
+    try {
+      const summary = await runtime.resumeGoal(goal.id);
+      if (streamedThinking) process.stderr.write('\x1b[0m\n\n');
+      console.log('\n' + summary);
+    } finally {
+      off();
+    }
     return;
   }
   if (first === 'apply') {
@@ -1843,6 +1863,60 @@ async function main() {
   if (first === 'providers') {
     const { PROVIDERS } = await import('./model/providers.js');
     for (const p of PROVIDERS) console.log(p.id.padEnd(14) + ' ' + p.name);
+    return;
+  }
+  if (first === 'fallback' || first === 'fallbacks') {
+    const action = positional[1] || 'list';
+    const targetProv = positional[2];
+    const targetModel = positional[3];
+    if (action === 'clear' || action === 'reset') {
+      console.log(runtime.clearFallbacks());
+      return;
+    }
+    if (action === 'rm' || action === 'remove' || action === 'delete') {
+      if (!targetProv) { console.error('Usage: mochi fallback rm <provider>'); process.exit(1); }
+      console.log(runtime.removeFallback(targetProv));
+      return;
+    }
+    if (action === 'add' || action === 'set') {
+      if (!targetProv) { console.error('Usage: mochi fallback add <provider> [model]'); process.exit(1); }
+      console.log(runtime.addFallback(targetProv, targetModel));
+      return;
+    }
+    const primary = runtime.config.model;
+    const fallbacks = runtime.getFallbacks();
+    console.log(`Primary model: ${primary.provider} (${primary.model})\n`);
+    if (fallbacks.length === 0) {
+      console.log('No fallback models configured.');
+    } else {
+      console.log(`Fallback models (${fallbacks.length}):`);
+      fallbacks.forEach((fb, idx) => {
+        console.log(`  ${idx + 1}. ${fb.provider.padEnd(16)} ${fb.model} (${fb.baseUrl})`);
+      });
+    }
+    console.log('\nManage fallbacks with:\n  mochi fallback add <provider> [model]\n  mochi fallback rm <provider>\n  mochi fallback clear');
+    return;
+  }
+  if (first === 'account' || first === 'accounts' || first === 'switch') {
+    const { runAuthCommand } = await import('./cli-auth.js');
+    if (first === 'switch' || (first === 'account' && (positional[1] === 'switch' || positional[1]?.includes('@')))) {
+      const targetAccount = first === 'switch' ? positional[1] : (positional[1] === 'switch' ? positional[2] : positional[1]);
+      await runAuthCommand({
+        positional: ['auth', 'switch', runtime.config.model.provider, targetAccount],
+        flags, runtime,
+        log: (s) => console.log(s),
+        error: (s) => console.error(s),
+        exit: (code) => process.exit(code),
+      });
+      return;
+    }
+    await runAuthCommand({
+      positional: ['auth', 'accounts', positional[1] || runtime.config.model.provider],
+      flags, runtime,
+      log: (s) => console.log(s),
+      error: (s) => console.error(s),
+      exit: (code) => process.exit(code),
+    });
     return;
   }
   if (first === 'login' || first === 'use') {
