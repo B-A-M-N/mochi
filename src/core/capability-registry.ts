@@ -126,11 +126,10 @@ const READ_ONLY_TOOLS = new Set([
   'find_references', 'find_definitions', 'db_inspect', 'think',
 ]);
 // 'verify' is deliberately ABSENT: it has permission:'shell', dangerous:true,
-// and executes its command argument verbatim (tools/verify.ts runs the
-// command verbatim, builds/tests write dist/, coverage, and test side
-// effects). Restored here because the upstream merge of the fetch fix
-// (7e14a6e) was based on a pre-#22 parent and silently reverted the removal
-// — main's own capability.test.ts regression assertion fails on main.
+// and executes its command argument verbatim (tools/verify.ts). Classifying
+// it read-only let ToolDispatcher run it in the concurrent read-only
+// Promise.allSettled batch while builds/tests mutate the tree. (Re-removed
+// after the fetch-methods PR accidentally restored it from its base.)
 // 'fetch' is deliberately ABSENT: its method arg selects POST/PUT/PATCH/
 // DELETE, which mutate REMOTE state (tools/fetch.ts), and this static flag is
 // arg-blind — mutating requests must not ride the concurrent read-only

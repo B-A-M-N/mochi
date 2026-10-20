@@ -9,7 +9,8 @@
 // the foreground branch — safe mode blocks risk !== 'low' regardless of the
 // background flag; benign background commands still start.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs'
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { shellTool } from './shell.js';
@@ -17,7 +18,7 @@ import type { ToolContext } from './types.js';
 
 let dir: string;
 beforeAll(() => { dir = mkdtempSync(resolve(tmpdir(), 'mochi-bg-gate-')); });
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+afterAll(() => rmTmp(dir));
 
 function safeCtx(): ToolContext {
   return {

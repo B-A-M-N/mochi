@@ -175,10 +175,10 @@ describe('themes are visually distinct', () => {
       }
       expect(stripThemeColors(THEMES[0]).colors.fg).toBe('');
     } finally {
-      if (prev === undefined) delete process.env.NO_COLOR;
-      else process.env.NO_COLOR = prev;
+      delete process.env.NO_COLOR;
     }
     expect(honorsNoColor()).toBe(false);
+    if (prev !== undefined) process.env.NO_COLOR = prev;
   });
 
   it('reduced-motion is honored via env, NO_COLOR, or dumb terminal', () => {
