@@ -1000,6 +1000,9 @@ export class Agent {
   async run(task: Task): Promise<AgentResult> {
     this.startTime = performance.now();
     this.activeTask = task;
+    // B2: each run() gets exactly one finish(). A previous run's guard entry
+    // must not swallow this run's teardown (auto-resume reuses the instance).
+    this.finishPromise = null;
     // Mark the bus position so the finish-time summary covers THIS run only.
     const hist = this.events.snapshot();
     this.runStartMarker = hist.length > 0 ? hist[hist.length - 1] : undefined;
@@ -5852,7 +5855,28 @@ Continue from 'Next:', do not redo completed progress.`,
     }
   }
 
-  private async finish(task: Task, success: boolean, summary: string, stopReason: AgentStopReason = success ? 'completed' : 'aborted'): Promise<AgentResult> {
+  /** B2: result of the in-flight or completed finish() for THIS run. Exactly-once
+   *  guard: finish() closes MCP connections, emits agent:completed, releases the
+   *  shared budget slot (recordAgentEnd), and may fire a narrative model call.
+   *  The budget-exhausted branch in runMoolCall fires inside PARALLEL tool
+   *  batches — every call in the batch sees the same exhausted phase — and the
+   *  loop top then reaches its own exhausted check: N+1 full teardowns, N
+   *  duplicate agent:completed events, N recordAgentEnd releases. First call
+   *  wins; later callers (different summary/stopReason, same teardown) receive
+   *  the first result. Reset per run() so a second run on the same instance
+   *  (auto-resume) finishes normally. */
+  private finishPromise: Promise<AgentResult> | null = null;
+
+  private finish(task: Task, success: boolean, summary: string, stopReason: AgentStopReason = success ? 'completed' : 'aborted'): Promise<AgentResult> {
+    if (this.finishPromise) return this.finishPromise;
+    const p = this.finishOnce(task, success, summary, stopReason);
+    // Clear on rejection so an outer retry can attempt a finish again; while
+    // the first attempt is in flight concurrent callers still share it.
+    this.finishPromise = p.catch((err) => { if (this.finishPromise === p) this.finishPromise = null; throw err; });
+    return this.finishPromise;
+  }
+
+  private async finishOnce(task: Task, success: boolean, summary: string, stopReason: AgentStopReason = success ? 'completed' : 'aborted'): Promise<AgentResult> {
     // MCH-33: tear down MCP server connections on every finish path.
     try {
       const { closeMcpConnections } = await import('../tools/mcp.js');
