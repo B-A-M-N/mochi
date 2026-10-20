@@ -183,6 +183,13 @@ export const patchTool: Tool = {
       | { op: 'delete'; path: string; fullPath: string }
       | { op: 'update'; path: string; fullPath: string; content: string; before: string };
     const plans: Plan[] = [];
+    // B13: a patch may contain MULTIPLE *** Update File: sections for the same
+    // path (the model emits one per logical edit). Each section used to be
+    // planned from the SAME on-disk content, and phase 2 wrote the last plan
+    // over the earlier ones — earlier edits silently lost while the output
+    // claimed every section was applied. Compose same-file update plans
+    // sequentially instead: section N+1 applies to section N's result.
+    const updateIndexByPath = new Map<string, number>();
     for (const fp of patches) {
       const fullPath = resolve(ctx.cwd, fp.path);
       if (fp.op === 'add') {
@@ -193,10 +200,21 @@ export const patchTool: Tool = {
         if (!existsSync(fullPath)) throw new Error(`*** Delete File: ${fp.path} not found`);
         plans.push({ op: 'delete', path: fp.path, fullPath });
       } else {
+        const prior = updateIndexByPath.get(fp.path);
+        if (prior !== undefined) {
+          const prev = plans[prior];
+          if (prev.op !== 'update') throw new Error(`Conflicting patch sections for ${fp.path}: cannot update after ${prev.op}`);
+          const after = applyFilePatch(prev.content, fp);
+          if (after === prev.content) throw new Error(`Patch produced no change to ${fp.path}`);
+          // Update in place: one plan per file, content = cumulative result.
+          plans[prior] = { ...prev, content: after };
+          continue;
+        }
         if (!existsSync(fullPath)) throw new Error(`*** Update File: ${fp.path} not found`);
         const before = readFileSync(fullPath, 'utf8');
         const after = applyFilePatch(before, fp);
         if (after === before) throw new Error(`Patch produced no change to ${fp.path}`);
+        updateIndexByPath.set(fp.path, plans.length);
         plans.push({ op: 'update', path: fp.path, fullPath, content: after, before });
       }
     }

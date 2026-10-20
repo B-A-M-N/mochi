@@ -236,3 +236,49 @@ describe('patch tool — atomicity', () => {
     expect(readFileSync(join(dir, 'b.ts'), 'utf8')).toBe('alpha\nbeta\n');
   });
 });
+
+describe('patch tool — duplicate sections for the same file (B13)', () => {
+  it('applies BOTH update sections for the same file sequentially (second builds on first)', async () => {
+    // Two *** Update File: sections for the same file. Phase 1 plans each
+    // section from the SAME on-disk content; phase 2 used to write plan 2
+    // over plan 1 — the first edit was silently lost while the output
+    // claimed both were applied.
+    writeFileSync(join(dir, 'dup.ts'), 'const A = 1;\nconst B = 2;\n');
+    const out = await patchTool.execute({
+      patch: [
+        '*** Begin Patch',
+        '*** Update File: dup.ts',
+        '-const A = 1;',
+        '+const A = 10;',
+        '*** Update File: dup.ts',
+        '-const B = 2;',
+        '+const B = 20;',
+        '*** End Patch',
+      ].join('\n'),
+    }, ctx());
+    expect(out).toContain('updated dup.ts');
+    const after = readFileSync(join(dir, 'dup.ts'), 'utf8');
+    // Both edits must survive.
+    expect(after).toBe('const A = 10;\nconst B = 20;\n');
+  });
+
+  it('update-then-update with overlapping context applies sequentially without corruption', async () => {
+    // Section 2's context includes what section 1 changed — only correct
+    // when sections compose sequentially.
+    writeFileSync(join(dir, 'seq.ts'), 'const x = 1;\nconst y = x + 1;\n');
+    const out = await patchTool.execute({
+      patch: [
+        '*** Begin Patch',
+        '*** Update File: seq.ts',
+        '-const x = 1;',
+        '+const x = 5;',
+        '*** Update File: seq.ts',
+        '-const y = x + 1;',
+        '+const y = x + 2;',
+        '*** End Patch',
+      ].join('\n'),
+    }, ctx());
+    expect(out).toContain('updated seq.ts');
+    expect(readFileSync(join(dir, 'seq.ts'), 'utf8')).toBe('const x = 5;\nconst y = x + 2;\n');
+  });
+});
