@@ -220,9 +220,8 @@ Return ONLY the JSON array, no markdown.`;
     }
 
     const tasks: Task[] = [];
-    const titleToId = new Map<string, string>();
     // B19: keep the RAW dependency titles until every task exists. The old
-    // code mapped them through titleToId at creation time, so a forward
+    // code mapped them through a title→id map at creation time, so a forward
     // reference (a task depending on one later in the plan) became '' and was
     // filtered out BEFORE the title-link pass below — which then had nothing
     // to resolve, making the scheduler run dependent tasks in the wrong order.
@@ -235,7 +234,6 @@ Return ONLY the JSON array, no markdown.`;
         acceptanceCriteria: raw.acceptanceCriteria ?? [],
         verificationCommand: raw.verificationCommand,
       });
-      titleToId.set(task.title, task.id);
       rawDeps.set(task.id, (raw.dependencies ?? []).map((d) => String(d)).filter(Boolean));
       tasks.push(task);
       goal.tasks.push(task.id);
@@ -243,12 +241,14 @@ Return ONLY the JSON array, no markdown.`;
     }
     // Resolve dependencies by title (or pass through existing ids) now that
     // the full task list exists — backward AND forward references both work.
+    // A task depending on ITSELF would stall forever (self-edge = never
+    // ready); drop it instead.
     for (const task of tasks) {
       task.dependencies = (rawDeps.get(task.id) ?? []).map((dep) => {
         if (tasks.find((t) => t.id === dep)) return dep;
         const byTitle = tasks.find((t) => t.title === dep);
         return byTitle?.id ?? '';
-      }).filter(Boolean);
+      }).filter((id) => Boolean(id) && id !== task.id);
     }
     this.workspace.saveGoal(goal);
     this.workspace.saveTasks(goal.id, tasks);

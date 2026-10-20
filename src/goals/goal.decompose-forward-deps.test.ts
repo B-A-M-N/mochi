@@ -1,10 +1,10 @@
 // B19 regression: decompose() drops dependency edges that reference a task
-// LATER in the plan (forward references). At creation time dependencies are
-// mapped through titleToId, which only contains EARLIER tasks — a forward ref
-// became '' and was filtered out before the title-link second pass (which was
-// written exactly for this case but receives nothing to link). Result: a
-// plan like [B depends on A... wait, reversed: task 1 depends on task 2]
-// silently loses the edge and the scheduler runs the dependent task FIRST.
+// LATER in the plan (forward references). At creation time dependencies were
+// mapped through a title→id map that only contained EARLIER tasks — a forward
+// ref became '' and was filtered out before the title-link second pass (which
+// was written exactly for this case but receives nothing to link). Result:
+// a plan where task 1 depends on task 2 silently loses the edge and the
+// scheduler runs the dependent task FIRST, inverted from the author's intent.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
