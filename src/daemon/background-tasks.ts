@@ -14,8 +14,9 @@
 // the on-disk ledger (with owner-pid liveness checks for stale 'running').
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface BackgroundTask {
   id: string;
@@ -55,7 +56,10 @@ function writeLedger(dir: string | undefined, list: BackgroundTask[]): void {
         ? `…(truncated)\n${t.output.slice(-PERSIST_OUTPUT_CAP)}`
         : t.output,
     }));
-    writeFileSync(file, JSON.stringify(slim));
+    // Atomic via tmp+rename: a crash mid-write must never leave a torn
+    // bg-tasks.json (I4) — `mochi bg list/kill` in a fresh process would
+    // die on the truncated JSON.
+    atomicWriteFileSync(file, JSON.stringify(slim));
   } catch {
     /* ledger is best-effort — never break a task over it */
   }
