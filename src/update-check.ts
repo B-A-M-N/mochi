@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { mochiStateDir } from './core/mochi-dir.js';
+import { runArgv } from './exec.js';
 
 export const REPO = 'xanstomper/mochi';
 const RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -194,12 +195,10 @@ export async function applyUpdate(
 }
 
 async function defaultRun(cmd: string, args: string[], cwd: string): Promise<{ ok: boolean; output: string }> {
-  const { execFile } = await import('node:child_process');
-  return new Promise((res) => {
-    execFile(cmd, args, { cwd, timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) => {
-      res({ ok: !err, output: `${stdout ?? ''}${stderr ? `\n${stderr}` : ''}`.trim() });
-    });
-  });
+  // Route through the shared exec boundary (proc-sites ratchet): runArgv owns
+  // spawn, timeouts, tree-kill, and output caps.
+  const r = await runArgv(cmd, args, { cwd, timeoutMs: 10 * 60_000, maxOutput: 16 * 1024 * 1024 });
+  return { ok: r.code === 0, output: `${r.stdout}${r.stderr ? `\n${r.stderr}` : ''}`.trim() };
 }
 
 /** One-line notice text for the TUI (also used by tests to pin the wording). */
