@@ -3508,8 +3508,17 @@ Continue from 'Next:', do not redo completed progress.`,
               const normalized = normalizeToolArgs(tcName, parsed);
               path = String(normalized.path ?? '');
             } catch { /* treat as independent */ }
-            if (seen.has(path)) { remaining.push(tc); continue; }
-            seen.add(path);
+            // B12: dedup by RESOLVED absolute path. The raw string comparison
+            // missed './a.ts' vs 'a.ts' vs an absolute path — two writes to
+            // the SAME file ran concurrently and the second clobbered the
+            // first (the later call observed winning in the trace). An empty
+            // or unparseable path falls back to a `__raw__:` sentinel key:
+            // empty-path calls are serialized against each other (conservative,
+            // and unchanged from the old shared-'' behavior) and the sentinel
+            // can never collide with a resolved absolute path.
+            const resolvedKey = path ? resolve(this.cwd, path) : `__raw__:${path}`;
+            if (seen.has(resolvedKey)) { remaining.push(tc); continue; }
+            seen.add(resolvedKey);
             group.push(tc);
           } else {
             remaining.push(tc);
