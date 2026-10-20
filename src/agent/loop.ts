@@ -2286,7 +2286,15 @@ Continue from 'Next:', do not redo completed progress.`,
               this.effectiveBudgetTokens = tightened;
               this.context.setBudgetTokens(tightened);
             }
-            await this.checkpointAndCompact('floor');
+            // B15: compaction must be allowed to go DEEPER than the recency
+            // floor when the budget just shrank — the old hard-coded floor
+            // made this recovery a no-op once history hit the floor. Derive
+            // the floor from the tightened budget (≈4 chars/token): a 4K
+            // budget keeps ~2 recent messages' worth of headroom, clamped to
+            // at least 2 and at most the default floor.
+            const perMsgEstimate = 4000;
+            const tightenedFloor = Math.max(2, Math.min(this.context.messageCount - 2, Math.floor(tightened / perMsgEstimate)));
+            await this.checkpointAndCompact('floor', tightenedFloor);
             i = Math.max(0, i - 1);
             continue;
           }
@@ -3213,10 +3221,10 @@ Continue from 'Next:', do not redo completed progress.`,
     }
   }
 
-  private async checkpointAndCompact(reason: 'periodic' | 'floor' | 'error'): Promise<void> {
-    const dropped = await this.context.previewCompact();
+  private async checkpointAndCompact(reason: 'periodic' | 'floor' | 'error', keepFloor?: number): Promise<void> {
+    const dropped = await this.context.previewCompact(keepFloor);
     if (!dropped || dropped.length === 0) {
-      this.context.compact().catch(() => {});
+      this.context.compact(undefined, keepFloor).catch(() => {});
       this.clearReadStub();
       return;
     }
@@ -3273,7 +3281,10 @@ Continue from 'Next:', do not redo completed progress.`,
         /* heuristic fallback inside compact() */
       }
     }
-    await this.context.compact(checkpoint);
+    // B15: pass the caller's explicit floor through — previewCompact() must
+    // agree with the compact() cut, or the checkpoint would summarize a
+    // slice that compact() then keeps.
+    await this.context.compact(checkpoint, keepFloor);
     this.clearReadStub();
     // Phase 7: durable checkpoint — survives process restarts for resume.
     if (checkpoint) {

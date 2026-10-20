@@ -547,7 +547,18 @@ export class ContextEngine {
       } else {
         relevant = [];
       }
-      this.skillsCache = formatSkillsForPrompt(relevant);
+      // B15: the system prompt is part of the working budget. A no-tool
+      // packet advertises ALL bundled skills (142 here ≈ 9.8K tokens), which
+      // alone exceeds a small clamped window, leaving nothing for history.
+      // Cap the skills block to a fraction of the budget — relevance-ranked,
+      // so the most useful ones survive the cap.
+      let block = formatSkillsForPrompt(relevant);
+      const blockBudget = Math.max(200, Math.floor(this.budget * 0.2));
+      while (block && approxTokens(block) > blockBudget && relevant.length > 0) {
+        relevant = relevant.slice(0, Math.max(0, relevant.length - 1));
+        block = formatSkillsForPrompt(relevant);
+      }
+      this.skillsCache = block;
     } catch {
       this.skillsCache = '';
     }
@@ -808,7 +819,32 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // the prefix (identity + prior conversation) stays byte-stable and cached.
     const statePrompt = this.buildStatePrompt(task);
 
-    let remaining = this.budget - approxTokens(baseSystemPrompt);
+    // B15 (review follow-up): the system prompt itself can exceed the working
+    // budget on a small clamped window — the identity sections alone are
+    // ~1.5K tokens and the machine-access block another ~0.5K. When that
+    // happens the packet starts hopelessly over budget (remaining deeply
+    // negative, nothing but the newest turn fits) for EVERY turn. Degrade
+    // gracefully instead: a compact identity header + workspace containment
+    // + the host capabilities line, dropping the boilerplate sections. The
+    // full prompt returns as soon as the budget allows it.
+    let sysTokens = approxTokens(baseSystemPrompt);
+    let effectiveSystem = baseSystemPrompt;
+    if (sysTokens > this.budget * 0.8) {
+      const compact = [
+        'You are Mochi, an agentic software engineering assistant. Work with precision, explain briefly what you do and why, verify changes with real builds/tests before claiming success, and never emit placeholder comments when rewriting code.',
+        machineAccessBlock(this.projectRoot),
+      ].join('\n\n');
+      if (approxTokens(compact) < sysTokens) {
+        effectiveSystem = compact;
+        sysTokens = approxTokens(effectiveSystem);
+      }
+    }
+
+    // Reserve the trailing state message's tokens up front: it is appended
+    // AFTER the history walk but is part of the wire size, so the walk must
+    // not spend its tokens.
+    const stateTokens = statePrompt ? approxTokens(statePrompt) : 0;
+    let remaining = this.budget - sysTokens - stateTokens;
 
     // Add recent messages until budget exhausted; prefer latest. Always retain
     // at least the latest turns so active tool responses and conversation context are never dropped.
@@ -831,28 +867,44 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     const RESCUE_TAIL = this.complexPreserve ? 800 : 160;
     const CONTENT_TOOLS = new Set(['read', 'search', 'grep', 'edit', 'patch', 'replace_symbol', 'regex-replace', 'search-replace-multi', 'get_function', 'find_definitions', 'find_references']);
     const evictedDense: { name: string; content: string; tokens: number }[] = [];
+    // B15: the floor is a TARGET, not an override. The old code added the
+    // first MIN_RECENT messages UNCONDITIONALLY (overBudget required
+    // recent.length >= MIN_RECENT, so below the floor nothing consulted the
+    // budget): when the clamped window could not hold 24 dense messages the
+    // packet went out OVER budget — a guaranteed provider 400 that
+    // compaction (same floor) could not fix.
+    // The budget line therefore applies on the ADD path itself, below the
+    // floor too: keep adding toward the floor while the packet still fits,
+    // stop the moment the next message would not fit — EXCEPT for the newest
+    // turn, which is always kept (the active working set). A single message
+    // larger than the whole window still goes through alone (the orphan
+    // cleanup and shrinkOldToolOutputs address its content size downstream).
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const m = this.messages[i];
       const tokens = cachedMessageTokens(m);
-      const overBudget = recent.length >= MIN_RECENT && remaining - tokens < 0;
-      if (overBudget) {
-        // Candidate rescue: dense content-bearing tool result being evicted.
-        // Keep scanning older (collect up to RESCUE_MAX) after the budget cuts
-        // in, so code sitting several turns behind the window is still found —
-        // not only the one message at the exact eviction boundary.
-        if (m.role === 'tool'
-          && typeof m.content === 'string'
-          && m.name && CONTENT_TOOLS.has(m.name)
-          && m.content.length > 300
-          && evictedDense.length < RESCUE_MAX) {
-          evictedDense.push({ name: m.name, content: m.content, tokens });
-        } else if (evictedDense.length >= RESCUE_MAX && recent.length >= MIN_RECENT) {
+      const fitsBudget = remaining - tokens >= 0;
+      const overFloor = recent.length >= MIN_RECENT;
+      if (!fitsBudget && recent.length > 0) {
+        if (overFloor) {
+          // Candidate rescue: dense content-bearing tool result being evicted.
+          // Keep scanning older (collect up to RESCUE_MAX) after the budget
+          // cuts in, so code sitting several turns behind the window is still
+          // found — not only the message at the exact eviction boundary.
+          if (m.role === 'tool'
+            && typeof m.content === 'string'
+            && m.name && CONTENT_TOOLS.has(m.name)
+            && m.content.length > 300
+            && evictedDense.length < RESCUE_MAX) {
+            evictedDense.push({ name: m.name, content: m.content, tokens });
+            continue; // keep scanning for more rescues
+          }
+          if (evictedDense.length < RESCUE_MAX) continue; // still hunting rescues
           break; // rescue full and window satisfied — stop
         }
-        // Do NOT add to `recent` once over budget; only scan for rescue.
-        if (recent.length >= MIN_RECENT && evictedDense.length < RESCUE_MAX) continue;
-        if (recent.length >= MIN_RECENT) break;
-        // fall through (below MIN_RECENT): keep adding regardless of budget
+        // Below the floor AND the next message would not fit — the old code
+        // fell through and added unconditionally, overshooting the window.
+        // Stop here; the orphan cleanup below keeps API validity at the cut.
+        break;
       }
       remaining -= tokens;
       recent.unshift(m);
@@ -898,25 +950,52 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     }
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: baseSystemPrompt },
+      { role: 'system', content: effectiveSystem },
       ...recent,
     ];
     if (evictedDense.length > 0) {
       const MARK = '\n[…earlier output truncated in place; re-run the tool if you need the full text…]';
-      const rescueBody = evictedDense.reverse().map((r) => {
+      // B15 (review P2): the rescue block re-adds up to RESCUE_MAX shrunk
+      // results (~500 tokens each on complex tasks) AFTER the budget walk —
+      // unbounded, it could push the packet straight back over the line the
+      // walk just enforced. Keep rescues only while their SHRUNK size fits
+      // the headroom left after the history walk; cap the body at a hard
+      // 16K chars as a backstop.
+      const headroom = Math.max(0, remaining);
+      const kept: typeof evictedDense = [];
+      let rescueChars = 0;
+      let rescueTokens = 0;
+      for (const r of evictedDense) {
         const shrunk = r.content.length <= RESCUE_HEAD + RESCUE_TAIL
           ? r.content
           : r.content.slice(0, RESCUE_HEAD) + MARK + r.content.slice(-RESCUE_TAIL);
-        return `### ${r.name}\n${shrunk}`;
-      }).join('\n\n');
-      messages.push({ role: 'system', content: `[Preserved file contents from earlier steps (then I compacted the rest) — these are the files you were reading/editing; keep them in mind and re-read only if you need more detail]:\n${rescueBody}` });
-      remaining += evictedDense.reduce((a, r) => a + r.tokens, 0);
+        const shrunkTokens = approxTokens(`### ${r.name}\n${shrunk}`);
+        if (rescueTokens + shrunkTokens > headroom || rescueChars + shrunk.length > 16_000) break;
+        kept.push(r);
+        rescueChars += shrunk.length;
+        rescueTokens += shrunkTokens;
+      }
+      if (kept.length > 0) {
+        const rescueBody = kept.reverse().map((r) => {
+          const shrunk = r.content.length <= RESCUE_HEAD + RESCUE_TAIL
+            ? r.content
+            : r.content.slice(0, RESCUE_HEAD) + MARK + r.content.slice(-RESCUE_TAIL);
+          return `### ${r.name}\n${shrunk}`;
+        }).join('\n\n');
+        messages.push({ role: 'system', content: `[Preserved file contents from earlier steps (then I compacted the rest) — these are the files you were reading/editing; keep them in mind and re-read only if you need more detail]:\n${rescueBody}` });
+        // B15 (review P0): the rescue block IS on the wire — SPEND the
+        // headroom it consumes. The old `remaining +=` inflated the credit
+        // and made usedTokens read far BELOW the real wire size (negative,
+        // in the gross-overshoot case), hiding the overflow from the
+        // pressure loop.
+        remaining -= rescueTokens;
+      }
     }
     if (statePrompt) messages.push({ role: 'system', content: statePrompt });
 
     const used = this.budget - remaining;
     this.lastSentTokens = used;
-    return { messages, systemPrompt: baseSystemPrompt, usedTokens: used, budgetTokens: this.budget };
+    return { messages, systemPrompt: effectiveSystem, usedTokens: used, budgetTokens: this.budget };
   }
 
   addDecision(decision: string) {
@@ -1043,7 +1122,11 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
     // size to bother shrinking, and head/tail kept all scale up ~10x. Simple/
     // standard tasks use the original aggressive constants unchanged.
     const preserve = this.complexPreserve;
-    const RECENT_WINDOW = preserve ? 40 : 12;      // never touch the newest turns
+    // B15: the complex window was 40 — so wide that the packet's own recency
+    // floor (24) sat entirely inside the never-shrink zone, and the cheapest
+    // lever against an over-budget packet was locked out. 24 mirrors the
+    // floor: the newest 24 messages stay live, older dense output shrinks.
+    const RECENT_WINDOW = preserve ? 24 : 12;      // never touch the newest turns
     const SHRINK_THRESHOLD = preserve ? 4000 : 600; // chars: outputs below this are already cheap
     const KEEP_HEAD = preserve ? 2000 : 240;
     const KEEP_TAIL = preserve ? 1200 : 160;
@@ -1083,11 +1166,12 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   /** Compute the valid cut index for compaction: prefer the native Rust
    *  planner (identical invariant, computed off the JS hot path) and fall
    *  back to the inlined TS walk when the binary is unavailable (CI, cold
-   *  installs). Never orphans a tool result. */
-  private async planCutIndex(): Promise<number | null> {
-    // Complex tasks retain more recency through compaction (16 vs 6 messages):
-    // dropping to a 6-message window mid-refactor strands the code under change.
-    const keep = this.complexPreserve ? 24 : 12;
+   *  installs). Never orphans a tool result. B15: `keepFloor` lets a caller
+   *  compact BELOW the default recency floor (context-limit recovery with a
+   *  tightened budget) — the old hard-coded floor made compaction a no-op
+   *  exactly when the packet was over budget and needed to shrink most. */
+  private async planCutIndex(keepFloor = this.complexPreserve ? 24 : 12): Promise<number | null> {
+    const keep = keepFloor;
     if (this.messages.length <= keep) return null;
     const native = await nativePlanCompaction(this.messages as PlanRequestMessage[], keep);
     if (typeof native?.cut === 'number' && native.cut > 0 && native.cut < this.messages.length) {
@@ -1112,22 +1196,27 @@ ${rules ? rules + '\n' : ''}${repoInfo}${this.skills(task, tools)}${contractSect
   /** Non-destructive preview of what compact() would drop: the valid-cut-point
    *  slice that would be removed. Returns null when nothing would be dropped
    *  (already at the recency floor). Lets the caller summarize it with an LLM
-   *  BEFORE committing to the compaction (Pi's structured checkpoint). */
-  async previewCompact(): Promise<ChatMessage[] | null> {
-    const cutIndex = await this.planCutIndex();
+   *  BEFORE committing to the compaction (Pi's structured checkpoint). B15:
+   *  accepts the same explicit keepFloor as compact() so preview and cut
+   *  always agree. */
+  async previewCompact(keepFloor?: number): Promise<ChatMessage[] | null> {
+    const cutIndex = await this.planCutIndex(keepFloor);
     if (cutIndex === null) return null;
     return this.messages.slice(0, cutIndex);
   }
 
-  async compact(checkpoint?: string) {
+  async compact(checkpoint?: string, keepFloor?: number) {
     // Tier 1 (micro): drop everything but the recency window and distill small facts.
-    if (this.messages.length <= (this.complexPreserve ? 24 : 12)) return;
+    // B15: an explicit keepFloor (context-limit recovery) may go below the
+    // default complex/simple floor.
+    const floor = keepFloor ?? (this.complexPreserve ? 24 : 12);
+    if (this.messages.length <= floor) return;
 
     // VALID CUT POINTS (Pi insight): a tool result must stay attached to the
     // assistant message that requested it. planCutIndex() enforces that
     // invariant (native Rust planner first, TS walk as fallback) and never
     // orphans a tool result.
-    const cutIndex = await this.planCutIndex();
+    const cutIndex = await this.planCutIndex(floor);
     if (cutIndex === null) return;
     const dropped = this.messages.slice(0, cutIndex);
     this.messages = this.messages.slice(cutIndex);
