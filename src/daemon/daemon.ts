@@ -8,10 +8,11 @@
 // (0600). The info file carries port + token + pid so clients can discover both
 // from the workspace without scanning.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, chmodSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 import type { MochiConfig } from '../types.js';
 import { Runtime } from '../runtime.js';
 import { addJob, listJobs, removeJob, dueJobs, bumpJob, updateJob, notifyJobResult } from './cron.js';
@@ -113,12 +114,11 @@ export function daemonRunning(workspaceDir: string): boolean {
 function writeInfo(workspaceDir: string, info: DaemonInfo): void {
   const p = daemonInfoPath(workspaceDir);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(info), { mode: 0o600 });
-  try {
-    chmodSync(p, 0o600);
-  } catch {
-    // best effort (some platforms ignore mode on write)
-  }
+  // Atomic (B29) + forced 0600: the file carries the daemon's bearer token —
+  // the tmp sibling must be 0600 BEFORE the content lands, never briefly
+  // world-readable in flight, and a crash mid-write must not tear the JSON
+  // that clients read for discovery.
+  atomicWriteFileSync(p, JSON.stringify(info), { mode: 0o600 });
 }
 
 /**

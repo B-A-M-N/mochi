@@ -6,10 +6,11 @@
 //   - interval: "every 30m", "every 2 hours", "every day", "every 9h"
 //   - cron:     standard 5-field cron, e.g. "0 9 * * 1-5"
 // Jobs persist as JSON (.mochi/cron.json) and are owned by the daemon process.
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mochiStateDir } from '../core/mochi-dir.js';
+import { atomicWriteFileSync } from '../core/atomic-fs.js';
 
 export interface CronJob {
   id: string;
@@ -136,7 +137,9 @@ function loadJobs(dir: string): CronJob[] {
 
 function saveJobs(dir: string, jobs: CronJob[]): void {
   mkdirSync(mochiStateDir(dir), { recursive: true });
-  writeFileSync(resolve(mochiStateDir(dir), 'cron.json'), JSON.stringify(jobs, null, 2));
+  // Atomic (B29): a crash mid-write must never tear cron.json — the daemon
+  // re-reads it on every scheduler tick.
+  atomicWriteFileSync(resolve(mochiStateDir(dir), 'cron.json'), JSON.stringify(jobs, null, 2));
 }
 
 /** Validate a notify target: https? webhook URL or a bounded shell command.
