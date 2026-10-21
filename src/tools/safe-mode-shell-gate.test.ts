@@ -6,8 +6,11 @@
 // shell: low-risk runs, elevated-risk foreground blocked, elevated-risk
 // background sandboxed-or-blocked. These tests exercise the DISPATCHER layer
 // (executeTool, the path production and the harness actually use) to pin
-// that the exemption holds end-to-end. RED pre-fix: benign shell returned
-// "Tool shell requires safety mode ask/auto" from executeTool.
+// that the exemption holds end-to-end. RED pre-fix (first two tests only):
+// benign shell returned "Tool shell requires safety mode ask/auto" from
+// executeTool, and the network-classified command was denied at the same
+// dispatcher layer. The third test (verify still denied) passes on main too
+// — it pins the exemption's boundary, not a behavior change.
 import { describe, it, expect } from 'vitest';
 import { executeTool } from './index.js';
 import type { ToolContext } from './types.js';
