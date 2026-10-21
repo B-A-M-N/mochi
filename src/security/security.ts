@@ -95,8 +95,13 @@ const DESTRUCTIVE = [
   /\bgit\s+(push|reset\s+--hard|clean\s+-[a-z]*f[a-z]*|checkout\s+--\s+\.|rebase|cherry-pick)(?![\w.])/i,
   // Silent-discard class (audit round 2): these destroy uncommitted work or
   // saved state with no gate when classified 'low' in safe mode.
-  /\bgit\s+restore\b(?!\s+--staged\b)/i,           // default mode discards worktree changes
-  /\bgit\s+restore\b[^|;&]*(--worktree\b|\s+-W\b)/i, // explicit worktree restore (even with --staged)
+  // git restore: default mode discards WORKTREE changes; --staged/-S alone is
+  // index-only (worktree preserved) and stays low. Flag order must not matter
+  // (--source=HEAD before vs after --staged used to flip the verdict), so the
+  // staged exception scans the whole command segment, and any --worktree/-W
+  // makes it destructive regardless.
+  /\bgit\s+restore\b(?![^|;&]*(?:--staged\b|\s-S\b))/i,   // worktree mode (no --staged/-S anywhere)
+  /\bgit\s+restore\b[^|;&]*(--worktree\b|\s-W\b)/i,       // explicit worktree restore (even with --staged)
   /\bgit\s+checkout\b[^|;&]*\s--\s/i,              // path-limited checkout discards that path
   /\bgit\s+stash\s+(drop|clear)\b/i,               // permanently drops saved work
   /\bfind\b[^|;&]*\s-delete\b/i,                   // find's bulk-delete mutation form
