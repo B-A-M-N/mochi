@@ -42,14 +42,14 @@ function makeConfig(dir: string, url: string, planReads: string[]): MochiConfig 
   } as unknown as MochiConfig;
 }
 
-async function runPlanScenario(planReads: string[]): Promise<{ hits: number; toolResult: string }> {
+async function runPlanScenario(planReads: string[], urlHost = 'localhost'): Promise<{ hits: number; toolResult: string }> {
   const hits: string[] = [];
   const server: Server = createServer((req, res) => {
     hits.push(`${req.method} ${req.url}`);
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ result: 'ok' }));
   });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>((r) => server.listen(0, 'localhost', r));
   const port = (server.address() as { port: number }).port;
   const url = `http://127.0.0.1:${port}`;
   let fake: Awaited<ReturnType<typeof startFakeOpenAI>> | undefined;
@@ -61,7 +61,7 @@ async function runPlanScenario(planReads: string[]): Promise<{ hits: number; too
         toolCalls: [{
           id: 'f1',
           type: 'function',
-          function: { name: 'fetch', arguments: JSON.stringify({ url: `${url}/graphql`, method: 'POST', body: '{"query":"{ status }"}', allow_private: true }) },
+          function: { name: 'fetch', arguments: JSON.stringify({ url: `http://${urlHost}:${port}/graphql`, method: 'POST', body: '{"query":"{ status }"}', allow_private: true }) },
         }],
         finishReason: 'tool_calls',
       },
@@ -95,7 +95,7 @@ async function runPlanScenario(planReads: string[]): Promise<{ hits: number; too
 
 describe('plan-mode network-read allowlist (B27 restructure)', () => {
   it('runs a POST fetch to an allowlisted host in plan mode (research intent restored)', async () => {
-    const { hits, toolResult } = await runPlanScenario(['127.0.0.1']);
+    const { hits, toolResult } = await runPlanScenario(['localhost']);
     // The request actually fired against the declared read host.
     expect(hits).toBe(1);
     expect(toolResult).not.toContain('Blocked: plan mode');
@@ -107,5 +107,23 @@ describe('plan-mode network-read allowlist (B27 restructure)', () => {
     // restructure preserves: no request reaches the host.
     expect(hits).toBe(0);
     expect(toolResult).toContain('Blocked: plan mode');
+  });
+
+  it('host match is EXACT — declaring a superstring does not exempt the real host', async () => {
+    // P2:8b1f861b: the exemption is includes(host) on the parsed hostname.
+    // A declared entry that merely CONTAINS the real host ('localhost.evil.com'
+    // vs real host 'localhost') must NOT match — only the exact hostname.
+    const { hits, toolResult } = await runPlanScenario(['localhost.evil.com']);
+    expect(hits).toBe(0);
+    expect(toolResult).toContain('Blocked: plan mode');
+  });
+
+  it('matching is case-insensitive: a mixed-case config entry matches the lowercase URL host', async () => {
+    // loop.ts lowercases config entries; URL.hostname is lowercase per the
+    // URL spec. Bind the server on 'localhost' and declare 'LOCALHOST' —
+    // still an exact match after normalization, so the request fires.
+    const { hits, toolResult } = await runPlanScenario(['LOCALHOST'], 'localhost');
+    expect(hits).toBe(1);
+    expect(toolResult).not.toContain('Blocked: plan mode');
   });
 });
