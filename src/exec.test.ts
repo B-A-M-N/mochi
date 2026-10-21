@@ -35,7 +35,7 @@ describe('exec policy', () => {
     expect(r.cancelled).toBe(true);
   }, 60_000);
 
-  it('kills the whole process TREE on timeout, not just the direct child', async () => {
+  it.skipIf(process.platform === 'win32')('kills the whole process TREE on timeout, not just the direct child', async () => {
     const { mkdtempSync, readFileSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');

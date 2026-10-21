@@ -9,7 +9,7 @@
  * Never touches the git index — review with `git diff` afterwards.
  */
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, resolve, isAbsolute } from 'node:path';
+import { dirname, resolve, isAbsolute, sep as pathSep } from 'node:path';
 import { atomicWriteFileSync } from './core/atomic-fs.js';
 
 export interface ApplyResult {
@@ -120,7 +120,10 @@ export function applyDiffAtomically(root: string, diffText: string): ApplyResult
   const rootResolved = resolve(root);
   const abs = (p: string) => {
     const t = resolve(root, p);
-    if (t !== rootResolved && !t.startsWith(rootResolved + '/')) {
+    // path.sep, not a literal '/': on win32 resolve() returns backslash paths,
+    // so a literal-slash startsWith rejected EVERY path ("Path escapes
+    // workspace root: mod.txt") and broke the apply tool on Windows entirely.
+    if (t !== rootResolved && !t.startsWith(rootResolved + pathSep)) {
       throw new Error(`Path escapes workspace root: ${p}`);
     }
     return t;

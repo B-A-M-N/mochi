@@ -7,7 +7,8 @@
 // Fix: at runGoal entry nothing can legitimately be running, so stale
 // 'running' tasks are reset to 'pending' before scheduling.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { GoalEngine } from './goal.js';
@@ -62,7 +63,7 @@ describe('goal resume with stale running tasks', () => {
       const after = workspace.loadTasks(goal.id);
       expect(after.find((t) => t.id === task.id)?.status).toBe('done');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   }, 60_000);
 });

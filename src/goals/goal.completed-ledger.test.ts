@@ -5,7 +5,8 @@
 // "Completed tasks: X", and a later goal treats the failed work as already
 // done. The ledger entry must record only successful task completions.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { GoalEngine } from './goal.js';
@@ -61,7 +62,7 @@ describe('completedTasks ledger records only successful tasks (B18)', () => {
       const after = workspace.loadTasks(goal.id);
       expect(after.find((t) => t.id === task.id)?.status).toBe('failed');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   }, 90_000);
 
@@ -92,7 +93,7 @@ describe('completedTasks ledger records only successful tasks (B18)', () => {
       expect(state.completedTasks).toContain('passing task');
       await okFake.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   }, 90_000);
 });

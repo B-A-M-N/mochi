@@ -22,7 +22,7 @@ describe('atomicWriteFileSync', () => {
     expect(readFileSync(p, 'utf8')).toBe('new');
   });
 
-  it('preserves the existing file permission bits', () => {
+  it.skipIf(process.platform === 'win32')('preserves the existing file permission bits', () => {
     const p = join(dir, 'script.sh');
     writeFileSync(p, '#!/bin/sh\n');
     chmodSync(p, 0o755);

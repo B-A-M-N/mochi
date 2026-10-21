@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { saveNamedCheckpoint, listNamedCheckpoints, deleteNamedCheckpoint, restoreNamedCheckpoint } from './checkpoint-manager.js';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { rmTmp } from '../testutil/rm-tmp.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -38,7 +39,7 @@ describe('Named Checkpoint Manager', () => {
       git(dir, ['add', '-A']);
       git(dir, ['commit', '-qm', 'init']);
     });
-    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+    afterAll(() => rmTmp(dir));
 
     it('re-applies the working-tree patch on restore (patch keeps its trailing newline)', async () => {
       // Dirty the tree after the commit, then checkpoint.
@@ -52,7 +53,10 @@ describe('Named Checkpoint Manager', () => {
 
       const res = await restoreNamedCheckpoint(dir, 'snap');
       expect(res.success).toBe(true);
-      expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v2\n');
+      // CRLF-normalize: on Windows checkouts (core.autocrlf=true) git round-trips
+      // the file with CRLF; the product restores faithfully — the literal LF
+      // expectation was a checkout artifact, not a bug.
+      expect(readFileSync(join(dir, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('v2\n');
     });
 
     it('repairs a legacy stored patch with no trailing newline on restore', async () => {
@@ -67,7 +71,7 @@ describe('Named Checkpoint Manager', () => {
       writeFileSync(join(dir, 'a.txt'), 'broken\n');
       const res = await restoreNamedCheckpoint(dir, 'legacy');
       expect(res.success).toBe(true);
-      expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v3\n');
+      expect(readFileSync(join(dir, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('v3\n');
     });
 
     it('returns a clean failure (not a throw) when the stored checkpoint JSON is torn/corrupt (B20)', async () => {
@@ -116,7 +120,7 @@ describe('Named Checkpoint Manager', () => {
       expect(res.success).toBe(false);
       expect(res.message).toContain('rolled back');
       // The pre-restore state must survive the failed restore.
-      expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('v4\n');
+      expect(readFileSync(join(dir, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('v4\n');
     });
   });
 });
