@@ -67,7 +67,7 @@ describe('daemon state writes are atomic (B29)', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('daemon info.json is written atomically and is 0600 from birth', async () => {
+  it.skipIf(process.platform === 'win32')('daemon info.json is written atomically and is 0600 from birth', async () => {
     const { daemonInfoPath } = await import('./daemon.js');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-b29info-'));
     const infoPath = daemonInfoPath(dir);
@@ -85,7 +85,7 @@ describe('daemon state writes are atomic (B29)', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('mode-forced atomic write lands whole with the forced mode (fresh file)', async () => {
+  it.skipIf(process.platform === 'win32')('mode-forced atomic write lands whole with the forced mode (fresh file)', async () => {
     const { atomicWriteFileSync } = await import('../core/atomic-fs.js');
     const dir = mkdtempSync(resolve(tmpdir(), 'mochi-b29mode-'));
     const target = resolve(dir, 'secret.json');

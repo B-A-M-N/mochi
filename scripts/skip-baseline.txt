@@ -1,1 +1,5 @@
-17
+20
+# 2026-10-21: 17 -> 20. Added 4 it.skipIf(win32) markers (daemon-state-atomic x2,
+# atomic-fs mode bits, exec tree-kill) for POSIX-only semantics with no Windows
+# equivalent (chmod is a no-op; detached process groups don't exist). Product
+# code unchanged on POSIX; not skip-rot.

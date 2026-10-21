@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { desktopGuiReason, shellTool } from './shell.js';
+
+// Real, existing cwd: '/tmp' does not exist on Windows and spawn-with-bad-cwd
+// surfaces as a confusing `spawn ...cmd.exe ENOENT`.
+const CWD = mkdtempSync(join(tmpdir(), 'mochi-shell-'));
 
 describe('desktopGuiReason', () => {
   it('detects common desktop GUI app launches', () => {
@@ -27,7 +34,7 @@ describe('desktopGuiReason', () => {
 describe('shellTool GUI guard', () => {
   it('refuses to launch a desktop GUI app with a guiding error', async () => {
     const err = await shellTool
-      .execute({ command: 'gnome-calculator' }, { cwd: '/tmp', config: { safety: { mode: 'safe' } } })
+      .execute({ command: 'gnome-calculator' }, { cwd: CWD, config: { safety: { mode: 'safe' } } })
       .then(() => null, (e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toMatch(/gnome-calculator/i);
@@ -42,7 +49,7 @@ describe('shellTool timeout sanitization', () => {
     // value falls back to the configured default instead.
     const out = await shellTool.execute(
       { command: 'echo hello', timeout: '30s' },
-      { cwd: '/tmp', config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
+      { cwd: CWD, config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
     );
     expect(out).toContain('hello');
     expect(out).not.toContain('timed out');
@@ -51,7 +58,7 @@ describe('shellTool timeout sanitization', () => {
   it('accepts a numeric timeout and still enforces it', async () => {
     const out = await shellTool.execute(
       { command: 'echo n', timeout: 30 },
-      { cwd: '/tmp', config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
+      { cwd: CWD, config: { safety: { mode: 'safe', commandTimeoutSeconds: 120 } as never } as never },
     );
     expect(out).toContain('n');
     expect(out).not.toContain('timed out');

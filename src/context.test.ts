@@ -226,9 +226,15 @@ describe('conditional tool guidelines (VNext P1.3)', () => {
 
   it('rescues dense file-content tool results evicted by budget pressure (repo-aware) into a trailing system band', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mochi-ctx-'));
-    // Tiny budget forces the newest-window retention loop to evict old turns.
+    // Small budget forces the newest-window retention loop to evict old turns,
+    // while still leaving rescue headroom on every machine: the budget is
+    // consumed by the system prompt FIRST, whose size varies with the runner
+    // environment (OS lines, embedded paths — longer on GitHub runners). With
+    // 4000 the walk could end at ≈0 remaining, so the B15 headroom guard
+    // dropped the rescue band entirely (CI-only failure). 6000 evicts just
+    // the same (53 messages ≫ 6000) but keeps ~2k tokens of slack.
     const engine = makeEngine(dir, {
-      safety: { contextBudgetTokens: 4000, maxIterations: 50, maxRuntimeMinutes: 10, mode: 'safe' as const },
+      safety: { contextBudgetTokens: 6000, maxIterations: 50, maxRuntimeMinutes: 10, mode: 'safe' as const },
     } as any);
     // Oldest: dense read/edit tool results (would normally be dropped).
     const denseSrc = `const handler = async (req, res) => {\n  // very long realistic source so this message is dense\n${Array.from({ length: 120 }, (_, i) => `  const v${i} = compute(${i}) * factor(${i % 7});`).join('\n')}\n  return res.json({ ok: true });\n};`;

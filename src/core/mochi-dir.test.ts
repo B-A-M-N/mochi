@@ -1,23 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { mochiStateDir } from './mochi-dir.js';
 import { projectMemoryPath } from '../memory/project-memory.js';
 import { skillUsagePath } from '../skills/skills.js';
 
 describe('mochiStateDir', () => {
   it('appends .mochi to a project root', () => {
-    expect(mochiStateDir('/proj')).toBe('/proj/.mochi');
+    // sep-aware: on win32 the product returns 'D:\proj\.mochi' — the join
+    // result is the platform-correct expectation; a literal '/proj/.mochi'
+    // was a POSIX-only assertion that could never pass on Windows.
+    const root = resolve('D:\\proj'.replace('D:\\', sep === '\\' ? 'D:\\' : '/'));
+    expect(mochiStateDir(root)).toBe(join(root, '.mochi'));
   });
 
   it('is idempotent when handed the state dir itself', () => {
-    expect(mochiStateDir('/proj/.mochi')).toBe('/proj/.mochi');
-    expect(mochiStateDir('/proj/.mochi/')).toBe('/proj/.mochi');
+    const state = join(resolve(sep === '\\' ? 'D:\\proj' : '/proj'), '.mochi');
+    expect(mochiStateDir(state)).toBe(state);
+    expect(mochiStateDir(state + sep)).toBe(state);
   });
 
   it('never produces a nested .mochi/.mochi', () => {
-    expect(mochiStateDir('/proj/.mochi')).not.toContain('.mochi/.mochi');
+    const state = join(resolve(sep === '\\' ? 'D:\\proj' : '/proj'), '.mochi');
+    expect(mochiStateDir(state)).not.toContain(join('.mochi', '.mochi'));
   });
 });
 
