@@ -34,6 +34,18 @@ describe('isPureReadOnlyShellCommand (parallel batch gate)', () => {
     expect(isPureReadOnlyShellCommand('find . -name x -exec rm {} +')).toBe(false);
   });
 
+  it('rejects env — it executes arbitrary argv (review P1)', () => {
+    expect(isPureReadOnlyShellCommand('env rm -rf .git')).toBe(false);
+    expect(isPureReadOnlyShellCommand('env -i FOO=1 sh -c "echo hi"')).toBe(false);
+    // printenv stays: it only prints.
+    expect(isPureReadOnlyShellCommand('printenv HOME')).toBe(true);
+  });
+
+  it('rejects vertical-tab / form-feed hidden second commands (review P2)', () => {
+    expect(isPureReadOnlyShellCommand('cat foo.txt\vrm -rf .git')).toBe(false);
+    expect(isPureReadOnlyShellCommand('cat foo.txt\frm -rf .git')).toBe(false);
+  });
+
   it('rejects empty commands', () => {
     expect(isPureReadOnlyShellCommand('')).toBe(false);
     expect(isPureReadOnlyShellCommand('   ')).toBe(false);
