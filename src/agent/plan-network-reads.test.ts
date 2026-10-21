@@ -118,6 +118,15 @@ describe('plan-mode network-read allowlist (B27 restructure)', () => {
     expect(toolResult).toContain('Blocked: plan mode');
   });
 
+  it('host match is EXACT — declaring a proper SUFFIX of the host does not exempt it', async () => {
+    // Pins against a suffix-matching regression (host.endsWith(entry)): the
+    // entry 'ost' is a proper suffix of the bound host 'localhost' — under
+    // exact matching it must veto; under endsWith semantics it would exempt.
+    const { hits, toolResult } = await runPlanScenario(['ost']);
+    expect(hits).toBe(0);
+    expect(toolResult).toContain('Blocked: plan mode');
+  });
+
   it('matching is case-insensitive: a mixed-case config entry matches the lowercase URL host', async () => {
     // loop.ts lowercases config entries; URL.hostname is lowercase per the
     // URL spec. Bind the server on 'localhost' and declare 'LOCALHOST' —
